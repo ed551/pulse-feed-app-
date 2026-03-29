@@ -23,6 +23,11 @@ export default defineConfig(({mode}) => {
     build: {
       rollupOptions: {
         external: ['react-is'],
+        output: {
+          globals: {
+            'react-is': 'ReactIs',
+          },
+        },
       },
     },
     base: '/pulse-feed-app-/',
