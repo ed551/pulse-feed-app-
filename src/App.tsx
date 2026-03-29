@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { HashRouter, Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
 import Groups from "./pages/Groups";
@@ -20,7 +20,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <BrowserRouter>
+        <HashRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<Layout />}>
@@ -57,7 +57,7 @@ export default function App() {
               } />
             </Route>
           </Routes>
-        </BrowserRouter>
+        </HashRouter>
       </AuthProvider>
     </ErrorBoundary>
   );
