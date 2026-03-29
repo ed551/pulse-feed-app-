@@ -28,6 +28,11 @@ export default function FingerprintModal({
     }
   }, [isOpen]);
 
+  const onSuccessRef = useRef(onSuccess);
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
+
   useEffect(() => {
     if (isPressing) {
       progressInterval.current = setInterval(() => {
@@ -35,7 +40,7 @@ export default function FingerprintModal({
           if (prev >= 100) {
             clearInterval(progressInterval.current!);
             setTimeout(() => {
-              onSuccess();
+              onSuccessRef.current();
             }, 300);
             return 100;
           }

@@ -5,7 +5,7 @@ import {
   Sun, Moon, CloudRain, Cloud, CloudLightning, Clock, Watch, BellRing, StickyNote,
   Fingerprint, HeartPulse, MapPin, Phone, MessageCircle, Gamepad2, Globe, BrainCircuit,
   Languages, Ticket, Snowflake, Calendar, Smartphone, Monitor, PhoneCall, Wrench,
-  Calculator, LayoutGrid, Power, RefreshCw, ArrowUpCircle, ArrowDownCircle, XCircle, RotateCcw, Edit3, DollarSign, LogOut, Wallet, X, Send, Search, CheckCircle2
+  Calculator, LayoutGrid, Power, RefreshCw, ArrowUpCircle, ArrowDownCircle, XCircle, RotateCcw, Edit3, DollarSign, LogOut, Wallet, X, Send, Search, CheckCircle2, Plus
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { 
@@ -35,6 +35,32 @@ export default function Layout() {
   // Calculator State
   const [calcValue, setCalcValue] = useState('0');
   const [calcExpression, setCalcExpression] = useState('');
+
+  const handleCalc = (val: string) => {
+    if (val === "=") {
+      try {
+        const fullExpression = calcExpression + calcValue;
+        const sanitizedExpression = fullExpression.replace(/[^-+*/0-9.]/g, '');
+        // eslint-disable-next-line no-new-func
+        const result = new Function(`"use strict"; return (${sanitizedExpression})`)();
+        setCalcValue(String(result));
+        setCalcExpression('');
+      } catch (e) {
+        setCalcValue("Error");
+        setCalcExpression("");
+      }
+    } else if (val === "C") {
+      setCalcValue("0");
+      setCalcExpression("");
+    } else if (val === "DEL") {
+      setCalcValue(prev => prev.length > 1 ? prev.slice(0, -1) : '0');
+    } else if (['+', '-', '*', '/', '%'].includes(val)) {
+      setCalcExpression(calcValue + val);
+      setCalcValue('0');
+    } else {
+      setCalcValue(prev => prev === "0" ? val : prev + val);
+    }
+  };
 
   // Clock/Watch/Alarm State
   const [stopwatchTime, setStopwatchTime] = useState(0);
@@ -167,7 +193,7 @@ export default function Layout() {
     { type: 'img', src: 'https://cdn.simpleicons.org/tiktok/black', darkSrc: 'https://cdn.simpleicons.org/tiktok/white', title: 'TikTok', href: 'https://tiktok.com' },
     { type: 'img', src: 'https://cdn.simpleicons.org/youtube/FF0000', title: 'YouTube', href: 'https://youtube.com' },
     { type: 'img', src: 'https://cdn.simpleicons.org/gmail/EA4335', title: 'Gmail', href: 'https://gmail.com' },
-    { type: 'img', src: 'https://cdn.simpleicons.org/yahoo/6001D2', title: 'Yahoo', href: 'https://yahoo.com' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/yahoo/720E9E', title: 'Yahoo', href: 'https://yahoo.com' },
     { type: 'img', src: 'https://cdn.simpleicons.org/googlemaps/4285F4', title: 'Maps', href: 'https://maps.google.com' },
     { type: 'img', src: 'https://cdn.simpleicons.org/google/4285F4', title: 'Google Search', href: 'https://google.com' },
     { type: 'img', src: 'https://cdn.simpleicons.org/googlegemini/8E75B2', title: 'Gemini AI', href: 'https://gemini.google.com' },
@@ -458,14 +484,7 @@ export default function Layout() {
                     {['C', 'DEL', '%', '/'].map(btn => (
                       <button 
                         key={btn} 
-                        onClick={() => {
-                          if (btn === 'C') { setCalcValue('0'); setCalcExpression(''); }
-                          else if (btn === 'DEL') { setCalcValue(prev => prev.length > 1 ? prev.slice(0, -1) : '0'); }
-                          else { 
-                            setCalcExpression(prev => prev + calcValue + btn); 
-                            setCalcValue('0'); 
-                          }
-                        }}
+                        onClick={() => handleCalc(btn)}
                         className="h-12 bg-gray-200 dark:bg-gray-700 rounded-lg font-bold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-purple-600"
                       >
                         {btn}
@@ -474,26 +493,16 @@ export default function Layout() {
                     {['7','8','9','*','4','5','6','-','1','2','3','+'].map(btn => (
                       <button 
                         key={btn} 
-                        onClick={() => setCalcValue(prev => prev === '0' ? btn : prev + btn)}
+                        onClick={() => handleCalc(btn)}
                         className="h-12 bg-gray-100 dark:bg-gray-700 rounded-lg font-bold hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                       >
                         {btn}
                       </button>
                     ))}
-                    <button onClick={() => setCalcValue(prev => prev.includes('.') ? prev : prev + '.')} className="h-12 bg-gray-100 dark:bg-gray-700 rounded-lg font-bold hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">.</button>
-                    <button onClick={() => setCalcValue(prev => prev === '0' ? '0' : prev + '0')} className="h-12 bg-gray-100 dark:bg-gray-700 rounded-lg font-bold hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">0</button>
+                    <button onClick={() => handleCalc('.')} className="h-12 bg-gray-100 dark:bg-gray-700 rounded-lg font-bold hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">.</button>
+                    <button onClick={() => handleCalc('0')} className="h-12 bg-gray-100 dark:bg-gray-700 rounded-lg font-bold hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">0</button>
                     <button 
-                      onClick={() => {
-                        try {
-                          const fullExpression = calcExpression + calcValue;
-                          // Safe evaluation using Function constructor
-                          const result = Function(`"use strict"; return (${fullExpression})`)();
-                          setCalcValue(String(result));
-                          setCalcExpression('');
-                        } catch {
-                          setCalcValue('Error');
-                        }
-                      }}
+                      onClick={() => handleCalc('=')}
                       className="h-12 col-span-2 bg-purple-600 text-white rounded-lg font-bold hover:bg-purple-700 transition-colors"
                     >
                       =

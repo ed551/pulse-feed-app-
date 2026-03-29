@@ -29,6 +29,7 @@ export default function Profile() {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [brightness, setBrightness] = useState(100);
   const [contrast, setContrast] = useState(100);
+  const [filter, setFilter] = useState('none');
 
   const onCropComplete = useCallback((_croppedArea: any, croppedAreaPixels: any) => {
     setCroppedAreaPixels(croppedAreaPixels);
@@ -80,7 +81,7 @@ export default function Profile() {
     canvas.height = height;
 
     // Apply filters
-    ctx.filter = `brightness(${brightness}%) contrast(${contrast}%)`;
+    ctx.filter = `brightness(${brightness}%) contrast(${contrast}%) ${filter !== 'none' ? filter : ''}`;
     
     ctx.drawImage(
       image,
@@ -271,20 +272,20 @@ export default function Profile() {
             </div>
           </div>
           
-          <div className="flex space-x-2">
+          <div className="flex space-x-3">
             <button 
               onClick={handleEditBio}
-              className="p-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-full transition-colors text-gray-700 dark:text-gray-300"
+              className="p-3 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 transition-all active:scale-95 text-purple-600 dark:text-purple-400"
               title="Edit Profile"
             >
-              <Edit3 className="w-5 h-5" />
+              <Edit3 className="w-6 h-6" />
             </button>
             <button 
               onClick={() => handleSensitiveAction('security')}
-              className="p-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-full transition-colors text-gray-700 dark:text-gray-300"
+              className="p-3 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 transition-all active:scale-95 text-blue-600 dark:text-blue-400"
               title="Account Settings"
             >
-              <Settings className="w-5 h-5" />
+              <Settings className="w-6 h-6" />
             </button>
           </div>
         </div>
@@ -463,6 +464,28 @@ export default function Profile() {
                           onChange={(e) => setContrast(Number(e.target.value))}
                           className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-pink-500"
                         />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center">
+                        <Sparkles className="w-3 h-3 mr-1" /> Filters
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {['none', 'grayscale(1)', 'sepia(1)', 'invert(1)', 'hue-rotate(90deg)', 'brightness(1.5)', 'contrast(1.5)'].map((f) => (
+                          <button
+                            key={f}
+                            onClick={() => setFilter(f)}
+                            className={cn(
+                              "px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border",
+                              filter === f 
+                                ? "bg-purple-600 text-white border-purple-600" 
+                                : "bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"
+                            )}
+                          >
+                            {f === 'none' ? 'Original' : f.split('(')[0]}
+                          </button>
+                        ))}
                       </div>
                     </div>
 

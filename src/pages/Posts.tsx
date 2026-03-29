@@ -156,63 +156,77 @@ export default function Posts() {
 
   const CATEGORIES = ['General', 'Gold Prediction', 'Tech', 'News', 'Gaming', 'Finance'];
 
-  const [posts, setPosts] = useState<Post[]>([
-    {
-      id: 1,
-      author: "Alex Rivera",
-      avatar: "AR",
-      title: "Gold Market Analysis",
-      content: "The recent trends suggest a strong resistance at $2,200. I predict a slight pullback before the next major surge. What do you guys think? 📈",
-      category: "Gold Prediction",
-      tags: ["Gold", "Trading", "Finance"],
-      images: [],
-      likes: 42,
-      comments: 15,
-      shares: 8,
-      time: "2h ago",
-      isLiked: false,
-      commentsList: [
-        { id: 101, author: "John Doe", avatar: "JD", content: "Great analysis! I agree with the pullback.", likes: 5, isLiked: false, time: "1h ago", replies: [] },
-        { id: 102, author: "Jane Smith", avatar: "JS", content: "I think it might break resistance sooner than expected.", likes: 2, isLiked: false, time: "30m ago", replies: [] }
-      ],
-      analytics: [
-        { name: 'Mon', views: 400, likes: 240, shares: 120, comments: 45 },
-        { name: 'Tue', views: 300, likes: 139, shares: 98, comments: 32 },
-        { name: 'Wed', views: 200, likes: 980, shares: 390, comments: 120 },
-        { name: 'Thu', views: 278, likes: 390, shares: 190, comments: 67 },
-        { name: 'Fri', views: 189, likes: 480, shares: 240, comments: 89 },
-        { name: 'Sat', views: 239, likes: 380, shares: 180, comments: 56 },
-        { name: 'Sun', views: 349, likes: 430, shares: 210, comments: 78 },
-      ]
-    },
-    {
-      id: 2,
-      author: "Sarah Chen",
-      avatar: "SC",
-      title: "New AI Features are here!",
-      content: "Just tested the new Gemini 3.1 Pro features. The reasoning capabilities are off the charts! 🤖✨",
-      category: "Tech",
-      tags: ["AI", "Gemini", "Future"],
-      images: [],
-      likes: 128,
-      comments: 34,
-      shares: 22,
-      time: "5h ago",
-      isLiked: true,
-      commentsList: [
-        { id: 201, author: "Tech Enthusiast", avatar: "TE", content: "Gemini is really catching up fast!", likes: 12, isLiked: true, time: "4h ago", replies: [] }
-      ],
-      analytics: [
-        { name: 'Mon', views: 1200, likes: 450, shares: 300, comments: 150 },
-        { name: 'Tue', views: 1500, likes: 600, shares: 420, comments: 180 },
-        { name: 'Wed', views: 1800, likes: 800, shares: 550, comments: 220 },
-        { name: 'Thu', views: 2100, likes: 950, shares: 680, comments: 280 },
-        { name: 'Fri', views: 2500, likes: 1200, shares: 850, comments: 350 },
-        { name: 'Sat', views: 2200, likes: 1000, shares: 720, comments: 300 },
-        { name: 'Sun', views: 2800, likes: 1400, shares: 980, comments: 420 },
-      ]
+  const [posts, setPosts] = useState<Post[]>(() => {
+    const saved = localStorage.getItem('pulse_feed_posts');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Failed to parse posts", e);
+      }
     }
-  ]);
+    return [
+      {
+        id: 1,
+        author: "Alex Rivera",
+        avatar: "AR",
+        title: "Gold Market Analysis",
+        content: "The recent trends suggest a strong resistance at $2,200. I predict a slight pullback before the next major surge. What do you guys think? 📈",
+        category: "Gold Prediction",
+        tags: ["Gold", "Trading", "Finance"],
+        images: [],
+        likes: 42,
+        comments: 15,
+        shares: 8,
+        time: "2h ago",
+        isLiked: false,
+        commentsList: [
+          { id: 101, author: "John Doe", avatar: "JD", content: "Great analysis! I agree with the pullback.", likes: 5, isLiked: false, time: "1h ago", replies: [] },
+          { id: 102, author: "Jane Smith", avatar: "JS", content: "I think it might break resistance sooner than expected.", likes: 2, isLiked: false, time: "30m ago", replies: [] }
+        ],
+        analytics: [
+          { name: 'Mon', views: 400, likes: 240, shares: 120, comments: 45 },
+          { name: 'Tue', views: 300, likes: 139, shares: 98, comments: 32 },
+          { name: 'Wed', views: 200, likes: 980, shares: 390, comments: 120 },
+          { name: 'Thu', views: 278, likes: 390, shares: 190, comments: 67 },
+          { name: 'Fri', views: 189, likes: 480, shares: 240, comments: 89 },
+          { name: 'Sat', views: 239, likes: 380, shares: 180, comments: 56 },
+          { name: 'Sun', views: 349, likes: 430, shares: 210, comments: 78 },
+        ]
+      },
+      {
+        id: 2,
+        author: "Sarah Chen",
+        avatar: "SC",
+        title: "New AI Features are here!",
+        content: "Just tested the new Gemini 3.1 Pro features. The reasoning capabilities are off the charts! 🤖✨",
+        category: "Tech",
+        tags: ["AI", "Gemini", "Future"],
+        images: [],
+        likes: 128,
+        comments: 34,
+        shares: 22,
+        time: "5h ago",
+        isLiked: true,
+        commentsList: [
+          { id: 201, author: "Tech Enthusiast", avatar: "TE", content: "Gemini is really catching up fast!", likes: 12, isLiked: true, time: "4h ago", replies: [] }
+        ],
+        analytics: [
+          { name: 'Mon', views: 1200, likes: 450, shares: 300, comments: 150 },
+          { name: 'Tue', views: 1500, likes: 600, shares: 420, comments: 180 },
+          { name: 'Wed', views: 1800, likes: 800, shares: 550, comments: 220 },
+          { name: 'Thu', views: 2100, likes: 950, shares: 680, comments: 280 },
+          { name: 'Fri', views: 2500, likes: 1200, shares: 850, comments: 350 },
+          { name: 'Sat', views: 2200, likes: 1000, shares: 720, comments: 300 },
+          { name: 'Sun', views: 2800, likes: 1400, shares: 980, comments: 420 },
+        ]
+      }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('pulse_feed_posts', JSON.stringify(posts));
+  }, [posts]);
 
   useEffect(() => {
     intelligent_dispatcher();
