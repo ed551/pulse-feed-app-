@@ -12,7 +12,7 @@ interface Message {
 export default function Support() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'model', content: "Hi! I'm your Supervybe assistant. How can I help you today?" }
+    { role: 'model', content: "Hi! I'm your Pulse Feed AI. How can I help you today?" }
   ]);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -48,7 +48,7 @@ export default function Support() {
           { role: 'user', parts: [{ text: userMessage }] }
         ],
         config: {
-          systemInstruction: "You are a helpful customer support assistant for Supervybe, a social media platform. You help users with technical issues, account questions, and general inquiries. Be polite, concise, and professional.",
+          systemInstruction: "You are a helpful customer support assistant for Pulse Feed, a social media platform. You help users with technical issues, account questions, and general inquiries. Be polite, concise, and professional.",
         }
       });
 
@@ -93,7 +93,10 @@ export default function Support() {
           </div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Email Support</h2>
           <p className="text-gray-600 dark:text-gray-400 mb-6">Send us an email and we'll get back to you within 24 hours.</p>
-          <button className="mt-auto w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full font-bold transition-colors">
+          <button 
+            onClick={() => window.location.href = 'mailto:support@pulsefeed.com'}
+            className="mt-auto w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full font-bold transition-colors"
+          >
             Send Email
           </button>
         </div>
@@ -105,19 +108,34 @@ export default function Support() {
           Help Resources
         </h2>
         <div className="space-y-4">
-          <button className="w-full flex items-center justify-between p-4 rounded-2xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left">
+          <button 
+            onClick={() => alert('FAQ:\n1. How to earn? Participate in surveys.\n2. How to withdraw? Go to Wallet.\n3. Is it safe? Yes, we use end-to-end encryption.')}
+            className="w-full flex items-center justify-between p-4 rounded-2xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left"
+          >
             <div>
               <div className="font-bold text-gray-900 dark:text-white text-lg">FAQ</div>
               <div className="text-gray-500 dark:text-gray-400">Frequently asked questions</div>
             </div>
           </button>
-          <button className="w-full flex items-center justify-between p-4 rounded-2xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left">
+          <button 
+            onClick={() => alert('User Guide:\n- Navigation: Use the bottom bar.\n- Posting: Click the + button.\n- Profile: Edit your bio and avatar in the Profile tab.')}
+            className="w-full flex items-center justify-between p-4 rounded-2xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left"
+          >
             <div>
               <div className="font-bold text-gray-900 dark:text-white text-lg">User Guide</div>
-              <div className="text-gray-500 dark:text-gray-400">Learn how to use Supervybe</div>
+              <div className="text-gray-500 dark:text-gray-400">Learn how to use Pulse Feed</div>
             </div>
           </button>
-          <button className="w-full flex items-center justify-between p-4 rounded-2xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left">
+          <button 
+            onClick={() => {
+              const link = document.createElement('a');
+              link.href = 'data:application/pdf;base64,JVBERi0xLjQKJWRmYm9keQoxIDAgb2JqCjw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+CmVuZG9iagoyIDAgb2JqCjw8L1R5cGUvUGFnZXMvQ291bnQgMS9LaWRzWzMgMCBSXT4+CmVuZG9iagozIDAgb2JqCjw8L1R5cGUvUGFnZS9QYXJlbnQgMiAwIFIvTWVkaWFCb3hbMCAwIDYxMiA3OTJdL0NvbnRlbnRzIDQgMCBSPj4KZW5kb2JqCjQgIDAgb2JqCjw8L0xlbmd0aCA0ND4+CnN0cmVhbQpCVAovRjEgMjQgVGYKODAgNzAwIFRkCihQdWxzZSBGZWVkIERvY3VtZW50KSBUagpFVAplbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA1CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxOCAwMDAwMCBuIAowMDAwMDAwMDY3IDAwMDAwIG4gCjAwMDAwMDAxMjYgMDAwMDAgbiAKMDAwMDAwMDIyNiAwMDAwMCBuIAp0cmFpbGVyCjw8L1NpemUgNS9Sb290IDEgMCBSPj4Kc3RhcnR4cmVmCjMyMQolJUVPRgo=';
+              link.download = 'Pulse_Feed_Support.pdf';
+              link.click();
+              alert('Support PDF download started!');
+            }}
+            className="w-full flex items-center justify-between p-4 rounded-2xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left"
+          >
             <div>
               <div className="font-bold text-gray-900 dark:text-white text-lg">Download Support PDF</div>
               <div className="text-gray-500 dark:text-gray-400">Offline documentation</div>
@@ -142,7 +160,7 @@ export default function Support() {
                   <Bot className="w-6 h-6" />
                 </div>
                 <div>
-                  <div className="font-bold">Supervybe AI</div>
+                  <div className="font-bold">Pulse Feed AI</div>
                   <div className="text-xs text-blue-100">Always online</div>
                 </div>
               </div>

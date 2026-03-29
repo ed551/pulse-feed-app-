@@ -159,10 +159,12 @@ export default function Profile() {
     
     // Process the pending action after successful verification
     setTimeout(() => {
-      if (pendingAction === 'security') {
-        alert("Identity verified. Opening Security Settings...");
+      if (pendingAction === 'personal') {
+        alert("Access Granted: You can now edit your Personal Information.");
+      } else if (pendingAction === 'security') {
+        alert("Identity verified. Opening Security & Fingerprint Settings...");
       } else if (pendingAction === 'delete') {
-        alert("Identity verified. Account deletion process initiated.");
+        alert("Identity verified. Account deletion process initiated. Please check your email for final confirmation.");
       } else if (pendingAction === 'privacy') {
         alert("Identity verified. Opening Privacy Preferences...");
       }
@@ -270,10 +272,18 @@ export default function Profile() {
           </div>
           
           <div className="flex space-x-2">
-            <button className="p-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-full transition-colors text-gray-700 dark:text-gray-300">
+            <button 
+              onClick={handleEditBio}
+              className="p-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-full transition-colors text-gray-700 dark:text-gray-300"
+              title="Edit Profile"
+            >
               <Edit3 className="w-5 h-5" />
             </button>
-            <button className="p-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-full transition-colors text-gray-700 dark:text-gray-300">
+            <button 
+              onClick={() => handleSensitiveAction('security')}
+              className="p-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-full transition-colors text-gray-700 dark:text-gray-300"
+              title="Account Settings"
+            >
               <Settings className="w-5 h-5" />
             </button>
           </div>
@@ -342,7 +352,7 @@ export default function Profile() {
             <Shield className="w-5 h-5 mr-2 text-indigo-500" /> Account Settings
           </h2>
           <ul className="space-y-3">
-            <li><button className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-700 dark:text-gray-300 font-medium">Personal Information</button></li>
+            <li><button onClick={() => alert('Opening Personal Information Settings...')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-700 dark:text-gray-300 font-medium">Personal Information</button></li>
             <li><button onClick={() => handleSensitiveAction('privacy')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-700 dark:text-gray-300 font-medium flex items-center justify-between">
               <span>Privacy Preferences</span>
               <Fingerprint className="w-4 h-4 text-gray-400" />
@@ -359,7 +369,7 @@ export default function Profile() {
             <LogOut className="w-5 h-5 mr-2 text-red-500" /> Actions
           </h2>
           <ul className="space-y-3">
-            <li><button className="w-full text-left px-4 py-3 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/20 dark:hover:bg-red-900/40 dark:text-red-400 transition-colors font-bold">Sign Out</button></li>
+            <li><button onClick={() => { if(confirm('Are you sure you want to sign out?')) window.location.href = '/'; }} className="w-full text-left px-4 py-3 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/20 dark:hover:bg-red-900/40 dark:text-red-400 transition-colors font-bold">Sign Out</button></li>
             <li><button onClick={() => handleSensitiveAction('delete')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-500 dark:text-gray-400 font-medium flex items-center justify-between">
               <span>Delete Account</span>
               <Fingerprint className="w-4 h-4 text-gray-400" />

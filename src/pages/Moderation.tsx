@@ -203,6 +203,7 @@ export default function Moderation() {
                   onMouseLeave={() => setIsPressing(false)}
                   onTouchStart={() => setIsPressing(true)}
                   onTouchEnd={() => setIsPressing(false)}
+                  onContextMenu={(e) => e.preventDefault()}
                   className={cn(
                     "w-24 h-24 rounded-full flex items-center justify-center transition-all duration-300 relative z-10",
                     isPressing 
@@ -250,33 +251,6 @@ export default function Moderation() {
           <Fingerprint className="w-4 h-4 mr-2" />
           AI at Work
         </div>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <button className="flex flex-col items-center justify-center p-4 bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl hover:bg-red-200 dark:hover:bg-red-900/40 transition-colors border border-red-200 dark:border-red-800/50 shadow-sm">
-          <Power className="w-8 h-8 mb-2" />
-          <span className="text-xs font-bold uppercase tracking-wider text-center">Kill Switch</span>
-        </button>
-        <button className="flex flex-col items-center justify-center p-4 bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-2xl hover:bg-green-200 dark:hover:bg-green-900/40 transition-colors border border-green-200 dark:border-green-800/50 shadow-sm">
-          <Power className="w-8 h-8 mb-2" />
-          <span className="text-xs font-bold uppercase tracking-wider text-center">Boot</span>
-        </button>
-        <button className="flex flex-col items-center justify-center p-4 bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-2xl hover:bg-blue-200 dark:hover:bg-blue-900/40 transition-colors border border-blue-200 dark:border-blue-800/50 shadow-sm">
-          <RefreshCw className="w-8 h-8 mb-2" />
-          <span className="text-xs font-bold uppercase tracking-wider text-center">Restart</span>
-        </button>
-        <button className="flex flex-col items-center justify-center p-4 bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400 rounded-2xl hover:bg-yellow-200 dark:hover:bg-yellow-900/40 transition-colors border border-yellow-200 dark:border-yellow-800/50 shadow-sm">
-          <UploadCloud className="w-8 h-8 mb-2" />
-          <span className="text-xs font-bold uppercase tracking-wider text-center">Upgrade</span>
-        </button>
-        <button className="flex flex-col items-center justify-center p-4 bg-cyan-100 dark:bg-cyan-900/20 text-cyan-600 dark:text-cyan-400 rounded-2xl hover:bg-cyan-200 dark:hover:bg-cyan-900/40 transition-colors border border-cyan-200 dark:border-cyan-800/50 shadow-sm">
-          <AlertTriangle className="w-8 h-8 mb-2" />
-          <span className="text-xs font-bold uppercase tracking-wider text-center">Problem Check</span>
-        </button>
-        <button className="flex flex-col items-center justify-center p-4 bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-2xl hover:bg-orange-200 dark:hover:bg-orange-900/40 transition-colors border border-orange-200 dark:border-orange-800/50 shadow-sm">
-          <DownloadCloud className="w-8 h-8 mb-2" />
-          <span className="text-xs font-bold uppercase tracking-wider text-center">Downgrade</span>
-        </button>
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">

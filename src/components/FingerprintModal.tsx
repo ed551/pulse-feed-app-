@@ -104,6 +104,7 @@ export default function FingerprintModal({
               onMouseLeave={() => setIsPressing(false)}
               onTouchStart={() => setIsPressing(true)}
               onTouchEnd={() => setIsPressing(false)}
+              onContextMenu={(e) => e.preventDefault()}
               className={cn(
                 "w-24 h-24 rounded-full flex items-center justify-center transition-all duration-300 relative z-10",
                 isPressing 
