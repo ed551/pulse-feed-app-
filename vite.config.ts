@@ -7,9 +7,9 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   
   return {
-    // This is the fix for the white screen on GitHub Pages.
-    // It must match your repository name exactly.
-    base: '/pulse-feed-app-/', 
+    // Setting base to './' makes all asset paths relative.
+    // This is the best fix for "White Screen" issues on GitHub Pages.
+    base: './', 
     
     plugins: [
       react(), 
@@ -28,7 +28,6 @@ export default defineConfig(({ mode }) => {
     
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
     },
   };
