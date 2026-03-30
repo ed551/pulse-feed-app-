@@ -6,7 +6,7 @@ import {
   Fingerprint, HeartPulse, MapPin, Phone, MessageCircle, Gamepad2, Globe, BrainCircuit,
   Languages, Ticket, Snowflake, Calendar, Smartphone, Monitor, PhoneCall, Wrench,
   Calculator, LayoutGrid, Power, RefreshCw, ArrowUpCircle, ArrowDownCircle, XCircle, RotateCcw, Edit3, DollarSign, LogOut, Wallet, X, Send, Search, CheckCircle2, Plus,
-  Volume2, VolumeX, Share2, Brain, TrendingUp, TrendingDown, Minus
+  Volume2, VolumeX, Share2, Brain, TrendingUp, TrendingDown, Minus, Menu
 } from "lucide-react";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { cn } from "../lib/utils";
@@ -311,12 +311,15 @@ export default function Layout() {
   const CurrentWeatherIcon = currentWeather.icon;
   const ForecastWeatherIcon = forecastWeather.icon;
 
-  const navItems = [
+  const coreNavItems = [
     { path: '/', icon: Home, color: 'text-blue-500', label: 'Home' },
     { path: '/groups', icon: Users, color: 'text-green-500', label: 'Groups' },
     { path: '/posts', icon: PlusSquare, color: 'text-pink-500', label: 'Posts' },
     { path: '/rewards', icon: Gem, color: 'text-yellow-500', label: 'Rewards' },
     { path: '/profile', icon: User, color: 'text-purple-500', label: 'Profile' },
+  ];
+
+  const extraNavItems = [
     { path: '/moderation', icon: ShieldAlert, color: 'text-red-500', label: 'Moderation' },
     { path: '/notifications', icon: Bell, color: 'text-orange-500', label: 'Notifications' },
     { path: '/calls', icon: Phone, color: 'text-indigo-500', label: 'Calls' },
@@ -324,6 +327,8 @@ export default function Layout() {
     { path: '/privacy', icon: Lock, color: 'text-indigo-500', label: 'Privacy' },
     { path: '/support', icon: Headphones, color: 'text-cyan-500', label: 'Support' },
   ];
+
+  const navItems = [...coreNavItems, ...extraNavItems];
 
   const rightLinks = [
     { type: 'icon', icon: Edit3, color: 'text-yellow-500', title: 'Note Pad', action: () => setActiveModal('notepad') },
@@ -348,12 +353,12 @@ export default function Layout() {
   ];
 
   return (
-    <div className={cn("bg-gray-200 dark:bg-black min-h-screen flex items-center justify-center transition-colors duration-300", viewMode === 'desktop' ? "p-0" : "p-4 sm:p-8")}>
+    <div className={cn("bg-gray-200 dark:bg-black min-h-[100dvh] flex items-center justify-center transition-colors duration-300", viewMode === 'desktop' ? "p-0" : "p-0 sm:p-8")}>
       <div className={cn(
         "flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden font-sans transition-all duration-500 relative",
         viewMode === 'mobile' 
-          ? "w-full sm:max-w-[375px] sm:h-[812px] sm:max-h-[90vh] sm:rounded-[2.5rem] sm:border-[8px] border-gray-800 dark:border-gray-800 shadow-2xl h-screen" 
-          : "w-full h-screen"
+          ? "w-full sm:max-w-[375px] sm:h-[812px] sm:max-h-[90vh] sm:rounded-[2.5rem] sm:border-[8px] border-gray-800 dark:border-gray-800 shadow-2xl h-[100dvh]" 
+          : "w-full h-[100dvh]"
       )}>
         {/* Header */}
         <header className="flex flex-wrap items-center justify-between px-2 sm:px-4 py-2 bg-white dark:bg-gray-800 shadow-md z-10 shrink-0 gap-2">
@@ -455,7 +460,7 @@ export default function Layout() {
         <div className="flex flex-1 overflow-hidden relative">
           
           {/* Left Utility Bar (Weather, Clock, Health) */}
-          <div className="flex flex-col w-12 sm:w-16 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 py-2 sm:py-4 items-center space-y-4 sm:space-y-6 overflow-y-auto shrink-0 z-10 custom-scrollbar">
+          <div className="hidden sm:flex flex-col w-12 sm:w-16 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 py-2 sm:py-4 items-center space-y-4 sm:space-y-6 overflow-y-auto shrink-0 z-10 custom-scrollbar">
             <div className="flex flex-col items-center space-y-1 group relative" title={`Today: ${currentWeather.type}`}>
               <CurrentWeatherIcon className={cn("w-5 h-5 sm:w-6 sm:h-6 transition-all", currentWeather.color, currentWeather.glow)} />
               <span className="text-[8px] sm:text-[10px] font-bold opacity-70">Today</span>
@@ -521,7 +526,7 @@ export default function Layout() {
           </main>
 
           {/* Right Links Bar */}
-          <div className="flex flex-col w-12 sm:w-16 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 py-2 sm:py-4 items-center space-y-3 sm:space-y-4 overflow-y-auto shrink-0 z-10 custom-scrollbar">
+          <div className="hidden sm:flex flex-col w-12 sm:w-16 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 py-2 sm:py-4 items-center space-y-3 sm:space-y-4 overflow-y-auto shrink-0 z-10 custom-scrollbar">
             {rightLinks.map((link, idx) => {
               if (link.href) {
                 return (
@@ -658,8 +663,8 @@ export default function Layout() {
         "bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shrink-0 z-20 pb-safe",
         viewMode === 'desktop' ? "sm:hidden" : ""
       )}>
-        <div className="flex flex-wrap justify-center items-center p-1 sm:p-2 max-w-screen-xl mx-auto gap-1 sm:gap-2">
-          {navItems.map((item) => {
+        <div className="flex justify-around items-center p-1 sm:p-2 max-w-screen-xl mx-auto">
+          {coreNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
             return (
@@ -677,6 +682,13 @@ export default function Layout() {
               </Link>
             );
           })}
+          <button 
+            onClick={() => setActiveModal('moreMenu')}
+            className="flex flex-col items-center p-1.5 sm:p-2 rounded-xl min-w-[60px] sm:min-w-[70px] transition-all duration-200 shrink-0 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+          >
+            <Menu className="w-5 h-5 sm:w-6 sm:h-6 mb-0.5 sm:mb-1 text-gray-500" />
+            <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-tighter truncate w-full text-center">More</span>
+          </button>
         </div>
       </nav>
       
@@ -995,6 +1007,46 @@ export default function Layout() {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+              {activeModal === 'moreMenu' && (
+                <div className="grid grid-cols-3 gap-4">
+                  {extraNavItems.map((item, idx) => {
+                    const Icon = item.icon;
+                    return (
+                      <Link 
+                        key={idx}
+                        to={item.path}
+                        onClick={() => setActiveModal(null)}
+                        className="flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors gap-2"
+                      >
+                        <Icon className={cn("w-6 h-6", item.color)} />
+                        <span className="text-xs font-bold text-center">{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                  {rightLinks.map((link, idx) => {
+                    const Wrapper = link.href ? 'a' : (link.path ? Link : 'button');
+                    const props = link.href ? { href: link.href, target: "_blank", rel: "noopener noreferrer" } : { to: link.path || '' };
+                    return (
+                      <Wrapper
+                        key={`right-${idx}`}
+                        {...props as any}
+                        onClick={() => {
+                          if (link.action) link.action();
+                          if (link.path) setActiveModal(null);
+                        }}
+                        className="flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors gap-2"
+                      >
+                        {link.type === 'img' ? (
+                          <img src={link.src} alt={link.title} className={cn("w-6 h-6 object-contain", link.darkSrc ? "dark:hidden" : "")} />
+                        ) : (
+                          link.icon && <link.icon className={cn("w-6 h-6", link.color)} />
+                        )}
+                        <span className="text-xs font-bold text-center">{link.title}</span>
+                      </Wrapper>
+                    );
+                  })}
                 </div>
               )}
             </div>
