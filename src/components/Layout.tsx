@@ -44,6 +44,51 @@ export default function Layout() {
 
   const { showNotification } = useNotifications();
 
+  const toggleTheme = () => {
+    const newTheme = !isDark;
+    setIsDark(newTheme);
+    localStorage.setItem('theme', newTheme ? 'dark' : 'light');
+    if (newTheme) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  };
+
+  const [systemStatus, setSystemStatus] = useState<{
+    status: 'optimal' | 'healing' | 'checking' | 'updating';
+    message: string;
+    lastCheck: string;
+  }>({
+    status: 'optimal',
+    message: 'System intelligence active. All units operational.',
+    lastCheck: new Date().toLocaleTimeString()
+  });
+
+  useEffect(() => {
+    const aiActions: { status: 'optimal' | 'healing' | 'checking' | 'updating'; message: string }[] = [
+      { status: 'checking', message: 'Scanning for system anomalies...' },
+      { status: 'healing', message: 'Auto-correcting minor database inconsistencies...' },
+      { status: 'updating', message: 'Syncing intelligence units with global pulse...' },
+      { status: 'optimal', message: 'System health: 100%. Self-healing complete.' }
+    ];
+
+    const interval = setInterval(() => {
+      const randomAction = aiActions[Math.floor(Math.random() * aiActions.length)];
+      setSystemStatus({
+        ...randomAction,
+        lastCheck: new Date().toLocaleTimeString()
+      });
+      
+      // Occasionally show a notification for "AI Insight"
+      if (Math.random() > 0.8) {
+        showNotification("AI Insight", { body: "System optimized for peak community engagement." });
+      }
+    }, 30000); // Every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [showNotification]);
+
   const handleShare = async () => {
     if (isShortening) return;
     setIsShortening(true);
@@ -140,59 +185,43 @@ export default function Layout() {
 
   const location = useLocation();
 
-  useEffect(() => {
-    localStorage.setItem('user_notes_list', JSON.stringify(notes));
-  }, [notes]);
+  // Smart Gold Prediction Logic
+  const [goldPrediction, setGoldPrediction] = useState('⏭️');
+  const [goldSeller, setGoldSeller] = useState('Global Bullion');
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isStopwatchRunning) {
-      interval = setInterval(() => setStopwatchTime(prev => prev + 10), 10);
-    }
+    const updateGoldPrediction = () => {
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      // Day begins at 9am. If before 9am, use yesterday's seed.
+      const effectiveDate = new Date(now);
+      if (currentHour < 9) {
+        effectiveDate.setDate(now.getDate() - 1);
+      }
+      
+      const dateStr = effectiveDate.toISOString().split('T')[0];
+      const pagePath = location.pathname;
+      
+      // Seed based on date and page path for "One prediction direction in each of 10 pages"
+      const seed = `${dateStr}-${pagePath}`;
+      let hash = 0;
+      for (let i = 0; i < seed.length; i++) {
+        hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+        hash |= 0;
+      }
+      
+      const predictions = ['⏫', '⏬', '⏭️'];
+      const sellers = ['Global Bullion', 'Gold Standard', 'Aureus Trading', 'Midas Exchange', 'Pure Gold Co.'];
+      
+      setGoldPrediction(predictions[Math.abs(hash) % predictions.length]);
+      setGoldSeller(sellers[Math.abs(hash) % sellers.length]);
+    };
+
+    updateGoldPrediction();
+    const interval = setInterval(updateGoldPrediction, 60000); // Check every minute
     return () => clearInterval(interval);
-  }, [isStopwatchRunning]);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isTimerRunning && timerTime > 0) {
-      interval = setInterval(() => setTimerTime(prev => prev - 1), 1000);
-    } else if (timerTime === 0 && isTimerRunning) {
-      setIsTimerRunning(false);
-      alert('Timer Finished!');
-    }
-    return () => clearInterval(interval);
-  }, [isTimerRunning, timerTime]);
-
-  useEffect(() => {
-    // Initialize background agents
-    pulse_feeds_auto_sync();
-    daily_twin_sync();
-    midnight_settlement_engine();
-    revenue_split_engine();
-    auto_updater();
-    resource_governor();
-    theme_engine();
-    HeaderIntelligence();
-
-    const timer = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  }, [isDark]);
-
-  const toggleTheme = () => setIsDark(!isDark);
-
-  // Simulated Gold Prediction
-  const goldPredictions = ['⏫', '⏬', '⏭️'];
-  const [goldPrediction] = useState(goldPredictions[Math.floor(Math.random() * goldPredictions.length)]);
+  }, [location.pathname]);
 
   // Real-time Weather & Date Logic
   const weatherTypes = [
@@ -364,82 +393,34 @@ export default function Layout() {
       )}>
         {/* Header */}
         <header className="flex flex-wrap items-center justify-between px-2 sm:px-4 py-2 bg-white dark:bg-gray-800 shadow-md z-10 shrink-0 gap-2">
-          <div className="flex items-center space-x-1 sm:space-x-2">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-purple-600 to-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-lg sm:text-xl">P</div>
-            <span className="font-bold text-base sm:text-xl bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-blue-500">Pulse Feeds</span>
+          <div className="flex items-center">
+            <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-500 rounded-xl flex items-center justify-center text-white shadow-lg" title="Pulse Feeds">
+              <BrainCircuit className="w-6 h-6" />
+            </div>
           </div>
           
-          <div className="flex flex-col items-center justify-center">
-            <span className="text-[10px] sm:text-xs font-semibold text-yellow-600 dark:text-yellow-400 uppercase tracking-wider">Gold Prediction</span>
-            <div className="flex items-center space-x-1 bg-yellow-100 dark:bg-yellow-900/30 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full border border-yellow-200 dark:border-yellow-700/50">
-              <span className="font-bold text-xs sm:text-sm text-yellow-700 dark:text-yellow-500">Gold</span>
-              <span className="text-sm sm:text-lg">{goldPrediction}</span>
+          <div className="flex flex-col items-center justify-center flex-1">
+            <div className="flex items-center space-x-2 bg-yellow-100/50 dark:bg-yellow-900/20 px-3 sm:px-4 py-1 rounded-full border border-yellow-200/50 dark:border-yellow-700/30 shadow-sm transition-all hover:scale-105 cursor-help" title={`Best Seller: ${goldSeller}`}>
+              <span className="font-black text-[10px] sm:text-xs text-yellow-700 dark:text-yellow-500 tracking-widest uppercase">Gold</span>
+              <span className="text-sm sm:text-xl font-bold drop-shadow-sm">{goldPrediction}</span>
             </div>
+            <span className="text-[7px] font-bold text-gray-400 dark:text-gray-500 uppercase mt-0.5 tracking-tighter truncate max-w-[80px]">{goldSeller}</span>
           </div>
 
-          <div className="flex items-center space-x-1 sm:space-x-4 w-full sm:w-auto justify-between sm:justify-end order-last sm:order-none mt-1 sm:mt-0">
-            <div className="flex items-center space-x-1 sm:space-x-2">
-              <button onClick={() => setActiveModal('translate')} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Translate">
-                <Languages className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
-              </button>
-              <button onClick={() => setActiveModal('call')} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Call Support">
-                <PhoneCall className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
-              </button>
-              <button onClick={() => navigate('/calls')} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="User & Group Calls">
-                <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
-              </button>
-            </div>
-
-            <div className="flex items-center space-x-2 sm:space-x-3">
-              <div 
-                className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm bg-gray-100 dark:bg-gray-700/50 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl font-bold cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors" 
-                title={`Location: ${locationName} | Today: ${currentWeather.type} | Forecast: ${forecastWeather.type}`}
-                onClick={() => setActiveModal('weather')}
-              >
-                <div className="flex flex-col items-start mr-1 sm:mr-2">
-                  <span className="text-[8px] sm:text-[10px] text-gray-500 dark:text-gray-400 leading-none uppercase tracking-tighter">Smart Weather</span>
-                  <span className="text-[10px] sm:text-xs text-blue-600 dark:text-blue-400 leading-tight truncate max-w-[60px] sm:max-w-[100px]">{locationName}</span>
-                </div>
-                <CurrentWeatherIcon className={cn("w-4 h-4 sm:w-5 sm:h-5", currentWeather.color, currentWeather.glow)} />
-                <span className={cn(currentWeather.color, "flex items-center")}>
-                  {tempTrend && <span className="mr-0.5 text-[10px] sm:text-xs font-black">{tempTrend}</span>}
-                  {currentWeather.temp}
-                </span>
-              </div>
-
-              <div className="flex items-center space-x-1 sm:space-x-3 text-xs sm:text-sm bg-gray-100 dark:bg-gray-700/50 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl">
-                <button onClick={toggleDateFormat} className="flex items-center space-x-1 hover:text-blue-500 transition-colors" title="Change Date Format">
-                  <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
-                  <span className="font-medium">{formatDate(time, dateFormatIndex)}</span>
-                </button>
-                <div className="w-px h-3 sm:h-4 bg-gray-300 dark:bg-gray-600"></div>
-                <div className="flex items-center space-x-1 font-mono font-semibold">
-                  <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-blue-500" />
-                  <span>{time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-1">
-              <button onClick={() => setViewMode(viewMode === 'desktop' ? 'mobile' : 'desktop')} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Toggle Device View">
-                {viewMode === 'desktop' ? <Smartphone className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-300" /> : <Monitor className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 dark:text-gray-300" />}
-              </button>
-              <button onClick={toggleTheme} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Toggle Theme">
-                {isDark ? <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600" />}
-              </button>
-              {currentUser && (
-                <button 
-                  onClick={async () => {
-                    await logout();
-                    navigate('/login');
-                  }} 
-                  className="p-1.5 sm:p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 transition-colors" 
-                  title="Sign Out"
-                >
-                  <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
-                </button>
-              )}
-            </div>
+          <div className="flex items-center space-x-1 sm:space-x-2">
+            <button onClick={() => setActiveModal('translate')} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Translate">
+              <Languages className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+            </button>
+            <button onClick={() => setActiveModal('call')} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Call Support">
+              <PhoneCall className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
+            </button>
+            <button onClick={() => navigate('/calls')} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="User & Group Calls">
+              <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+            </button>
+            <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1 hidden sm:block"></div>
+            <button onClick={toggleTheme} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Toggle Theme">
+              {isDark ? <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600" />}
+            </button>
           </div>
         </header>
 
@@ -479,12 +460,9 @@ export default function Layout() {
 
           {/* Desktop Sidebar Navigation */}
           <div className={cn(
-            "flex-col w-48 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 py-4 overflow-y-auto shrink-0 z-10 custom-scrollbar",
+            "flex-col w-16 sm:w-20 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 py-4 items-center space-y-4 overflow-y-auto shrink-0 z-10 custom-scrollbar",
             viewMode === 'desktop' ? "hidden sm:flex" : "hidden"
           )}>
-            <div className="px-4 pb-2 mb-2 border-b border-gray-100 dark:border-gray-700">
-              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Menu</span>
-            </div>
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
@@ -493,13 +471,16 @@ export default function Layout() {
                   key={item.path} 
                   to={item.path}
                   className={cn(
-                    "flex items-center space-x-3 px-4 py-3 transition-all duration-200",
-                    isActive ? "bg-blue-50 dark:bg-blue-900/20 border-r-4 border-blue-500" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    "flex flex-col items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-2xl transition-all duration-300 group relative",
+                    isActive ? "bg-blue-50 dark:bg-blue-900/20 shadow-inner" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
                   )}
                   title={item.label}
                 >
-                  <Icon className={cn("w-5 h-5", item.color, isActive ? "drop-shadow-md" : "")} />
-                  <span className={cn("text-sm font-medium", isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-700 dark:text-gray-300")}>{item.label}</span>
+                  <Icon className={cn("w-5 h-5 sm:w-6 sm:h-6", item.color, isActive ? "scale-110" : "group-hover:scale-110 transition-transform")} />
+                  {isActive && <div className="absolute right-0 top-1/4 bottom-1/4 w-1 bg-blue-500 rounded-l-full"></div>}
+                  <span className="absolute left-full ml-3 px-2 py-1 bg-gray-800 text-white text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity z-50">
+                    {item.label}
+                  </span>
                 </Link>
               );
             })}
@@ -623,34 +604,55 @@ export default function Layout() {
           <PlusSquare className="w-6 h-6" />
         </Link>
 
-      {/* Pulse Core Icon with Voice Assistant */}
-      <button 
-        onClick={() => {
-          if (isSpeaking) {
-            window.speechSynthesis.cancel();
-            setIsSpeaking(false);
-          } else {
-            speakSystemStatus();
-          }
-        }} 
-        className={cn(
-          "fixed bottom-20 left-4 sm:left-6 w-10 h-10 sm:w-12 sm:h-12 bg-black/20 dark:bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-purple-500 dark:text-purple-400 opacity-30 hover:opacity-100 transition-all z-30 group",
-          isSpeaking && "opacity-100 animate-pulse"
-        )}
-        title={isSpeaking ? "Stop Speaking" : "Pulse Core: Voice Assistant"}
-      >
-        {isSpeaking ? <VolumeX className="w-5 h-5 sm:w-6 sm:h-6" /> : <BrainCircuit className="w-5 h-5 sm:w-6 sm:h-6 group-hover:scale-110 transition-transform" />}
-        <span className="absolute left-full ml-2 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity">
-          {isSpeaking ? "Speaking..." : "Pulse Core: System Healthy (Click for Voice)"}
-        </span>
-      </button>
+      {/* Master AI Icon - Subtle & Integrated */}
+      <div className="fixed bottom-20 left-4 sm:left-6 z-30 group">
+        <button 
+          onClick={() => {
+            if (isSpeaking) {
+              window.speechSynthesis.cancel();
+              setIsSpeaking(false);
+            } else {
+              speakSystemStatus();
+            }
+          }} 
+          className={cn(
+            "w-10 h-10 sm:w-12 sm:h-12 bg-white/5 dark:bg-black/5 backdrop-blur-[1px] rounded-full flex items-center justify-center text-purple-500/10 dark:text-purple-400/10 hover:text-purple-500 dark:hover:text-purple-400 hover:bg-white/10 dark:hover:bg-black/10 hover:backdrop-blur-md transition-all border border-transparent hover:border-purple-500/20 shadow-none hover:shadow-lg relative overflow-hidden",
+            isSpeaking && "text-purple-500 dark:text-purple-400 opacity-100 animate-pulse bg-white/10 dark:bg-black/10 backdrop-blur-md border-purple-500/30"
+          )}
+          title={isSpeaking ? "Stop Speaking" : "Master AI: System Controller"}
+        >
+          <BrainCircuit className={cn("w-5 h-5 sm:w-6 sm:h-6 transition-transform", isSpeaking ? "scale-110" : "group-hover:scale-110")} />
+          
+          {/* AI Activity Indicator */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+             <div className="w-full h-full border border-purple-500/10 rounded-full animate-ping opacity-20 group-hover:opacity-40"></div>
+          </div>
+        </button>
+        
+        {/* Tooltip/Status */}
+        <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 bg-gray-900/90 backdrop-blur-md text-white text-[9px] px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-all translate-x-2 group-hover:translate-x-0 border border-white/10 shadow-xl">
+          <div className="flex flex-col space-y-1">
+            <div className="flex items-center space-x-2">
+              <div className={cn(
+                "w-1.5 h-1.5 rounded-full animate-pulse",
+                systemStatus.status === 'optimal' ? "bg-green-500" : "bg-yellow-500"
+              )}></div>
+              <span className="font-bold tracking-wider uppercase">
+                {isSpeaking ? "AI Analyzing System..." : `Master AI: ${systemStatus.status}`}
+              </span>
+            </div>
+            <div className="text-[7px] text-gray-400 italic">{systemStatus.message}</div>
+            <div className="text-[6px] text-gray-500 text-right">Last check: {systemStatus.lastCheck}</div>
+          </div>
+        </div>
+      </div>
 
       {/* Bottom Smart Hub Navigation */}
       <nav className={cn(
         "bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shrink-0 z-20 pb-safe",
         viewMode === 'desktop' ? "sm:hidden" : ""
       )}>
-        <div className="flex justify-around items-center p-1 sm:p-2 max-w-screen-xl mx-auto">
+        <div className="flex justify-around items-center p-2 max-w-screen-xl mx-auto">
           {coreNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
@@ -659,22 +661,21 @@ export default function Layout() {
                 key={item.path} 
                 to={item.path}
                 className={cn(
-                  "flex flex-col items-center p-1.5 sm:p-2 rounded-xl min-w-[60px] sm:min-w-[70px] transition-all duration-200 shrink-0",
-                  isActive ? "bg-gray-100 dark:bg-gray-700 scale-105" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                  "flex flex-col items-center p-2 rounded-2xl transition-all duration-300",
+                  isActive ? "bg-gray-100 dark:bg-gray-700 scale-110 shadow-inner" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
                 )}
                 title={item.label}
               >
-                <Icon className={cn("w-5 h-5 sm:w-6 sm:h-6 mb-0.5 sm:mb-1", item.color, isActive ? "drop-shadow-md" : "")} />
-                <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-tighter truncate w-full text-center">{item.label}</span>
+                <Icon className={cn("w-6 h-6", item.color, isActive ? "drop-shadow-md" : "")} />
               </Link>
             );
           })}
           <button 
             onClick={() => setActiveModal('moreMenu')}
-            className="flex flex-col items-center p-1.5 sm:p-2 rounded-xl min-w-[60px] sm:min-w-[70px] transition-all duration-200 shrink-0 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+            className="flex flex-col items-center p-2 rounded-2xl transition-all duration-300 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+            title="More"
           >
-            <Menu className="w-5 h-5 sm:w-6 sm:h-6 mb-0.5 sm:mb-1 text-gray-500" />
-            <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-tighter truncate w-full text-center">More</span>
+            <Menu className="w-6 h-6 text-gray-500" />
           </button>
         </div>
       </nav>

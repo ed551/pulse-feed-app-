@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { PlayCircle, MessageSquare, Heart, Share2, MoreHorizontal, Sun, Snowflake, CloudRain, Cloud, CloudLightning, Send, Loader2, AlertTriangle, Search, Filter, X, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { 
+  PlayCircle, MessageSquare, Heart, Share2, MoreHorizontal, Sun, Snowflake, CloudRain, Cloud, CloudLightning, 
+  Send, Loader2, AlertTriangle, Search, Filter, X, TrendingUp, TrendingDown, Minus,
+  LayoutGrid, Globe, Gem, Smartphone, FileText, Gamepad2, DollarSign, Calendar, Clock
+} from "lucide-react";
 import { multimedia_stream_engine, content_governor, revenue_logic } from "../lib/engines";
 import { cn } from "../lib/utils";
 import AdUnit from "../components/AdUnit";
@@ -22,7 +26,15 @@ export default function Home() {
   const [dateFilter, setDateFilter] = useState("all"); // all, today, week, month
   const [userFilter, setUserFilter] = useState("");
   
-  const CATEGORIES = ['All', 'General', 'Gold Prediction', 'Tech', 'News', 'Gaming', 'Finance'];
+  const CATEGORIES = [
+    { name: 'All', icon: LayoutGrid },
+    { name: 'General', icon: Globe },
+    { name: 'Gold Prediction', icon: Gem },
+    { name: 'Tech', icon: Smartphone },
+    { name: 'News', icon: FileText },
+    { name: 'Gaming', icon: Gamepad2 },
+    { name: 'Finance', icon: DollarSign }
+  ];
 
   const feedItems = firebasePosts.map(p => ({ ...p, type: 'post', user: p.author }))
     .sort((a, b) => new Date(b.time || b.createdAt?.toDate?.()?.toISOString?.() || new Date()).getTime() - new Date(a.time || a.createdAt?.toDate?.()?.toISOString?.() || new Date()).getTime());
@@ -86,8 +98,7 @@ export default function Home() {
             <currentWeather.icon className="w-48 h-48" />
           </div>
           <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-            <div>
-              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-1">Weather Today</h2>
+            <div className="group relative">
               <div className="flex items-end space-x-4">
                 <currentWeather.icon className={cn("w-16 h-16", currentWeather.color, currentWeather.glow)} />
                 <div>
@@ -95,23 +106,28 @@ export default function Home() {
                   <div className={cn("text-lg font-medium", currentWeather.color)}>{currentWeather.type}</div>
                 </div>
               </div>
+              <span className="absolute -top-6 left-0 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Weather Today</span>
             </div>
             
             <div className="w-full sm:w-px h-px sm:h-16 bg-gray-300 dark:bg-gray-600/50"></div>
             
-            <div className="flex items-center space-x-4 bg-white/40 dark:bg-black/20 p-3 rounded-2xl backdrop-blur-sm">
+            <div className="flex items-center space-x-4 bg-white/40 dark:bg-black/20 p-3 rounded-2xl backdrop-blur-sm group relative">
               <div className="flex flex-col">
-                <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Tomorrow</span>
+                <Clock className="w-3 h-3 text-gray-500 mb-1" />
                 <span className="font-semibold text-gray-800 dark:text-gray-200">{forecastWeather.type}</span>
               </div>
               <forecastWeather.icon className={cn("w-8 h-8", forecastWeather.color, forecastWeather.glow)} />
+              <span className="absolute -top-6 right-0 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Tomorrow</span>
             </div>
           </div>
         </div>
       )}
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
-        <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-blue-500">Latest Feed</h1>
+        <div className="flex items-center space-x-2 group relative">
+          <TrendingUp className="w-6 h-6 text-purple-600" />
+          <span className="absolute -top-8 left-0 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Latest Feed</span>
+        </div>
         
         <div className="flex items-center space-x-2 w-full sm:w-auto">
           <div className="relative flex-1 sm:w-64">
@@ -180,18 +196,21 @@ export default function Home() {
       )}
 
       <div className="flex overflow-x-auto hide-scrollbar space-x-2 pb-2 mb-4">
-        {CATEGORIES.map(category => (
+        {CATEGORIES.map(cat => (
           <button
-            key={category}
-            onClick={() => setActiveCategory(category)}
+            key={cat.name}
+            onClick={() => setActiveCategory(cat.name)}
             className={cn(
-              "whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium transition-colors border",
-              activeCategory === category
-                ? "bg-purple-600 text-white border-purple-600"
+              "flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-medium transition-all border group relative",
+              activeCategory === cat.name
+                ? "bg-purple-600 text-white border-purple-600 shadow-lg scale-105"
                 : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
             )}
           >
-            {category}
+            <cat.icon className="w-4 h-4" />
+            <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
+              {cat.name}
+            </span>
           </button>
         ))}
       </div>
@@ -201,7 +220,7 @@ export default function Home() {
           // Ad bypasses filters
           if (item.type === 'ad') return true;
 
-          // Category Filter
+          {/* Category Filter */}
           if (activeCategory !== 'All' && item.category !== activeCategory) return false;
 
           // Search Query Filter
