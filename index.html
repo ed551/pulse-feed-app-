@@ -2,65 +2,73 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>📱 Pulse Feeds</title>
-  <link rel="stylesheet" crossorigin href="./assets/index-CYesbo7e.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supervybe</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="gold_pulse_aura.css">
 </head>
-<body class="dark">
+<body>
 
-    <div class="app-container" id="app">
-        <header>
-            <img src="asset/logo.png" alt="Logo" class="logo" onerror="this.src='https://picsum.photos/seed/logo/40/40'">
-            <div class="gold-indicator">Gold ⏭️</div>
-            <div class="header-widgets">
-                <div class="weather-pill"></div>
-                <div class="clock-pill"></div>
-            </div>
-        </header>
-
-        <div class="main-content">
-            <div class="sidebar-links"></div>
-
-            <div class="container">
-                <div class="card">
-                    <h2 style="font-size: 1.2rem; margin-bottom: 10px;">🔥 Latest Feed</h2>
-                    <div id="feed-area">
-                        <div class="post-item card" style="background: rgba(255, 255, 255, 0.02);">
-                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                                <div style="width: 30px; height: 30px; border-radius: 50%; background: #764ba2;"></div>
-                                <div style="font-weight: bold; font-size: 0.9rem;">Admin Pulse</div>
-                            </div>
-                            <p style="font-size: 0.85rem; margin-bottom: 10px;">Welcome to Pulse Feeds! The most boostiful community app is now live. 🚀</p>
-                            <div style="width: 100%; height: 200px; background: #000; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #555;">
-                                <span style="font-size: 3rem;">▶️</span>
-                            </div>
-                        </div>
-                        
-                        <div class="ad-banner">Sponsored: Pulse Feeds Premium - Get the edge</div>
-                        
-                        <div class="post-item card" style="background: rgba(255, 255, 255, 0.02);">
-                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                                <div style="width: 30px; height: 30px; border-radius: 50%; background: #39ff14;"></div>
-                                <div style="font-weight: bold; font-size: 0.9rem;">Gold Analyst</div>
-                            </div>
-                            <p style="font-size: 0.85rem; margin-bottom: 10px;">Gold prices are showing a steady upward trend today. Stay tuned for more updates. 💰</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card" style="text-align: center;">
-                    <p style="font-size: 0.8rem; opacity: 0.6;">System Version: 1.0.0 | Pulse Core Active</p>
-                </div>
-            </div>
+    <!-- Header -->
+    <header id="app-header">
+        <div class="logo">
+            <img src="asset/logo.png" alt="Logo">
         </div>
+        <div class="gold-indicator">
+            <span>Gold</span>
+            <span id="gold-signal">⏭️</span>
+        </div>
+        <div class="theme-toggle">
+            <button id="theme-btn">☀️/🌙</button>
+        </div>
+    </header>
 
-        <div class="ai-master">🧠</div>
-        <div class="fab">✚</div>
+    <!-- Right Sidebar Links -->
+    <nav class="right-sidebar">
+        <a href="#"><img src="asset/whatsapp_link.png" alt="WhatsApp"></a>
+        <a href="#"><img src="asset/facebook_link.png" alt="Facebook"></a>
+        <a href="#"><img src="asset/tiktok_icon_link.png" alt="TikTok"></a>
+        <a href="#"><img src="asset/YouTube_link.png" alt="YouTube"></a>
+        <a href="#"><img src="asset/gmail_link.png" alt="Gmail"></a>
+        <a href="#"><img src="asset/www.yahoo.com-link.png" alt="Yahoo"></a>
+        <a href="#"><img src="asset/map_link.png" alt="Maps"></a>
+        <a href="#"><img src="asset/fingerprint_reader.png" alt="Fingerprint"></a>
+        <a href="#"><img src="asset/brave_link.png" alt="Brave"></a>
+        <a href="#"><img src="asset/calculator_link.png" alt="Calculator"></a>
+        <a href="#"><img src="asset/calendar_link.png" alt="Calendar"></a>
+        <a href="#"><img src="asset/chrome_link.png" alt="Chrome"></a>
+        <a href="#"><img src="asset/google_apps_display_link.png" alt="Google Apps"></a>
+        <a href="#"><img src="asset/Googlg_search_link.png" alt="Search"></a>
+        <a href="#"><img src="asset/health_check_AI_link.png" alt="Health AI"></a>
+        <a href="#"><img src="asset/translate_link.png" alt="Translate"></a>
+        <a href="#"><img src="asset/Gemini_link.png" alt="Gemini"></a>
+    </nav>
 
-        <nav class="bottom-nav"></nav>
-    </div>
+    <!-- Main Content -->
+    <main id="feed-area">
+        <!-- Feed content will be dynamically generated -->
+    </main>
 
+    <!-- Bottom Navigation -->
+    <footer id="smart-hub-nav">
+        <a href="index.html">🏠</a>
+        <a href="groups.html">👥</a>
+        <a href="posts.html">➕</a>
+        <a href="rewards.html">💎</a>
+        <a href="profile.html">👤</a>
+        <a href="moderation.html">🛡️</a>
+        <a href="notifications.html">🔔</a>
+        <a href="terms.html">📜</a>
+        <a href="privacy.html">🔒</a>
+        <a href="support.html">🎧</a>
+    </footer>
+
+    <!-- Scripts -->
     <script src="script.js"></script>
-    <script src="index.js"></script>
+    <script src="theme_engine.js"></script>
+    <script src="HeaderIntelligence.js"></script>
+    <script src="multimedia_stream_engine.js"></script>
+    <script src="content_governor.js"></script>
+    <script src="revenue_logic.js"></script>
 </body>
 </html>
