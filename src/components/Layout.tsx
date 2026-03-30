@@ -334,10 +334,35 @@ export default function Layout() {
                     title={link.title}
                   >
                     {link.type === 'img' ? (
-                      <>
-                        <img src={link.src} alt={link.title} className={cn("w-5 h-5 sm:w-6 sm:h-6 object-contain", link.darkSrc ? "dark:hidden" : "")} referrerPolicy="no-referrer" />
-                        {link.darkSrc && <img src={link.darkSrc} alt={link.title} className="w-5 h-5 sm:w-6 sm:h-6 object-contain hidden dark:block" referrerPolicy="no-referrer" />}
-                      </>
+                      <div className="relative w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center">
+                        <img 
+                          src={link.src} 
+                          alt={link.title} 
+                          className={cn("w-full h-full object-contain", link.darkSrc ? "dark:hidden" : "")} 
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            const fallback = (e.target as HTMLImageElement).nextElementSibling as HTMLElement;
+                            if (fallback) fallback.style.display = 'flex';
+                          }}
+                        />
+                        {link.darkSrc && (
+                          <img 
+                            src={link.darkSrc} 
+                            alt={link.title} 
+                            className="w-full h-full object-contain hidden dark:block" 
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              const fallback = (e.target as HTMLImageElement).nextElementSibling as HTMLElement;
+                              if (fallback) fallback.style.display = 'flex';
+                            }}
+                          />
+                        )}
+                        <div className="hidden absolute inset-0 items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-lg">
+                          <Globe className="w-4 h-4 text-gray-400" />
+                        </div>
+                      </div>
                     ) : (
                       link.icon && <link.icon className={cn("w-5 h-5 sm:w-6 sm:h-6", link.color)} />
                     )}
@@ -360,10 +385,35 @@ export default function Layout() {
                   title={link.title}
                 >
                   {link.type === 'img' ? (
-                    <>
-                      <img src={link.src} alt={link.title} className={cn("w-5 h-5 sm:w-6 sm:h-6 object-contain", link.darkSrc ? "dark:hidden" : "")} referrerPolicy="no-referrer" />
-                      {link.darkSrc && <img src={link.darkSrc} alt={link.title} className="w-5 h-5 sm:w-6 sm:h-6 object-contain hidden dark:block" referrerPolicy="no-referrer" />}
-                    </>
+                    <div className="relative w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center">
+                      <img 
+                        src={link.src} 
+                        alt={link.title} 
+                        className={cn("w-full h-full object-contain", link.darkSrc ? "dark:hidden" : "")} 
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                          const fallback = (e.target as HTMLImageElement).nextElementSibling as HTMLElement;
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+                      {link.darkSrc && (
+                        <img 
+                          src={link.darkSrc} 
+                          alt={link.title} 
+                          className="w-full h-full object-contain hidden dark:block" 
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            const fallback = (e.target as HTMLImageElement).nextElementSibling as HTMLElement;
+                            if (fallback) fallback.style.display = 'flex';
+                          }}
+                        />
+                      )}
+                      <div className="hidden absolute inset-0 items-center justify-center bg-gray-100 dark:bg-gray-700 rounded-lg">
+                        <Globe className="w-4 h-4 text-gray-400" />
+                      </div>
+                    </div>
                   ) : (
                     link.icon && <link.icon className={cn("w-5 h-5 sm:w-6 sm:h-6", link.color)} />
                   )}
@@ -381,9 +431,21 @@ export default function Layout() {
           <PlusSquare className="w-6 h-6" />
         </Link>
 
+      {/* Master AI Icon */}
+      <button 
+        onClick={() => setActiveModal('health')} 
+        className="fixed bottom-20 left-4 sm:left-6 w-10 h-10 sm:w-12 sm:h-12 bg-black/20 dark:bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-purple-500 dark:text-purple-400 opacity-30 hover:opacity-100 transition-all z-30 group"
+        title="Master AI"
+      >
+        <BrainCircuit className="w-5 h-5 sm:w-6 sm:h-6 group-hover:scale-110 transition-transform" />
+        <span className="absolute left-full ml-2 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity">
+          Master AI: System Healthy
+        </span>
+      </button>
+
       {/* Bottom Smart Hub Navigation */}
       <nav className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shrink-0 z-20 pb-safe">
-        <div className="grid grid-cols-5 sm:flex sm:justify-around items-center p-1 sm:p-2 max-w-screen-xl mx-auto gap-y-1 sm:gap-y-0">
+        <div className="flex items-center p-1 sm:p-2 max-w-screen-xl mx-auto overflow-x-auto custom-scrollbar hide-scrollbar space-x-1 sm:space-x-2">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
@@ -392,13 +454,13 @@ export default function Layout() {
                 key={item.path} 
                 to={item.path}
                 className={cn(
-                  "flex flex-col items-center p-1 sm:p-2 rounded-xl min-w-[50px] sm:min-w-[60px] transition-all duration-200",
-                  isActive ? "bg-gray-100 dark:bg-gray-700 scale-105 sm:scale-110" : "hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:scale-105"
+                  "flex flex-col items-center p-1 sm:p-2 rounded-xl min-w-[70px] sm:min-w-[80px] transition-all duration-200 shrink-0",
+                  isActive ? "bg-gray-100 dark:bg-gray-700 scale-105" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
                 )}
                 title={item.label}
               >
                 <Icon className={cn("w-5 h-5 sm:w-6 sm:h-6 mb-0.5 sm:mb-1", item.color, isActive ? "drop-shadow-md" : "opacity-80")} />
-                <span className="text-[9px] sm:text-[10px] font-medium opacity-70 truncate w-full text-center">{item.label}</span>
+                <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-tighter truncate w-full text-center">{item.label}</span>
               </Link>
             );
           })}
@@ -688,7 +750,6 @@ export default function Layout() {
         .dark {
           --tw-bg-opacity: 1;
           background-color: rgb(0 0 0 / var(--tw-bg-opacity));
-          filter: brightness(0.8);
         }
         .dark .bg-gray-900 {
           background-color: #020202;
@@ -705,6 +766,7 @@ export default function Layout() {
         }
         .custom-scrollbar::-webkit-scrollbar {
           width: 4px;
+          height: 4px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
           background: transparent;
