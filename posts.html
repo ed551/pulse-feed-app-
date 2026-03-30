@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>📱 Supervybe - Posts</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark">
+
+    <header>
+        <img src="asset/logo.png" alt="Logo" class="logo" onerror="this.src='https://picsum.photos/seed/logo/40/40'">
+        <div class="gold-indicator">Gold ⏭️</div>
+        <div class="weather-clock">
+            <div class="weather-icon">☀️</div>
+            <div class="clock-date">
+                <div>00:00</div>
+                <div style="font-size: 0.6rem;">01/01/2026</div>
+            </div>
+        </div>
+    </header>
+
+    <div class="sidebar-links"></div>
+
+    <div class="container">
+        <div class="card">
+            <h2 style="font-size: 1.2rem; margin-bottom: 15px;">➕ Create Post</h2>
+            <textarea placeholder="What's on your mind?" style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid #444; border-radius: 10px; padding: 15px; color: white; font-size: 0.9rem; min-height: 100px; margin-bottom: 15px;"></textarea>
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <button style="flex: 1; background: #555; border: none; padding: 8px; border-radius: 5px; color: white; cursor: pointer;">📷 Photo</button>
+                <button style="flex: 1; background: #555; border: none; padding: 8px; border-radius: 5px; color: white; cursor: pointer;">🎥 Video</button>
+                <button style="flex: 1; background: #555; border: none; padding: 8px; border-radius: 5px; color: white; cursor: pointer;">📊 Poll</button>
+            </div>
+            <button style="width: 100%; background: #b026ff; border: none; padding: 12px; border-radius: 10px; color: white; font-weight: bold; cursor: pointer;">Post Now</button>
+        </div>
+    </div>
+
+    <div class="ai-master">🧠</div>
+    <div class="fab">➕</div>
+
+    <nav class="bottom-nav"></nav>
+
+    <script src="script.js"></script>
+    <script src="posts.js"></script>
+</body>
+</html>
