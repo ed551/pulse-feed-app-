@@ -11,8 +11,8 @@ function initApp() {
     setupSidebar();
     setupTheme();
     startBackgroundAgents();
-    setupAI();
     setupDeviceToggle();
+    setupVoiceAssistant();
 }
 
 // 0. Device View Toggle Logic
@@ -59,30 +59,51 @@ function updateHeader() {
     };
 
     // Weather & Clock Logic
+    let prevTemp = 32;
+    let lastWeatherIndex = -1;
+
     const updateClock = () => {
         const now = new Date();
         const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const dateStr = now.toLocaleDateString();
         
-        // Weather Simulation
+        // Weather Simulation (Change every minute for realism)
         const weatherStates = [
-            { icon: '☀️', color: 'orange', label: 'Hot' },
-            { icon: '❄️', color: '#00ffff', label: 'Cold' },
-            { icon: '🌧️', color: '#4a90e2', label: 'Rainy' },
-            { icon: '⛅', color: 'white', label: 'Cloudy' },
-            { icon: '⛈️', color: '#b026ff', label: 'Stormy' }
+            { icon: '☀️', color: 'orange', label: 'Hot', temp: 32 },
+            { icon: '❄️', color: '#00ffff', label: 'Cold', temp: 2 },
+            { icon: '🌧️', color: '#4a90e2', label: 'Rainy', temp: 14 },
+            { icon: '⛅', color: 'white', label: 'Cloudy', temp: 20 },
+            { icon: '⛈️', color: '#b026ff', label: 'Stormy', temp: 18 }
         ];
-        const weather = weatherStates[Math.floor(Math.random() * weatherStates.length)];
+        
+        const weatherIndex = Math.floor((now.getMinutes() + now.getHours()) % weatherStates.length);
+        const weather = weatherStates[weatherIndex];
+        
+        let trendSign = '';
+        if (weather.temp > prevTemp) trendSign = '+';
+        else if (weather.temp < prevTemp) trendSign = '-';
+
+        if (weatherIndex !== lastWeatherIndex && lastWeatherIndex !== -1) {
+            const trendText = weather.temp > prevTemp ? "increasing" : (weather.temp < prevTemp ? "decreasing" : "stable");
+            const msg = new SpeechSynthesisUtterance(`Weather update: It is now ${weather.label} with a temperature of ${weather.temp} degrees. The temperature is ${trendText}.`);
+            window.speechSynthesis.speak(msg);
+        }
 
         if (weatherClock) {
             weatherClock.innerHTML = `
                 <div class="weather-icon" style="color: ${weather.color}; text-shadow: 0 0 5px ${weather.color};">${weather.icon}</div>
                 <div class="clock-date">
-                    <div>${timeStr}</div>
+                    <div style="display: flex; align-items: center; gap: 5px;">
+                        <span>${timeStr}</span>
+                        <span style="font-size: 0.7rem; color: ${weather.color}; font-weight: bold;">${trendSign}${weather.temp}°C</span>
+                    </div>
                     <div style="font-size: 0.6rem; opacity: 0.7;">${dateStr}</div>
                 </div>
             `;
         }
+
+        prevTemp = weather.temp;
+        lastWeatherIndex = weatherIndex;
     };
 
     updateGold();
@@ -173,14 +194,39 @@ function startBackgroundAgents() {
     }, 60000);
 }
 
-// 6. AI Master & Health
-function setupAI() {
-    const aiIcon = document.querySelector('.ai-master');
-    if (aiIcon) {
-        aiIcon.onclick = () => {
-            alert('🧠 Master AI: System Healthy. \n💡 Advice: Stay hydrated and take a 5-minute break.');
+// 6. Voice Assistant Logic
+function setupVoiceAssistant() {
+    const aiMaster = document.querySelector('.ai-master');
+    if (!aiMaster) return;
+
+    aiMaster.title = 'Click for Voice Assistant';
+    aiMaster.style.cursor = 'pointer';
+    
+    let isSpeaking = false;
+
+    aiMaster.onclick = () => {
+        if (isSpeaking) {
+            window.speechSynthesis.cancel();
+            isSpeaking = false;
+            aiMaster.innerHTML = '🧠';
+            aiMaster.classList.remove('speaking');
+            return;
+        }
+
+        isSpeaking = true;
+        aiMaster.innerHTML = '🔇';
+        aiMaster.classList.add('speaking');
+        
+        const statusMessage = "Pulse Feeds is currently in development. To be fully functional, I need a secure backend connection, valid API keys for all integrated services, and a verified administrative account. System health is currently optimal, but these components are required for full feature deployment.";
+        
+        const msg = new SpeechSynthesisUtterance(statusMessage);
+        msg.onend = () => {
+            isSpeaking = false;
+            aiMaster.innerHTML = '🧠';
+            aiMaster.classList.remove('speaking');
         };
-    }
+        window.speechSynthesis.speak(msg);
+    };
 }
 
 // 7. Fingerprint Health Check

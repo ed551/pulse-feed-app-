@@ -5,8 +5,10 @@ import {
   Sun, Moon, CloudRain, Cloud, CloudLightning, Clock, Watch, BellRing, StickyNote,
   Fingerprint, HeartPulse, MapPin, Phone, MessageCircle, Gamepad2, Globe, BrainCircuit,
   Languages, Ticket, Snowflake, Calendar, Smartphone, Monitor, PhoneCall, Wrench,
-  Calculator, LayoutGrid, Power, RefreshCw, ArrowUpCircle, ArrowDownCircle, XCircle, RotateCcw, Edit3, DollarSign, LogOut, Wallet, X, Send, Search, CheckCircle2, Plus
+  Calculator, LayoutGrid, Power, RefreshCw, ArrowUpCircle, ArrowDownCircle, XCircle, RotateCcw, Edit3, DollarSign, LogOut, Wallet, X, Send, Search, CheckCircle2, Plus,
+  Volume2, VolumeX
 } from "lucide-react";
+import { GoogleGenAI, Modality } from "@google/genai";
 import { cn } from "../lib/utils";
 import { 
   pulse_feeds_auto_sync, daily_twin_sync, midnight_settlement_engine, 
@@ -35,6 +37,45 @@ export default function Layout() {
   // Calculator State
   const [calcValue, setCalcValue] = useState('0');
   const [calcExpression, setCalcExpression] = useState('');
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const speakSystemStatus = async () => {
+    if (isSpeaking) return;
+    setIsSpeaking(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const statusMessage = "Pulse Feeds is currently in development. To be fully functional, I need a secure backend connection, valid API keys for all integrated services, and a verified administrative account. System health is currently optimal, but these components are required for full feature deployment.";
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: `Say clearly and professionally: ${statusMessage}` }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Kore' },
+            },
+          },
+        },
+      });
+
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
+        audio.onended = () => setIsSpeaking(false);
+        await audio.play();
+      } else {
+        throw new Error("No audio data");
+      }
+    } catch (error) {
+      console.error("TTS Error:", error);
+      // Fallback to browser TTS if Gemini fails
+      const statusMessage = "Pulse Feeds is currently in development. To be fully functional, I need a secure backend connection, valid API keys for all integrated services, and a verified administrative account. System health is currently optimal, but these components are required for full feature deployment.";
+      const msg = new SpeechSynthesisUtterance(statusMessage);
+      msg.onend = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(msg);
+    }
+  };
 
   const handleCalc = (val: string) => {
     if (val === "=") {
@@ -127,15 +168,17 @@ export default function Layout() {
 
   // Real-time Weather & Date Logic
   const weatherTypes = [
-    { type: 'Hot / Sunny', icon: Sun, color: 'text-orange-500', glow: 'drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]', symbol: '☀️', temp: '32°C' },
-    { type: 'Cold / Chilly', icon: Snowflake, color: 'text-cyan-300', glow: 'drop-shadow-[0_0_8px_rgba(103,232,249,0.8)]', symbol: '❄️', temp: '2°C' },
-    { type: 'Rainy', icon: CloudRain, color: 'text-teal-700', glow: 'drop-shadow-[0_0_8px_rgba(15,118,110,0.8)]', symbol: '🌧️', temp: '14°C' },
-    { type: 'Cloudy / Fair', icon: Cloud, color: 'text-slate-200', glow: 'drop-shadow-[0_0_8px_rgba(226,232,240,0.8)]', symbol: '⛅', temp: '20°C' },
-    { type: 'Stormy', icon: CloudLightning, color: 'text-purple-500', glow: 'drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]', symbol: '⛈️', temp: '18°C' }
+    { type: 'Hot / Sunny', icon: Sun, color: 'text-orange-500', glow: 'drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]', symbol: '☀️', temp: '32°C', tempValue: 32 },
+    { type: 'Cold / Chilly', icon: Snowflake, color: 'text-cyan-300', glow: 'drop-shadow-[0_0_8px_rgba(103,232,249,0.8)]', symbol: '❄️', temp: '2°C', tempValue: 2 },
+    { type: 'Rainy', icon: CloudRain, color: 'text-teal-700', glow: 'drop-shadow-[0_0_8px_rgba(15,118,110,0.8)]', symbol: '🌧️', temp: '14°C', tempValue: 14 },
+    { type: 'Cloudy / Fair', icon: Cloud, color: 'text-slate-200', glow: 'drop-shadow-[0_0_8px_rgba(226,232,240,0.8)]', symbol: '⛅', temp: '20°C', tempValue: 20 },
+    { type: 'Stormy', icon: CloudLightning, color: 'text-purple-500', glow: 'drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]', symbol: '⛈️', temp: '18°C', tempValue: 18 }
   ];
 
   const [currentWeather, setCurrentWeather] = useState(weatherTypes[0]);
   const [forecastWeather, setForecastWeather] = useState(weatherTypes[1]);
+  const [tempTrend, setTempTrend] = useState<'+' | '-' | ''>('');
+  const [prevTemp, setPrevTemp] = useState<number>(32);
   
   const dateFormats = ['US', 'UK', 'ISO', 'Full'];
   const [dateFormatIndex, setDateFormatIndex] = useState(0);
@@ -157,17 +200,36 @@ export default function Layout() {
     const updateWeather = () => {
       const now = new Date();
       // Prediction day starts at 12 AM midnight
-      const seed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+      const seed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate() + now.getHours(); // Change every hour
       const todayIndex = seed % weatherTypes.length;
       const forecastIndex = (seed + 1) % weatherTypes.length;
-      setCurrentWeather(weatherTypes[todayIndex]);
-      setForecastWeather(weatherTypes[forecastIndex]);
+      
+      const newWeather = weatherTypes[todayIndex];
+      const newForecast = weatherTypes[forecastIndex];
+
+      if (newWeather.tempValue > prevTemp) {
+        setTempTrend('+');
+      } else if (newWeather.tempValue < prevTemp) {
+        setTempTrend('-');
+      } else {
+        setTempTrend('');
+      }
+
+      if (newWeather.type !== currentWeather.type) {
+        const trendText = newWeather.tempValue > prevTemp ? "increasing" : (newWeather.tempValue < prevTemp ? "decreasing" : "stable");
+        const msg = new SpeechSynthesisUtterance(`Weather update: It is now ${newWeather.type} with a temperature of ${newWeather.tempValue} degrees. The temperature is ${trendText}.`);
+        window.speechSynthesis.speak(msg);
+      }
+
+      setPrevTemp(newWeather.tempValue);
+      setCurrentWeather(newWeather);
+      setForecastWeather(newForecast);
     };
     
     updateWeather();
     const interval = setInterval(updateWeather, 60000); // Check every minute
     return () => clearInterval(interval);
-  }, []);
+  }, [prevTemp, currentWeather.type]);
 
   const CurrentWeatherIcon = currentWeather.icon;
   const ForecastWeatherIcon = forecastWeather.icon;
@@ -242,7 +304,10 @@ export default function Layout() {
             <div className="flex items-center space-x-1 sm:space-x-3 text-xs sm:text-sm bg-gray-100 dark:bg-gray-700/50 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl flex-1 justify-center sm:flex-none">
               <div className="flex items-center space-x-1 font-bold" title={`Today: ${currentWeather.type} | Forecast: ${forecastWeather.type}`}>
                 <CurrentWeatherIcon className={cn("w-4 h-4 sm:w-5 sm:h-5", currentWeather.color, currentWeather.glow)} />
-                <span className={cn(currentWeather.color)}>{currentWeather.temp}</span>
+                <span className={cn(currentWeather.color)}>
+                  {tempTrend && <span className="mr-0.5">{tempTrend}</span>}
+                  {currentWeather.temp}
+                </span>
               </div>
               <div className="w-px h-3 sm:h-4 bg-gray-300 dark:bg-gray-600"></div>
               <button onClick={toggleDateFormat} className="flex items-center space-x-1 hover:text-blue-500 transition-colors" title="Change Date Format">
@@ -431,15 +496,25 @@ export default function Layout() {
           <PlusSquare className="w-6 h-6" />
         </Link>
 
-      {/* Master AI Icon */}
+      {/* Master AI Icon with Voice Assistant */}
       <button 
-        onClick={() => setActiveModal('health')} 
-        className="fixed bottom-20 left-4 sm:left-6 w-10 h-10 sm:w-12 sm:h-12 bg-black/20 dark:bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-purple-500 dark:text-purple-400 opacity-30 hover:opacity-100 transition-all z-30 group"
-        title="Master AI"
+        onClick={() => {
+          if (isSpeaking) {
+            window.speechSynthesis.cancel();
+            setIsSpeaking(false);
+          } else {
+            speakSystemStatus();
+          }
+        }} 
+        className={cn(
+          "fixed bottom-20 left-4 sm:left-6 w-10 h-10 sm:w-12 sm:h-12 bg-black/20 dark:bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-purple-500 dark:text-purple-400 opacity-30 hover:opacity-100 transition-all z-30 group",
+          isSpeaking && "opacity-100 animate-pulse"
+        )}
+        title={isSpeaking ? "Stop Speaking" : "Master AI: Voice Assistant"}
       >
-        <BrainCircuit className="w-5 h-5 sm:w-6 sm:h-6 group-hover:scale-110 transition-transform" />
+        {isSpeaking ? <VolumeX className="w-5 h-5 sm:w-6 sm:h-6" /> : <BrainCircuit className="w-5 h-5 sm:w-6 sm:h-6 group-hover:scale-110 transition-transform" />}
         <span className="absolute left-full ml-2 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity">
-          Master AI: System Healthy
+          {isSpeaking ? "Speaking..." : "Master AI: System Healthy (Click for Voice)"}
         </span>
       </button>
 
