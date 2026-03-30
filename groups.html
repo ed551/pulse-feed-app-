@@ -8,47 +8,51 @@
 </head>
 <body class="dark">
 
-    <header>
-        <img src="asset/logo.png" alt="Logo" class="logo" onerror="this.src='https://picsum.photos/seed/logo/40/40'">
-        <div class="gold-indicator">Gold ⏭️</div>
-        <div class="weather-clock">
-            <div class="weather-icon">☀️</div>
-            <div class="clock-date">
-                <div>00:00</div>
-                <div style="font-size: 0.6rem;">01/01/2026</div>
-            </div>
-        </div>
-    </header>
-
-    <div class="sidebar-links"></div>
-
-    <div class="container">
-        <div class="card">
-            <h2 style="font-size: 1.2rem; margin-bottom: 15px;">👥 Groups</h2>
-            <div id="group-list">
-                <div class="card" style="background: rgba(255, 255, 255, 0.02); display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <div style="font-weight: bold; font-size: 1rem;">Gold Investors</div>
-                        <div style="font-size: 0.8rem; color: #888;">Daily predictions and market analysis.</div>
-                    </div>
-                    <button class="join-btn" style="background: #39ff14; color: black; border: none; padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; cursor: pointer;">Join</button>
-                </div>
-
-                <div class="card" style="background: rgba(255, 255, 255, 0.02); display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <div style="font-weight: bold; font-size: 1rem;">Tech Enthusiasts</div>
-                        <div style="font-size: 0.8rem; color: #888;">Latest AI and gadget news.</div>
-                    </div>
-                    <button class="join-btn" style="background: #39ff14; color: black; border: none; padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; cursor: pointer;">Join</button>
+    <div class="app-container" id="app">
+        <header>
+            <img src="asset/logo.png" alt="Logo" class="logo" onerror="this.src='https://picsum.photos/seed/logo/40/40'">
+            <div class="gold-indicator">Gold ⏭️</div>
+            <div class="weather-clock">
+                <div class="weather-icon">☀️</div>
+                <div class="clock-date">
+                    <div>00:00</div>
+                    <div style="font-size: 0.6rem;">01/01/2026</div>
                 </div>
             </div>
+        </header>
+
+        <div class="main-content">
+            <div class="sidebar-links"></div>
+
+            <div class="container">
+                <div class="card">
+                    <h2 style="font-size: 1.2rem; margin-bottom: 15px;">👥 Groups</h2>
+                    <div id="group-list">
+                        <div class="card" style="background: rgba(255, 255, 255, 0.02); display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-weight: bold; font-size: 1rem;">Gold Investors</div>
+                                <div style="font-size: 0.8rem; color: #888;">Daily predictions and market analysis.</div>
+                            </div>
+                            <button class="join-btn" style="background: #39ff14; color: black; border: none; padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; cursor: pointer;">Join</button>
+                        </div>
+
+                        <div class="card" style="background: rgba(255, 255, 255, 0.02); display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-weight: bold; font-size: 1rem;">Tech Enthusiasts</div>
+                                <div style="font-size: 0.8rem; color: #888;">Latest AI and gadget news.</div>
+                            </div>
+                            <button class="join-btn" style="background: #39ff14; color: black; border: none; padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; cursor: pointer;">Join</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
+
+        <div class="ai-master">🧠</div>
+        <div class="fab">➕</div>
+
+        <nav class="bottom-nav"></nav>
     </div>
-
-    <div class="ai-master">🧠</div>
-    <div class="fab">➕</div>
-
-    <nav class="bottom-nav"></nav>
 
     <script src="script.js"></script>
     <script src="groups.js"></script>

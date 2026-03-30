@@ -8,56 +8,60 @@
 </head>
 <body class="dark">
 
-    <header>
-        <img src="asset/logo.png" alt="Logo" class="logo" onerror="this.src='https://picsum.photos/seed/logo/40/40'">
-        <div class="gold-indicator">Gold ⏭️</div>
-        <div class="weather-clock">
-            <div class="weather-icon">☀️</div>
-            <div class="clock-date">
-                <div>00:00</div>
-                <div style="font-size: 0.6rem;">01/01/2026</div>
-            </div>
-        </div>
-    </header>
-
-    <div class="sidebar-links"></div>
-
-    <div class="container">
-        <div class="card">
-            <h2 style="font-size: 1.2rem; margin-bottom: 10px;">🔥 Latest Feed</h2>
-            <div id="feed-area">
-                <div class="post-item card" style="background: rgba(255, 255, 255, 0.02);">
-                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                        <div style="width: 30px; height: 30px; border-radius: 50%; background: #764ba2;"></div>
-                        <div style="font-weight: bold; font-size: 0.9rem;">Admin Pulse</div>
-                    </div>
-                    <p style="font-size: 0.85rem; margin-bottom: 10px;">Welcome to Pulse Feeds! The most boostiful community app is now live. 🚀</p>
-                    <div style="width: 100%; height: 200px; background: #000; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #555;">
-                        <span style="font-size: 3rem;">▶️</span>
-                    </div>
-                </div>
-                
-                <div class="ad-banner">Sponsored: Boost your productivity with AI</div>
-                
-                <div class="post-item card" style="background: rgba(255, 255, 255, 0.02);">
-                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                        <div style="width: 30px; height: 30px; border-radius: 50%; background: #39ff14;"></div>
-                        <div style="font-weight: bold; font-size: 0.9rem;">Gold Analyst</div>
-                    </div>
-                    <p style="font-size: 0.85rem; margin-bottom: 10px;">Gold prices are showing a steady upward trend today. Stay tuned for more updates. 💰</p>
+    <div class="app-container" id="app">
+        <header>
+            <img src="asset/logo.png" alt="Logo" class="logo" onerror="this.src='https://picsum.photos/seed/logo/40/40'">
+            <div class="gold-indicator">Gold ⏭️</div>
+            <div class="weather-clock">
+                <div class="weather-icon">☀️</div>
+                <div class="clock-date">
+                    <div>00:00</div>
+                    <div style="font-size: 0.6rem;">01/01/2026</div>
                 </div>
             </div>
+        </header>
+
+        <div class="main-content">
+            <div class="sidebar-links"></div>
+
+            <div class="container">
+                <div class="card">
+                    <h2 style="font-size: 1.2rem; margin-bottom: 10px;">🔥 Latest Feed</h2>
+                    <div id="feed-area">
+                        <div class="post-item card" style="background: rgba(255, 255, 255, 0.02);">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <div style="width: 30px; height: 30px; border-radius: 50%; background: #764ba2;"></div>
+                                <div style="font-weight: bold; font-size: 0.9rem;">Admin Pulse</div>
+                            </div>
+                            <p style="font-size: 0.85rem; margin-bottom: 10px;">Welcome to Pulse Feeds! The most boostiful community app is now live. 🚀</p>
+                            <div style="width: 100%; height: 200px; background: #000; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #555;">
+                                <span style="font-size: 3rem;">▶️</span>
+                            </div>
+                        </div>
+                        
+                        <div class="ad-banner">Sponsored: Boost your productivity with AI</div>
+                        
+                        <div class="post-item card" style="background: rgba(255, 255, 255, 0.02);">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <div style="width: 30px; height: 30px; border-radius: 50%; background: #39ff14;"></div>
+                                <div style="font-weight: bold; font-size: 0.9rem;">Gold Analyst</div>
+                            </div>
+                            <p style="font-size: 0.85rem; margin-bottom: 10px;">Gold prices are showing a steady upward trend today. Stay tuned for more updates. 💰</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="text-align: center;">
+                    <p style="font-size: 0.8rem; opacity: 0.6;">AI Work Sign: 🤖 Pulse Purple</p>
+                </div>
+            </div>
         </div>
 
-        <div class="card" style="text-align: center;">
-            <p style="font-size: 0.8rem; opacity: 0.6;">AI Work Sign: 🤖 Pulse Purple</p>
-        </div>
+        <div class="ai-master">🧠</div>
+        <div class="fab">✚</div>
+
+        <nav class="bottom-nav"></nav>
     </div>
-
-    <div class="ai-master">🧠</div>
-    <div class="fab">✚</div>
-
-    <nav class="bottom-nav"></nav>
 
     <script src="script.js"></script>
     <script src="index.js"></script>

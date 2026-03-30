@@ -211,7 +211,7 @@ export default function Layout() {
       <div className={cn(
         "flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden font-sans transition-all duration-500 relative",
         viewMode === 'mobile' 
-          ? "w-full max-w-[375px] h-[812px] max-h-[90vh] rounded-[2.5rem] border-[8px] border-gray-800 dark:border-gray-800 shadow-2xl" 
+          ? "w-full sm:max-w-[375px] sm:h-[812px] sm:max-h-[90vh] sm:rounded-[2.5rem] sm:border-[8px] border-gray-800 dark:border-gray-800 shadow-2xl h-screen" 
           : "w-full h-screen"
       )}>
         {/* Header */}

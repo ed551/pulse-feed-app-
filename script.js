@@ -12,6 +12,33 @@ function initApp() {
     setupTheme();
     startBackgroundAgents();
     setupAI();
+    setupDeviceToggle();
+}
+
+// 0. Device View Toggle Logic
+function setupDeviceToggle() {
+    const app = document.getElementById('app');
+    if (!app) return;
+
+    const toggle = document.createElement('div');
+    toggle.className = 'device-toggle';
+    toggle.innerHTML = '📱';
+    toggle.title = 'Toggle Smartphone/Desktop View';
+    
+    let isMobile = false;
+    
+    toggle.onclick = () => {
+        isMobile = !isMobile;
+        if (isMobile) {
+            app.classList.add('mobile-mode');
+            toggle.innerHTML = '💻';
+        } else {
+            app.classList.remove('mobile-mode');
+            toggle.innerHTML = '📱';
+        }
+    };
+    
+    document.body.appendChild(toggle);
 }
 
 // 1. Header Intelligence
