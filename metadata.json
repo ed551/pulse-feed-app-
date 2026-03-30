@@ -1,5 +1,0 @@
-{
-  "name": "Pulse Feeds",
-  "description": "A modern, enhanced, and boostiful community app for social interaction, rewards, and gold price predictions.",
-  "requestFramePermissions": ["geolocation"]
-}
