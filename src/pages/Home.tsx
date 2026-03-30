@@ -21,9 +21,9 @@ export default function Home() {
   const CATEGORIES = ['All', 'General', 'Gold Prediction', 'Tech', 'News', 'Gaming', 'Finance'];
 
   const [feedItems, setFeedItems] = useState<any[]>([
-    { id: 1, type: 'post', user: 'Alice', category: 'General', content: 'Just discovered the new supervybe app! Loving the gold predictions.', likes: 42, comments: 12, commentsList: [], timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000) }, // 2 hours ago
+    { id: 1, type: 'post', user: 'Alice', category: 'General', content: 'Just discovered the new Pulse Feeds app! Loving the gold predictions.', likes: 42, comments: 12, commentsList: [], timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000) }, // 2 hours ago
     { id: 2, type: 'video', user: 'Bob', category: 'Tech', content: 'Check out this amazing sunset!', videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4', likes: 156, comments: 34, commentsList: [], timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000) }, // 1 day ago
-    { id: 3, type: 'ad', category: 'Sponsored', content: 'Sponsored: Get 20% off your next premium subscription!', sponsor: 'Supervybe Premium', timestamp: new Date() },
+    { id: 3, type: 'ad', category: 'Sponsored', content: 'Sponsored: Get 20% off your next premium subscription!', sponsor: 'Pulse Feeds Premium', timestamp: new Date() },
     { id: 4, type: 'poll', user: 'Charlie', category: 'Gold Prediction', content: 'What feature do you use most?', options: ['Gold Prediction', 'Groups', 'Rewards'], votes: 89, commentsList: [], timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) }, // 3 days ago
   ]);
 

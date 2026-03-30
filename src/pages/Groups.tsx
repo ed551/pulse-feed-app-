@@ -11,14 +11,14 @@ export default function Groups() {
   const groups = [
     { id: 1, name: 'Gold Traders Elite', desc: 'Daily analysis and predictions for gold markets.', members: '12.4k', joined: true, admin: false },
     { id: 2, name: 'Tech Innovators', desc: 'Discussing the latest in AI and tech.', members: '8.2k', joined: false, admin: false },
-    { id: 3, name: 'Pulse Feed Creators', desc: 'Official group for platform creators and developers.', members: '45k', joined: true, admin: true },
+    { id: 3, name: 'Pulse Feeds Creators', desc: 'Official group for platform creators and developers.', members: '45k', joined: true, admin: true },
     { id: 4, name: 'Health & Wellness', desc: 'Tips for maintaining a healthy lifestyle using our AI checker.', members: '3.1k', joined: false, admin: false },
   ];
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-500 to-emerald-600">Pulse Feed</h1>
+        <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-500 to-emerald-600">Pulse Feeds</h1>
         <button className="flex items-center space-x-1 bg-green-500 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
           <Plus className="w-4 h-4" />
           <span>Create</span>

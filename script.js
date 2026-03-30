@@ -1,4 +1,4 @@
-// Global Script for Supervybe
+// Global Script for Pulse Feeds
 // Controls Smart Hub navigation, global UI interactions, and background agents
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -136,7 +136,7 @@ function setupTheme() {
 
 // 5. Background Agents (Simulated)
 function startBackgroundAgents() {
-    console.log('🚀 Supervybe Auto-Sync Started...');
+    console.log('🚀 Pulse Feeds Auto-Sync Started...');
     console.log('💰 Midnight Settlement Engine Initialized...');
     console.log('🛡️ Resource Governor Active...');
     

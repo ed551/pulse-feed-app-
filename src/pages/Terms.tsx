@@ -27,7 +27,7 @@ export default function Terms() {
         </div>
 
         <h2>1. Acceptance of Terms</h2>
-        <p>By accessing and using the Pulse Feed application, you accept and agree to be bound by the terms and provision of this agreement.</p>
+        <p>By accessing and using the Pulse Feeds application, you accept and agree to be bound by the terms and provision of this agreement.</p>
 
         <h2>2. Reward System</h2>
         <p>Users earn points for participation. Points can be redeemed for cash rewards. The platform retains a portion to cover hosting and development costs.</p>
@@ -44,7 +44,7 @@ export default function Terms() {
             onClick={() => {
               const link = document.createElement('a');
               link.href = 'data:application/pdf;base64,JVBERi0xLjQKJWRmYm9keQoxIDAgb2JqCjw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+CmVuZG9iagoyIDAgb2JqCjw8L1R5cGUvUGFnZXMvQ291bnQgMS9LaWRzWzMgMCBSXT4+CmVuZG9iagozIDAgb2JqCjw8L1R5cGUvUGFnZS9QYXJlbnQgMiAwIFIvTWVkaWFCb3hbMCAwIDYxMiA3OTJdL0NvbnRlbnRzIDQgMCBSPj4KZW5kb2JqCjQgIDAgb2JqCjw8L0xlbmd0aCA0ND4+CnN0cmVhbQpCVAovRjEgMjQgVGYKODAgNzAwIFRkCihQdWxzZSBGZWVkIERvY3VtZW50KSBUagpFVAplbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA1CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxOCAwMDAwMCBuIAowMDAwMDAwMDY3IDAwMDAwIG4gCjAwMDAwMDAxMjYgMDAwMDAgbiAKMDAwMDAwMDIyNiAwMDAwMCBuIAp0cmFpbGVyCjw8L1NpemUgNS9Sb290IDEgMCBSPj4Kc3RhcnR4cmVmCjMyMQolJUVPRgo='; 
-              link.download = 'Pulse_Feed_Terms.pdf';
+              link.download = 'Pulse_Feeds_Terms.pdf';
               link.click();
               alert('Terms PDF download started!');
             }}

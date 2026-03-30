@@ -60,8 +60,8 @@ async function startServer() {
         PartyB: shortcode,
         PhoneNumber: phoneNumber,
         CallBackURL: `${process.env.APP_URL}/api/mpesa/callback`,
-        AccountReference: "Pulse Feed",
-        TransactionDesc: "Payment for Pulse Feed",
+        AccountReference: "Pulse Feeds",
+        TransactionDesc: "Payment for Pulse Feeds",
       };
 
       const response = await fetch(url, {

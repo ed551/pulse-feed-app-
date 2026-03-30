@@ -76,7 +76,7 @@ export default function AdsDashboard() {
         
         <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-6 border border-purple-100 dark:border-purple-800/50 mb-6">
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-            Supervybe operates on a <strong>50/50 revenue sharing model for user-driven activity</strong>. Revenue generated directly from user interactions (like viewing ads or creating content) is split equally between the community and the platform.
+            Pulse Feeds operates on a <strong>50/50 revenue sharing model for user-driven activity</strong>. Revenue generated directly from user interactions (like viewing ads or creating content) is split equally between the community and the platform.
             <br/><br/>
             <span className="text-sm italic text-purple-700 dark:text-purple-300">Note: Revenue generated independently by developer activity (not involving users) is retained 100% by the platform and is not shared.</span>
           </p>

@@ -32,7 +32,7 @@ export const auto_translation_engine = () => console.log("auto_translation_engin
 export const email_system_reporter = () => console.log("email_system_reporter initialized");
 
 // Background agents
-export const supervybe_auto_sync = () => console.log("supervybe_auto_sync running");
+export const pulse_feeds_auto_sync = () => console.log("pulse_feeds_auto_sync running");
 export const daily_twin_sync = () => console.log("daily_twin_sync running");
 export const midnight_settlement_engine = () => console.log("midnight_settlement_engine running");
 export const revenue_split_engine = () => console.log("revenue_split_engine running");

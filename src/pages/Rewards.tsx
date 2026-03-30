@@ -795,7 +795,7 @@ export default function Rewards() {
         Business number : 400200,
         Account number : 853390
         
-        https://supervybe-brain.onrender.com
+        https://pulse-feeds-brain.onrender.com
       </div>
     </div>
   );
