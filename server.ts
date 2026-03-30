@@ -15,6 +15,12 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Logging middleware
+  app.use((req, res, next) => {
+    console.log(`${req.method} ${req.url}`);
+    next();
+  });
+
   // In-memory storage for transaction results (for demo purposes)
   const transactionResults = new Map<string, any>();
 
@@ -176,12 +182,13 @@ async function startServer() {
       server: { middlewareMode: true },
       appType: "custom", // Changed from "spa" to "custom" to handle root serving
     });
-    app.use(vite.middlewares);
     
-    // Explicitly serve index.html from root
+    // Explicitly serve index.html from root before Vite middleware
     app.get("/", (req, res) => {
       res.sendFile(path.join(process.cwd(), "index.html"));
     });
+
+    app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
