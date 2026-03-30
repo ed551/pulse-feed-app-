@@ -6,8 +6,12 @@ import { generateAvatar } from "../services/imageService";
 import FingerprintModal from "../components/FingerprintModal";
 import Cropper from 'react-easy-crop';
 import { cn } from "../lib/utils";
+import { useAuth } from "../contexts/AuthContext";
+import { usePosts } from "../hooks/usePosts";
 
 export default function Profile() {
+  const { currentUser, logout } = useAuth();
+  const { posts } = usePosts();
   const [isEditingBio, setIsEditingBio] = useState(false);
   const [bio, setBio] = useState("Digital creator & tech enthusiast. Building the future one line of code at a time. 🚀");
   const [tempBio, setTempBio] = useState("");
@@ -15,12 +19,14 @@ export default function Profile() {
   const [bioError, setBioError] = useState<string | null>(null);
   const [showFingerprintModal, setShowFingerprintModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(currentUser?.photoURL || null);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const userPostsCount = posts.filter(p => p.authorId === currentUser?.uid).length;
 
   // Image Editing State
   const [editingImage, setEditingImage] = useState<string | null>(null);
@@ -192,7 +198,7 @@ export default function Profile() {
               <img src={avatarUrl} alt="Profile Avatar" className="w-32 h-32 rounded-full border-4 border-white dark:border-gray-800 object-cover shadow-lg" />
             ) : (
               <div className="w-32 h-32 rounded-full border-4 border-white dark:border-gray-800 bg-gradient-to-br from-pink-400 to-orange-400 flex items-center justify-center text-white text-4xl font-bold shadow-lg">
-                U
+                {currentUser?.displayName ? currentUser.displayName.charAt(0) : "U"}
               </div>
             )}
             <button 
@@ -212,8 +218,10 @@ export default function Profile() {
           </div>
           
           <div className="flex-1 text-center sm:text-left">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-1">User Name</h1>
-            <p className="text-gray-500 dark:text-gray-400 font-medium mb-3">@username • Joined March 2026</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-1">{currentUser?.displayName || "User Name"}</h1>
+            <p className="text-gray-500 dark:text-gray-400 font-medium mb-3">
+              {currentUser?.email ? `@${currentUser.email.split('@')[0]}` : "@username"} • Joined March 2026
+            </p>
             
             <div className="mb-4 max-w-md">
               {isEditingBio ? (
@@ -292,7 +300,7 @@ export default function Profile() {
 
         <div className="mt-8 pt-8 border-t border-gray-100 dark:border-gray-700 grid grid-cols-3 gap-4 text-center">
           <div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">142</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{userPostsCount}</div>
             <div className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">Posts</div>
           </div>
           <div>
@@ -370,7 +378,7 @@ export default function Profile() {
             <LogOut className="w-5 h-5 mr-2 text-red-500" /> Actions
           </h2>
           <ul className="space-y-3">
-            <li><button onClick={() => { if(confirm('Are you sure you want to sign out?')) window.location.href = '/'; }} className="w-full text-left px-4 py-3 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/20 dark:hover:bg-red-900/40 dark:text-red-400 transition-colors font-bold">Sign Out</button></li>
+            <li><button onClick={async () => { if(confirm('Are you sure you want to sign out?')) { await logout(); window.location.href = '/'; } }} className="w-full text-left px-4 py-3 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/20 dark:hover:bg-red-900/40 dark:text-red-400 transition-colors font-bold">Sign Out</button></li>
             <li><button onClick={() => handleSensitiveAction('delete')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-500 dark:text-gray-400 font-medium flex items-center justify-between">
               <span>Delete Account</span>
               <Fingerprint className="w-4 h-4 text-gray-400" />

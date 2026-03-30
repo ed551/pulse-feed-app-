@@ -143,13 +143,45 @@ async function startServer() {
     }
   });
 
+  // International Payout Endpoint
+  app.post("/api/payout/international", async (req, res) => {
+    try {
+      const { method, amount, email, bankDetails } = req.body;
+      
+      // Here you would integrate with Stripe Connect, PayPal Payouts, or Wise API
+      // For demonstration, we simulate a successful payout
+      
+      console.log(`Processing ${method} payout of $${amount} to ${email || bankDetails?.accountNumber}`);
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      const transactionId = `INT-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+      
+      res.json({
+        success: true,
+        transactionId,
+        status: "success",
+        message: `Successfully processed ${method} payout.`
+      });
+    } catch (error: any) {
+      console.error("International Payout Error:", error);
+      res.status(500).json({ error: error.message || "Failed to process international payout" });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: "spa",
+      appType: "custom", // Changed from "spa" to "custom" to handle root serving
     });
     app.use(vite.middlewares);
+    
+    // Explicitly serve index.html from root
+    app.get("/", (req, res) => {
+      res.sendFile(path.join(process.cwd(), "index.html"));
+    });
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));

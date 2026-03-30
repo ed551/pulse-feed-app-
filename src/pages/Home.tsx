@@ -5,10 +5,14 @@ import { cn } from "../lib/utils";
 import AdUnit from "../components/AdUnit";
 import { moderateContent } from "../services/moderationService";
 import { useOutletContext } from "react-router-dom";
+import { usePosts } from "../hooks/usePosts";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function Home() {
   const { currentWeather, forecastWeather, locationName, tempTrend, weatherAnalysis } = useOutletContext<any>();
-  const [activeCommentPostId, setActiveCommentPostId] = useState<number | null>(null);
+  const { posts: firebasePosts, updatePost, loading: postsLoading } = usePosts();
+  const { currentUser, loading: authLoading } = useAuth();
+  const [activeCommentPostId, setActiveCommentPostId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [isPostingComment, setIsPostingComment] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
@@ -20,12 +24,8 @@ export default function Home() {
   
   const CATEGORIES = ['All', 'General', 'Gold Prediction', 'Tech', 'News', 'Gaming', 'Finance'];
 
-  const [feedItems, setFeedItems] = useState<any[]>([
-    { id: 1, type: 'post', user: 'Alice', category: 'General', content: 'Just discovered the new Pulse Feeds app! Loving the gold predictions.', likes: 42, comments: 12, commentsList: [], timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000) }, // 2 hours ago
-    { id: 2, type: 'video', user: 'Bob', category: 'Tech', content: 'Check out this amazing sunset!', videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4', likes: 156, comments: 34, commentsList: [], timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000) }, // 1 day ago
-    { id: 3, type: 'ad', category: 'Sponsored', content: 'Sponsored: Get 20% off your next premium subscription!', sponsor: 'Pulse Feeds Premium', timestamp: new Date() },
-    { id: 4, type: 'poll', user: 'Charlie', category: 'Gold Prediction', content: 'What feature do you use most?', options: ['Gold Prediction', 'Groups', 'Rewards'], votes: 89, commentsList: [], timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) }, // 3 days ago
-  ]);
+  const feedItems = firebasePosts.map(p => ({ ...p, type: 'post', user: p.author }))
+    .sort((a, b) => new Date(b.time || b.createdAt?.toDate?.()?.toISOString?.() || new Date()).getTime() - new Date(a.time || a.createdAt?.toDate?.()?.toISOString?.() || new Date()).getTime());
 
   useEffect(() => {
     multimedia_stream_engine();
@@ -33,8 +33,8 @@ export default function Home() {
     revenue_logic();
   }, []);
 
-  const handlePostComment = async (postId: number) => {
-    if (!commentText.trim()) return;
+  const handlePostComment = async (postId: string) => {
+    if (!commentText.trim() || !currentUser) return;
 
     setIsPostingComment(true);
     setCommentError(null);
@@ -48,19 +48,25 @@ export default function Home() {
         return;
       }
 
-      // If approved, add comment
-      setFeedItems(prevItems => 
-        prevItems.map(item => {
-          if (item.id === postId) {
-            return {
-              ...item,
-              comments: (item.comments || 0) + 1,
-              commentsList: [...(item.commentsList || []), { user: 'You', text: commentText }]
-            };
-          }
-          return item;
-        })
-      );
+      const post = firebasePosts.find(p => p.id === postId);
+      if (post) {
+        const newComment = {
+          id: Math.random().toString(36).substr(2, 9),
+          authorId: currentUser.uid,
+          author: currentUser.displayName || "Anonymous",
+          avatar: currentUser.photoURL || (currentUser.displayName ? currentUser.displayName.charAt(0) : "U"),
+          content: commentText,
+          likes: 0,
+          isLiked: false,
+          time: "Just now",
+          replies: []
+        };
+
+        await updatePost(postId, {
+          comments: (post.comments || 0) + 1,
+          commentsList: [...(post.commentsList || []), newComment]
+        });
+      }
       
       setCommentText("");
       setIsPostingComment(false);
@@ -210,9 +216,9 @@ export default function Home() {
           if (userFilter && !item.user?.toLowerCase().includes(userFilter.toLowerCase())) return false;
 
           // Date Filter
-          if (dateFilter !== 'all' && item.timestamp) {
+          if (dateFilter !== 'all' && item.time) {
             const now = new Date();
-            const itemDate = new Date(item.timestamp);
+            const itemDate = new Date(item.time);
             const diffTime = Math.abs(now.getTime() - itemDate.getTime());
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -237,15 +243,7 @@ export default function Home() {
                       <div className="font-semibold text-gray-900 dark:text-gray-100">{item.user}</div>
                       <div className="flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
                         <span>
-                          {item.timestamp ? (
-                            (() => {
-                              const diff = Math.floor((new Date().getTime() - new Date(item.timestamp).getTime()) / 1000);
-                              if (diff < 60) return 'Just now';
-                              if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-                              if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-                              return `${Math.floor(diff / 86400)}d ago`;
-                            })()
-                          ) : '2 hours ago'}
+                          {item.time || 'Just now'}
                         </span>
                         <span>•</span>
                         <span className="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">{item.category}</span>
@@ -257,26 +255,7 @@ export default function Home() {
                   </button>
                 </div>
 
-                {item.type === 'video' ? (
-                  <div className="relative rounded-xl overflow-hidden bg-black aspect-video mb-3 flex items-center justify-center group">
-                    <video src={item.videoUrl} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" loop muted autoPlay playsInline />
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <PlayCircle className="w-12 h-12 text-white/80" />
-                    </div>
-                  </div>
-                ) : item.type === 'poll' ? (
-                  <div className="mb-3 space-y-2">
-                    <p className="text-gray-800 dark:text-gray-200 mb-2">{item.content}</p>
-                    {item.options?.map((opt, i) => (
-                      <button key={i} className="w-full text-left px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-                        {opt}
-                      </button>
-                    ))}
-                    <div className="text-xs text-gray-500 mt-2">{item.votes} votes</div>
-                  </div>
-                ) : (
-                  <p className="text-gray-800 dark:text-gray-200 mb-3">{item.content}</p>
-                )}
+                <p className="text-gray-800 dark:text-gray-200 mb-3">{item.content}</p>
 
                 <div className="flex items-center space-x-6 text-gray-500 dark:text-gray-400 mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
                   <button className="flex items-center space-x-1 hover:text-pink-500 transition-colors">

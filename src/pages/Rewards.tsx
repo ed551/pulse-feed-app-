@@ -151,12 +151,28 @@ export default function Rewards() {
 
     setIsLoading(true);
 
-    // Simulate international payout processing
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const response = await fetch("/api/payout/international", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          method: payoutMethod,
+          amount: numAmount,
+          email: payoutEmail,
+          bankDetails: payoutMethod === 'bank' ? bankDetails : undefined
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to process payout");
+      }
       
       const newTransaction: Transaction = {
-        id: "INT-" + Math.random().toString(36).substr(2, 9),
+        id: data.transactionId,
         amount: numAmount,
         phoneNumber: payoutMethod === 'bank' ? bankDetails.accountNumber : payoutEmail,
         status: 'success',
@@ -170,8 +186,8 @@ export default function Rewards() {
       setPayoutAmount("");
       setPayoutEmail("");
       setBankDetails({ accountName: "", accountNumber: "", bankName: "", swiftCode: "" });
-    } catch (err) {
-      setError("Failed to process international payout. Please try again.");
+    } catch (err: any) {
+      setError(err.message || "Failed to process international payout. Please try again.");
     } finally {
       setIsLoading(false);
     }

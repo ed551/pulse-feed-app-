@@ -16,6 +16,7 @@ import {
   theme_engine, HeaderIntelligence 
 } from "../lib/engines";
 import { useAuth } from "../contexts/AuthContext";
+import { useNotifications } from "../hooks/useNotifications";
 
 export default function Layout() {
   const { currentUser, logout } = useAuth();
@@ -41,6 +42,8 @@ export default function Layout() {
   const [showShareToast, setShowShareToast] = useState(false);
   const [isShortening, setIsShortening] = useState(false);
 
+  const { showNotification } = useNotifications();
+
   const handleShare = async () => {
     if (isShortening) return;
     setIsShortening(true);
@@ -54,13 +57,11 @@ export default function Layout() {
       }
       
       await navigator.clipboard.writeText(shareUrl);
-      setShowShareToast(true);
-      setTimeout(() => setShowShareToast(false), 3000);
+      showNotification("Link Copied!", { body: "Pulse Feeds link copied to clipboard." });
     } catch (error) {
       console.error('Error sharing:', error);
       await navigator.clipboard.writeText(window.location.origin);
-      setShowShareToast(true);
-      setTimeout(() => setShowShareToast(false), 3000);
+      showNotification("Link Copied!", { body: "Pulse Feeds link copied to clipboard." });
     } finally {
       setIsShortening(false);
     }
@@ -249,7 +250,7 @@ export default function Layout() {
         try {
           const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
           const analysisResponse = await ai.models.generateContent({
-            model: "gemini-2.5-flash-preview-tts",
+            model: "gemini-3-flash-preview",
             contents: [{ parts: [{ text: `Analyze this weather for ${city}: ${newWeather.temp}, ${newWeather.type}. Provide a 1-sentence smart summary for the user.` }] }],
           });
           
@@ -331,6 +332,7 @@ export default function Layout() {
   const navItems = [...coreNavItems, ...extraNavItems];
 
   const rightLinks = [
+    { type: 'icon', icon: Share2, color: 'text-blue-500', title: 'Share Pulse Feeds', action: handleShare },
     { type: 'icon', icon: Edit3, color: 'text-yellow-500', title: 'Note Pad', action: () => setActiveModal('notepad') },
     { type: 'icon', icon: DollarSign, color: 'text-green-500', title: 'AdMob Ads', path: '/ads' },
     { type: 'img', src: 'https://cdn.simpleicons.org/whatsapp/25D366', title: 'WhatsApp', href: 'https://web.whatsapp.com' },
@@ -424,21 +426,6 @@ export default function Layout() {
               </button>
               <button onClick={toggleTheme} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Toggle Theme">
                 {isDark ? <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600" />}
-              </button>
-              <button 
-                onClick={handleShare} 
-                className={cn(
-                  "p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors relative",
-                  isShortening && "animate-pulse"
-                )} 
-                title="Share Pulse Feeds (Shortened URL)"
-              >
-                <Share2 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
-                {showShareToast && (
-                  <div className="absolute top-full right-0 mt-2 bg-black text-white text-[10px] py-1 px-2 rounded whitespace-nowrap z-50 animate-in fade-in slide-in-from-top-1">
-                    URL Copied!
-                  </div>
-                )}
               </button>
               {currentUser && (
                 <button 

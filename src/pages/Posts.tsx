@@ -1,15 +1,19 @@
 import { useEffect, useState, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { Image, Video, FileText, Smile, Send, BarChart2, Loader2, AlertTriangle, Heart, MessageCircle, Share2, MoreHorizontal, Save, Trash2, FolderOpen, Link as LinkIcon, TrendingUp, X, Tag, Plus, Check, Zap } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar, Legend } from 'recharts';
 import { intelligent_dispatcher, security_audit } from "../lib/engines";
 import { moderateContent } from "../services/moderationService";
 import { motion, AnimatePresence } from "motion/react";
 import { useNotifications } from "../hooks/useNotifications";
+import { useAuth } from "../contexts/AuthContext";
+import { usePosts, Post as FirebasePost } from "../hooks/usePosts";
 import { cn } from "../lib/utils";
 import ReactQuill from 'react-quill';
 
 interface PostComment {
-  id: number;
+  id: string;
+  authorId: string;
   author: string;
   avatar: string;
   content: string;
@@ -28,7 +32,8 @@ interface PostAnalytics {
 }
 
 interface Post {
-  id: number;
+  id: string;
+  authorId: string;
   author: string;
   avatar: string;
   title: string;
@@ -47,9 +52,9 @@ interface Post {
 
 interface CommentItemProps {
   comment: PostComment;
-  postId: number;
-  onLike: (postId: number, commentId: number) => void;
-  onReply: (postId: number, commentId: number, author: string) => void;
+  postId: string;
+  onLike: (postId: string, commentId: string) => void;
+  onReply: (postId: string, commentId: string, author: string) => void;
   depth?: number;
 }
 
@@ -123,6 +128,10 @@ const CommentItem = ({ comment, postId, onLike, onReply, depth = 0 }: CommentIte
 };
 
 export default function Posts() {
+  const { currentUser } = useAuth();
+  const { posts: firebasePosts, addPost, updatePost, deletePost: firebaseDeletePost, loading: postsLoading } = usePosts();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('feed');
   const [postContent, setPostContent] = useState("");
   const [postTitle, setPostTitle] = useState("");
   const [postTags, setPostTags] = useState<string[]>([]);
@@ -131,7 +140,7 @@ export default function Posts() {
   const [selectedCategory, setSelectedCategory] = useState("General");
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
   const [isPosting, setIsPosting] = useState(false);
-  const [editingPostId, setEditingPostId] = useState<number | null>(null);
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [editCategory, setEditCategory] = useState("");
@@ -139,94 +148,21 @@ export default function Posts() {
   const [editTagInput, setEditTagInput] = useState("");
   const [editSelectedImages, setEditSelectedImages] = useState<string[]>([]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [drafts, setDrafts] = useState<{id: string, title: string, content: string, category: string, tags: string[], date: string}[]>([]);
   const [showDrafts, setShowDrafts] = useState(false);
-  const [activeMenuId, setActiveMenuId] = useState<number | null>(null);
-  const [showAnalyticsId, setShowAnalyticsId] = useState<number | null>(null);
-  const [commentInputs, setCommentInputs] = useState<{[key: number]: string}>({});
-  const [replyingTo, setReplyingTo] = useState<{postId: number, commentId: number, author: string} | null>(null);
-  const commentInputRefs = useRef<{[key: number]: HTMLInputElement | null}>({});
+  const [drafts, setDrafts] = useState<{id: string, title: string, content: string, category: string, tags: string[], date: string}[]>([]);
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [showAnalyticsId, setShowAnalyticsId] = useState<string | null>(null);
+  const [commentInputs, setCommentInputs] = useState<{[key: string]: string}>({});
+  const [replyingTo, setReplyingTo] = useState<{postId: string, commentId: string, author: string} | null>(null);
+  const commentInputRefs = useRef<{[key: string]: HTMLInputElement | null}>({});
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
-  const observer = useRef<IntersectionObserver | null>(null);
   const { showNotification } = useNotifications();
 
   const CATEGORIES = ['General', 'Gold Prediction', 'Tech', 'News', 'Gaming', 'Finance'];
 
-  const [posts, setPosts] = useState<Post[]>(() => {
-    const saved = localStorage.getItem('pulse_feed_posts');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Failed to parse posts", e);
-      }
-    }
-    return [
-      {
-        id: 1,
-        author: "Alex Rivera",
-        avatar: "AR",
-        title: "Gold Market Analysis",
-        content: "The recent trends suggest a strong resistance at $2,200. I predict a slight pullback before the next major surge. What do you guys think? 📈",
-        category: "Gold Prediction",
-        tags: ["Gold", "Trading", "Finance"],
-        images: [],
-        likes: 42,
-        comments: 15,
-        shares: 8,
-        time: "2h ago",
-        isLiked: false,
-        commentsList: [
-          { id: 101, author: "John Doe", avatar: "JD", content: "Great analysis! I agree with the pullback.", likes: 5, isLiked: false, time: "1h ago", replies: [] },
-          { id: 102, author: "Jane Smith", avatar: "JS", content: "I think it might break resistance sooner than expected.", likes: 2, isLiked: false, time: "30m ago", replies: [] }
-        ],
-        analytics: [
-          { name: 'Mon', views: 400, likes: 240, shares: 120, comments: 45 },
-          { name: 'Tue', views: 300, likes: 139, shares: 98, comments: 32 },
-          { name: 'Wed', views: 200, likes: 980, shares: 390, comments: 120 },
-          { name: 'Thu', views: 278, likes: 390, shares: 190, comments: 67 },
-          { name: 'Fri', views: 189, likes: 480, shares: 240, comments: 89 },
-          { name: 'Sat', views: 239, likes: 380, shares: 180, comments: 56 },
-          { name: 'Sun', views: 349, likes: 430, shares: 210, comments: 78 },
-        ]
-      },
-      {
-        id: 2,
-        author: "Sarah Chen",
-        avatar: "SC",
-        title: "New AI Features are here!",
-        content: "Just tested the new Gemini 3.1 Pro features. The reasoning capabilities are off the charts! 🤖✨",
-        category: "Tech",
-        tags: ["AI", "Gemini", "Future"],
-        images: [],
-        likes: 128,
-        comments: 34,
-        shares: 22,
-        time: "5h ago",
-        isLiked: true,
-        commentsList: [
-          { id: 201, author: "Tech Enthusiast", avatar: "TE", content: "Gemini is really catching up fast!", likes: 12, isLiked: true, time: "4h ago", replies: [] }
-        ],
-        analytics: [
-          { name: 'Mon', views: 1200, likes: 450, shares: 300, comments: 150 },
-          { name: 'Tue', views: 1500, likes: 600, shares: 420, comments: 180 },
-          { name: 'Wed', views: 1800, likes: 800, shares: 550, comments: 220 },
-          { name: 'Thu', views: 2100, likes: 950, shares: 680, comments: 280 },
-          { name: 'Fri', views: 2500, likes: 1200, shares: 850, comments: 350 },
-          { name: 'Sat', views: 2200, likes: 1000, shares: 720, comments: 300 },
-          { name: 'Sun', views: 2800, likes: 1400, shares: 980, comments: 420 },
-        ]
-      }
-    ];
-  });
-
-  useEffect(() => {
-    localStorage.setItem('pulse_feed_posts', JSON.stringify(posts));
-  }, [posts]);
+  const posts = firebasePosts;
 
   useEffect(() => {
     intelligent_dispatcher();
@@ -319,7 +255,7 @@ export default function Posts() {
     }
   };
 
-  const copyLink = async (postId: number) => {
+  const copyLink = async (postId: string) => {
     const shareUrl = `${window.location.origin}${window.location.pathname}?post=${postId}`;
     try {
       await navigator.clipboard.writeText(shareUrl);
@@ -329,8 +265,10 @@ export default function Posts() {
     }
   };
 
-  const deletePost = (postId: number) => {
-    setPosts(posts.filter(p => p.id !== postId));
+  const deletePost = async (postId: string) => {
+    if (firebasePosts.find(p => p.id === postId)) {
+      await firebaseDeletePost(postId);
+    }
     showNotification("Post Deleted", { body: "Your post has been removed." });
     setActiveMenuId(null);
   };
@@ -441,53 +379,56 @@ export default function Posts() {
         return;
       }
 
-      // If approved, simulate posting
-      setTimeout(() => {
-        const newPost = {
-          id: posts.length + 1,
-          author: "You",
-          avatar: "U",
-          title: postTitle,
-          content: postContent,
-          category: selectedCategory,
-          tags: postTags,
-          images: selectedImages,
-          likes: 0,
-          comments: 0,
-          shares: 0,
-          time: "Just now",
-          isLiked: false,
-          commentsList: [],
-          analytics: Array.from({ length: 7 }).map((_, i) => ({
-            name: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i],
-            views: 0,
-            likes: 0,
-            shares: 0,
-            comments: 0
-          }))
-        };
-        setPosts([newPost, ...posts]);
-        
-        // If we were editing a draft, remove it
-        if (currentDraftId) {
-          const updatedDrafts = drafts.filter(d => d.id !== currentDraftId);
-          setDrafts(updatedDrafts);
-          localStorage.setItem('post_drafts', JSON.stringify(updatedDrafts));
-          setCurrentDraftId(null);
-        }
+      const newPostData = {
+        authorId: currentUser?.uid || 'anonymous',
+        author: currentUser?.displayName || "You",
+        avatar: currentUser?.photoURL || "U",
+        title: postTitle,
+        content: postContent,
+        category: selectedCategory,
+        tags: postTags,
+        images: selectedImages,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        time: "Just now",
+        isLiked: false,
+        commentsList: [],
+        analytics: [
+          { name: 'Mon', views: 0, likes: 0, shares: 0, comments: 0 },
+          { name: 'Tue', views: 0, likes: 0, shares: 0, comments: 0 },
+          { name: 'Wed', views: 0, likes: 0, shares: 0, comments: 0 },
+          { name: 'Thu', views: 0, likes: 0, shares: 0, comments: 0 },
+          { name: 'Fri', views: 0, likes: 0, shares: 0, comments: 0 },
+          { name: 'Sat', views: 0, likes: 0, shares: 0, comments: 0 },
+          { name: 'Sun', views: 0, likes: 0, shares: 0, comments: 0 },
+        ]
+      };
 
-        setPostContent("");
-        setPostTitle("");
-        setPostTags([]);
-        setSelectedImages([]);
-        setSelectedCategory("General");
-        setIsPosting(false);
-        
+      try {
+        await addPost(newPostData);
         showNotification("Post Published!", {
           body: `Your post in ${selectedCategory} is now live!`,
           icon: '/icon-192x192.png'
         });
-      }, 1000);
+      } catch (err) {
+        console.error("Firebase post failed", err);
+        setError("Failed to publish post. Please try again.");
+      }
+
+      setPostContent("");
+      setPostTitle("");
+      setPostTags([]);
+      setSelectedImages([]);
+      setSelectedCategory("General");
+      setIsPosting(false);
+      
+      if (currentDraftId) {
+        const updatedDrafts = drafts.filter(d => d.id !== currentDraftId);
+        setDrafts(updatedDrafts);
+        localStorage.setItem('post_drafts', JSON.stringify(updatedDrafts));
+        setCurrentDraftId(null);
+      }
 
     } catch (err) {
       setError("Failed to moderate content. Please try again.");
@@ -495,7 +436,7 @@ export default function Posts() {
     }
   };
 
-  const handleComment = async (postId: number) => {
+  const handleComment = async (postId: string) => {
     const content = commentInputs[postId];
     if (!content?.trim()) return;
 
@@ -509,9 +450,10 @@ export default function Posts() {
       }
 
       const newComment: PostComment = {
-        id: Date.now(),
-        author: "You",
-        avatar: "U",
+        id: Date.now().toString(),
+        authorId: currentUser?.uid || 'anonymous',
+        author: currentUser?.displayName || "You",
+        avatar: currentUser?.photoURL || "U",
         content: content,
         likes: 0,
         isLiked: false,
@@ -519,7 +461,7 @@ export default function Posts() {
         replies: []
       };
 
-      const addReplyToComments = (comments: PostComment[], parentId: number, reply: PostComment): PostComment[] => {
+      const addReplyToComments = (comments: PostComment[], parentId: string, reply: PostComment): PostComment[] => {
         return comments.map(comment => {
           if (comment.id === parentId) {
             return {
@@ -537,23 +479,20 @@ export default function Posts() {
         });
       };
 
-      setPosts(posts.map(post => {
-        if (post.id === postId) {
-          if (replyingTo && replyingTo.postId === postId) {
-            return {
-              ...post,
-              comments: post.comments + 1,
-              commentsList: addReplyToComments(post.commentsList, replyingTo.commentId, newComment)
-            };
-          }
-          return {
-            ...post,
-            comments: post.comments + 1,
-            commentsList: [newComment, ...(post.commentsList || [])]
-          };
+      if (firebasePosts.find(p => p.id === postId)) {
+        const post = firebasePosts.find(p => p.id === postId)!;
+        let updatedCommentsList: PostComment[];
+        if (replyingTo && replyingTo.postId === postId) {
+          updatedCommentsList = addReplyToComments(post.commentsList, replyingTo.commentId, newComment);
+        } else {
+          updatedCommentsList = [newComment, ...(post.commentsList || [])];
         }
-        return post;
-      }));
+        await updatePost(postId, {
+          comments: post.comments + 1,
+          commentsList: updatedCommentsList
+        });
+      }
+
       setCommentInputs({ ...commentInputs, [postId]: "" });
       setReplyingTo(null);
       showNotification("Comment Posted", { body: "Your comment is now visible." });
@@ -562,7 +501,7 @@ export default function Posts() {
     }
   };
 
-  const handleReply = (postId: number, commentId: number, author: string) => {
+  const handleReply = (postId: string, commentId: string, author: string) => {
     setReplyingTo({ postId, commentId, author });
     // Focus the input for this post
     setTimeout(() => {
@@ -574,7 +513,7 @@ export default function Posts() {
     }, 100);
   };
 
-  const handleLikeComment = (postId: number, commentId: number) => {
+  const handleLikeComment = async (postId: string, commentId: string) => {
     const toggleLikeInComments = (comments: PostComment[]): PostComment[] => {
       return comments.map(comment => {
         if (comment.id === commentId) {
@@ -595,34 +534,33 @@ export default function Posts() {
       });
     };
 
-    setPosts(posts.map(post => {
-      if (post.id === postId) {
-        return {
-          ...post,
-          commentsList: toggleLikeInComments(post.commentsList)
-        };
-      }
-      return post;
-    }));
+    if (firebasePosts.find(p => p.id === postId)) {
+      const post = firebasePosts.find(p => p.id === postId)!;
+      await updatePost(postId, {
+        commentsList: toggleLikeInComments(post.commentsList)
+      });
+    }
   };
 
-  const handleLike = (postId: number) => {
-    setPosts(posts.map(post => {
-      if (post.id === postId) {
-        const newIsLiked = !post.isLiked;
-        if (newIsLiked) {
-          showNotification("Post Liked!", {
-            body: `You liked ${post.author}'s post.`,
-          });
-        }
-        return {
-          ...post,
-          isLiked: newIsLiked,
-          likes: newIsLiked ? post.likes + 1 : post.likes - 1
-        };
-      }
-      return post;
-    }));
+  const handleLike = async (postId: string) => {
+    const postToLike = posts.find(p => p.id === postId);
+    if (!postToLike) return;
+
+    const newIsLiked = !postToLike.isLiked;
+    const newLikes = newIsLiked ? postToLike.likes + 1 : postToLike.likes - 1;
+
+    if (firebasePosts.find(p => p.id === postId)) {
+      await updatePost(postId, {
+        isLiked: newIsLiked,
+        likes: newLikes
+      });
+    }
+
+    if (newIsLiked) {
+      showNotification("Post Liked!", {
+        body: `You liked ${postToLike.author}'s post.`,
+      });
+    }
   };
 
   const startEditing = (post: any) => {
@@ -645,7 +583,7 @@ export default function Posts() {
     setError(null);
   };
 
-  const saveEdit = async (postId: number) => {
+  const saveEdit = async (postId: string) => {
     if (!editContent.trim() || editContent === '<p><br></p>') return;
 
     setIsSavingEdit(true);
@@ -665,19 +603,17 @@ export default function Posts() {
         return;
       }
 
-      setPosts(posts.map(post => {
-        if (post.id === postId) {
-          return {
-            ...post,
-            title: editTitle,
-            content: editContent,
-            category: editCategory,
-            tags: editTags,
-            images: editSelectedImages
-          };
-        }
-        return post;
-      }));
+      const updatedData = {
+        title: editTitle,
+        content: editContent,
+        category: editCategory,
+        tags: editTags,
+        images: editSelectedImages
+      };
+
+      if (firebasePosts.find(p => p.id === postId)) {
+        await updatePost(postId, updatedData);
+      }
 
       setEditingPostId(null);
       setEditSelectedImages([]);
@@ -691,59 +627,9 @@ export default function Posts() {
     }
   };
 
-  const loadMorePosts = useCallback(() => {
-    if (isLoadingMore || !hasMore) return;
-
-    setIsLoadingMore(true);
-
-    // Simulate API delay
-    setTimeout(() => {
-      const nextId = posts.length + 1;
-      const newPosts = Array.from({ length: 5 }).map((_, i) => ({
-        id: nextId + i,
-        author: ["Marcus Aurelius", "Elena Gilbert", "Damon Salvatore", "Bonnie Bennett", "Stefan Salvatore"][Math.floor(Math.random() * 5)],
-        avatar: "M",
-        title: `Insight #${nextId + i}`,
-        content: "This is an automatically generated post to demonstrate infinite scrolling. The content is placeholder but the functionality is real! 🚀",
-        category: CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)],
-        tags: ["Auto", "Demo", "Infinite"],
-        likes: Math.floor(Math.random() * 100),
-        comments: Math.floor(Math.random() * 50),
-        shares: Math.floor(Math.random() * 20),
-        time: `${Math.floor(Math.random() * 24)}h ago`,
-        isLiked: false,
-        commentsList: [],
-        analytics: Array.from({ length: 7 }).map((_, i) => ({
-          name: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i],
-          views: Math.floor(Math.random() * 1000),
-          likes: Math.floor(Math.random() * 500),
-          shares: Math.floor(Math.random() * 200),
-          comments: Math.floor(Math.random() * 100)
-        }))
-      }));
-
-      setPosts(prev => [...prev, ...newPosts]);
-      setIsLoadingMore(false);
-
-      // Stop after 20 posts for demo purposes
-      if (posts.length + newPosts.length >= 20) {
-        setHasMore(false);
-      }
-    }, 1500);
-  }, [isLoadingMore, hasMore, posts.length, CATEGORIES]);
-
   const lastPostElementRef = useCallback((node: HTMLDivElement | null) => {
-    if (isLoadingMore) return;
-    if (observer.current) observer.current.disconnect();
-
-    observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) {
-        loadMorePosts();
-      }
-    });
-
-    if (node) observer.current.observe(node);
-  }, [isLoadingMore, hasMore, loadMorePosts]);
+    // No-op for now, could implement Firestore pagination here
+  }, []);
 
   return (
     <div className="space-y-8 max-w-2xl mx-auto pb-12">
@@ -1594,18 +1480,12 @@ export default function Posts() {
           ))}
         </AnimatePresence>
 
-        {isLoadingMore && (
+        {postsLoading && (
           <div className="flex justify-center py-8">
             <div className="flex items-center space-x-2 text-purple-600">
               <Loader2 className="w-6 h-6 animate-spin" />
-              <span className="font-medium">Loading more posts...</span>
+              <span className="font-medium">Loading posts...</span>
             </div>
-          </div>
-        )}
-
-        {!hasMore && posts.length > 0 && (
-          <div className="text-center py-8 text-gray-500 text-sm">
-            You've reached the end of the feed ✨
           </div>
         )}
       </div>
