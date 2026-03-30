@@ -1,13 +1,443 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pulse Feed</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>📱 Pulse Feed App</title>
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+            --text-main: #2d3436;
+            --text-muted: #636e72;
+            --accent: #764ba2;
+            --nav-height: 65px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            padding-bottom: var(--nav-height);
+        }
+
+        header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .page {
+            display: none;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Home Page Styles */
+        .welcome-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .stat-box {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .stat-box .value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .stat-box .label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .trending-section h2 {
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+            color: var(--text-main);
+        }
+
+        .trending-item {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+        }
+
+        /* Feed Page Styles */
+        .post {
+            background: white;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .post-header {
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .avatar {
+            width: 40px;
+            height: 40px;
+            background: #eee;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        .post-content {
+            padding: 0 15px 15px;
+        }
+
+        .post-image {
+            width: 100%;
+            height: 200px;
+            background: #f0f0f0;
+            object-fit: cover;
+        }
+
+        .post-actions {
+            padding: 10px 15px;
+            border-top: 1px solid #f0f0f0;
+            display: flex;
+            gap: 20px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        /* Profile Page Styles */
+        .profile-header {
+            text-align: center;
+            padding: 30px 0;
+        }
+
+        .profile-avatar {
+            width: 100px;
+            height: 100px;
+            background: var(--primary-gradient);
+            border-radius: 50%;
+            margin: 0 auto 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            color: white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        .profile-info h2 {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
+
+        .profile-info p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .profile-menu {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-top: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .menu-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .menu-item:last-child {
+            border-bottom: none;
+        }
+
+        /* Bottom Nav Styles */
+        nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: var(--nav-height);
+            background: white;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+            z-index: 1000;
+        }
+
+        .nav-btn {
+            flex: 1;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.75rem;
+            transition: color 0.2s;
+            cursor: pointer;
+            border: none;
+            background: none;
+        }
+
+        .nav-btn.active {
+            color: var(--accent);
+        }
+
+        .nav-btn span {
+            font-size: 1.5rem;
+            margin-bottom: 2px;
+        }
+
+        /* Responsive Adjustments */
+        @media (min-width: 600px) {
+            body {
+                background-color: #f0f2f5;
+            }
+            .container {
+                padding: 40px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>📱 Pulse Feed App</h1>
+    </header>
+
+    <div class="container">
+        <!-- Home Page -->
+        <div id="home" class="page active">
+            <div class="welcome-card">
+                <h2>Welcome back, ed551!</h2>
+                <p style="color: var(--text-muted); margin-top: 10px;">Here's what's happening in your network today.</p>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="value">1,284</div>
+                    <div class="label">Followers</div>
+                </div>
+                <div class="stat-box">
+                    <div class="value">452</div>
+                    <div class="label">Following</div>
+                </div>
+            </div>
+
+            <div class="trending-section">
+                <h2>🔥 Trending Now</h2>
+                <div class="trending-item">
+                    <span style="font-size: 1.2rem;">🚀</span>
+                    <div>
+                        <div style="font-weight: 600;">#TechRevolution</div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted);">2.4k posts</div>
+                    </div>
+                </div>
+                <div class="trending-item">
+                    <span style="font-size: 1.2rem;">🎨</span>
+                    <div>
+                        <div style="font-weight: 600;">#DigitalArt</div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted);">1.8k posts</div>
+                    </div>
+                </div>
+                <div class="trending-item">
+                    <span style="font-size: 1.2rem;">🌍</span>
+                    <div>
+                        <div style="font-weight: 600;">#GlobalPulse</div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted);">1.2k posts</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Feed Page -->
+        <div id="feed" class="page">
+            <div class="post">
+                <div class="post-header">
+                    <div class="avatar">JD</div>
+                    <div>
+                        <div style="font-weight: 600;">Jane Doe</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">2 hours ago</div>
+                    </div>
+                </div>
+                <div class="post-content">
+                    <p>Just launched my new project! Really excited to share this with the community. Check out the link in my bio. 🚀✨</p>
+                </div>
+                <div class="post-actions">
+                    <span>❤️ 124</span>
+                    <span>💬 18</span>
+                    <span>🔄 5</span>
+                </div>
+            </div>
+
+            <div class="post">
+                <div class="post-header">
+                    <div class="avatar" style="background: #ffeaa7; color: #d63031;">AM</div>
+                    <div>
+                        <div style="font-weight: 600;">Alex Miller</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">5 hours ago</div>
+                    </div>
+                </div>
+                <div class="post-content">
+                    <p>The sunset today was absolutely breathtaking. Nature never fails to amaze me. 🌅📸</p>
+                </div>
+                <div style="width: 100%; height: 250px; background: #eee; display: flex; align-items: center; justify-content: center; color: #ccc; font-size: 3rem;">🌅</div>
+                <div class="post-actions">
+                    <span>❤️ 89</span>
+                    <span>💬 12</span>
+                    <span>🔄 2</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile Page -->
+        <div id="profile" class="page">
+            <div class="profile-header">
+                <div class="profile-avatar">👤</div>
+                <div class="profile-info">
+                    <h2>ed551</h2>
+                    <p>Digital Creator & Tech Enthusiast</p>
+                </div>
+            </div>
+
+            <div class="profile-menu">
+                <div class="menu-item">
+                    <span>Account Settings</span>
+                    <span style="color: #ccc;">›</span>
+                </div>
+                <div class="menu-item">
+                    <span>Privacy & Security</span>
+                    <span style="color: #ccc;">›</span>
+                </div>
+                <div class="menu-item">
+                    <span>Help & Support</span>
+                    <span style="color: #ccc;">›</span>
+                </div>
+                <div class="menu-item" style="color: #d63031;">
+                    <span>Logout</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <nav>
+        <button class="nav-btn active" onclick="showPage('home')">
+            <span>🏠</span>
+            Home
+        </button>
+        <button class="nav-btn" onclick="showPage('feed')">
+            <span>📰</span>
+            Feed
+        </button>
+        <button class="nav-btn" onclick="showPage('profile')">
+            <span>👤</span>
+            Profile
+        </button>
+    </nav>
+
+    <script>
+        function showPage(pageId) {
+            // Hide all pages
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+
+            // Show selected page
+            document.getElementById(pageId).classList.add('active');
+
+            // Update nav buttons
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Find the button that corresponds to the pageId
+            const buttons = document.querySelectorAll('.nav-btn');
+            if (pageId === 'home') buttons[0].classList.add('active');
+            if (pageId === 'feed') buttons[1].classList.add('active');
+            if (pageId === 'profile') buttons[2].classList.add('active');
+
+            // Scroll to top
+            window.scrollTo(0, 0);
+        }
+
+        // Handle browser back button (optional but good for UX)
+        window.onpopstate = function(event) {
+            if (event.state && event.state.page) {
+                showPage(event.state.page);
+            }
+        };
+    </script>
+</body>
 </html>
 
