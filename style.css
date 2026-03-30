@@ -162,10 +162,19 @@ header {
     position: fixed;
     right: 10px;
     top: 80px;
+    bottom: 150px;
     display: flex;
     flex-direction: column;
     gap: 12px;
     z-index: 900;
+    overflow-y: auto;
+    padding-right: 5px; /* For scrollbar */
+}
+
+/* Hide scrollbar for cleaner look */
+.sidebar-links::-webkit-scrollbar {
+    width: 0px;
+    background: transparent;
 }
 
 .sidebar-icon {

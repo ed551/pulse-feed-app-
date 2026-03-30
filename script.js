@@ -286,31 +286,15 @@ function setupVoiceAssistant() {
 // 7. Share Logic
 function setupShare() {
     const shareBtn = document.createElement('button');
-    shareBtn.className = 'share-btn';
+    shareBtn.className = 'sidebar-icon';
     shareBtn.innerHTML = '🔗';
     shareBtn.title = 'Share Pulse Feeds (Shortened URL)';
     shareBtn.style.cssText = `
-        position: fixed;
-        right: 10px;
-        bottom: 120px;
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
         background: #4a90e2;
         color: white;
         border: none;
-        cursor: pointer;
-        z-index: 1000;
-        display: flex;
-        align-items: center;
-        justify-content: center;
         font-size: 1.2rem;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-        transition: transform 0.2s, background 0.2s;
     `;
-    
-    shareBtn.onmouseover = () => shareBtn.style.transform = 'scale(1.1)';
-    shareBtn.onmouseout = () => shareBtn.style.transform = 'scale(1)';
     
     shareBtn.onclick = async () => {
         const currentUrl = window.location.origin;
@@ -326,7 +310,6 @@ function setupShare() {
             }
             await navigator.clipboard.writeText(shareUrl);
             
-            const originalHTML = shareBtn.innerHTML;
             shareBtn.innerHTML = '✅';
             setTimeout(() => {
                 shareBtn.innerHTML = '🔗';
@@ -342,7 +325,15 @@ function setupShare() {
         }
     };
     
-    document.body.appendChild(shareBtn);
+    const sidebar = document.querySelector('.sidebar-links');
+    if (sidebar) {
+        sidebar.appendChild(shareBtn);
+    } else {
+        shareBtn.style.position = 'fixed';
+        shareBtn.style.right = '10px';
+        shareBtn.style.bottom = '150px';
+        document.body.appendChild(shareBtn);
+    }
 }
 
 // 8. Fingerprint Health Check
