@@ -7,6 +7,7 @@ import Rewards from "./pages/Rewards";
 import Profile from "./pages/Profile";
 import Moderation from "./pages/Moderation";
 import Notifications from "./pages/Notifications";
+import Calls from "./pages/Calls";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import Support from "./pages/Support";
@@ -45,6 +46,11 @@ export default function App() {
               <Route path="notifications" element={
                 <ProtectedRoute>
                   <Notifications />
+                </ProtectedRoute>
+              } />
+              <Route path="calls" element={
+                <ProtectedRoute>
+                  <Calls />
                 </ProtectedRoute>
               } />
               <Route path="terms" element={<Terms />} />

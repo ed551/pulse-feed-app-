@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import { PlayCircle, MessageSquare, Heart, Share2, MoreHorizontal, Sun, Snowflake, CloudRain, Cloud, CloudLightning, Send, Loader2, AlertTriangle, Search, Filter, X } from "lucide-react";
+import { PlayCircle, MessageSquare, Heart, Share2, MoreHorizontal, Sun, Snowflake, CloudRain, Cloud, CloudLightning, Send, Loader2, AlertTriangle, Search, Filter, X, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { multimedia_stream_engine, content_governor, revenue_logic } from "../lib/engines";
 import { cn } from "../lib/utils";
 import AdUnit from "../components/AdUnit";
 import { moderateContent } from "../services/moderationService";
+import { useOutletContext } from "react-router-dom";
 
 export default function Home() {
-  const [currentWeather, setCurrentWeather] = useState<any>(null);
-  const [forecastWeather, setForecastWeather] = useState<any>(null);
+  const { currentWeather, forecastWeather, locationName, tempTrend, weatherAnalysis } = useOutletContext<any>();
   const [activeCommentPostId, setActiveCommentPostId] = useState<number | null>(null);
   const [commentText, setCommentText] = useState("");
   const [isPostingComment, setIsPostingComment] = useState(false);
@@ -31,27 +31,6 @@ export default function Home() {
     multimedia_stream_engine();
     content_governor();
     revenue_logic();
-
-    const weatherTypes = [
-      { type: 'Hot / Sunny', icon: Sun, color: 'text-orange-500', bg: 'from-orange-500/20 to-yellow-500/20', glow: 'drop-shadow-[0_0_12px_rgba(249,115,22,0.8)]', symbol: '☀️', temp: '32°C' },
-      { type: 'Cold / Chilly', icon: Snowflake, color: 'text-cyan-300', bg: 'from-cyan-500/20 to-blue-500/20', glow: 'drop-shadow-[0_0_12px_rgba(103,232,249,0.8)]', symbol: '❄️', temp: '2°C' },
-      { type: 'Rainy', icon: CloudRain, color: 'text-teal-700', bg: 'from-teal-500/20 to-emerald-500/20', glow: 'drop-shadow-[0_0_12px_rgba(15,118,110,0.8)]', symbol: '🌧️', temp: '14°C' },
-      { type: 'Cloudy / Fair', icon: Cloud, color: 'text-slate-400', bg: 'from-slate-500/20 to-gray-500/20', glow: 'drop-shadow-[0_0_12px_rgba(226,232,240,0.8)]', symbol: '⛅', temp: '20°C' },
-      { type: 'Stormy', icon: CloudLightning, color: 'text-purple-500', bg: 'from-purple-500/20 to-indigo-500/20', glow: 'drop-shadow-[0_0_12px_rgba(168,85,247,0.8)]', symbol: '⛈️', temp: '18°C' }
-    ];
-
-    const updateWeather = () => {
-      const now = new Date();
-      const seed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-      const todayIndex = seed % weatherTypes.length;
-      const forecastIndex = (seed + 1) % weatherTypes.length;
-      setCurrentWeather(weatherTypes[todayIndex]);
-      setForecastWeather(weatherTypes[forecastIndex]);
-    };
-    
-    updateWeather();
-    const interval = setInterval(updateWeather, 60000);
-    return () => clearInterval(interval);
   }, []);
 
   const handlePostComment = async (postId: number) => {

@@ -110,7 +110,7 @@ export default function Rewards() {
         startPolling(checkoutRequestId, numAmount);
         setAmount("");
       } else {
-        setError(data.CustomerMessage || data.errorMessage || "Payment failed. Please try again.");
+        setError(data.CustomerMessage || data.errorMessage || data.error || "Payment failed. Please try again.");
         setIsLoading(false);
       }
     } catch (err) {

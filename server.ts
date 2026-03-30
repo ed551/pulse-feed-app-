@@ -22,6 +22,11 @@ async function startServer() {
   const getMpesaAccessToken = async () => {
     const consumerKey = process.env.MPESA_CONSUMER_KEY;
     const consumerSecret = process.env.MPESA_CONSUMER_SECRET;
+    
+    if (!consumerKey || !consumerSecret) {
+      throw new Error("M-Pesa Consumer Key or Secret is missing in environment variables.");
+    }
+
     const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64");
 
     const response = await fetch(
@@ -34,6 +39,9 @@ async function startServer() {
     );
 
     const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.errorMessage || "Failed to get M-Pesa access token");
+    }
     return data.access_token;
   };
 
@@ -81,9 +89,9 @@ async function startServer() {
       }
 
       res.json(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error("M-Pesa STK Push Error:", error);
-      res.status(500).json({ error: "Failed to initiate STK Push" });
+      res.status(500).json({ error: error.message || "Failed to initiate STK Push" });
     }
   });
 
@@ -114,6 +122,25 @@ async function startServer() {
     }
     
     res.json(result);
+  });
+
+  // URL Shortener Proxy
+  app.get("/api/shorten", async (req, res) => {
+    const { url } = req.query;
+    if (!url) return res.status(400).json({ error: "URL is required" });
+
+    try {
+      const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(url as string)}`);
+      if (response.ok) {
+        const shortUrl = await response.text();
+        res.json({ shortUrl });
+      } else {
+        res.status(500).json({ error: "Failed to shorten URL" });
+      }
+    } catch (error) {
+      console.error("URL Shortener Error:", error);
+      res.status(500).json({ error: "Server error" });
+    }
   });
 
   // Vite middleware for development

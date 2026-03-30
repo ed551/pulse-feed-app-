@@ -6,7 +6,7 @@ import {
   Fingerprint, HeartPulse, MapPin, Phone, MessageCircle, Gamepad2, Globe, BrainCircuit,
   Languages, Ticket, Snowflake, Calendar, Smartphone, Monitor, PhoneCall, Wrench,
   Calculator, LayoutGrid, Power, RefreshCw, ArrowUpCircle, ArrowDownCircle, XCircle, RotateCcw, Edit3, DollarSign, LogOut, Wallet, X, Send, Search, CheckCircle2, Plus,
-  Volume2, VolumeX
+  Volume2, VolumeX, Share2, Brain, TrendingUp, TrendingDown, Minus
 } from "lucide-react";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { cn } from "../lib/utils";
@@ -38,6 +38,33 @@ export default function Layout() {
   const [calcValue, setCalcValue] = useState('0');
   const [calcExpression, setCalcExpression] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [showShareToast, setShowShareToast] = useState(false);
+  const [isShortening, setIsShortening] = useState(false);
+
+  const handleShare = async () => {
+    if (isShortening) return;
+    setIsShortening(true);
+    try {
+      const currentUrl = window.location.origin;
+      const response = await fetch(`/api/shorten?url=${encodeURIComponent(currentUrl)}`);
+      let shareUrl = currentUrl;
+      if (response.ok) {
+        const data = await response.json();
+        shareUrl = data.shortUrl;
+      }
+      
+      await navigator.clipboard.writeText(shareUrl);
+      setShowShareToast(true);
+      setTimeout(() => setShowShareToast(false), 3000);
+    } catch (error) {
+      console.error('Error sharing:', error);
+      await navigator.clipboard.writeText(window.location.origin);
+      setShowShareToast(true);
+      setTimeout(() => setShowShareToast(false), 3000);
+    } finally {
+      setIsShortening(false);
+    }
+  };
 
   const speakSystemStatus = async () => {
     if (isSpeaking) return;
@@ -168,17 +195,19 @@ export default function Layout() {
 
   // Real-time Weather & Date Logic
   const weatherTypes = [
-    { type: 'Hot / Sunny', icon: Sun, color: 'text-orange-500', glow: 'drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]', symbol: '☀️', temp: '32°C', tempValue: 32 },
-    { type: 'Cold / Chilly', icon: Snowflake, color: 'text-cyan-300', glow: 'drop-shadow-[0_0_8px_rgba(103,232,249,0.8)]', symbol: '❄️', temp: '2°C', tempValue: 2 },
-    { type: 'Rainy', icon: CloudRain, color: 'text-teal-700', glow: 'drop-shadow-[0_0_8px_rgba(15,118,110,0.8)]', symbol: '🌧️', temp: '14°C', tempValue: 14 },
-    { type: 'Cloudy / Fair', icon: Cloud, color: 'text-slate-200', glow: 'drop-shadow-[0_0_8px_rgba(226,232,240,0.8)]', symbol: '⛅', temp: '20°C', tempValue: 20 },
-    { type: 'Stormy', icon: CloudLightning, color: 'text-purple-500', glow: 'drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]', symbol: '⛈️', temp: '18°C', tempValue: 18 }
+    { type: 'Hot / Sunny', icon: Sun, color: 'text-orange-500', bg: 'from-orange-500/20 to-yellow-500/20', glow: 'drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]', symbol: '☀️', temp: '32°C', tempValue: 32 },
+    { type: 'Cold / Chilly', icon: Snowflake, color: 'text-cyan-300', bg: 'from-cyan-500/20 to-blue-500/20', glow: 'drop-shadow-[0_0_8px_rgba(103,232,249,0.8)]', symbol: '❄️', temp: '2°C', tempValue: 2 },
+    { type: 'Rainy', icon: CloudRain, color: 'text-teal-700', bg: 'from-teal-500/20 to-emerald-500/20', glow: 'drop-shadow-[0_0_8px_rgba(15,118,110,0.8)]', symbol: '🌧️', temp: '14°C', tempValue: 14 },
+    { type: 'Cloudy / Fair', icon: Cloud, color: 'text-slate-400', bg: 'from-slate-500/20 to-gray-500/20', glow: 'drop-shadow-[0_0_8px_rgba(226,232,240,0.8)]', symbol: '⛅', temp: '20°C', tempValue: 20 },
+    { type: 'Stormy', icon: CloudLightning, color: 'text-purple-500', bg: 'from-purple-500/20 to-indigo-500/20', glow: 'drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]', symbol: '⛈️', temp: '18°C', tempValue: 18 }
   ];
 
   const [currentWeather, setCurrentWeather] = useState(weatherTypes[0]);
   const [forecastWeather, setForecastWeather] = useState(weatherTypes[1]);
   const [tempTrend, setTempTrend] = useState<'+' | '-' | ''>('');
   const [prevTemp, setPrevTemp] = useState<number>(32);
+  const [locationName, setLocationName] = useState<string>('Detecting...');
+  const [weatherAnalysis, setWeatherAnalysis] = useState<string>('Analyzing weather patterns...');
   
   const dateFormats = ['US', 'UK', 'ISO', 'Full'];
   const [dateFormatIndex, setDateFormatIndex] = useState(0);
@@ -197,39 +226,87 @@ export default function Layout() {
   const toggleDateFormat = () => setDateFormatIndex((prev) => (prev + 1) % dateFormats.length);
 
   useEffect(() => {
-    const updateWeather = () => {
-      const now = new Date();
-      // Prediction day starts at 12 AM midnight
-      const seed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate() + now.getHours(); // Change every hour
-      const todayIndex = seed % weatherTypes.length;
-      const forecastIndex = (seed + 1) % weatherTypes.length;
-      
-      const newWeather = weatherTypes[todayIndex];
-      const newForecast = weatherTypes[forecastIndex];
+    const fetchWeather = async (lat: number, lon: number, city: string) => {
+      try {
+        const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+        const data = await response.json();
+        const current = data.current_weather;
+        
+        let typeIndex = 3; // Default Cloudy
+        if (current.weathercode === 0) typeIndex = 0; // Hot/Sunny
+        else if (current.weathercode >= 1 && current.weathercode <= 3) typeIndex = 3; // Cloudy
+        else if (current.weathercode >= 51 && current.weathercode <= 82) typeIndex = 2; // Rainy
+        else if (current.weathercode >= 95) typeIndex = 4; // Stormy
+        else if (current.weathercode >= 71 && current.weathercode <= 77) typeIndex = 1; // Cold
+        
+        const newWeather = {
+          ...weatherTypes[typeIndex],
+          temp: `${Math.round(current.temperature)}°C`,
+          tempValue: Math.round(current.temperature)
+        };
 
-      if (newWeather.tempValue > prevTemp) {
-        setTempTrend('+');
-      } else if (newWeather.tempValue < prevTemp) {
-        setTempTrend('-');
-      } else {
-        setTempTrend('');
+        // Smart Analysis via Gemini
+        try {
+          const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+          const analysisResponse = await ai.models.generateContent({
+            model: "gemini-2.5-flash-preview-tts",
+            contents: [{ parts: [{ text: `Analyze this weather for ${city}: ${newWeather.temp}, ${newWeather.type}. Provide a 1-sentence smart summary for the user.` }] }],
+          });
+          
+          if (analysisResponse.text) {
+            setWeatherAnalysis(analysisResponse.text);
+            const msg = new SpeechSynthesisUtterance(analysisResponse.text);
+            window.speechSynthesis.speak(msg);
+          }
+        } catch (aiErr) {
+          console.error("Smart Analysis Error:", aiErr);
+          const trendText = newWeather.tempValue > prevTemp ? "increasing" : (newWeather.tempValue < prevTemp ? "decreasing" : "stable");
+          const fallbackText = `Weather update for ${city}: It is now ${newWeather.type} with a temperature of ${newWeather.tempValue} degrees. The temperature is ${trendText}.`;
+          setWeatherAnalysis(fallbackText);
+          const msg = new SpeechSynthesisUtterance(fallbackText);
+          window.speechSynthesis.speak(msg);
+        }
+
+        setTempTrend(newWeather.tempValue > prevTemp ? '+' : (newWeather.tempValue < prevTemp ? '-' : ''));
+        setPrevTemp(newWeather.tempValue);
+        setCurrentWeather(newWeather);
+      } catch (error) {
+        console.error("Weather Fetch Error:", error);
       }
-
-      if (newWeather.type !== currentWeather.type) {
-        const trendText = newWeather.tempValue > prevTemp ? "increasing" : (newWeather.tempValue < prevTemp ? "decreasing" : "stable");
-        const msg = new SpeechSynthesisUtterance(`Weather update: It is now ${newWeather.type} with a temperature of ${newWeather.tempValue} degrees. The temperature is ${trendText}.`);
-        window.speechSynthesis.speak(msg);
-      }
-
-      setPrevTemp(newWeather.tempValue);
-      setCurrentWeather(newWeather);
-      setForecastWeather(newForecast);
     };
-    
-    updateWeather();
-    const interval = setInterval(updateWeather, 60000); // Check every minute
+
+    const getLocation = () => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            let city = 'Your Region';
+            try {
+              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+              const data = await res.json();
+              city = data.address.city || data.address.town || data.address.village || data.address.suburb || 'Your Region';
+              setLocationName(city);
+            } catch (e) {
+              setLocationName('Your Region');
+            }
+            fetchWeather(latitude, longitude, city);
+          },
+          (error) => {
+            console.error("Geolocation Error:", error);
+            setLocationName('Global');
+            fetchWeather(-1.286389, 36.817223, 'Global'); // Default to Nairobi
+          }
+        );
+      } else {
+        setLocationName('Global');
+        fetchWeather(-1.286389, 36.817223, 'Global');
+      }
+    };
+
+    getLocation();
+    const interval = setInterval(getLocation, 600000); // Update every 10 mins
     return () => clearInterval(interval);
-  }, [prevTemp, currentWeather.type]);
+  }, [prevTemp]);
 
   const CurrentWeatherIcon = currentWeather.icon;
   const ForecastWeatherIcon = forecastWeather.icon;
@@ -242,6 +319,7 @@ export default function Layout() {
     { path: '/profile', icon: User, color: 'text-purple-500', label: 'Profile' },
     { path: '/moderation', icon: ShieldAlert, color: 'text-red-500', label: 'Moderation' },
     { path: '/notifications', icon: Bell, color: 'text-orange-500', label: 'Notifications' },
+    { path: '/calls', icon: Phone, color: 'text-indigo-500', label: 'Calls' },
     { path: '/terms', icon: FileText, color: 'text-teal-500', label: 'Terms' },
     { path: '/privacy', icon: Lock, color: 'text-indigo-500', label: 'Privacy' },
     { path: '/support', icon: Headphones, color: 'text-cyan-500', label: 'Support' },
@@ -266,6 +344,7 @@ export default function Layout() {
     { type: 'icon', icon: Calendar, color: 'text-blue-600', title: 'Calendar' },
     { type: 'icon', icon: HeartPulse, color: 'text-red-500', title: 'Health Checker', action: () => setActiveModal('health') },
     { type: 'icon', icon: Fingerprint, color: 'text-pink-400', title: 'Fingerprint Reader', action: () => setActiveModal('fingerprint') },
+    { type: 'icon', icon: Phone, color: 'text-blue-500', title: 'Calls', path: '/calls' },
   ];
 
   return (
@@ -299,25 +378,38 @@ export default function Layout() {
               <button onClick={() => setActiveModal('call')} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Call Support">
                 <PhoneCall className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
               </button>
+              <button onClick={() => navigate('/calls')} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="User & Group Calls">
+                <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+              </button>
             </div>
 
-            <div className="flex items-center space-x-1 sm:space-x-3 text-xs sm:text-sm bg-gray-100 dark:bg-gray-700/50 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl flex-1 justify-center sm:flex-none">
-              <div className="flex items-center space-x-1 font-bold" title={`Today: ${currentWeather.type} | Forecast: ${forecastWeather.type}`}>
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <div 
+                className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm bg-gray-100 dark:bg-gray-700/50 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl font-bold cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors" 
+                title={`Location: ${locationName} | Today: ${currentWeather.type} | Forecast: ${forecastWeather.type}`}
+                onClick={() => setActiveModal('weather')}
+              >
+                <div className="flex flex-col items-start mr-1 sm:mr-2">
+                  <span className="text-[8px] sm:text-[10px] text-gray-500 dark:text-gray-400 leading-none uppercase tracking-tighter">Smart Weather</span>
+                  <span className="text-[10px] sm:text-xs text-blue-600 dark:text-blue-400 leading-tight truncate max-w-[60px] sm:max-w-[100px]">{locationName}</span>
+                </div>
                 <CurrentWeatherIcon className={cn("w-4 h-4 sm:w-5 sm:h-5", currentWeather.color, currentWeather.glow)} />
-                <span className={cn(currentWeather.color)}>
-                  {tempTrend && <span className="mr-0.5">{tempTrend}</span>}
+                <span className={cn(currentWeather.color, "flex items-center")}>
+                  {tempTrend && <span className="mr-0.5 text-[10px] sm:text-xs font-black">{tempTrend}</span>}
                   {currentWeather.temp}
                 </span>
               </div>
-              <div className="w-px h-3 sm:h-4 bg-gray-300 dark:bg-gray-600"></div>
-              <button onClick={toggleDateFormat} className="flex items-center space-x-1 hover:text-blue-500 transition-colors" title="Change Date Format">
-                <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
-                <span className="font-medium">{formatDate(time, dateFormatIndex)}</span>
-              </button>
-              <div className="w-px h-3 sm:h-4 bg-gray-300 dark:bg-gray-600"></div>
-              <div className="flex items-center space-x-1 font-mono font-semibold">
-                <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-blue-500" />
-                <span>{time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+
+              <div className="flex items-center space-x-1 sm:space-x-3 text-xs sm:text-sm bg-gray-100 dark:bg-gray-700/50 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl">
+                <button onClick={toggleDateFormat} className="flex items-center space-x-1 hover:text-blue-500 transition-colors" title="Change Date Format">
+                  <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="font-medium">{formatDate(time, dateFormatIndex)}</span>
+                </button>
+                <div className="w-px h-3 sm:h-4 bg-gray-300 dark:bg-gray-600"></div>
+                <div className="flex items-center space-x-1 font-mono font-semibold">
+                  <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-blue-500" />
+                  <span>{time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                </div>
               </div>
             </div>
             
@@ -327,6 +419,21 @@ export default function Layout() {
               </button>
               <button onClick={toggleTheme} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Toggle Theme">
                 {isDark ? <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600" />}
+              </button>
+              <button 
+                onClick={handleShare} 
+                className={cn(
+                  "p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors relative",
+                  isShortening && "animate-pulse"
+                )} 
+                title="Share Pulse Feeds (Shortened URL)"
+              >
+                <Share2 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
+                {showShareToast && (
+                  <div className="absolute top-full right-0 mt-2 bg-black text-white text-[10px] py-1 px-2 rounded whitespace-nowrap z-50 animate-in fade-in slide-in-from-top-1">
+                    URL Copied!
+                  </div>
+                )}
               </button>
               {currentUser && (
                 <button 
@@ -378,10 +485,38 @@ export default function Layout() {
             </div>
           </div>
 
+          {/* Desktop Sidebar Navigation */}
+          <div className={cn(
+            "flex-col w-48 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 py-4 overflow-y-auto shrink-0 z-10 custom-scrollbar",
+            viewMode === 'desktop' ? "hidden sm:flex" : "hidden"
+          )}>
+            <div className="px-4 pb-2 mb-2 border-b border-gray-100 dark:border-gray-700">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Menu</span>
+            </div>
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
+              return (
+                <Link 
+                  key={item.path} 
+                  to={item.path}
+                  className={cn(
+                    "flex items-center space-x-3 px-4 py-3 transition-all duration-200",
+                    isActive ? "bg-blue-50 dark:bg-blue-900/20 border-r-4 border-blue-500" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                  )}
+                  title={item.label}
+                >
+                  <Icon className={cn("w-5 h-5", item.color, isActive ? "drop-shadow-md" : "")} />
+                  <span className={cn("text-sm font-medium", isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-700 dark:text-gray-300")}>{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+
           {/* Center Content */}
           <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900 p-4 pb-24 relative">
             <div className="max-w-4xl mx-auto w-full h-full">
-              <Outlet />
+              <Outlet context={{ currentWeather, forecastWeather, locationName, tempTrend, weatherAnalysis }} />
             </div>
           </main>
 
@@ -496,7 +631,7 @@ export default function Layout() {
           <PlusSquare className="w-6 h-6" />
         </Link>
 
-      {/* Master AI Icon with Voice Assistant */}
+      {/* Pulse Core Icon with Voice Assistant */}
       <button 
         onClick={() => {
           if (isSpeaking) {
@@ -510,17 +645,20 @@ export default function Layout() {
           "fixed bottom-20 left-4 sm:left-6 w-10 h-10 sm:w-12 sm:h-12 bg-black/20 dark:bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-purple-500 dark:text-purple-400 opacity-30 hover:opacity-100 transition-all z-30 group",
           isSpeaking && "opacity-100 animate-pulse"
         )}
-        title={isSpeaking ? "Stop Speaking" : "Master AI: Voice Assistant"}
+        title={isSpeaking ? "Stop Speaking" : "Pulse Core: Voice Assistant"}
       >
         {isSpeaking ? <VolumeX className="w-5 h-5 sm:w-6 sm:h-6" /> : <BrainCircuit className="w-5 h-5 sm:w-6 sm:h-6 group-hover:scale-110 transition-transform" />}
         <span className="absolute left-full ml-2 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity">
-          {isSpeaking ? "Speaking..." : "Master AI: System Healthy (Click for Voice)"}
+          {isSpeaking ? "Speaking..." : "Pulse Core: System Healthy (Click for Voice)"}
         </span>
       </button>
 
       {/* Bottom Smart Hub Navigation */}
-      <nav className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shrink-0 z-20 pb-safe">
-        <div className="flex items-center p-1 sm:p-2 max-w-screen-xl mx-auto overflow-x-auto custom-scrollbar hide-scrollbar space-x-1 sm:space-x-2">
+      <nav className={cn(
+        "bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shrink-0 z-20 pb-safe",
+        viewMode === 'desktop' ? "sm:hidden" : ""
+      )}>
+        <div className="flex flex-wrap justify-center items-center p-1 sm:p-2 max-w-screen-xl mx-auto gap-1 sm:gap-2">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
@@ -529,7 +667,7 @@ export default function Layout() {
                 key={item.path} 
                 to={item.path}
                 className={cn(
-                  "flex flex-col items-center p-1 sm:p-2 rounded-xl min-w-[70px] sm:min-w-[80px] transition-all duration-200 shrink-0",
+                  "flex flex-col items-center p-1.5 sm:p-2 rounded-xl min-w-[60px] sm:min-w-[70px] transition-all duration-200 shrink-0",
                   isActive ? "bg-gray-100 dark:bg-gray-700 scale-105" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
                 )}
                 title={item.label}
@@ -553,6 +691,50 @@ export default function Layout() {
               </button>
             </div>
             <div className="p-6">
+              {activeModal === 'weather' && (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <CurrentWeatherIcon className={cn("w-12 h-12", currentWeather.color, currentWeather.glow)} />
+                      <div>
+                        <h4 className="text-2xl font-bold">{currentWeather.temp}</h4>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">{currentWeather.type}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-gray-700 dark:text-gray-300">{locationName}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Auto Location Reader</p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
+                    <h5 className="text-sm font-bold text-blue-800 dark:text-blue-300 mb-2 flex items-center">
+                      <Brain className="w-4 h-4 mr-2" />
+                      Smart Weather Analysis
+                    </h5>
+                    <p className="text-sm text-blue-900 dark:text-blue-200 leading-relaxed">
+                      {weatherAnalysis}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-xl">
+                      <p className="text-xs text-gray-500 mb-1">Temperature Trend</p>
+                      <p className="text-sm font-bold flex items-center">
+                        {tempTrend === '+' ? <TrendingUp className="w-4 h-4 text-red-500 mr-1" /> : (tempTrend === '-' ? <TrendingDown className="w-4 h-4 text-blue-500 mr-1" /> : <Minus className="w-4 h-4 text-gray-500 mr-1" />)}
+                        {tempTrend === '+' ? 'Increasing' : (tempTrend === '-' ? 'Decreasing' : 'Stable')}
+                      </p>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-xl">
+                      <p className="text-xs text-gray-500 mb-1">Forecast</p>
+                      <p className="text-sm font-bold flex items-center">
+                        <ForecastWeatherIcon className={cn("w-4 h-4 mr-1", forecastWeather.color)} />
+                        {forecastWeather.type}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
               {activeModal === 'notepad' && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between mb-2">

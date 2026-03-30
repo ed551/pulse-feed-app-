@@ -132,15 +132,29 @@ header {
     text-shadow: var(--gold-glow);
 }
 
-.weather-clock {
+.header-widgets {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+}
+
+.weather-pill, .clock-pill {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 4px 10px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
     font-size: 0.8rem;
 }
 
 .weather-icon {
-    font-size: 1.2rem;
+    font-size: 1.1rem;
+}
+
+.temp-display {
+    font-weight: bold;
 }
 
 /* Sidebar Links */
@@ -188,17 +202,15 @@ nav.bottom-nav {
     left: 0;
     right: 0;
     display: flex;
-    justify-content: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
     align-items: center;
     z-index: 1000;
-    padding: 0 10px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-}
-
-nav.bottom-nav::-webkit-scrollbar {
-    display: none;
+    padding: 10px;
+    background: rgba(10, 10, 15, 0.95);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    gap: 5px;
 }
 
 .nav-item {
@@ -210,12 +222,14 @@ nav.bottom-nav::-webkit-scrollbar {
     font-size: 1.3rem;
     font-weight: bold;
     transition: transform 0.2s;
-    min-width: 65px;
-    flex-shrink: 0;
+    min-width: 60px;
+    padding: 5px;
+    border-radius: 10px;
 }
 
 .nav-item:hover {
-    transform: translateY(-5px);
+    background: rgba(255, 255, 255, 0.05);
+    transform: translateY(-2px);
 }
 
 /* FAB */
