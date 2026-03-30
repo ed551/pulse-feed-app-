@@ -459,7 +459,7 @@ export default function Layout() {
                 )}
                 title={item.label}
               >
-                <Icon className={cn("w-5 h-5 sm:w-6 sm:h-6 mb-0.5 sm:mb-1", item.color, isActive ? "drop-shadow-md" : "opacity-80")} />
+                <Icon className={cn("w-5 h-5 sm:w-6 sm:h-6 mb-0.5 sm:mb-1", item.color, isActive ? "drop-shadow-md" : "")} />
                 <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-tighter truncate w-full text-center">{item.label}</span>
               </Link>
             );

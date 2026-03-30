@@ -68,14 +68,14 @@ function updateHeader() {
 function setupNavigation() {
     const navItems = [
         { icon: '🏠', color: '#ff4b2b', link: 'index.html', label: 'Home' },
-        { icon: '👥', color: '#39ff14', link: 'groups.html', label: 'Groups' },
-        { icon: '➕', color: '#b026ff', link: 'posts.html', label: 'Posts' },
+        { icon: '👥', color: '#00d2ff', link: 'groups.html', label: 'Groups' },
+        { icon: '✚', color: '#ffffff', link: 'posts.html', label: 'Posts' },
         { icon: '💎', color: '#00ffff', link: 'rewards.html', label: 'Rewards' },
         { icon: '👤', color: '#ffd700', link: 'profile.html', label: 'Profile' },
         { icon: '🛡️', color: '#ff3131', link: 'moderation.html', label: 'Moderation' },
-        { icon: '🔔', color: '#4a90e2', link: 'notifications.html', label: 'Notifications' },
+        { icon: '🔔', color: '#ffcc00', link: 'notifications.html', label: 'Notifications' },
         { icon: '📜', color: '#f5f5f5', link: 'terms.html', label: 'Terms' },
-        { icon: '🔒', color: '#888', link: 'privacy.html', label: 'Privacy' },
+        { icon: '🔒', color: '#aaaaaa', link: 'privacy.html', label: 'Privacy' },
         { icon: '🎧', color: '#ff9f43', link: 'support.html', label: 'Support' }
     ];
 
@@ -92,16 +92,16 @@ function setupNavigation() {
 // 3. Sidebar Setup
 function setupSidebar() {
     const links = [
-        { icon: 'asset/whatsapp_link.png', link: 'https://wa.me/', type: 'Social' },
-        { icon: 'asset/facebook_link.png', link: 'https://facebook.com', type: 'Social' },
-        { icon: 'asset/tiktok_icon_link.png', link: 'https://tiktok.com', type: 'Social' },
-        { icon: 'asset/YouTube_link.png', link: 'https://youtube.com', type: 'Social' },
-        { icon: 'asset/gmail_link.png', link: 'mailto:', type: 'Comm' },
-        { icon: 'asset/www.yahoo.com-link.png', link: 'https://yahoo.com', type: 'Comm' },
-        { icon: 'asset/map_link.png', link: 'https://maps.google.com', type: 'Utility' },
-        { icon: 'asset/brave_link.png', link: 'https://brave.com', type: 'Browser' },
-        { icon: 'asset/chrome_link.png', link: 'https://google.com/chrome', type: 'Browser' },
-        { icon: 'asset/Gemini_link.png', link: 'https://gemini.google.com', type: 'AI' }
+        { icon: 'https://cdn.simpleicons.org/whatsapp/white', link: 'https://wa.me/', type: 'WhatsApp' },
+        { icon: 'https://cdn.simpleicons.org/facebook/white', link: 'https://facebook.com', type: 'Facebook' },
+        { icon: 'https://cdn.simpleicons.org/tiktok/white', link: 'https://tiktok.com', type: 'TikTok' },
+        { icon: 'https://cdn.simpleicons.org/youtube/white', link: 'https://youtube.com', type: 'YouTube' },
+        { icon: 'https://cdn.simpleicons.org/gmail/white', link: 'mailto:', type: 'Gmail' },
+        { icon: 'https://cdn.simpleicons.org/yahoo/white', link: 'https://yahoo.com', type: 'Yahoo' },
+        { icon: 'https://cdn.simpleicons.org/googlemaps/white', link: 'https://maps.google.com', type: 'Maps' },
+        { icon: 'https://cdn.simpleicons.org/brave/white', link: 'https://brave.com', type: 'Brave' },
+        { icon: 'https://cdn.simpleicons.org/googlechrome/white', link: 'https://google.com/chrome', type: 'Chrome' },
+        { icon: 'https://cdn.simpleicons.org/googlegemini/white', link: 'https://gemini.google.com', type: 'Gemini' }
     ];
 
     const sidebar = document.querySelector('.sidebar-links');
