@@ -18,6 +18,7 @@ service cloud.firestore {
     //   - points: number (optional) - The user's reward points
     //   - balance: number (optional) - The user's wallet balance
     //   - bio: string (optional) - The user's bio
+    //   - badges: list (optional) - The user's earned badges
     //   - createdAt: timestamp (required) - When the user was created
     //
     // Collection: transactions
@@ -84,6 +85,11 @@ service cloud.firestore {
     function isValidEmail(email) {
       return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string &&
+        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
     
     function isAdmin() {
       return isAuthenticated() && (
@@ -96,6 +102,15 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
     
+    function isValidBadge(badge) {
+      return badge.keys().hasAll(['name', 'date', 'type', 'icon', 'description']) &&
+             badge.name is string && badge.name.size() > 0 && badge.name.size() <= 100 &&
+             isValidDateString(badge.date) &&
+             badge.type is string && badge.type.size() > 0 && badge.type.size() <= 50 &&
+             badge.icon is string && badge.icon.size() > 0 && badge.icon.size() <= 50 &&
+             badge.description is string && badge.description.size() > 0 && badge.description.size() <= 1000;
+    }
+
     function isValidUser(data) {
       return data.keys().hasAll(['uid', 'email', 'role', 'createdAt']) &&
              data.uid is string && data.uid.size() > 0 && data.uid.size() < 128 &&
@@ -104,6 +119,7 @@ service cloud.firestore {
              (!('points' in data) || data.points is number) &&
              (!('balance' in data) || data.balance is number) &&
              (!('bio' in data) || (data.bio is string && data.bio.size() <= 500)) &&
+             (!('badges' in data) || (data.badges is list && data.badges.size() <= 100)) &&
              data.createdAt is timestamp;
     }
 

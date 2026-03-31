@@ -3,7 +3,8 @@ import {
   PlayCircle, MessageSquare, Heart, Share2, MoreHorizontal, Sun, Snowflake, CloudRain, Cloud, CloudLightning, 
   Send, Loader2, AlertTriangle, Search, Filter, X, TrendingUp, TrendingDown, Minus,
   LayoutGrid, Globe, Gem, Smartphone, FileText, Gamepad2, DollarSign, Calendar, Clock,
-  Mail, Map, Youtube, Image, Languages, ExternalLink, Eye, Camera, Award, Sparkles, Volume2, VolumeX
+  Mail, Map, Youtube, Image, Languages, ExternalLink, Eye, Camera, Award, Sparkles, Volume2, VolumeX,
+  Home as HomeIcon
 } from "lucide-react";
 import { multimedia_stream_engine, content_governor, revenue_logic } from "../lib/engines";
 import { cn } from "../lib/utils";
@@ -65,7 +66,7 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
   const CATEGORIES = [
-    { name: 'All', icon: Home, color: 'text-purple-500' },
+    { name: 'All', icon: HomeIcon, color: 'text-purple-500' },
     { name: 'Google Apps', icon: LayoutGrid, color: 'text-blue-500' },
     { name: 'Browsers', icon: Globe, color: 'text-orange-500' },
     { name: 'Rewards', icon: Gem, color: 'text-yellow-500' },

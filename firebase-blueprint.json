@@ -13,9 +13,23 @@
         "points": { "type": "number", "description": "The user's reward points" },
         "balance": { "type": "number", "description": "The user's wallet balance" },
         "bio": { "type": "string", "description": "The user's bio" },
+        "badges": { "type": "array", "items": { "$ref": "#/entities/Badge" }, "description": "The user's earned badges" },
         "createdAt": { "type": "string", "format": "date-time", "description": "When the user was created" }
       },
       "required": ["uid", "email", "role", "createdAt"]
+    },
+    "Badge": {
+      "title": "Badge",
+      "description": "An educational badge earned by a user",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The name of the badge" },
+        "date": { "type": "string", "format": "date-time", "description": "When the badge was earned" },
+        "type": { "type": "string", "description": "The type of badge (e.g., LinkedIn-Style)" },
+        "icon": { "type": "string", "description": "The icon name for the badge" },
+        "description": { "type": "string", "description": "A description of why the badge was awarded" }
+      },
+      "required": ["name", "date", "type", "icon", "description"]
     },
     "Transaction": {
       "title": "Transaction",
