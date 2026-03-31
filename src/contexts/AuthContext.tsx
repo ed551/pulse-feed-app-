@@ -45,47 +45,73 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let unsubscribeUser: (() => void) | undefined;
+
     // Set a safety timeout for loading state
     const timeoutId = setTimeout(() => {
-      if (loading) {
-        console.warn('Auth state check timed out. Proceeding with unauthenticated state.');
-        setLoading(false);
-      }
-    }, 5000);
+      setLoading(currentLoading => {
+        if (currentLoading) {
+          console.warn('Auth state check timed out after 8s. Proceeding with unauthenticated state.');
+          return false;
+        }
+        return currentLoading;
+      });
+    }, 8000);
 
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      clearTimeout(timeoutId);
-      setCurrentUser(user);
-      if (user) {
-        // Fetch user data from Firestore
-        const userRef = doc(db, 'users', user.uid);
-        const unsubscribeUser = onSnapshot(userRef, (doc) => {
-          if (doc.exists()) {
-            setUserData(doc.data() as UserData);
-          } else {
-            // Initialize user data if it doesn't exist
-            setDoc(userRef, {
-              uid: user.uid,
-              email: user.email,
-              displayName: user.displayName,
-              photoURL: user.photoURL,
-              role: 'user',
-              points: 1250, // Initial points
-              balance: 0,
-              createdAt: serverTimestamp()
-            }, { merge: true });
-          }
-        }, (error) => {
-          handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
-        });
-        return () => unsubscribeUser();
-      } else {
-        setUserData(null);
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      try {
+        console.log('Auth state changed:', user ? `User ${user.uid}` : 'No user');
+        setCurrentUser(user);
+        
+        // Clean up previous user listener if it exists
+        if (unsubscribeUser) {
+          unsubscribeUser();
+          unsubscribeUser = undefined;
+        }
+
+        if (user) {
+          // Fetch user data from Firestore
+          const userRef = doc(db, 'users', user.uid);
+          unsubscribeUser = onSnapshot(userRef, (docSnap) => {
+            if (docSnap.exists()) {
+              setUserData(docSnap.data() as UserData);
+            } else {
+              console.log('Initializing new user document...');
+              // Initialize user data if it doesn't exist
+              setDoc(userRef, {
+                uid: user.uid,
+                email: user.email,
+                displayName: user.displayName,
+                photoURL: user.photoURL,
+                role: 'user',
+                points: 1250,
+                balance: 0,
+                createdAt: serverTimestamp()
+              }, { merge: true }).catch(err => {
+                console.error('Error initializing user document:', err);
+              });
+            }
+          }, (error) => {
+            console.error('User document snapshot error:', error);
+            // Don't throw here to avoid crashing the auth state
+          });
+        } else {
+          setUserData(null);
+        }
+      } catch (err) {
+        console.error('Error in onAuthStateChanged callback:', err);
+      } finally {
+        // Always clear loading state once we get an initial auth response
+        setLoading(false);
+        clearTimeout(timeoutId);
       }
-      setLoading(false);
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeUser) unsubscribeUser();
+      clearTimeout(timeoutId);
+    };
   }, []);
 
   const loginWithGoogle = async () => {

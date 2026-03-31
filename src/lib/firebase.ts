@@ -12,7 +12,10 @@ export const auth = getAuth(app);
 
 // Initialize Firestore with better connection reliability
 const dbId = firebaseConfig.firestoreDatabaseId;
-const firestoreDatabaseId = (dbId && dbId !== '(default)') ? dbId : undefined;
+// Common mistake: setting database ID to project ID when it should be (default)
+const firestoreDatabaseId = (dbId && dbId !== '(default)' && dbId !== firebaseConfig.projectId) ? dbId : undefined;
+
+console.log('Initializing Firestore with database ID:', firestoreDatabaseId || '(default)');
 
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,

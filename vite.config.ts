@@ -40,6 +40,6 @@ export default defineConfig(({mode}) => {
     build: {
       outDir: 'dist',
     },
-    base: '/pulse-feed-app-/',
+    base: '/',
   };
 });
