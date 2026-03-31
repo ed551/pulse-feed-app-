@@ -84,19 +84,22 @@ export default function Moderation() {
       if (progressInterval.current) {
         clearInterval(progressInterval.current);
       }
-      if (fingerprintProgress < 100) {
-        setFingerprintProgress(0);
-      }
+      setFingerprintProgress((prev) => {
+        if (prev < 100) return 0;
+        return prev;
+      });
     }
     return () => {
       if (progressInterval.current) clearInterval(progressInterval.current);
     };
-  }, [isPressing, fingerprintProgress]);
+  }, [isPressing]);
 
   const handlePhoneSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (phoneNumber.length > 5) {
       setAuthState('phone_verify');
+    } else {
+      alert("Please enter a valid phone number.");
     }
   };
 
@@ -104,6 +107,8 @@ export default function Moderation() {
     e.preventDefault();
     if (verificationCode.length >= 4) {
       setAuthState('fingerprint');
+    } else {
+      alert("Please enter a valid verification code (at least 4 digits).");
     }
   };
 
@@ -170,12 +175,13 @@ export default function Moderation() {
                     value={verificationCode}
                     onChange={(e) => setVerificationCode(e.target.value)}
                     className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all tracking-widest text-center font-mono text-lg"
-                    placeholder="000000"
+                    placeholder="123456"
                     maxLength={6}
                     required
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-2 text-center">Code sent to {phoneNumber}</p>
+                <p className="text-xs text-blue-500 mt-1 text-center font-medium">Demo mode: Enter any 6-digit code (e.g., 123456) to continue.</p>
               </div>
               <button
                 type="submit"
@@ -190,7 +196,7 @@ export default function Moderation() {
             <div className="flex flex-col items-center justify-center space-y-8 animate-in fade-in slide-in-from-bottom-4 py-4">
               <div className="text-center">
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Final Step</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Press and hold to verify identity</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Press and hold for security, health status, and acknowledgement</p>
               </div>
               
               <div className="relative">

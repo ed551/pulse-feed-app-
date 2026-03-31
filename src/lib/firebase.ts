@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, getDocFromServer, doc } from 'firebase/firestore';
+import { getFirestore, getDocFromServer, doc } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 // Import the Firebase configuration
@@ -17,9 +17,7 @@ const firestoreDatabaseId = (dbId && dbId !== '(default)' && dbId !== firebaseCo
 
 console.log('Initializing Firestore with database ID:', firestoreDatabaseId || '(default)');
 
-export const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-}, firestoreDatabaseId);
+export const db = firestoreDatabaseId ? getFirestore(app, firestoreDatabaseId) : getFirestore(app);
 
 // Initialize Storage
 export const storage = getStorage(app);

@@ -62,6 +62,11 @@ export default function Layout() {
   const [showShareToast, setShowShareToast] = useState(false);
   const [isShortening, setIsShortening] = useState(false);
 
+  // Fingerprint State
+  const [fingerprintProgress, setFingerprintProgress] = useState(0);
+  const [isPressing, setIsPressing] = useState(false);
+  const progressInterval = useRef<NodeJS.Timeout | null>(null);
+
   const { showNotification } = useNotifications();
 
   const toggleTheme = () => {
@@ -108,6 +113,37 @@ export default function Layout() {
 
     return () => clearInterval(interval);
   }, [showNotification]);
+
+  // Fingerprint logic
+  useEffect(() => {
+    if (isPressing) {
+      progressInterval.current = setInterval(() => {
+        setFingerprintProgress((prev) => {
+          if (prev >= 100) {
+            clearInterval(progressInterval.current!);
+            setTimeout(() => {
+              alert('Identity Verified! Security, health status, and acknowledgement confirmed.');
+              setActiveModal(null);
+              setFingerprintProgress(0);
+            }, 300);
+            return 100;
+          }
+          return prev + 2; // 50 ticks = ~1.5 seconds at 30ms
+        });
+      }, 30);
+    } else {
+      if (progressInterval.current) {
+        clearInterval(progressInterval.current);
+      }
+      setFingerprintProgress((prev) => {
+        if (prev < 100) return 0;
+        return prev;
+      });
+    }
+    return () => {
+      if (progressInterval.current) clearInterval(progressInterval.current);
+    };
+  }, [isPressing]);
 
   const handleShare = async () => {
     if (isShortening) return;
@@ -1054,19 +1090,73 @@ export default function Layout() {
                 </div>
               )}
               {activeModal === 'fingerprint' && (
-                <div className="space-y-6 text-center">
-                  <div className="w-24 h-24 bg-cyan-100 dark:bg-cyan-900/30 rounded-full flex items-center justify-center mx-auto relative">
-                    <Fingerprint className="w-12 h-12 text-cyan-500" />
-                    <div className="absolute inset-0 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
-                  </div>
-                  <div>
+                <div className="flex flex-col items-center justify-center space-y-8 animate-in fade-in slide-in-from-bottom-4 py-4">
+                  <div className="text-center">
                     <h4 className="font-bold text-xl">Biometric Scanner</h4>
-                    <p className="text-gray-500 dark:text-gray-400 mt-2">Place your finger on the sensor</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Press and hold for security, health status, and acknowledgement</p>
                   </div>
-                  <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-xl border border-dashed border-cyan-500/50">
-                    <span className="text-sm font-medium text-cyan-600 animate-pulse">Waiting for input...</span>
+                  
+                  <div className="relative">
+                    {/* Progress Ring */}
+                    <svg className="absolute inset-0 w-32 h-32 -m-4 transform -rotate-90 pointer-events-none">
+                      <circle
+                        cx="64"
+                        cy="64"
+                        r="60"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="transparent"
+                        className="text-gray-200 dark:text-gray-700"
+                      />
+                      <circle
+                        cx="64"
+                        cy="64"
+                        r="60"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="transparent"
+                        strokeDasharray={377}
+                        strokeDashoffset={377 - (377 * fingerprintProgress) / 100}
+                        className="text-cyan-500 transition-all duration-75 ease-linear"
+                      />
+                    </svg>
+
+                    <button
+                      onMouseDown={() => setIsPressing(true)}
+                      onMouseUp={() => setIsPressing(false)}
+                      onMouseLeave={() => setIsPressing(false)}
+                      onTouchStart={() => setIsPressing(true)}
+                      onTouchEnd={() => setIsPressing(false)}
+                      onContextMenu={(e) => e.preventDefault()}
+                      className={cn(
+                        "w-24 h-24 rounded-full flex items-center justify-center transition-all duration-300 relative z-10",
+                        isPressing 
+                          ? "bg-cyan-100 dark:bg-cyan-900/40 scale-95 shadow-inner" 
+                          : "bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 shadow-lg"
+                      )}
+                    >
+                      <Fingerprint 
+                        className={cn(
+                          "w-12 h-12 transition-colors duration-300",
+                          isPressing ? "text-cyan-600 dark:text-cyan-400" : "text-cyan-500",
+                          fingerprintProgress === 100 && "text-green-500 dark:text-green-400"
+                        )} 
+                      />
+                    </button>
                   </div>
-                  <button onClick={() => alert('Identity Verified!')} className="w-full py-3 bg-cyan-500 text-white rounded-xl font-bold hover:bg-cyan-600 transition-colors">Simulate Scan</button>
+                  
+                  <div className="h-4">
+                    {fingerprintProgress > 0 && fingerprintProgress < 100 && (
+                      <span className="text-xs font-mono text-cyan-600 dark:text-cyan-400 animate-pulse">
+                        Scanning... {fingerprintProgress}%
+                      </span>
+                    )}
+                    {fingerprintProgress === 100 && (
+                      <span className="text-xs font-bold text-green-600 dark:text-green-400">
+                        Identity Verified
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
               {activeModal === 'call' && (
