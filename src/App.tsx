@@ -1,4 +1,4 @@
-import { HashRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import React, { Suspense, lazy } from "react";
 import Layout from "./components/Layout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -33,7 +33,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <HashRouter>
+        <BrowserRouter basename="/pulse-feed-app-/">
           <Suspense fallback={<LoadingFallback />}>
             <Routes>
               <Route path="/login" element={<Login />} />
@@ -87,7 +87,7 @@ export default function App() {
               </Route>
             </Routes>
           </Suspense>
-        </HashRouter>
+        </BrowserRouter>
       </AuthProvider>
     </ErrorBoundary>
   );
