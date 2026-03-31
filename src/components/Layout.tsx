@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { 
   Home, Users, PlusSquare, Gem, User, ShieldAlert, Bell, FileText, Lock, Headphones,
   Sun, Moon, CloudRain, Cloud, CloudLightning, Clock, Watch, BellRing, StickyNote,
@@ -17,10 +17,20 @@ import {
   theme_engine, HeaderIntelligence 
 } from "../lib/engines";
 import { useAuth } from "../contexts/AuthContext";
+import { useRevenue } from "../contexts/RevenueContext";
 import { useNotifications } from "../hooks/useNotifications";
+
+const weatherTypes = [
+  { type: 'Hot / Sunny', icon: Sun, color: 'text-orange-500', bg: 'from-orange-500/20 to-yellow-500/20', glow: 'drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]', symbol: '☀️', temp: '32°C', tempValue: 32 },
+  { type: 'Cold / Chilly', icon: Snowflake, color: 'text-cyan-300', bg: 'from-cyan-500/20 to-blue-500/20', glow: 'drop-shadow-[0_0_8px_rgba(103,232,249,0.8)]', symbol: '❄️', temp: '2°C', tempValue: 2 },
+  { type: 'Rainy', icon: CloudRain, color: 'text-teal-700', bg: 'from-teal-500/20 to-emerald-500/20', glow: 'drop-shadow-[0_0_8px_rgba(15,118,110,0.8)]', symbol: '🌧️', temp: '14°C', tempValue: 14 },
+  { type: 'Cloudy / Fair', icon: Cloud, color: 'text-slate-400', bg: 'from-slate-500/20 to-gray-500/20', glow: 'drop-shadow-[0_0_8px_rgba(226,232,240,0.8)]', symbol: '⛅', temp: '20°C', tempValue: 20 },
+  { type: 'Stormy', icon: CloudLightning, color: 'text-purple-500', bg: 'from-purple-500/20 to-indigo-500/20', glow: 'drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]', symbol: '⛈️', temp: '18°C', tempValue: 18 }
+];
 
 export default function Layout() {
   const { currentUser, logout } = useAuth();
+  const { isIdle, totalEarnedToday } = useRevenue();
   const navigate = useNavigate();
   const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem('theme');
@@ -63,7 +73,7 @@ export default function Layout() {
   }>({
     status: 'optimal',
     message: 'System intelligence active. All units operational.',
-    lastCheck: new Date().toLocaleTimeString()
+    lastCheck: new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   });
 
   useEffect(() => {
@@ -78,7 +88,7 @@ export default function Layout() {
       const randomAction = aiActions[Math.floor(Math.random() * aiActions.length)];
       setSystemStatus({
         ...randomAction,
-        lastCheck: new Date().toLocaleTimeString()
+        lastCheck: new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
       });
       
       // Occasionally show a notification for "AI Insight"
@@ -183,6 +193,59 @@ export default function Layout() {
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [alarmTime, setAlarmTime] = useState('');
 
+  // Clock Ticking
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      setTime(now);
+      
+      // Check alarm
+      const currentTimeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      if (alarmTime === currentTimeStr) {
+        // Only trigger once per minute
+        const lastAlarmTrigger = localStorage.getItem('last_alarm_trigger');
+        if (lastAlarmTrigger !== currentTimeStr) {
+          showNotification("Alarm!", { body: `It's ${alarmTime}!` });
+          localStorage.setItem('last_alarm_trigger', currentTimeStr);
+          
+          // Play a sound if possible
+          try {
+            const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-clock-beep-989.mp3');
+            audio.play();
+          } catch (e) {
+            console.error("Alarm sound error:", e);
+          }
+        }
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [alarmTime, showNotification]);
+
+  // Stopwatch Ticking
+  useEffect(() => {
+    let interval: any;
+    if (isStopwatchRunning) {
+      interval = setInterval(() => {
+        setStopwatchTime(prev => prev + 10);
+      }, 10);
+    }
+    return () => clearInterval(interval);
+  }, [isStopwatchRunning]);
+
+  // Timer Ticking
+  useEffect(() => {
+    let interval: any;
+    if (isTimerRunning && timerTime > 0) {
+      interval = setInterval(() => {
+        setTimerTime(prev => prev - 1);
+      }, 1000);
+    } else if (timerTime === 0 && isTimerRunning) {
+      setIsTimerRunning(false);
+      showNotification("Timer Finished", { body: "Your countdown has ended." });
+    }
+    return () => clearInterval(interval);
+  }, [isTimerRunning, timerTime, showNotification]);
+
   const location = useLocation();
 
   // Smart Gold Prediction Logic
@@ -224,18 +287,12 @@ export default function Layout() {
   }, [location.pathname]);
 
   // Real-time Weather & Date Logic
-  const weatherTypes = [
-    { type: 'Hot / Sunny', icon: Sun, color: 'text-orange-500', bg: 'from-orange-500/20 to-yellow-500/20', glow: 'drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]', symbol: '☀️', temp: '32°C', tempValue: 32 },
-    { type: 'Cold / Chilly', icon: Snowflake, color: 'text-cyan-300', bg: 'from-cyan-500/20 to-blue-500/20', glow: 'drop-shadow-[0_0_8px_rgba(103,232,249,0.8)]', symbol: '❄️', temp: '2°C', tempValue: 2 },
-    { type: 'Rainy', icon: CloudRain, color: 'text-teal-700', bg: 'from-teal-500/20 to-emerald-500/20', glow: 'drop-shadow-[0_0_8px_rgba(15,118,110,0.8)]', symbol: '🌧️', temp: '14°C', tempValue: 14 },
-    { type: 'Cloudy / Fair', icon: Cloud, color: 'text-slate-400', bg: 'from-slate-500/20 to-gray-500/20', glow: 'drop-shadow-[0_0_8px_rgba(226,232,240,0.8)]', symbol: '⛅', temp: '20°C', tempValue: 20 },
-    { type: 'Stormy', icon: CloudLightning, color: 'text-purple-500', bg: 'from-purple-500/20 to-indigo-500/20', glow: 'drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]', symbol: '⛈️', temp: '18°C', tempValue: 18 }
-  ];
-
   const [currentWeather, setCurrentWeather] = useState(weatherTypes[0]);
   const [forecastWeather, setForecastWeather] = useState(weatherTypes[1]);
   const [tempTrend, setTempTrend] = useState<'+' | '-' | ''>('');
   const [prevTemp, setPrevTemp] = useState<number>(32);
+  const prevTempRef = useRef<number>(32);
+  const prevTypeRef = useRef<string>(weatherTypes[0].type);
   const [locationName, setLocationName] = useState<string>('Detecting...');
   const [weatherAnalysis, setWeatherAnalysis] = useState<string>('Analyzing weather patterns...');
   
@@ -275,30 +332,38 @@ export default function Layout() {
           tempValue: Math.round(current.temperature)
         };
 
-        // Smart Analysis via Gemini
-        try {
-          const analysisResponse = await generateContentWithRetry({
-            model: "gemini-3-flash-preview",
-            contents: [{ parts: [{ text: `Analyze this weather for ${city}: ${newWeather.temp}, ${newWeather.type}. Provide a 1-sentence smart summary for the user.` }] }],
-          });
-          
-          if (analysisResponse.text) {
-            setWeatherAnalysis(analysisResponse.text);
-            const msg = new SpeechSynthesisUtterance(analysisResponse.text);
+        // Only update and speak if there's a significant change to avoid "frequent changes"
+        const tempDiff = Math.abs(newWeather.tempValue - prevTempRef.current);
+        const typeChanged = newWeather.type !== prevTypeRef.current;
+        
+        if (tempDiff >= 2 || typeChanged) {
+          // Smart Analysis via Gemini
+          try {
+            const analysisResponse = await generateContentWithRetry({
+              model: "gemini-3-flash-preview",
+              contents: [{ parts: [{ text: `Analyze this weather for ${city}: ${newWeather.temp}, ${newWeather.type}. Provide a 1-sentence smart summary for the user.` }] }],
+            });
+            
+            if (analysisResponse.text) {
+              setWeatherAnalysis(analysisResponse.text);
+              const msg = new SpeechSynthesisUtterance(analysisResponse.text);
+              window.speechSynthesis.speak(msg);
+            }
+          } catch (aiErr) {
+            console.error("Smart Analysis Error:", aiErr);
+            const trendText = newWeather.tempValue > prevTempRef.current ? "increasing" : (newWeather.tempValue < prevTempRef.current ? "decreasing" : "stable");
+            const fallbackText = `Weather update for ${city}: It is now ${newWeather.type} with a temperature of ${newWeather.tempValue} degrees. The temperature is ${trendText}.`;
+            setWeatherAnalysis(fallbackText);
+            const msg = new SpeechSynthesisUtterance(fallbackText);
             window.speechSynthesis.speak(msg);
           }
-        } catch (aiErr) {
-          console.error("Smart Analysis Error:", aiErr);
-          const trendText = newWeather.tempValue > prevTemp ? "increasing" : (newWeather.tempValue < prevTemp ? "decreasing" : "stable");
-          const fallbackText = `Weather update for ${city}: It is now ${newWeather.type} with a temperature of ${newWeather.tempValue} degrees. The temperature is ${trendText}.`;
-          setWeatherAnalysis(fallbackText);
-          const msg = new SpeechSynthesisUtterance(fallbackText);
-          window.speechSynthesis.speak(msg);
-        }
 
-        setTempTrend(newWeather.tempValue > prevTemp ? '+' : (newWeather.tempValue < prevTemp ? '-' : ''));
-        setPrevTemp(newWeather.tempValue);
-        setCurrentWeather(newWeather);
+          setTempTrend(newWeather.tempValue > prevTempRef.current ? '+' : (newWeather.tempValue < prevTempRef.current ? '-' : ''));
+          prevTempRef.current = newWeather.tempValue;
+          prevTypeRef.current = newWeather.type;
+          setPrevTemp(newWeather.tempValue);
+          setCurrentWeather(newWeather);
+        }
       } catch (error) {
         console.error("Weather Fetch Error:", error);
       }
@@ -335,7 +400,7 @@ export default function Layout() {
     getLocation();
     const interval = setInterval(getLocation, 600000); // Update every 10 mins
     return () => clearInterval(interval);
-  }, [prevTemp]);
+  }, []);
 
   const CurrentWeatherIcon = currentWeather.icon;
   const ForecastWeatherIcon = forecastWeather.icon;
@@ -403,7 +468,15 @@ export default function Layout() {
               <span className="font-black text-[10px] sm:text-xs text-yellow-700 dark:text-yellow-500 tracking-widest uppercase">Gold</span>
               <span className="text-sm sm:text-xl font-bold drop-shadow-sm">{goldPrediction}</span>
             </div>
-            <span className="text-[7px] font-bold text-gray-400 dark:text-gray-500 uppercase mt-0.5 tracking-tighter truncate max-w-[80px]">{goldSeller}</span>
+            <div className="flex items-center space-x-1 mt-1">
+              <div className={cn(
+                "w-1.5 h-1.5 rounded-full animate-pulse",
+                isIdle ? "bg-gray-400" : "bg-green-500"
+              )}></div>
+              <span className="text-[7px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-tighter">
+                {isIdle ? "Idle - Earning Paused" : `Active - Earned ${totalEarnedToday} pts`}
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center space-x-1 sm:space-x-2">
@@ -445,6 +518,9 @@ export default function Layout() {
             </div>
             <div className="flex flex-col items-center space-y-1" title="Alarm" onClick={() => setActiveModal('alarm')}>
               <BellRing className="w-5 h-5 sm:w-6 sm:h-6 text-red-500 cursor-pointer" />
+            </div>
+            <div className="flex flex-col items-center space-y-1" title="Notifications" onClick={() => navigate('/notifications')}>
+              <Bell className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500 cursor-pointer" />
             </div>
             <div className="flex flex-col items-center space-y-1" title="Note Pad" onClick={() => setActiveModal('notepad')}>
               <StickyNote className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-500 cursor-pointer" />
@@ -966,7 +1042,7 @@ export default function Layout() {
                   {activeModal === 'clock' && (
                     <div className="text-center space-y-4">
                       <div className="text-5xl font-mono font-bold text-blue-500 drop-shadow-sm">
-                        {time.toLocaleTimeString()}
+                        {time.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                       </div>
                       <p className="text-sm text-gray-500">{time.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                     </div>

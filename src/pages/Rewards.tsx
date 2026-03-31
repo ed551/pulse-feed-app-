@@ -5,6 +5,7 @@ import { useCurrencyConverter } from "../hooks/useCurrencyConverter";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";
 import { useAuth } from "../contexts/AuthContext";
+import { useRevenue } from "../contexts/RevenueContext";
 import { db, handleFirestoreError, OperationType } from "../lib/firebase";
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment } from "firebase/firestore";
 
@@ -19,6 +20,7 @@ interface Transaction {
 
 export default function Rewards() {
   const { currentUser, userData } = useAuth();
+  const { isIdle, activeSeconds, totalEarnedToday } = useRevenue();
   const { currency, availableCurrencies, changeCurrency, convert, loading, rates } = useCurrencyConverter();
   const [activeTab, setActiveTab] = useState<'overview' | 'mpesa' | 'international'>('overview');
 
@@ -356,6 +358,35 @@ export default function Rewards() {
                 <div className="text-6xl font-black mb-4 flex items-center">
                   {convert(points / 100)}
                 </div>
+                
+                {/* Activity Status Card */}
+                <div className="w-full max-w-sm bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 mb-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-2">
+                      <div className={cn(
+                        "w-2 h-2 rounded-full animate-pulse",
+                        isIdle ? "bg-gray-300" : "bg-green-300"
+                      )}></div>
+                      <span className="text-xs font-bold uppercase tracking-widest">
+                        {isIdle ? "Idle Mode" : "Active Earning"}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono opacity-70">
+                      {Math.floor(activeSeconds / 60)}m {activeSeconds % 60}s active
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-[10px] opacity-70 uppercase font-bold">Earned Today</p>
+                      <p className="text-xl font-black">{totalEarnedToday} <span className="text-xs font-normal opacity-70">pts</span></p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] opacity-70 uppercase font-bold">Status</p>
+                      <p className="text-sm font-bold">{isIdle ? "Paused" : "Live"}</p>
+                    </div>
+                  </div>
+                </div>
+
                 <button 
                   onClick={() => setActiveTab('mpesa')}
                   className="bg-white text-orange-600 hover:bg-yellow-50 px-8 py-3 rounded-full font-bold shadow-md transition-all"

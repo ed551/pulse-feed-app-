@@ -168,11 +168,15 @@ export default function Home() {
         </div>
         
         <div className="flex items-center space-x-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-64">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 text-gray-400" />
+          <div className="relative flex-1 sm:w-64 group">
+            <div 
+              className="absolute inset-y-0 left-0 pl-3 flex items-center cursor-pointer z-10"
+              onClick={() => document.getElementById('search-input')?.focus()}
+            >
+              <Search className="h-4 w-4 text-gray-400 group-focus-within:text-purple-500 transition-colors" />
             </div>
             <input
+              id="search-input"
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -254,30 +258,93 @@ export default function Home() {
       </div>
 
       <div className="space-y-4">
-        {feedItems.filter(item => {
+        {postsLoading ? (
+          <div className="flex flex-col items-center justify-center py-20 space-y-4">
+            <Loader2 className="w-10 h-10 text-purple-500 animate-spin" />
+            <p className="text-gray-500 dark:text-gray-400 font-medium animate-pulse">Loading your feed...</p>
+          </div>
+        ) : feedItems.filter(item => {
           // Ad bypasses filters
           if (item.type === 'ad') return true;
 
-          {/* Category Filter */}
-          if (activeCategory !== 'All' && item.category !== activeCategory) return false;
+          // Category Filter
+          if (activeCategory !== 'All' && item.category?.toLowerCase() !== activeCategory.toLowerCase()) return false;
 
           // Search Query Filter
           if (searchQuery) {
             const query = searchQuery.toLowerCase();
             const contentMatch = item.content?.toLowerCase().includes(query);
             const userMatch = item.user?.toLowerCase().includes(query);
-            if (!contentMatch && !userMatch) return false;
+            const categoryMatch = item.category?.toLowerCase().includes(query);
+            if (!contentMatch && !userMatch && !categoryMatch) return false;
           }
 
           // User Filter
           if (userFilter && !item.user?.toLowerCase().includes(userFilter.toLowerCase())) return false;
 
           // Date Filter
-          if (dateFilter !== 'all' && item.time) {
+          if (dateFilter !== 'all') {
+            const itemDate = item.createdAt?.toDate?.() || (item.time ? new Date(item.time) : null);
+            if (!itemDate || isNaN(itemDate.getTime())) return true; // Show if date is invalid/missing
+
             const now = new Date();
-            const itemDate = new Date(item.time);
             const diffTime = Math.abs(now.getTime() - itemDate.getTime());
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+            if (dateFilter === 'today' && diffDays > 1) return false;
+            if (dateFilter === 'week' && diffDays > 7) return false;
+            if (dateFilter === 'month' && diffDays > 30) return false;
+          }
+
+          return true;
+        }).length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-gray-800 rounded-3xl border border-dashed border-gray-200 dark:border-gray-700">
+            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-900 rounded-full flex items-center justify-center mb-4">
+              <Search className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">No posts found</h3>
+            <p className="text-gray-500 dark:text-gray-400 text-center max-w-xs mt-2">
+              We couldn't find any posts matching your current filters. Try adjusting your search or category.
+            </p>
+            <button 
+              onClick={() => {
+                setActiveCategory("All");
+                setSearchQuery("");
+                setDateFilter("all");
+                setUserFilter("");
+              }}
+              className="mt-6 px-6 py-2 bg-purple-600 text-white rounded-full font-semibold hover:bg-purple-700 transition-colors"
+            >
+              Clear all filters
+            </button>
+          </div>
+        ) : feedItems.filter(item => {
+          // Ad bypasses filters
+          if (item.type === 'ad') return true;
+
+          // Category Filter
+          if (activeCategory !== 'All' && item.category?.toLowerCase() !== activeCategory.toLowerCase()) return false;
+
+          // Search Query Filter
+          if (searchQuery) {
+            const query = searchQuery.toLowerCase();
+            const contentMatch = item.content?.toLowerCase().includes(query);
+            const userMatch = item.user?.toLowerCase().includes(query);
+            const categoryMatch = item.category?.toLowerCase().includes(query);
+            if (!contentMatch && !userMatch && !categoryMatch) return false;
+          }
+
+          // User Filter
+          if (userFilter && !item.user?.toLowerCase().includes(userFilter.toLowerCase())) return false;
+
+          // Date Filter
+          if (dateFilter !== 'all') {
+            const itemDate = item.createdAt?.toDate?.() || (item.time ? new Date(item.time) : null);
+            if (!itemDate || isNaN(itemDate.getTime())) return true;
+
+            const now = new Date();
+            const diffTime = Math.abs(now.getTime() - itemDate.getTime());
+            const diffDays = diffTime / (1000 * 60 * 60 * 24);
 
             if (dateFilter === 'today' && diffDays > 1) return false;
             if (dateFilter === 'week' && diffDays > 7) return false;
@@ -315,19 +382,47 @@ export default function Home() {
                 <p className="text-gray-800 dark:text-gray-200 mb-3">{item.content}</p>
 
                 <div className="flex items-center space-x-6 text-gray-500 dark:text-gray-400 mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
-                  <button className="flex items-center space-x-1 hover:text-pink-500 transition-colors">
-                    <Heart className="w-5 h-5" />
+                  <button 
+                    onClick={() => {
+                      if (!currentUser) {
+                        alert("Please sign in to like posts");
+                        return;
+                      }
+                      updatePost(item.id, { likes: (item.likes || 0) + 1 });
+                    }}
+                    className="flex items-center space-x-1 hover:text-pink-500 transition-colors group"
+                  >
+                    <div className="p-1.5 rounded-full group-hover:bg-pink-50 dark:group-hover:bg-pink-900/20">
+                      <Heart className={cn("w-5 h-5", item.likes > 0 && "fill-pink-500 text-pink-500")} />
+                    </div>
                     <span className="text-sm">{item.likes}</span>
                   </button>
                   <button 
                     onClick={() => setActiveCommentPostId(activeCommentPostId === item.id ? null : item.id)}
-                    className="flex items-center space-x-1 hover:text-blue-500 transition-colors"
+                    className="flex items-center space-x-1 hover:text-blue-500 transition-colors group"
                   >
-                    <MessageSquare className="w-5 h-5" />
+                    <div className="p-1.5 rounded-full group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20">
+                      <MessageSquare className="w-5 h-5" />
+                    </div>
                     <span className="text-sm">{item.comments}</span>
                   </button>
-                  <button className="flex items-center space-x-1 hover:text-green-500 transition-colors ml-auto">
-                    <Share2 className="w-5 h-5" />
+                  <button 
+                    onClick={() => {
+                      if (navigator.share) {
+                        navigator.share({
+                          title: 'Pulse Feeds',
+                          text: item.content,
+                          url: window.location.href
+                        }).catch(console.error);
+                      } else {
+                        alert("Sharing not supported on this browser");
+                      }
+                    }}
+                    className="flex items-center space-x-1 hover:text-green-500 transition-colors ml-auto group"
+                  >
+                    <div className="p-1.5 rounded-full group-hover:bg-green-50 dark:group-hover:bg-green-900/20">
+                      <Share2 className="w-5 h-5" />
+                    </div>
                   </button>
                 </div>
 

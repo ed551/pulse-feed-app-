@@ -1,8 +1,9 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { HashRouter, Routes, Route } from "react-router-dom";
 import React, { Suspense, lazy } from "react";
 import Layout from "./components/Layout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { AuthProvider } from "./contexts/AuthContext";
+import { RevenueProvider } from "./contexts/RevenueContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { Loader2 } from "lucide-react";
 
@@ -33,9 +34,10 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <BrowserRouter basename="/pulse-feed-app-/">
-          <Suspense fallback={<LoadingFallback />}>
-            <Routes>
+        <RevenueProvider>
+          <HashRouter>
+            <Suspense fallback={<LoadingFallback />}>
+              <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/" element={<Layout />}>
                 <Route index element={<Home />} />
@@ -87,8 +89,9 @@ export default function App() {
               </Route>
             </Routes>
           </Suspense>
-        </BrowserRouter>
-      </AuthProvider>
-    </ErrorBoundary>
-  );
+        </HashRouter>
+      </RevenueProvider>
+    </AuthProvider>
+  </ErrorBoundary>
+);
 }
