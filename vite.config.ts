@@ -46,6 +46,6 @@ export default defineConfig(({mode}) => {
         },
       },
     },
-    base: '/',
+    base: '/pulse-feed-app-/',
   };
 });
