@@ -10,10 +10,55 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function startServer() {
+  console.log("Starting server...");
+  console.log("NODE_ENV:", process.env.NODE_ENV);
+  
   const app = express();
   const PORT = 3000;
 
   app.use(express.json());
+
+  // M-Pesa API Routes
+  app.post("/api/mpesa/stkpush", (req, res) => {
+    const { phoneNumber, amount } = req.body;
+    console.log(`Initiating STK Push for ${phoneNumber} with amount ${amount}`);
+    
+    // Mock successful response
+    res.json({
+      ResponseCode: "0",
+      CustomerMessage: "Success. Request accepted for processing",
+      CheckoutRequestID: "ws_CO_30032026170755" + Math.floor(Math.random() * 1000),
+      MerchantRequestID: "29115-34620-1",
+    });
+  });
+
+  app.get("/api/mpesa/status/:checkoutRequestId", (req, res) => {
+    const { checkoutRequestId } = req.params;
+    console.log(`Checking status for ${checkoutRequestId}`);
+    
+    // Mock status polling
+    // In a real app, you'd check your database for the callback from Safaricom
+    const statuses = ['pending', 'pending', 'success'];
+    const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
+    
+    res.json({
+      status: randomStatus,
+      resultDesc: randomStatus === 'success' ? 'The service request is processed successfully.' : 'Request is still pending',
+    });
+  });
+
+  // International Payout Routes
+  app.post("/api/payout/international", (req, res) => {
+    const { method, amount, email, bankDetails } = req.body;
+    console.log(`Initiating ${method} payout for ${amount} to ${email || bankDetails?.accountNumber}`);
+    
+    // Mock successful payout
+    res.json({
+      success: true,
+      transactionId: "INT-" + Math.random().toString(36).substr(2, 9),
+      message: "Payout initiated successfully"
+    });
+  });
 
   // Health check route
   app.get("/health", (req, res) => {

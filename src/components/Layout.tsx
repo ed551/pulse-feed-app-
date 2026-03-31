@@ -9,6 +9,7 @@ import {
   Volume2, VolumeX, Share2, Brain, TrendingUp, TrendingDown, Minus, Menu
 } from "lucide-react";
 import { GoogleGenAI, Modality } from "@google/genai";
+import { generateContentWithRetry } from "../lib/ai";
 import { cn } from "../lib/utils";
 import { 
   pulse_feeds_auto_sync, daily_twin_sync, midnight_settlement_engine, 
@@ -116,10 +117,9 @@ export default function Layout() {
     if (isSpeaking) return;
     setIsSpeaking(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const statusMessage = "Pulse Feeds is currently in development. To be fully functional, I need a secure backend connection, valid API keys for all integrated services, and a verified administrative account. System health is currently optimal, but these components are required for full feature deployment.";
       
-      const response = await ai.models.generateContent({
+      const response = await generateContentWithRetry({
         model: "gemini-2.5-flash-preview-tts",
         contents: [{ parts: [{ text: `Say clearly and professionally: ${statusMessage}` }] }],
         config: {
@@ -277,8 +277,7 @@ export default function Layout() {
 
         // Smart Analysis via Gemini
         try {
-          const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-          const analysisResponse = await ai.models.generateContent({
+          const analysisResponse = await generateContentWithRetry({
             model: "gemini-3-flash-preview",
             contents: [{ parts: [{ text: `Analyze this weather for ${city}: ${newWeather.temp}, ${newWeather.type}. Provide a 1-sentence smart summary for the user.` }] }],
           });
@@ -377,7 +376,7 @@ export default function Layout() {
     { type: 'img', src: 'https://cdn.simpleicons.org/googlechrome/4285F4', title: 'Chrome', href: 'https://google.com/chrome' },
     { type: 'icon', icon: LayoutGrid, color: 'text-gray-600 dark:text-gray-300', title: 'Google Apps', action: () => setActiveModal('googleapps') },
     { type: 'icon', icon: Calculator, color: 'text-blue-500', title: 'Calculator', action: () => setActiveModal('calculator') },
-    { type: 'icon', icon: Calendar, color: 'text-blue-600', title: 'Calendar' },
+    { type: 'icon', icon: Calendar, color: 'text-blue-600', title: 'Calendar', action: () => setActiveModal('calendar') },
     { type: 'icon', icon: HeartPulse, color: 'text-red-500', title: 'Health Checker', action: () => setActiveModal('health') },
     { type: 'icon', icon: Fingerprint, color: 'text-pink-400', title: 'Fingerprint Reader', action: () => setActiveModal('fingerprint') },
     { type: 'icon', icon: Phone, color: 'text-blue-500', title: 'Calls', path: '/calls' },
@@ -600,7 +599,7 @@ export default function Layout() {
         </div>
 
         {/* Floating Action Button (FAB) - Moved outside main for fixed positioning */}
-        <Link to="/posts" className="fixed bottom-24 right-20 sm:right-24 w-14 h-14 bg-gradient-to-r from-purple-600 to-blue-500 rounded-full flex items-center justify-center text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all z-30">
+        <Link to="/posts#add-post" className="fixed bottom-24 right-20 sm:right-24 w-14 h-14 bg-gradient-to-r from-purple-600 to-blue-500 rounded-full flex items-center justify-center text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all z-30">
           <PlusSquare className="w-6 h-6" />
         </Link>
 
@@ -690,7 +689,7 @@ export default function Layout() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-6">
+            <div className="p-6 max-h-[80vh] overflow-y-auto">
               {activeModal === 'weather' && (
                 <div className="space-y-6">
                   <div className="flex items-center justify-between">
@@ -826,6 +825,38 @@ export default function Layout() {
                     >
                       =
                     </button>
+                  </div>
+                </div>
+              )}
+              {activeModal === 'calendar' && (
+                <div className="space-y-4">
+                  <div className="text-center font-bold text-lg">
+                    {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
+                  </div>
+                  <div className="grid grid-cols-7 gap-1 text-center text-xs text-gray-500">
+                    {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => <div key={day}>{day}</div>)}
+                  </div>
+                  <div className="grid grid-cols-7 gap-1">
+                    {(() => {
+                      const now = new Date();
+                      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).getDay();
+                      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+                      const today = now.getDate();
+                      
+                      const days = [];
+                      for (let i = 0; i < firstDay; i++) {
+                        days.push(<div key={`empty-${i}`} />);
+                      }
+                      for (let i = 1; i <= daysInMonth; i++) {
+                        const isToday = i === today;
+                        days.push(
+                          <div key={i} className={cn("h-8 flex items-center justify-center rounded-lg text-sm", isToday ? "bg-purple-600 text-white font-bold" : "bg-gray-100 dark:bg-gray-800")}>
+                            {i}
+                          </div>
+                        );
+                      }
+                      return days;
+                    })()}
                   </div>
                 </div>
               )}

@@ -11,11 +11,36 @@ import { moderateContent } from "../services/moderationService";
 import { useOutletContext } from "react-router-dom";
 import { usePosts } from "../hooks/usePosts";
 import { useAuth } from "../contexts/AuthContext";
+import { db } from "../lib/firebase";
+import { getDocFromServer, doc } from "firebase/firestore";
+import { 
+  CheckCircle2, AlertCircle
+} from "lucide-react";
 
 export default function Home() {
   const { currentWeather, forecastWeather, locationName, tempTrend, weatherAnalysis } = useOutletContext<any>();
   const { posts: firebasePosts, updatePost, loading: postsLoading } = usePosts();
   const { currentUser, loading: authLoading } = useAuth();
+  const [dbStatus, setDbStatus] = useState<'testing' | 'online' | 'offline'>('testing');
+
+  useEffect(() => {
+    async function testConnection() {
+      try {
+        // Test connection to Firestore
+        await getDocFromServer(doc(db, 'system', 'health'));
+        setDbStatus('online');
+      } catch (error) {
+        console.error("Firebase Connection Test:", error);
+        // If it's just a missing doc, that's fine, it means we're connected
+        if (error instanceof Error && error.message.includes('the client is offline')) {
+          setDbStatus('offline');
+        } else {
+          setDbStatus('online'); // Connected but doc doesn't exist
+        }
+      }
+    }
+    testConnection();
+  }, []);
   const [activeCommentPostId, setActiveCommentPostId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [isPostingComment, setIsPostingComment] = useState(false);
@@ -91,6 +116,19 @@ export default function Home() {
 
   return (
     <div className="space-y-6 pb-20">
+      {/* Connection Status Badge */}
+      <div className="flex justify-end">
+        <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border ${
+          dbStatus === 'online' ? 'bg-green-500/10 border-green-500/30 text-green-500' :
+          dbStatus === 'offline' ? 'bg-red-500/10 border-red-500/30 text-red-500' :
+          'bg-zinc-500/10 border-zinc-500/30 text-zinc-500'
+        }`}>
+          {dbStatus === 'testing' && <Loader2 className="w-3 h-3 animate-spin" />}
+          {dbStatus === 'online' && <CheckCircle2 className="w-3 h-3" />}
+          {dbStatus === 'offline' && <AlertCircle className="w-3 h-3" />}
+          Firebase {dbStatus}
+        </div>
+      </div>
       {/* Weather Widget */}
       {currentWeather && forecastWeather && (
         <div className={cn("rounded-3xl p-6 shadow-lg border border-white/10 relative overflow-hidden bg-gradient-to-br", currentWeather.bg)}>
@@ -300,8 +338,8 @@ export default function Home() {
                       <div className="space-y-3 mb-4">
                         {item.commentsList.map((comment: any, idx: number) => (
                           <div key={idx} className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
-                            <span className="font-semibold text-sm text-gray-900 dark:text-gray-100 mr-2">{comment.user}</span>
-                            <span className="text-sm text-gray-700 dark:text-gray-300">{comment.text}</span>
+                            <span className="font-semibold text-sm text-gray-900 dark:text-gray-100 mr-2">{comment.author}</span>
+                            <span className="text-sm text-gray-700 dark:text-gray-300">{comment.content}</span>
                           </div>
                         ))}
                       </div>

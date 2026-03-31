@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, query, orderBy, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
+import { handleFirestoreError, OperationType } from '../lib/firebase';
 
 export interface PostComment {
   id: string;
@@ -58,7 +59,7 @@ export function usePosts() {
       setPosts(postsData);
       setLoading(false);
     }, (error) => {
-      console.error("Error fetching posts:", error);
+      handleFirestoreError(error, OperationType.LIST, 'posts');
       setLoading(false);
     });
 
@@ -72,8 +73,7 @@ export function usePosts() {
         createdAt: serverTimestamp()
       });
     } catch (error) {
-      console.error("Error adding post:", error);
-      throw error;
+      handleFirestoreError(error, OperationType.CREATE, 'posts');
     }
   };
 
@@ -81,8 +81,7 @@ export function usePosts() {
     try {
       await updateDoc(doc(db, 'posts', postId), data);
     } catch (error) {
-      console.error("Error updating post:", error);
-      throw error;
+      handleFirestoreError(error, OperationType.UPDATE, `posts/${postId}`);
     }
   };
 
@@ -90,8 +89,7 @@ export function usePosts() {
     try {
       await deleteDoc(doc(db, 'posts', postId));
     } catch (error) {
-      console.error("Error deleting post:", error);
-      throw error;
+      handleFirestoreError(error, OperationType.DELETE, `posts/${postId}`);
     }
   };
 

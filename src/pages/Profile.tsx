@@ -1,30 +1,38 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { Settings, LogOut, Edit3, Shield, Star, Activity, Check, X, Loader2, AlertTriangle, Fingerprint, Camera, Sparkles, Upload, RotateCcw, Sliders, Award, Trophy, Zap, Users, Heart as HeartIcon } from "lucide-react";
+import { Settings, LogOut, Edit3, Shield, Star, Activity, Check, X, Loader2, AlertTriangle, Fingerprint, Camera, Sparkles, Upload, RotateCcw, Sliders, Award, Trophy, Zap, Users, Heart as HeartIcon, Beaker } from "lucide-react";
 import { auth_logic, user_history, wallet_engine } from "../lib/engines";
 import { moderateContent } from "../services/moderationService";
 import { generateAvatar } from "../services/imageService";
 import FingerprintModal from "../components/FingerprintModal";
 import Cropper from 'react-easy-crop';
 import { cn } from "../lib/utils";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { usePosts } from "../hooks/usePosts";
+import { db, handleFirestoreError, OperationType, storage } from "../lib/firebase";
+import { doc, updateDoc } from "firebase/firestore";
+import { ref, uploadString, getDownloadURL } from "firebase/storage";
 
 export default function Profile() {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, userData, logout } = useAuth();
+  const navigate = useNavigate();
   const { posts } = usePosts();
   const [isEditingBio, setIsEditingBio] = useState(false);
-  const [bio, setBio] = useState("Digital creator & tech enthusiast. Building the future one line of code at a time. 🚀");
+  const [bio, setBio] = useState(userData?.bio || "Digital creator & tech enthusiast. Building the future one line of code at a time. 🚀");
   const [tempBio, setTempBio] = useState("");
   const [isSavingBio, setIsSavingBio] = useState(false);
   const [bioError, setBioError] = useState<string | null>(null);
-  const [showFingerprintModal, setShowFingerprintModal] = useState(false);
-  const [pendingAction, setPendingAction] = useState<string | null>(null);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(currentUser?.photoURL || null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(userData?.photoURL || currentUser?.photoURL || null);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (userData?.bio) setBio(userData.bio);
+    if (userData?.photoURL) setAvatarUrl(userData.photoURL);
+  }, [userData]);
 
   const userPostsCount = posts.filter(p => p.authorId === currentUser?.uid).length;
 
@@ -102,7 +110,24 @@ export default function Profile() {
     );
 
     const base64Image = canvas.toDataURL('image/jpeg');
-    setAvatarUrl(base64Image);
+    
+    if (currentUser) {
+      try {
+        // Upload to Firebase Storage
+        const storageRef = ref(storage, `avatars/${currentUser.uid}`);
+        await uploadString(storageRef, base64Image, 'data_url');
+        const downloadURL = await getDownloadURL(storageRef);
+
+        // Update Firestore with the download URL
+        await updateDoc(doc(db, 'users', currentUser.uid), {
+          photoURL: downloadURL
+        });
+        setAvatarUrl(downloadURL);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `users/${currentUser.uid}`);
+      }
+    }
+    
     setEditingImage(null);
     setShowAvatarModal(false);
     // Reset filters
@@ -142,6 +167,11 @@ export default function Profile() {
       }
 
       // If approved, save
+      if (currentUser) {
+        await updateDoc(doc(db, 'users', currentUser.uid), {
+          bio: tempBio
+        });
+      }
       setBio(tempBio);
       setIsEditingBio(false);
       setIsSavingBio(false);
@@ -154,29 +184,6 @@ export default function Profile() {
   const handleCancelEdit = () => {
     setIsEditingBio(false);
     setBioError(null);
-  };
-
-  const handleSensitiveAction = (action: string) => {
-    setPendingAction(action);
-    setShowFingerprintModal(true);
-  };
-
-  const handleFingerprintSuccess = () => {
-    setShowFingerprintModal(false);
-    
-    // Process the pending action after successful verification
-    setTimeout(() => {
-      if (pendingAction === 'personal') {
-        alert("Access Granted: You can now edit your Personal Information.");
-      } else if (pendingAction === 'security') {
-        alert("Identity verified. Opening Security & Fingerprint Settings...");
-      } else if (pendingAction === 'delete') {
-        alert("Identity verified. Account deletion process initiated. Please check your email for final confirmation.");
-      } else if (pendingAction === 'privacy') {
-        alert("Identity verified. Opening Privacy Preferences...");
-      }
-      setPendingAction(null);
-    }, 100);
   };
 
   const achievements = [
@@ -289,7 +296,14 @@ export default function Profile() {
               <Edit3 className="w-6 h-6" />
             </button>
             <button 
-              onClick={() => handleSensitiveAction('security')}
+              onClick={() => navigate('/lab')}
+              className="p-3 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 transition-all active:scale-95 text-indigo-600 dark:text-indigo-400"
+              title="Gemini Lab"
+            >
+              <Beaker className="w-6 h-6" />
+            </button>
+            <button 
+              onClick={() => navigate('/settings')}
               className="p-3 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 transition-all active:scale-95 text-blue-600 dark:text-blue-400"
               title="Account Settings"
             >
@@ -308,7 +322,7 @@ export default function Profile() {
             <div className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">Groups</div>
           </div>
           <div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">1.2k</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{userData?.points || 0}</div>
             <div className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">Points</div>
           </div>
         </div>
@@ -361,12 +375,12 @@ export default function Profile() {
             <Shield className="w-5 h-5 mr-2 text-indigo-500" /> Account Settings
           </h2>
           <ul className="space-y-3">
-            <li><button onClick={() => alert('Opening Personal Information Settings...')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-700 dark:text-gray-300 font-medium">Personal Information</button></li>
-            <li><button onClick={() => handleSensitiveAction('privacy')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-700 dark:text-gray-300 font-medium flex items-center justify-between">
+            <li><button onClick={() => navigate('/settings')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-700 dark:text-gray-300 font-medium">Personal Information</button></li>
+            <li><button onClick={() => navigate('/settings')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-700 dark:text-gray-300 font-medium flex items-center justify-between">
               <span>Privacy Preferences</span>
               <Fingerprint className="w-4 h-4 text-gray-400" />
             </button></li>
-            <li><button onClick={() => handleSensitiveAction('security')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-700 dark:text-gray-300 font-medium flex items-center justify-between">
+            <li><button onClick={() => navigate('/settings')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-700 dark:text-gray-300 font-medium flex items-center justify-between">
               <span>Security & Fingerprint</span>
               <Fingerprint className="w-4 h-4 text-gray-400" />
             </button></li>
@@ -379,24 +393,13 @@ export default function Profile() {
           </h2>
           <ul className="space-y-3">
             <li><button onClick={async () => { if(confirm('Are you sure you want to sign out?')) { await logout(); window.location.href = '/'; } }} className="w-full text-left px-4 py-3 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/20 dark:hover:bg-red-900/40 dark:text-red-400 transition-colors font-bold">Sign Out</button></li>
-            <li><button onClick={() => handleSensitiveAction('delete')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-500 dark:text-gray-400 font-medium flex items-center justify-between">
+            <li><button onClick={() => navigate('/settings')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-500 dark:text-gray-400 font-medium flex items-center justify-between">
               <span>Delete Account</span>
               <Fingerprint className="w-4 h-4 text-gray-400" />
             </button></li>
           </ul>
         </div>
       </div>
-
-      <FingerprintModal 
-        isOpen={showFingerprintModal}
-        onClose={() => {
-          setShowFingerprintModal(false);
-          setPendingAction(null);
-        }}
-        onSuccess={handleFingerprintSuccess}
-        title={pendingAction === 'delete' ? 'Verify to Delete' : 'Verify Identity'}
-        description={pendingAction === 'delete' ? 'Press and hold to confirm account deletion' : 'Press and hold to access sensitive settings'}
-      />
 
       {/* Avatar Settings Modal */}
       {showAvatarModal && (

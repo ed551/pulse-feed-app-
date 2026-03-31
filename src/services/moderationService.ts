@@ -1,4 +1,5 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
+import { generateContentWithRetry } from "../lib/ai";
 
 export interface ModerationSettings {
   sensitivity: 'low' | 'medium' | 'high';
@@ -60,8 +61,7 @@ If rejected, provide a brief reason and list the flagged categories.
 `;
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry({
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: {

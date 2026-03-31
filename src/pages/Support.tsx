@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Headphones, Mail, MessageCircle, Phone, FileText, Send, X, Loader2, User, Bot } from "lucide-react";
 import { privacy_engine, auto_translation_engine, email_system_reporter } from "../lib/engines";
-import { GoogleGenAI } from "@google/genai";
+import { generateContentWithRetry } from "../lib/ai";
 import { motion, AnimatePresence } from "motion/react";
 
 interface Message {
@@ -40,8 +40,7 @@ export default function Support() {
     setIsTyping(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const response = await ai.models.generateContent({
+      const response = await generateContentWithRetry({
         model: "gemini-3-flash-preview",
         contents: [
           ...messages.map(m => ({ role: m.role, parts: [{ text: m.content }] })),

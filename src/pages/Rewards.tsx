@@ -1,9 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Gem, Award, TrendingUp, DollarSign, Receipt, Landmark, CheckCircle, Globe, Wallet, Phone, ArrowUpRight, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Info, Smartphone, CreditCard } from "lucide-react";
 import { mpesa_handler, unified_participant_payout, rewards_policy, equal_split_protocol, merchant_of_record_tax_remittance } from "../lib/engines";
 import { useCurrencyConverter } from "../hooks/useCurrencyConverter";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";
+import { useAuth } from "../contexts/AuthContext";
+import { db, handleFirestoreError, OperationType } from "../lib/firebase";
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment } from "firebase/firestore";
 
 interface Transaction {
   id: string;
@@ -15,14 +18,15 @@ interface Transaction {
 }
 
 export default function Rewards() {
+  const { currentUser, userData } = useAuth();
   const { currency, availableCurrencies, changeCurrency, convert, loading, rates } = useCurrencyConverter();
   const [activeTab, setActiveTab] = useState<'overview' | 'mpesa' | 'international'>('overview');
 
-  // Rewards State
-  const [points, setPoints] = useState(1250);
+  // Rewards State (from Firestore)
+  const points = userData?.points || 0;
+  const balance = userData?.balance || 0;
 
   // M-Pesa State
-  const [balance, setBalance] = useState(1250.50); // Points converted to KES for display in M-Pesa section
   const [phoneNumber, setPhoneNumber] = useState("");
   const [amount, setAmount] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -48,20 +52,27 @@ export default function Rewards() {
     equal_split_protocol();
     merchant_of_record_tax_remittance();
 
-    // Load transactions from local storage
-    const saved = localStorage.getItem("mpesa_transactions");
-    if (saved) {
-      setTransactions(JSON.parse(saved));
+    if (currentUser) {
+      const q = query(
+        collection(db, 'users', currentUser.uid, 'transactions'),
+        orderBy('timestamp', 'desc')
+      );
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const txs = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Transaction[];
+        setTransactions(txs);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, `users/${currentUser.uid}/transactions`);
+      });
+      return () => unsubscribe();
     }
-  }, []);
-
-  // Save transactions to local storage
-  useEffect(() => {
-    localStorage.setItem("mpesa_transactions", JSON.stringify(transactions));
-  }, [transactions]);
+  }, [currentUser]);
 
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser) return;
     setError(null);
     setSuccess(null);
 
@@ -94,16 +105,17 @@ export default function Rewards() {
 
       if (data.ResponseCode === "0") {
         const checkoutRequestId = data.CheckoutRequestID;
-        const newTransaction: Transaction = {
-          id: checkoutRequestId || Math.random().toString(36).substr(2, 9),
+        const newTransaction = {
           amount: numAmount,
           phoneNumber,
           status: 'pending',
           timestamp: new Date().toISOString(),
           reference: data.MerchantRequestID || "REF-" + Date.now(),
+          type: 'mpesa'
         };
 
-        setTransactions(prev => [newTransaction, ...prev]);
+        await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), newTransaction);
+        
         setSuccess("STK Push sent! Please enter your M-Pesa PIN on your phone.");
         
         // Start polling for status
@@ -122,6 +134,7 @@ export default function Rewards() {
 
   const handleInternationalPayout = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser) return;
     setError(null);
     setSuccess(null);
 
@@ -171,17 +184,23 @@ export default function Rewards() {
         throw new Error(data.error || "Failed to process payout");
       }
       
-      const newTransaction: Transaction = {
-        id: data.transactionId,
+      const newTransaction = {
         amount: numAmount,
         phoneNumber: payoutMethod === 'bank' ? bankDetails.accountNumber : payoutEmail,
         status: 'success',
         timestamp: new Date().toISOString(),
         reference: "PAY-" + Date.now(),
+        type: 'international',
+        method: payoutMethod
       };
 
-      setTransactions(prev => [newTransaction, ...prev]);
-      setPoints(prev => prev - pointsNeeded);
+      await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), newTransaction);
+      
+      // Update points in Firestore
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        points: increment(-pointsNeeded)
+      });
+
       setSuccess(`Payout of ${convert(numAmount)} initiated successfully via ${payoutMethod.toUpperCase()}!`);
       setPayoutAmount("");
       setPayoutEmail("");
@@ -194,16 +213,19 @@ export default function Rewards() {
   };
 
   const startPolling = async (checkoutRequestId: string, paidAmount: number) => {
+    if (!currentUser) return;
     let attempts = 0;
     const maxAttempts = 20; 
     
     const poll = async () => {
       if (attempts >= maxAttempts) {
-        setTransactions(prev => prev.map(tx => 
-          tx.id === checkoutRequestId && tx.status === 'pending' 
-            ? { ...tx, status: 'failed' } 
-            : tx
-        ));
+        // Update transaction status to failed in Firestore
+        const pendingTx = transactions.find(tx => tx.id === checkoutRequestId || tx.reference.includes(checkoutRequestId));
+        if (pendingTx) {
+          await updateDoc(doc(db, 'users', currentUser.uid, 'transactions', pendingTx.id), {
+            status: 'failed'
+          });
+        }
         setError("Transaction timed out. Please check your M-Pesa messages.");
         setIsLoading(false);
         return;
@@ -214,24 +236,25 @@ export default function Rewards() {
         const data = await response.json();
 
         if (data.status !== 'pending') {
-          setTransactions(prev => prev.map(tx => 
-            tx.id === checkoutRequestId 
-              ? { ...tx, status: data.status } 
-              : tx
-          ));
+          const pendingTx = transactions.find(tx => tx.id === checkoutRequestId || tx.reference.includes(checkoutRequestId));
+          if (pendingTx) {
+            await updateDoc(doc(db, 'users', currentUser.uid, 'transactions', pendingTx.id), {
+              status: data.status
+            });
+          }
           
           if (data.status === 'success') {
             setSuccess("Payment confirmed! Your balance has been updated.");
-            setBalance(prev => prev + paidAmount);
             
-            // Deduct points based on the KES amount
-            // 100 points = 1 USD
-            // amountInUSD = paidAmount / rates['KES']
-            // pointsToDeduct = amountInUSD * 100
-            const kesRate = rates['KES'] || 130; // Fallback to 130 if not loaded
+            const kesRate = rates['KES'] || 130;
             const amountInUSD = paidAmount / kesRate;
             const pointsToDeduct = Math.round(amountInUSD * 100);
-            setPoints(prev => Math.max(0, prev - pointsToDeduct));
+            
+            // Update balance and points in Firestore
+            await updateDoc(doc(db, 'users', currentUser.uid), {
+              balance: increment(paidAmount),
+              points: increment(-pointsToDeduct)
+            });
           } else {
             setError(`Payment failed: ${data.resultDesc || "Unknown error"}`);
           }

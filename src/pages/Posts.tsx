@@ -9,7 +9,7 @@ import { useNotifications } from "../hooks/useNotifications";
 import { useAuth } from "../contexts/AuthContext";
 import { usePosts, Post as FirebasePost } from "../hooks/usePosts";
 import { cn } from "../lib/utils";
-import ReactQuill from 'react-quill';
+import ReactQuill from 'react-quill-new';
 
 interface PostComment {
   id: string;
@@ -276,10 +276,14 @@ export default function Posts() {
   const addTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
-      const tag = tagInput.trim().replace(/,/g, '');
-      if (tag && !postTags.includes(tag)) {
-        setPostTags([...postTags, tag]);
-      }
+      const tags = tagInput.split(',').map(t => t.trim()).filter(t => t);
+      const newTags = [...postTags];
+      tags.forEach(tag => {
+        if (tag && !newTags.includes(tag)) {
+          newTags.push(tag);
+        }
+      });
+      setPostTags(newTags);
       setTagInput("");
     }
   };
@@ -291,10 +295,14 @@ export default function Posts() {
   const addEditTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
-      const tag = editTagInput.trim().replace(/,/g, '');
-      if (tag && !editTags.includes(tag)) {
-        setEditTags([...editTags, tag]);
-      }
+      const tags = editTagInput.split(',').map(t => t.trim()).filter(t => t);
+      const newTags = [...editTags];
+      tags.forEach(tag => {
+        if (tag && !newTags.includes(tag)) {
+          newTags.push(tag);
+        }
+      });
+      setEditTags(newTags);
       setEditTagInput("");
     }
   };
@@ -315,7 +323,7 @@ export default function Posts() {
   const quillFormats = [
     'header',
     'bold', 'italic', 'underline', 'strike', 'blockquote',
-    'list', 'bullet',
+    'list',
     'link'
   ];
 
@@ -694,7 +702,7 @@ export default function Posts() {
       </AnimatePresence>
       
       {/* Create Post Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700" id="add-post">
         <div className="flex items-start space-x-4 mb-4">
           <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-xl">
             U
@@ -794,7 +802,7 @@ export default function Posts() {
                       value={tagInput}
                       onChange={(e) => setTagInput(e.target.value)}
                       onKeyDown={addTag}
-                      placeholder="Add tags..."
+                      placeholder="Add tags (comma separated)..."
                       className="w-full bg-transparent border-none focus:ring-0 text-xs text-gray-600 dark:text-gray-400 placeholder-gray-400 dark:placeholder-gray-500 outline-none"
                     />
                     {tagInput.trim() && (
@@ -1062,7 +1070,7 @@ export default function Posts() {
                             value={editTagInput}
                             onChange={(e) => setEditTagInput(e.target.value)}
                             onKeyDown={addEditTag}
-                            placeholder="Add tags..."
+                            placeholder="Add tags (comma separated)..."
                             className="w-full bg-transparent border-none focus:ring-0 text-xs text-gray-600 dark:text-gray-400 placeholder-gray-400 dark:placeholder-gray-500 outline-none"
                           />
                           {editTagInput.trim() && (

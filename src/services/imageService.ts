@@ -1,9 +1,8 @@
-import { GoogleGenAI } from "@google/genai";
+import { generateContentWithRetry } from "../lib/ai";
 
 export const generateAvatar = async (prompt: string): Promise<string> => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const response = await ai.models.generateContent({
+    const response = await generateContentWithRetry({
       model: 'gemini-2.5-flash-image',
       contents: {
         parts: [
