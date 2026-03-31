@@ -37,14 +37,7 @@ export default defineConfig(({mode}) => {
       hmr: process.env.DISABLE_HMR !== 'true',
     },
     build: {
-      rollupOptions: {
-        external: ['react-is'],
-        output: {
-          globals: {
-            'react-is': 'ReactIs',
-          },
-        },
-      },
+      outDir: 'dist',
     },
     base: './',
   };
