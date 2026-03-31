@@ -35,12 +35,12 @@ export default function Home() {
         await getDocFromServer(doc(db, 'system', 'health'));
         setDbStatus('online');
       } catch (error) {
-        console.error("Firebase Connection Test:", error);
-        // If it's just a missing doc, that's fine, it means we're connected
+        // If it's just a missing doc or permission denied, that's fine, it means we're connected
         if (error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Firebase Connection Test:", error);
           setDbStatus('offline');
         } else {
-          setDbStatus('online'); // Connected but doc doesn't exist
+          setDbStatus('online'); // Connected but doc doesn't exist or permission denied
         }
       }
     }
@@ -183,14 +183,12 @@ export default function Home() {
 
         const response = await generateContentWithRetry({
           model: "gemini-3-flash-preview",
-          contents: [
-            {
-              parts: [
-                { text: prompt },
-                { inlineData: { mimeType: "image/jpeg", data: base64Data } }
-              ]
-            }
-          ],
+          contents: {
+            parts: [
+              { text: prompt },
+              { inlineData: { mimeType: "image/jpeg", data: base64Data } }
+            ]
+          },
           config: {
             temperature: 0.7,
             topP: 0.95,

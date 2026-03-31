@@ -3,6 +3,9 @@ import { ShieldAlert, Power, RefreshCw, UploadCloud, DownloadCloud, AlertTriangl
 import { admin_logic, integrity_audit_engine, global_kill_switch } from "../lib/engines";
 import { cn } from "../lib/utils";
 import { getModerationSettings, saveModerationSettings, ModerationSettings } from "../services/moderationService";
+import { db, handleFirestoreError, OperationType } from "../lib/firebase";
+import { collection, getCountFromServer } from "firebase/firestore";
+import { Users } from "lucide-react";
 
 type AuthState = 'phone_input' | 'phone_verify' | 'fingerprint' | 'verified';
 
@@ -16,6 +19,8 @@ export default function Moderation() {
 
   const [modSettings, setModSettings] = useState<ModerationSettings>(getModerationSettings());
   const [newRule, setNewRule] = useState("");
+  const [userCount, setUserCount] = useState<number | null>(null);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
   const handleSaveSettings = () => {
     saveModerationSettings(modSettings);
@@ -43,6 +48,22 @@ export default function Moderation() {
       admin_logic();
       integrity_audit_engine();
       global_kill_switch();
+
+      const fetchUserCount = async () => {
+        setIsLoadingUsers(true);
+        try {
+          const snapshot = await getCountFromServer(collection(db, 'users'));
+          setUserCount(snapshot.data().count);
+        } catch (error) {
+          console.error("Failed to fetch user count:", error);
+          // We don't throw handleFirestoreError here to avoid crashing the whole page if just this fails,
+          // but we log it.
+        } finally {
+          setIsLoadingUsers(false);
+        }
+      };
+
+      fetchUserCount();
     }
   }, [authState]);
 
@@ -251,6 +272,28 @@ export default function Moderation() {
           <Fingerprint className="w-4 h-4 mr-2" />
           AI at Work
         </div>
+      </div>
+
+      {/* Statistics Section */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center space-x-4">
+          <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center">
+            <Users className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Users</p>
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {isLoadingUsers ? (
+                <span className="animate-pulse">...</span>
+              ) : userCount !== null ? (
+                userCount.toLocaleString()
+              ) : (
+                <span className="text-red-500 text-sm">Error</span>
+              )}
+            </h3>
+          </div>
+        </div>
+        {/* Add more stats here if needed in the future */}
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">

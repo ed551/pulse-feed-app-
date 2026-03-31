@@ -148,6 +148,15 @@ service cloud.firestore {
     // Rules
     // ===============================================================
     
+    // Allow public read for connection testing
+    match /system/health {
+      allow read: if true;
+    }
+    
+    match /_connection_test_/ping {
+      allow read: if true;
+    }
+    
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       allow create: if isAuthenticated() && isValidUser(request.resource.data) && (

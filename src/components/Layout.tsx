@@ -356,7 +356,7 @@ export default function Layout() {
             try {
               const analysisResponse = await generateContentWithRetry({
                 model: "gemini-3-flash-preview",
-                contents: [{ parts: [{ text: `Analyze this weather for ${city}: ${newWeather.temp}, ${newWeather.type}. Provide a 1-sentence smart summary for the user.` }] }],
+                contents: `Analyze this weather for ${city}: ${newWeather.temp}, ${newWeather.type}. Provide a 1-sentence smart summary for the user.`,
               });
               
               if (analysisResponse.text) {
@@ -456,10 +456,34 @@ export default function Layout() {
     { type: 'icon', icon: Share2, color: 'text-blue-500', title: 'Share Pulse Feeds', action: handleShare },
     { type: 'icon', icon: Edit3, color: 'text-yellow-500', title: 'Note Pad', action: () => setActiveModal('notepad') },
     { type: 'icon', icon: DollarSign, color: 'text-green-500', title: 'AdMob Ads', path: '/ads' },
+    
+    // Messaging Links
     { type: 'img', src: 'https://cdn.simpleicons.org/whatsapp/25D366', title: 'WhatsApp', href: 'https://web.whatsapp.com' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/telegram/26A5E4', title: 'Telegram', href: 'https://web.telegram.org' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/messenger/00B2FF', title: 'Messenger', href: 'https://messenger.com' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/signal/3A76F0', title: 'Signal', href: 'https://signal.org' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/discord/5865F2', title: 'Discord', href: 'https://discord.com/app' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/wechat/07C160', title: 'WeChat', href: 'https://web.wechat.com' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/skype/00AFF0', title: 'Skype', href: 'https://web.skype.com' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/viber/7360F2', title: 'Viber', href: 'https://www.viber.com' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/line/00C300', title: 'Line', href: 'https://line.me' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/slack/4A154B', title: 'Slack', href: 'https://slack.com' },
+
+    // Social Media Links
     { type: 'img', src: 'https://cdn.simpleicons.org/facebook/1877F2', title: 'Facebook', href: 'https://facebook.com' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/x/black', darkSrc: 'https://cdn.simpleicons.org/x/white', title: 'X (Twitter)', href: 'https://x.com' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/instagram/E4405F', title: 'Instagram', href: 'https://instagram.com' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/linkedin/0A66C2', title: 'LinkedIn', href: 'https://linkedin.com' },
     { type: 'img', src: 'https://cdn.simpleicons.org/tiktok/black', darkSrc: 'https://cdn.simpleicons.org/tiktok/white', title: 'TikTok', href: 'https://tiktok.com' },
     { type: 'img', src: 'https://cdn.simpleicons.org/youtube/FF0000', title: 'YouTube', href: 'https://youtube.com' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/snapchat/FFFC00', title: 'Snapchat', href: 'https://snapchat.com' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/pinterest/E60023', title: 'Pinterest', href: 'https://pinterest.com' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/reddit/FF4500', title: 'Reddit', href: 'https://reddit.com' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/threads/black', darkSrc: 'https://cdn.simpleicons.org/threads/white', title: 'Threads', href: 'https://threads.net' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/twitch/9146FF', title: 'Twitch', href: 'https://twitch.tv' },
+    { type: 'img', src: 'https://cdn.simpleicons.org/tumblr/36465D', title: 'Tumblr', href: 'https://tumblr.com' },
+
+    // Other Utilities
     { type: 'img', src: 'https://cdn.simpleicons.org/gmail/EA4335', title: 'Gmail', href: 'https://gmail.com' },
     { type: 'img', src: 'https://cdn.simpleicons.org/yahoo/720E9E', title: 'Yahoo', href: 'https://yahoo.com' },
     { type: 'img', src: 'https://cdn.simpleicons.org/googlemaps/4285F4', title: 'Maps', href: 'https://maps.google.com' },
