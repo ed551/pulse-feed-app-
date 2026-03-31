@@ -7,6 +7,7 @@ interface RevenueContextType {
   isIdle: boolean;
   activeSeconds: number;
   totalEarnedToday: number;
+  addRevenue: (amount: number, reason: string) => Promise<void>;
 }
 
 const RevenueContext = createContext<RevenueContextType | undefined>(undefined);
@@ -29,6 +30,23 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const IDLE_THRESHOLD = 60000; // 60 seconds
   const EARNING_INTERVAL = 30000; // 30 seconds
   const POINTS_PER_INTERVAL = 1;
+
+  const addRevenue = async (amount: number, reason: string) => {
+    if (!currentUser) return;
+    try {
+      const userRef = doc(db, 'users', currentUser.uid);
+      // Assuming 1 point = $0.01 for simplicity, or we just add to points
+      // Let's add amount * 100 as points
+      const pointsToAdd = Math.floor(amount * 100);
+      await updateDoc(userRef, {
+        points: increment(pointsToAdd)
+      });
+      setTotalEarnedToday(prev => prev + pointsToAdd);
+      console.log(`Added revenue: $${amount} (${pointsToAdd} points) for ${reason}`);
+    } catch (error) {
+      console.error("Error adding revenue:", error);
+    }
+  };
 
   const resetIdleTimer = () => {
     setIsIdle(false);
@@ -83,7 +101,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [isIdle]);
 
   return (
-    <RevenueContext.Provider value={{ isIdle, activeSeconds, totalEarnedToday }}>
+    <RevenueContext.Provider value={{ isIdle, activeSeconds, totalEarnedToday, addRevenue }}>
       {children}
     </RevenueContext.Provider>
   );

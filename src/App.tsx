@@ -23,6 +23,7 @@ const Support = lazy(() => import("./pages/Support"));
 const AdsDashboard = lazy(() => import("./pages/AdsDashboard"));
 const GeminiLab = lazy(() => import("./pages/GeminiLab"));
 const Login = lazy(() => import("./pages/Login"));
+const Education = lazy(() => import("./pages/Education"));
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -43,6 +44,11 @@ export default function App() {
                 <Route index element={<Home />} />
                 <Route path="groups" element={<Groups />} />
                 <Route path="posts" element={<Posts />} />
+                <Route path="education" element={
+                  <ProtectedRoute>
+                    <Education />
+                  </ProtectedRoute>
+                } />
                 <Route path="rewards" element={
                   <ProtectedRoute>
                     <Rewards />

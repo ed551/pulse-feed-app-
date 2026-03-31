@@ -6,7 +6,7 @@ import {
   Fingerprint, HeartPulse, MapPin, Phone, MessageCircle, Gamepad2, Globe, BrainCircuit,
   Languages, Ticket, Snowflake, Calendar, Smartphone, Monitor, PhoneCall, Wrench,
   Calculator, LayoutGrid, Power, RefreshCw, ArrowUpCircle, ArrowDownCircle, XCircle, RotateCcw, Edit3, DollarSign, LogOut, Wallet, X, Send, Search, CheckCircle2, Plus,
-  Volume2, VolumeX, Share2, Brain, TrendingUp, TrendingDown, Minus, Menu
+  Volume2, VolumeX, Share2, Brain, TrendingUp, TrendingDown, Minus, Menu, GraduationCap
 } from "lucide-react";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { generateContentWithRetry } from "../lib/ai";
@@ -442,6 +442,7 @@ export default function Layout() {
   ];
 
   const extraNavItems = [
+    { path: '/education', icon: GraduationCap, color: 'text-blue-500', label: 'Education' },
     { path: '/moderation', icon: ShieldAlert, color: 'text-red-500', label: 'Moderation' },
     { path: '/notifications', icon: Bell, color: 'text-orange-500', label: 'Notifications' },
     { path: '/calls', icon: Phone, color: 'text-indigo-500', label: 'Calls' },
