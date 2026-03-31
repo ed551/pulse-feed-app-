@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { 
   PlayCircle, MessageSquare, Heart, Share2, MoreHorizontal, Sun, Snowflake, CloudRain, Cloud, CloudLightning, 
   Send, Loader2, AlertTriangle, Search, Filter, X, TrendingUp, TrendingDown, Minus,
-  LayoutGrid, Globe, Gem, Smartphone, FileText, Gamepad2, DollarSign, Calendar, Clock
+  LayoutGrid, Globe, Gem, Smartphone, FileText, Gamepad2, DollarSign, Calendar, Clock,
+  Mail, Map, Youtube, Image, Languages, ExternalLink
 } from "lucide-react";
 import { multimedia_stream_engine, content_governor, revenue_logic } from "../lib/engines";
 import { cn } from "../lib/utils";
 import AdUnit from "../components/AdUnit";
 import { moderateContent } from "../services/moderationService";
-import { useOutletContext } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import { usePosts } from "../hooks/usePosts";
 import { useAuth } from "../contexts/AuthContext";
 import { db } from "../lib/firebase";
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 
 export default function Home() {
+  const navigate = useNavigate();
   const { currentWeather, forecastWeather, locationName, tempTrend, weatherAnalysis } = useOutletContext<any>();
   const { posts: firebasePosts, updatePost, loading: postsLoading } = usePosts();
   const { currentUser, loading: authLoading } = useAuth();
@@ -45,21 +47,70 @@ export default function Home() {
   const [commentText, setCommentText] = useState("");
   const [isPostingComment, setIsPostingComment] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] = useState("All");
+  const [activeCategory, setActiveCategory] = useState("Google Apps");
   const [searchQuery, setSearchQuery] = useState("");
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [dateFilter, setDateFilter] = useState("all"); // all, today, week, month
   const [userFilter, setUserFilter] = useState("");
   
   const CATEGORIES = [
-    { name: 'All', icon: LayoutGrid },
-    { name: 'General', icon: Globe },
-    { name: 'Gold Prediction', icon: Gem },
-    { name: 'Tech', icon: Smartphone },
-    { name: 'News', icon: FileText },
-    { name: 'Gaming', icon: Gamepad2 },
-    { name: 'Finance', icon: DollarSign }
+    { name: 'Google Apps', icon: LayoutGrid },
+    { name: 'Browsers', icon: Globe },
+    { name: 'Rewards', icon: Gem },
+    { name: 'View Mode', icon: Smartphone },
+    { name: 'Terms', icon: FileText },
+    { name: 'Games', icon: Gamepad2 },
+    { name: 'Ads', icon: DollarSign }
   ];
+
+  const GOOGLE_APPS = [
+    { name: 'Gmail', icon: Mail, url: 'https://mail.google.com', color: 'text-red-500', bg: 'bg-red-50' },
+    { name: 'Drive', icon: Cloud, url: 'https://drive.google.com', color: 'text-blue-500', bg: 'bg-blue-50' },
+    { name: 'Calendar', icon: Calendar, url: 'https://calendar.google.com', color: 'text-green-500', bg: 'bg-green-50' },
+    { name: 'Maps', icon: Map, url: 'https://maps.google.com', color: 'text-green-600', bg: 'bg-green-50' },
+    { name: 'YouTube', icon: Youtube, url: 'https://youtube.com', color: 'text-red-600', bg: 'bg-red-50' },
+    { name: 'Photos', icon: Image, url: 'https://photos.google.com', color: 'text-blue-400', bg: 'bg-blue-50' },
+    { name: 'Search', icon: Search, url: 'https://google.com', color: 'text-blue-600', bg: 'bg-blue-50' },
+    { name: 'Translate', icon: Languages, url: 'https://translate.google.com', color: 'text-blue-500', bg: 'bg-blue-50' },
+  ];
+
+  const BROWSERS = [
+    { name: 'Chrome', icon: Globe, url: 'https://google.com/chrome', color: 'text-blue-500', bg: 'bg-blue-50' },
+    { name: 'Firefox', icon: Globe, url: 'https://firefox.com', color: 'text-orange-500', bg: 'bg-orange-50' },
+    { name: 'Safari', icon: Globe, url: 'https://apple.com/safari', color: 'text-blue-400', bg: 'bg-blue-50' },
+    { name: 'Edge', icon: Globe, url: 'https://microsoft.com/edge', color: 'text-blue-600', bg: 'bg-blue-50' },
+    { name: 'Opera', icon: Globe, url: 'https://opera.com', color: 'text-red-500', bg: 'bg-red-50' },
+    { name: 'Brave', icon: Globe, url: 'https://brave.com', color: 'text-orange-600', bg: 'bg-orange-50' },
+  ];
+
+  const GAMES = [
+    { name: 'Poki', icon: Gamepad2, url: 'https://poki.com', color: 'text-yellow-500', bg: 'bg-yellow-50' },
+    { name: 'CrazyGames', icon: Gamepad2, url: 'https://crazygames.com', color: 'text-purple-500', bg: 'bg-purple-50' },
+    { name: 'Armor Games', icon: Gamepad2, url: 'https://armorgames.com', color: 'text-red-500', bg: 'bg-red-50' },
+    { name: 'Kongregate', icon: Gamepad2, url: 'https://kongregate.com', color: 'text-orange-500', bg: 'bg-orange-50' },
+    { name: 'Y8', icon: Gamepad2, url: 'https://y8.com', color: 'text-blue-500', bg: 'bg-blue-50' },
+    { name: 'MiniClip', icon: Gamepad2, url: 'https://miniclip.com', color: 'text-green-500', bg: 'bg-green-50' },
+  ];
+
+  const handleCategoryClick = (categoryName: string) => {
+    if (categoryName === 'Rewards') {
+      navigate('/rewards');
+      return;
+    }
+    if (categoryName === 'Terms') {
+      navigate('/terms');
+      return;
+    }
+    if (categoryName === 'Ads') {
+      navigate('/ads');
+      return;
+    }
+    if (categoryName === 'View Mode') {
+      window.dispatchEvent(new CustomEvent('toggle-view-mode'));
+      return;
+    }
+    setActiveCategory(categoryName);
+  };
 
   const feedItems = firebasePosts.map(p => ({ ...p, type: 'post', user: p.author }))
     .sort((a, b) => new Date(b.time || b.createdAt?.toDate?.()?.toISOString?.() || new Date()).getTime() - new Date(a.time || a.createdAt?.toDate?.()?.toISOString?.() || new Date()).getTime());
@@ -241,7 +292,7 @@ export default function Home() {
         {CATEGORIES.map(cat => (
           <button
             key={cat.name}
-            onClick={() => setActiveCategory(cat.name)}
+            onClick={() => handleCategoryClick(cat.name)}
             className={cn(
               "flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-medium transition-all border group relative",
               activeCategory === cat.name
@@ -258,6 +309,66 @@ export default function Home() {
       </div>
 
       <div className="space-y-4">
+        {activeCategory === 'Google Apps' && !searchQuery && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {GOOGLE_APPS.map((app) => (
+              <a 
+                key={app.name}
+                href={app.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 hover:shadow-xl hover:scale-105 transition-all group"
+              >
+                <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-3 group-hover:rotate-12 transition-transform", app.bg, "dark:bg-gray-700")}>
+                  <app.icon className={cn("w-6 h-6", app.color)} />
+                </div>
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{app.name}</span>
+                <ExternalLink className="w-3 h-3 text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </a>
+            ))}
+          </div>
+        )}
+
+        {activeCategory === 'Browsers' && !searchQuery && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {BROWSERS.map((app) => (
+              <a 
+                key={app.name}
+                href={app.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 hover:shadow-xl hover:scale-105 transition-all group"
+              >
+                <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-3 group-hover:rotate-12 transition-transform", app.bg, "dark:bg-gray-700")}>
+                  <app.icon className={cn("w-6 h-6", app.color)} />
+                </div>
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{app.name}</span>
+                <ExternalLink className="w-3 h-3 text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </a>
+            ))}
+          </div>
+        )}
+
+        {activeCategory === 'Games' && !searchQuery && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {GAMES.map((app) => (
+              <a 
+                key={app.name}
+                href={app.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 hover:shadow-xl hover:scale-105 transition-all group"
+              >
+                <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-3 group-hover:rotate-12 transition-transform", app.bg, "dark:bg-gray-700")}>
+                  <app.icon className={cn("w-6 h-6", app.color)} />
+                </div>
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{app.name}</span>
+                <ExternalLink className="w-3 h-3 text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </a>
+            ))}
+          </div>
+        )}
+
         {postsLoading ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
             <Loader2 className="w-10 h-10 text-purple-500 animate-spin" />

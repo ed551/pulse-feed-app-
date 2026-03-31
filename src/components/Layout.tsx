@@ -39,6 +39,15 @@ export default function Layout() {
   });
   const [time, setTime] = useState(new Date());
   const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop');
+
+  useEffect(() => {
+    const handleToggleView = () => {
+      setViewMode(prev => prev === 'desktop' ? 'mobile' : 'desktop');
+    };
+    window.addEventListener('toggle-view-mode', handleToggleView);
+    return () => window.removeEventListener('toggle-view-mode', handleToggleView);
+  }, []);
+
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [notes, setNotes] = useState<{id: string, text: string, date: string}[]>(() => {
     const saved = localStorage.getItem('user_notes_list');
@@ -293,6 +302,7 @@ export default function Layout() {
   const [prevTemp, setPrevTemp] = useState<number>(32);
   const prevTempRef = useRef<number>(32);
   const prevTypeRef = useRef<string>(weatherTypes[0].type);
+  const lastWeatherAnalysisTimeRef = useRef<number>(0);
   const [locationName, setLocationName] = useState<string>('Detecting...');
   const [weatherAnalysis, setWeatherAnalysis] = useState<string>('Analyzing weather patterns...');
   
@@ -335,27 +345,45 @@ export default function Layout() {
         // Only update and speak if there's a significant change to avoid "frequent changes"
         const tempDiff = Math.abs(newWeather.tempValue - prevTempRef.current);
         const typeChanged = newWeather.type !== prevTypeRef.current;
+        const now = Date.now();
+        const analysisCooldown = 30 * 60 * 1000; // 30 minutes cooldown for AI analysis
         
         if (tempDiff >= 2 || typeChanged) {
           // Smart Analysis via Gemini
-          try {
-            const analysisResponse = await generateContentWithRetry({
-              model: "gemini-3-flash-preview",
-              contents: [{ parts: [{ text: `Analyze this weather for ${city}: ${newWeather.temp}, ${newWeather.type}. Provide a 1-sentence smart summary for the user.` }] }],
-            });
-            
-            if (analysisResponse.text) {
-              setWeatherAnalysis(analysisResponse.text);
-              const msg = new SpeechSynthesisUtterance(analysisResponse.text);
+          const shouldAnalyze = now - lastWeatherAnalysisTimeRef.current > analysisCooldown || typeChanged;
+          
+          if (shouldAnalyze) {
+            try {
+              const analysisResponse = await generateContentWithRetry({
+                model: "gemini-3-flash-preview",
+                contents: [{ parts: [{ text: `Analyze this weather for ${city}: ${newWeather.temp}, ${newWeather.type}. Provide a 1-sentence smart summary for the user.` }] }],
+              });
+              
+              if (analysisResponse.text) {
+                setWeatherAnalysis(analysisResponse.text);
+                lastWeatherAnalysisTimeRef.current = Date.now();
+                const msg = new SpeechSynthesisUtterance(analysisResponse.text);
+                window.speechSynthesis.speak(msg);
+              }
+            } catch (aiErr: any) {
+              // If it's a quota error, don't log it as an error, just a warning
+              if (aiErr?.status === 429) {
+                console.warn("Smart Analysis Quota Exceeded. Using fallback.");
+              } else {
+                console.error("Smart Analysis Error:", aiErr);
+              }
+              
+              const trendText = newWeather.tempValue > prevTempRef.current ? "increasing" : (newWeather.tempValue < prevTempRef.current ? "decreasing" : "stable");
+              const fallbackText = `Weather update for ${city}: It is now ${newWeather.type} with a temperature of ${newWeather.tempValue} degrees. The temperature is ${trendText}.`;
+              setWeatherAnalysis(fallbackText);
+              const msg = new SpeechSynthesisUtterance(fallbackText);
               window.speechSynthesis.speak(msg);
             }
-          } catch (aiErr) {
-            console.error("Smart Analysis Error:", aiErr);
+          } else {
+            // Just update the basic text without AI if on cooldown
             const trendText = newWeather.tempValue > prevTempRef.current ? "increasing" : (newWeather.tempValue < prevTempRef.current ? "decreasing" : "stable");
-            const fallbackText = `Weather update for ${city}: It is now ${newWeather.type} with a temperature of ${newWeather.tempValue} degrees. The temperature is ${trendText}.`;
-            setWeatherAnalysis(fallbackText);
-            const msg = new SpeechSynthesisUtterance(fallbackText);
-            window.speechSynthesis.speak(msg);
+            const updateText = `Weather update for ${city}: It is now ${newWeather.type} with a temperature of ${newWeather.tempValue} degrees. The temperature is ${trendText}.`;
+            setWeatherAnalysis(updateText);
           }
 
           setTempTrend(newWeather.tempValue > prevTempRef.current ? '+' : (newWeather.tempValue < prevTempRef.current ? '-' : ''));

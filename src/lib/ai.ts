@@ -3,8 +3,11 @@ import { GoogleGenAI, GenerateContentParameters, GenerateContentResponse } from 
 const apiKey = process.env.GEMINI_API_KEY;
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
-const MAX_RETRIES = 3;
-const INITIAL_DELAY = 1000; // 1 second
+const MAX_RETRIES = 2;
+const INITIAL_DELAY = 2000; // 2 seconds
+
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL = 2000; // 2 seconds between any AI requests in the same tab
 
 async function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -15,19 +18,38 @@ export async function generateContentWithRetry(params: GenerateContentParameters
     throw new Error("Gemini API key is not configured. Please add GEMINI_API_KEY to your environment.");
   }
   
+  // Simple rate limiting in the same tab
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastRequestTime;
+  if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+    await delay(MIN_REQUEST_INTERVAL - timeSinceLastRequest);
+  }
+  lastRequestTime = Date.now();
+  
   let retries = 0;
   
-  while (retries < MAX_RETRIES) {
+  while (retries <= MAX_RETRIES) {
     try {
       return await ai.models.generateContent(params);
     } catch (error: any) {
-      if (error?.status === 429 && retries < MAX_RETRIES - 1) {
+      const isQuotaExceeded = error?.status === 429 || error?.message?.includes("quota") || error?.message?.includes("RESOURCE_EXHAUSTED");
+      
+      if (isQuotaExceeded && retries < MAX_RETRIES) {
         retries++;
-        const backoffDelay = INITIAL_DELAY * Math.pow(2, retries);
-        console.warn(`Rate limit hit. Retrying in ${backoffDelay}ms... (Attempt ${retries}/${MAX_RETRIES})`);
+        const backoffDelay = INITIAL_DELAY * Math.pow(3, retries); // More aggressive backoff for quota issues
+        console.warn(`AI Quota/Rate limit hit. Retrying in ${backoffDelay}ms... (Attempt ${retries}/${MAX_RETRIES})`);
         await delay(backoffDelay);
         continue;
       }
+      
+      // If it's still a quota error after retries, throw a cleaner error
+      if (isQuotaExceeded) {
+        const cleanError = new Error("AI service is temporarily unavailable due to high demand. Please try again later.");
+        (cleanError as any).status = 429;
+        (cleanError as any).originalError = error;
+        throw cleanError;
+      }
+      
       throw error;
     }
   }
