@@ -486,8 +486,19 @@ export default function Layout() {
         {/* Header */}
         <header className="flex flex-wrap items-center justify-between px-2 sm:px-4 py-2 bg-white dark:bg-gray-800 shadow-md z-10 shrink-0 gap-2">
           <div className="flex items-center">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-500 rounded-xl flex items-center justify-center text-white shadow-lg" title="Pulse Feeds">
+            <div 
+              onClick={() => {
+                const msg = "Pulse Feeds Master AI is active. Use the AI Eye in the search bar to detect real-world problems and earn education badges.";
+                const utterance = new SpeechSynthesisUtterance(msg);
+                window.speechSynthesis.speak(utterance);
+              }}
+              className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-500 rounded-xl flex items-center justify-center text-white shadow-lg cursor-pointer hover:scale-110 transition-transform group relative" 
+              title="Master AI: System Intelligence"
+            >
               <BrainCircuit className="w-6 h-6" />
+              <span className="absolute -bottom-10 left-0 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
+                Master AI: Click for Status
+              </span>
             </div>
           </div>
           
@@ -528,7 +539,10 @@ export default function Layout() {
         <div className="flex flex-1 overflow-hidden relative">
           
           {/* Left Utility Bar (Weather, Clock, Health) */}
-          <div className="hidden sm:flex flex-col w-12 sm:w-16 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 py-2 sm:py-4 items-center space-y-4 sm:space-y-6 overflow-y-auto shrink-0 z-10 custom-scrollbar">
+          <div className={cn(
+            "flex-col w-12 sm:w-16 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 py-2 sm:py-4 items-center space-y-4 sm:space-y-6 overflow-y-auto shrink-0 z-10 custom-scrollbar",
+            viewMode === 'desktop' ? "hidden sm:flex" : "hidden"
+          )}>
             <div className="flex flex-col items-center space-y-1 group relative" title={`Today: ${currentWeather.type}`}>
               <CurrentWeatherIcon className={cn("w-5 h-5 sm:w-6 sm:h-6 transition-all", currentWeather.color, currentWeather.glow)} />
               <span className="text-[8px] sm:text-[10px] font-bold opacity-70">Today</span>
@@ -597,7 +611,10 @@ export default function Layout() {
           </main>
 
           {/* Right Links Bar */}
-          <div className="hidden sm:flex flex-col w-12 sm:w-16 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 py-2 sm:py-4 items-center space-y-3 sm:space-y-4 overflow-y-auto shrink-0 z-10 custom-scrollbar">
+          <div className={cn(
+            "flex-col w-12 sm:w-16 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 py-2 sm:py-4 items-center space-y-3 sm:space-y-4 overflow-y-auto shrink-0 z-10 custom-scrollbar",
+            viewMode === 'desktop' ? "hidden sm:flex" : "hidden"
+          )}>
             {rightLinks.map((link, idx) => {
               if (link.href) {
                 return (
@@ -989,19 +1006,25 @@ export default function Layout() {
               {activeModal === 'googleapps' && (
                 <div className="grid grid-cols-3 gap-6">
                   {[
-                    { name: 'Search', icon: Search, color: 'text-blue-500' },
-                    { name: 'Maps', icon: MapPin, color: 'text-green-500' },
-                    { name: 'Mail', icon: Bell, color: 'text-red-500' },
-                    { name: 'Drive', icon: LayoutGrid, color: 'text-yellow-500' },
-                    { name: 'Photos', icon: PlusSquare, color: 'text-pink-500' },
-                    { name: 'Translate', icon: Languages, color: 'text-blue-600' }
+                    { name: 'Search', icon: Search, color: 'text-blue-500', url: 'https://google.com' },
+                    { name: 'Maps', icon: MapPin, color: 'text-green-500', url: 'https://maps.google.com' },
+                    { name: 'Mail', icon: Bell, color: 'text-red-500', url: 'https://gmail.com' },
+                    { name: 'Drive', icon: LayoutGrid, color: 'text-yellow-500', url: 'https://drive.google.com' },
+                    { name: 'Photos', icon: PlusSquare, color: 'text-pink-500', url: 'https://photos.google.com' },
+                    { name: 'Translate', icon: Languages, color: 'text-blue-600', url: 'https://translate.google.com' }
                   ].map(app => (
-                    <button key={app.name} className="flex flex-col items-center space-y-2 group">
+                    <a 
+                      key={app.name} 
+                      href={app.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex flex-col items-center space-y-2 group"
+                    >
                       <div className="w-12 h-12 bg-gray-50 dark:bg-gray-900 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm border border-gray-100 dark:border-gray-700">
                         <app.icon className={cn("w-6 h-6", app.color)} />
                       </div>
                       <span className="text-xs font-medium">{app.name}</span>
-                    </button>
+                    </a>
                   ))}
                 </div>
               )}

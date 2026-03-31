@@ -1,5 +1,5 @@
 {
   "name": "Pulse Feeds",
-  "description": "A modern, enhanced, and boostiful community app for social interaction, rewards, and gold price predictions.",
-  "requestFramePermissions": ["geolocation"]
+  "description": "An AI-powered community app for social interaction, real-world problem detection, and educational badges.",
+  "requestFramePermissions": ["geolocation", "camera", "microphone"]
 }

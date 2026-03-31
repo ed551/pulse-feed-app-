@@ -187,11 +187,17 @@ export default function Profile() {
   };
 
   const achievements = [
-    { id: 1, name: "Top Contributor", icon: <Trophy className="w-5 h-5 text-yellow-500" />, description: "Top 1% of active posters this month", color: "bg-yellow-50 dark:bg-yellow-900/20", borderColor: "border-yellow-100 dark:border-yellow-800/30" },
-    { id: 2, name: "Community Helper", icon: <HeartIcon className="w-5 h-5 text-pink-500" />, description: "Answered 50+ support questions", color: "bg-pink-50 dark:bg-pink-900/20", borderColor: "border-pink-100 dark:border-pink-800/30" },
-    { id: 3, name: "Early Adopter", icon: <Zap className="w-5 h-5 text-blue-500" />, description: "Joined during the beta phase", color: "bg-blue-50 dark:bg-blue-900/20", borderColor: "border-blue-100 dark:border-blue-800/30" },
-    { id: 4, name: "Networker", icon: <Users className="w-5 h-5 text-green-500" />, description: "Connected with 100+ users", color: "bg-green-50 dark:bg-green-900/20", borderColor: "border-green-100 dark:border-green-800/30" },
-    { id: 5, name: "Trendsetter", icon: <Sparkles className="w-5 h-5 text-purple-500" />, description: "Created a viral post with 1k+ likes", color: "bg-purple-50 dark:bg-purple-900/20", borderColor: "border-purple-100 dark:border-purple-800/30" },
+    { id: 'top-contributor', name: "Top Contributor", icon: <Trophy className="w-5 h-5 text-yellow-500" />, description: "Top 1% of active posters this month", color: "bg-yellow-50 dark:bg-yellow-900/20", borderColor: "border-yellow-100 dark:border-yellow-800/30" },
+    { id: 'community-helper', name: "Community Helper", icon: <HeartIcon className="w-5 h-5 text-pink-500" />, description: "Answered 50+ support questions", color: "bg-pink-50 dark:bg-pink-900/20", borderColor: "border-pink-100 dark:border-pink-800/30" },
+    { id: 'early-adopter', name: "Early Adopter", icon: <Zap className="w-5 h-5 text-blue-500" />, description: "Joined during the beta phase", color: "bg-blue-50 dark:bg-blue-900/20", borderColor: "border-blue-100 dark:border-blue-800/30" },
+    ...((userData?.badges || []).map((badge: any, index: number) => ({
+      id: `ai-badge-${index}`,
+      name: badge.name,
+      icon: <Award className="w-5 h-5 text-purple-500" />,
+      description: badge.description || "Awarded for real-world problem detection.",
+      color: "bg-purple-50 dark:bg-purple-900/20",
+      borderColor: "border-purple-100 dark:border-purple-800/30"
+    })))
   ];
 
   return (

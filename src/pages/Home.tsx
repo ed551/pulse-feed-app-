@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { 
   PlayCircle, MessageSquare, Heart, Share2, MoreHorizontal, Sun, Snowflake, CloudRain, Cloud, CloudLightning, 
   Send, Loader2, AlertTriangle, Search, Filter, X, TrendingUp, TrendingDown, Minus,
   LayoutGrid, Globe, Gem, Smartphone, FileText, Gamepad2, DollarSign, Calendar, Clock,
-  Mail, Map, Youtube, Image, Languages, ExternalLink
+  Mail, Map, Youtube, Image, Languages, ExternalLink, Eye, Camera, Award, Sparkles, Volume2, VolumeX
 } from "lucide-react";
 import { multimedia_stream_engine, content_governor, revenue_logic } from "../lib/engines";
 import { cn } from "../lib/utils";
@@ -13,10 +13,12 @@ import { useNavigate, useOutletContext } from "react-router-dom";
 import { usePosts } from "../hooks/usePosts";
 import { useAuth } from "../contexts/AuthContext";
 import { db } from "../lib/firebase";
-import { getDocFromServer, doc } from "firebase/firestore";
+import { getDocFromServer, doc, setDoc, serverTimestamp, arrayUnion } from "firebase/firestore";
 import { 
   CheckCircle2, AlertCircle
 } from "lucide-react";
+import { generateContentWithRetry } from "../lib/ai";
+import { Modality } from "@google/genai";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -53,14 +55,24 @@ export default function Home() {
   const [dateFilter, setDateFilter] = useState("all"); // all, today, week, month
   const [userFilter, setUserFilter] = useState("");
   
+  // AI Eye & Education State
+  const [showAiEye, setShowAiEye] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiAdvice, setAiAdvice] = useState<string | null>(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  
   const CATEGORIES = [
-    { name: 'Google Apps', icon: LayoutGrid },
-    { name: 'Browsers', icon: Globe },
-    { name: 'Rewards', icon: Gem },
-    { name: 'View Mode', icon: Smartphone },
-    { name: 'Terms', icon: FileText },
-    { name: 'Games', icon: Gamepad2 },
-    { name: 'Ads', icon: DollarSign }
+    { name: 'All', icon: Home, color: 'text-purple-500' },
+    { name: 'Google Apps', icon: LayoutGrid, color: 'text-blue-500' },
+    { name: 'Browsers', icon: Globe, color: 'text-orange-500' },
+    { name: 'Rewards', icon: Gem, color: 'text-yellow-500' },
+    { name: 'View Mode', icon: Smartphone, color: 'text-purple-500' },
+    { name: 'Terms', icon: FileText, color: 'text-teal-500' },
+    { name: 'Games', icon: Gamepad2, color: 'text-red-500' },
+    { name: 'Ads', icon: DollarSign, color: 'text-green-500' }
   ];
 
   const GOOGLE_APPS = [
@@ -110,6 +122,141 @@ export default function Home() {
       return;
     }
     setActiveCategory(categoryName);
+  };
+
+  const startAiEye = async () => {
+    setShowAiEye(true);
+    setAiAdvice(null);
+    setCapturedImage(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("Camera Error:", err);
+      alert("Please allow camera access to use the AI Eye.");
+      setShowAiEye(false);
+    }
+  };
+
+  const stopAiEye = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+    }
+    setShowAiEye(false);
+    setIsSpeaking(false);
+    window.speechSynthesis.cancel();
+  };
+
+  const analyzeProblem = async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    
+    setIsAnalyzing(true);
+    setAiAdvice(null);
+
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0);
+      const imageData = canvas.toDataURL('image/jpeg', 0.8);
+      setCapturedImage(imageData);
+      const base64Data = imageData.split(',')[1];
+
+      try {
+        const prompt = `Act as an expert problem solver and educator. Analyze this image for real-world problems (social, environmental, technical, or personal). 
+        1. Identify the core problem.
+        2. Provide a practical, actionable solution.
+        3. Suggest an educational topic related to this problem.
+        4. Award a specific "LinkedIn-style" education badge for learning about this.
+        
+        Format the response clearly with these sections:
+        PROBLEM: [The detected problem]
+        SOLUTION: [Practical advice]
+        EDUCATION: [Educational topic]
+        BADGE: [Badge Name, e.g., "Sustainability Advocate", "Tech Problem Solver", "Social Impact Leader"]`;
+
+        const response = await generateContentWithRetry({
+          model: "gemini-3-flash-preview",
+          contents: [
+            {
+              parts: [
+                { text: prompt },
+                { inlineData: { mimeType: "image/jpeg", data: base64Data } }
+              ]
+            }
+          ],
+          config: {
+            temperature: 0.7,
+            topP: 0.95,
+          }
+        });
+
+        const advice = response.text || "I couldn't identify any specific problems in this view, but I'm always learning. Try pointing me at something else!";
+        setAiAdvice(advice);
+        
+        // Speak the advice
+        speakAdvice(advice);
+
+        // Award a badge if a badge is mentioned
+        if (advice.includes("BADGE:") && currentUser) {
+          const badgeMatch = advice.match(/BADGE:\s*(.*)/i);
+          const badgeName = badgeMatch ? badgeMatch[1].trim() : "Problem Solver";
+          
+          await setDoc(doc(db, 'users', currentUser.uid), {
+            badges: arrayUnion({
+              name: badgeName,
+              date: new Date().toISOString(),
+              type: 'LinkedIn-Style',
+              icon: 'Award',
+              description: advice.split('EDUCATION:')[1]?.split('BADGE:')[0]?.trim() || "Awarded for real-world problem detection."
+            })
+          }, { merge: true });
+        }
+
+      } catch (err) {
+        console.error("AI Analysis Error:", err);
+        setAiAdvice("The AI Eye is currently experiencing interference. Please try again in a moment.");
+      } finally {
+        setIsAnalyzing(false);
+      }
+    }
+  };
+
+  const speakAdvice = async (text: string) => {
+    setIsSpeaking(true);
+    try {
+      const response = await generateContentWithRetry({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: `Say clearly and helpfully: ${text}` }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Kore' },
+            },
+          },
+        },
+      });
+
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
+        audio.onended = () => setIsSpeaking(false);
+        await audio.play();
+      } else {
+        throw new Error("No audio data");
+      }
+    } catch (error) {
+      console.error("TTS Error:", error);
+      const msg = new SpeechSynthesisUtterance(text);
+      msg.onend = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(msg);
+    }
   };
 
   const feedItems = firebasePosts.map(p => ({ ...p, type: 'post', user: p.author }))
@@ -231,17 +378,27 @@ export default function Home() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search posts..."
-              className="block w-full pl-9 pr-3 py-2 border border-gray-200 dark:border-gray-700 rounded-full bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none dark:text-white transition-all"
+              placeholder="Search or ask AI Eye..."
+              className="block w-full pl-9 pr-20 py-2 border border-gray-200 dark:border-gray-700 rounded-full bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none dark:text-white transition-all"
             />
-            {searchQuery && (
+            <div className="absolute inset-y-0 right-0 flex items-center pr-1 space-x-1">
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery("")}
+                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
               <button 
-                onClick={() => setSearchQuery("")}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                onClick={startAiEye}
+                className="p-1.5 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800/60 transition-all group relative"
+                title="AI Eye: Detect Real-World Problems"
               >
-                <X className="h-4 w-4" />
+                <Eye className="h-4 w-4" />
+                <span className="absolute -top-8 right-0 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">AI Eye</span>
               </button>
-            )}
+            </div>
           </div>
           <button 
             onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
@@ -289,26 +446,129 @@ export default function Home() {
       )}
 
       <div className="flex overflow-x-auto hide-scrollbar space-x-2 pb-2 mb-4">
-        {CATEGORIES.map(cat => (
-          <button
-            key={cat.name}
-            onClick={() => handleCategoryClick(cat.name)}
-            className={cn(
-              "flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-medium transition-all border group relative",
-              activeCategory === cat.name
-                ? "bg-purple-600 text-white border-purple-600 shadow-lg scale-105"
-                : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-            )}
-          >
-            <cat.icon className="w-4 h-4" />
-            <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
-              {cat.name}
-            </span>
-          </button>
-        ))}
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat.name}
+                onClick={() => handleCategoryClick(cat.name)}
+                className={cn(
+                  "flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-bold transition-all border group relative",
+                  activeCategory === cat.name
+                    ? "bg-purple-600 text-white border-purple-600 shadow-lg scale-105"
+                    : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-purple-200 dark:hover:border-purple-900/30"
+                )}
+              >
+                <cat.icon className={cn("w-4 h-4", activeCategory === cat.name ? "text-white" : cat.color)} />
+                <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
+                  {cat.name}
+                </span>
+              </button>
+            ))}
       </div>
 
       <div className="space-y-4">
+        {/* AI Eye Modal */}
+        {showAiEye && (
+          <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[110] flex flex-col items-center justify-center p-4">
+            <div className="relative w-full max-w-3xl aspect-video bg-gray-950 rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl">
+              <video 
+                ref={videoRef} 
+                autoPlay 
+                playsInline 
+                className={cn("w-full h-full object-cover transition-opacity duration-500", isAnalyzing && "opacity-40")}
+              />
+              <canvas ref={canvasRef} className="hidden" />
+              
+              {capturedImage && (
+                <img src={capturedImage} alt="Captured" className="absolute inset-0 w-full h-full object-cover opacity-20 animate-pulse" />
+              )}
+
+              {/* HUD Overlay */}
+              <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-64 h-64 border-2 border-purple-500/20 rounded-full animate-[ping_3s_linear_infinite]" />
+                  <div className="absolute w-48 h-48 border border-purple-500/40 rounded-full animate-pulse" />
+                </div>
+                
+                {/* Corner Accents */}
+                <div className="absolute top-8 left-8 w-12 h-12 border-t-2 border-l-2 border-purple-500/50 rounded-tl-xl" />
+                <div className="absolute top-8 right-8 w-12 h-12 border-t-2 border-r-2 border-purple-500/50 rounded-tr-xl" />
+                <div className="absolute bottom-8 left-8 w-12 h-12 border-b-2 border-l-2 border-purple-500/50 rounded-bl-xl" />
+                <div className="absolute bottom-8 right-8 w-12 h-12 border-b-2 border-r-2 border-purple-500/50 rounded-br-xl" />
+
+                <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center space-x-3 bg-black/60 px-4 py-2 rounded-full backdrop-blur-xl border border-white/10">
+                  <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
+                  <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">AI Eye: Real-World Detection</span>
+                </div>
+              </div>
+
+              {/* Analysis Result */}
+              {aiAdvice && (
+                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/95 via-black/80 to-transparent p-8 animate-in slide-in-from-bottom-8 duration-700">
+                  <div className="flex items-start space-x-6">
+                    <div className="w-14 h-14 bg-gradient-to-br from-purple-600 to-blue-500 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-2xl rotate-3">
+                      <Sparkles className="w-8 h-8 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-purple-400 font-black text-xs uppercase tracking-[0.15em]">AI Analysis Complete</h4>
+                        {aiAdvice.includes("BADGE:") && (
+                          <div className="flex items-center space-x-2 bg-yellow-500/20 border border-yellow-500/30 px-3 py-1 rounded-full">
+                            <Award className="w-3.5 h-3.5 text-yellow-500" />
+                            <span className="text-yellow-500 text-[9px] font-black uppercase tracking-wider">Badge Earned</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-white text-sm leading-relaxed font-medium whitespace-pre-wrap">
+                        {aiAdvice}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {isAnalyzing && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md">
+                  <div className="relative">
+                    <Loader2 className="w-16 h-16 text-purple-500 animate-spin mb-6" />
+                    <div className="absolute inset-0 blur-xl bg-purple-500/20 animate-pulse" />
+                  </div>
+                  <p className="text-white font-black text-xs animate-pulse uppercase tracking-[0.3em]">Decoding Reality Matrix...</p>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-10 flex items-center space-x-6">
+              <button 
+                onClick={stopAiEye}
+                className="px-8 py-4 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all border border-white/10 backdrop-blur-xl"
+              >
+                Deactivate
+              </button>
+              <button 
+                onClick={analyzeProblem}
+                disabled={isAnalyzing}
+                className="px-10 py-4 bg-gradient-to-r from-purple-600 to-blue-500 hover:from-purple-500 hover:to-blue-400 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-[0_0_30px_rgba(168,85,247,0.3)] hover:shadow-[0_0_40px_rgba(168,85,247,0.5)] transition-all flex items-center space-x-3 disabled:opacity-50 active:scale-95"
+              >
+                <Camera className="w-5 h-5" />
+                <span>{isAnalyzing ? "Processing..." : "Capture & Detect"}</span>
+              </button>
+              {aiAdvice && (
+                <button 
+                  onClick={() => speakAdvice(aiAdvice)}
+                  className={cn(
+                    "p-4 rounded-2xl transition-all border backdrop-blur-xl",
+                    isSpeaking 
+                      ? "bg-purple-600 text-white border-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.5)]" 
+                      : "bg-white/5 text-white/70 border-white/10 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  {isSpeaking ? <Volume2 className="w-6 h-6 animate-bounce" /> : <VolumeX className="w-6 h-6" />}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeCategory === 'Google Apps' && !searchQuery && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {GOOGLE_APPS.map((app) => (

@@ -19,6 +19,13 @@ interface UserData {
   balance: number;
   bio?: string;
   createdAt: any;
+  badges?: {
+    name: string;
+    date: string;
+    type: string;
+    icon: string;
+    description?: string;
+  }[];
 }
 
 interface AuthContextType {
