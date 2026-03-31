@@ -12,9 +12,11 @@ export const auth = getAuth(app);
 
 // Initialize Firestore with better connection reliability
 const dbId = firebaseConfig.firestoreDatabaseId;
+const firestoreDatabaseId = (dbId && dbId !== '(default)') ? dbId : undefined;
+
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
-}, (dbId && dbId !== '(default)') ? dbId : undefined);
+}, firestoreDatabaseId);
 
 // Initialize Storage
 export const storage = getStorage(app);
@@ -72,22 +74,31 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 async function testConnection() {
   try {
-    console.log("Testing Firebase connection with project:", firebaseConfig.projectId, "and database:", firebaseConfig.firestoreDatabaseId);
+    console.log("Testing Firebase connection...");
+    console.log("Project ID:", firebaseConfig.projectId);
+    console.log("Database ID:", firestoreDatabaseId || "(default)");
+    
     // Attempt to fetch a non-existent document to test connectivity
+    // Using getDocFromServer to bypass cache and force a network check
     await getDocFromServer(doc(db, '_connection_test_', 'ping'));
-    console.log("Firebase connection test successful.");
+    console.log("Firebase connection test successful (reached server).");
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    if (errorMessage.includes('the client is offline')) {
-      console.error("Firebase connection failed: The client is offline.");
+    
+    if (errorMessage.includes('the client is offline') || errorMessage.includes('unavailable')) {
+      console.error("CRITICAL: Firestore connection failed.");
+      console.error("Error:", errorMessage);
       console.error("This usually means one of two things:");
-      console.error("1. Firestore is NOT enabled in your Firebase Console.");
-      console.error("2. You are behind a restrictive firewall or proxy.");
-      console.error("ACTION REQUIRED: Go to https://console.firebase.google.com/project/" + firebaseConfig.projectId + "/firestore and click 'Create database'.");
-      console.error("Make sure to select 'Start in test mode' for development.");
+      console.error("1. The Firestore database has not been created yet.");
+      console.error("2. The Database ID in your config is incorrect.");
+      console.error("");
+      console.error("ACTION REQUIRED:");
+      console.error("Go to: https://console.firebase.google.com/project/" + firebaseConfig.projectId + "/firestore/databases");
+      console.error("Check if a database exists. If not, create one.");
+      console.error("If the database ID is '(default)', ensure your firebase-applet-config.json reflects that.");
     } else {
       // Other errors (like 404 or permission denied) actually confirm we ARE online and reaching the server
-      console.log("Firebase connection confirmed (received expected response):", errorMessage);
+      console.log("Firebase connection confirmed (received server response):", errorMessage);
     }
   }
 }
