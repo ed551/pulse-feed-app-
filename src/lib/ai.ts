@@ -1,6 +1,7 @@
 import { GoogleGenAI, GenerateContentParameters, GenerateContentResponse } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+const apiKey = process.env.GEMINI_API_KEY;
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 const MAX_RETRIES = 3;
 const INITIAL_DELAY = 1000; // 1 second
@@ -10,6 +11,10 @@ async function delay(ms: number) {
 }
 
 export async function generateContentWithRetry(params: GenerateContentParameters): Promise<GenerateContentResponse> {
+  if (!ai) {
+    throw new Error("Gemini API key is not configured. Please add GEMINI_API_KEY to your environment.");
+  }
+  
   let retries = 0;
   
   while (retries < MAX_RETRIES) {

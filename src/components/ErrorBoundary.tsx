@@ -35,7 +35,8 @@ export class ErrorBoundary extends Component<Props, State> {
     // Auto-reload or reset
     setTimeout(() => {
       this.setState({ hasError: false, recoveryStep: 0 });
-      window.location.href = '/'; // Hard reset to home
+      // Use relative path for reset to support GitHub Pages subdirectories
+      window.location.href = window.location.pathname;
     }, 9000);
   }
 

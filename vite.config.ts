@@ -24,6 +24,7 @@ export default defineConfig(({mode}) => {
       ],
     },
     define: {
+      'process.env': {},
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },
     resolve: {
@@ -39,6 +40,6 @@ export default defineConfig(({mode}) => {
     build: {
       outDir: 'dist',
     },
-    base: './',
+    base: '/pulse-feed-app-/',
   };
 });
