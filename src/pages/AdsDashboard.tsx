@@ -1,6 +1,12 @@
-import { DollarSign, TrendingUp, Users, MousePointerClick, Activity, PieChart, Landmark, Send, CheckCircle, Clock } from "lucide-react";
+import { DollarSign, TrendingUp, Users, MousePointerClick, Activity, PieChart, Landmark, Send, CheckCircle, Clock, ArrowRight } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 export default function AdsDashboard() {
+  const { userData } = useAuth();
+  const navigate = useNavigate();
+  const adRevenue = userData?.adRevenue || 0;
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
       <div className="flex items-center justify-between">
@@ -8,6 +14,21 @@ export default function AdsDashboard() {
           <DollarSign className="w-8 h-8 mr-2 text-yellow-500" />
           AdMob & AdSense Revenue
         </h1>
+      </div>
+
+      <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg text-white flex flex-col md:flex-row items-center justify-between">
+        <div>
+          <h2 className="text-green-100 font-medium uppercase tracking-wider text-sm mb-1">Your Ad Revenue Share</h2>
+          <div className="text-4xl font-black">${adRevenue.toFixed(2)}</div>
+          <p className="text-green-100 text-sm mt-2">Earned from your engagement and content views.</p>
+        </div>
+        <button 
+          onClick={() => navigate('/rewards')}
+          className="mt-4 md:mt-0 bg-white text-green-600 px-6 py-3 rounded-xl font-bold hover:bg-green-50 transition-colors flex items-center shadow-sm"
+        >
+          Withdraw at Rewards
+          <ArrowRight className="w-4 h-4 ml-2" />
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

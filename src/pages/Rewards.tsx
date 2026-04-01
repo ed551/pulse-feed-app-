@@ -22,11 +22,12 @@ export default function Rewards() {
   const { currentUser, userData } = useAuth();
   const { isIdle, activeSeconds, totalEarnedToday } = useRevenue();
   const { currency, availableCurrencies, changeCurrency, convert, loading, rates } = useCurrencyConverter();
-  const [activeTab, setActiveTab] = useState<'overview' | 'mpesa' | 'international'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'mpesa' | 'international' | 'adrevenue'>('overview');
 
   // Rewards State (from Firestore)
   const points = userData?.points || 0;
   const balance = userData?.balance || 0;
+  const adRevenue = userData?.adRevenue || 0;
 
   // M-Pesa State
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -37,7 +38,7 @@ export default function Rewards() {
   const [success, setSuccess] = useState<string | null>(null);
 
   // International Payout State
-  const [payoutMethod, setPayoutMethod] = useState<'paypal' | 'stripe' | 'bank'>('paypal');
+  const [payoutMethod, setPayoutMethod] = useState<'mpesa' | 'paypal' | 'stripe' | 'bank'>('mpesa');
   const [payoutEmail, setPayoutEmail] = useState("");
   const [payoutAmount, setPayoutAmount] = useState("");
   const [bankDetails, setBankDetails] = useState({
@@ -214,6 +215,108 @@ export default function Rewards() {
     }
   };
 
+  const handleAdRevenueWithdrawal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    setError(null);
+    setSuccess(null);
+
+    const numAmount = parseFloat(payoutAmount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      setError("Please enter a valid amount");
+      return;
+    }
+
+    if (adRevenue < numAmount) {
+      setError(`Insufficient Ad Revenue. You only have $${adRevenue.toFixed(2)} available.`);
+      return;
+    }
+
+    if (payoutMethod === 'paypal' || payoutMethod === 'stripe') {
+      if (!payoutEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+        setError(`Please enter a valid ${payoutMethod === 'paypal' ? 'PayPal' : 'Stripe'} email`);
+        return;
+      }
+    } else if (payoutMethod === 'bank') {
+      if (!bankDetails.accountName || !bankDetails.accountNumber || !bankDetails.bankName) {
+        setError("Please fill in all required bank details");
+        return;
+      }
+    } else if (payoutMethod === 'mpesa') {
+      if (!phoneNumber.match(/^(?:254|\+254|0)?(7|1)\d{8}$/)) {
+        setError("Please enter a valid M-Pesa phone number");
+        return;
+      }
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Simulate API call for Ad Revenue withdrawal
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      const newTransaction = {
+        amount: numAmount,
+        phoneNumber: payoutMethod === 'bank' ? bankDetails.accountNumber : payoutMethod === 'mpesa' ? phoneNumber : payoutEmail,
+        status: 'success',
+        timestamp: new Date().toISOString(),
+        reference: "ADREV-" + Date.now(),
+        type: 'adrevenue',
+        method: payoutMethod
+      };
+
+      await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), newTransaction);
+      
+      // Update adRevenue in Firestore
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        adRevenue: increment(-numAmount)
+      });
+
+      setSuccess(`Ad Revenue withdrawal of $${numAmount.toFixed(2)} initiated successfully via ${payoutMethod.toUpperCase()}!`);
+      setPayoutAmount("");
+      setPayoutEmail("");
+      setBankDetails({ accountName: "", accountNumber: "", bankName: "", swiftCode: "" });
+    } catch (err: any) {
+      setError(err.message || "Failed to process Ad Revenue withdrawal. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRedeemPoints = async () => {
+    if (!currentUser || points <= 0) return;
+    setError(null);
+    setSuccess(null);
+    setIsLoading(true);
+
+    try {
+      const cashValue = points / 100; // 100 points = $1
+      
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        points: 0,
+        adRevenue: increment(cashValue)
+      });
+
+      const newTransaction = {
+        amount: cashValue,
+        phoneNumber: "Internal Redemption",
+        status: 'success',
+        timestamp: new Date().toISOString(),
+        reference: "REDEEM-" + Date.now(),
+        type: 'points_redemption',
+        method: 'points'
+      };
+
+      await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), newTransaction);
+      
+      setSuccess(`Successfully redeemed ${points.toLocaleString()} points for $${cashValue.toFixed(2)}!`);
+    } catch (err: any) {
+      setError(err.message || "Failed to redeem points. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const startPolling = async (checkoutRequestId: string, paidAmount: number) => {
     if (!currentUser) return;
     let attempts = 0;
@@ -321,6 +424,16 @@ export default function Rewards() {
           <Globe className="w-4 h-4" />
           <span>International</span>
         </button>
+        <button 
+          onClick={() => setActiveTab('adrevenue')}
+          className={cn(
+            "flex-1 py-2.5 px-4 text-sm font-bold rounded-xl transition-all flex items-center justify-center space-x-2 whitespace-nowrap",
+            activeTab === 'adrevenue' ? "bg-white dark:bg-gray-700 text-green-600 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+          )}
+        >
+          <DollarSign className="w-4 h-4" />
+          <span>Ad Revenue</span>
+        </button>
       </div>
 
       <AnimatePresence mode="wait">
@@ -354,11 +467,23 @@ export default function Rewards() {
             <div className="bg-gradient-to-br from-yellow-400 to-orange-500 rounded-3xl p-8 text-white shadow-lg relative overflow-hidden">
               <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl"></div>
               <div className="relative z-10 flex flex-col items-center justify-center">
-                <span className="text-yellow-100 font-medium uppercase tracking-wider mb-2">Total Balance ({points.toLocaleString()} Points)</span>
+                <span className="text-yellow-100 font-medium uppercase tracking-wider mb-2">Total Combined Balance</span>
                 <div className="text-6xl font-black mb-4 flex items-center">
-                  {convert(points / 100)}
+                  {convert((points / 100) + adRevenue + balance)}
                 </div>
                 
+                <div className="flex space-x-4 mb-6">
+                  <div className="text-center">
+                    <p className="text-[10px] uppercase font-bold opacity-70">Points Value</p>
+                    <p className="text-sm font-black">{convert(points / 100)}</p>
+                  </div>
+                  <div className="w-px h-8 bg-white/20"></div>
+                  <div className="text-center">
+                    <p className="text-[10px] uppercase font-bold opacity-70">Ad Revenue</p>
+                    <p className="text-sm font-black">{convert(adRevenue)}</p>
+                  </div>
+                </div>
+
                 {/* Activity Status Card */}
                 <div className="w-full max-w-sm bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 mb-6">
                   <div className="flex items-center justify-between mb-3">
@@ -387,12 +512,21 @@ export default function Rewards() {
                   </div>
                 </div>
 
-                <button 
-                  onClick={() => setActiveTab('mpesa')}
-                  className="bg-white text-orange-600 hover:bg-yellow-50 px-8 py-3 rounded-full font-bold shadow-md transition-all"
-                >
-                  Redeem Points
-                </button>
+                <div className="flex space-x-4">
+                  <button 
+                    onClick={handleRedeemPoints}
+                    disabled={isLoading || points <= 0}
+                    className="bg-white text-orange-600 hover:bg-yellow-50 px-6 py-3 rounded-full font-bold shadow-md transition-all text-sm disabled:opacity-50"
+                  >
+                    {isLoading ? "Redeeming..." : "Redeem Points to Cash"}
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('adrevenue')}
+                    className="bg-orange-600 text-white hover:bg-orange-700 px-6 py-3 rounded-full font-bold shadow-md transition-all text-sm border border-white/20"
+                  >
+                    Withdraw Cash
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -634,7 +768,7 @@ export default function Rewards() {
               </div>
             </div>
           </motion.div>
-        ) : (
+        ) : activeTab === 'international' ? (
           <motion.div 
             key="international"
             initial={{ opacity: 0, y: 20 }}
@@ -846,6 +980,271 @@ export default function Rewards() {
                       ))
                     ) : (
                       <p className="text-[10px] text-gray-400 text-center py-4">No international payouts yet</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div 
+            key="adrevenue"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-8"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-gradient-to-br from-green-600 to-emerald-700 p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-8 opacity-10">
+                  <DollarSign className="w-32 h-32" />
+                </div>
+                <div className="relative z-10 space-y-4">
+                  <p className="text-green-100 font-bold uppercase tracking-widest text-xs">Ad Revenue Balance</p>
+                  <h2 className="text-5xl font-black tracking-tighter">
+                    ${adRevenue.toFixed(2)}
+                  </h2>
+                  <div className="flex items-center space-x-2 text-green-100 text-sm">
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Earned from Ads Dashboard</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-purple-600 to-indigo-700 p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-8 opacity-10">
+                  <Gem className="w-32 h-32" />
+                </div>
+                <div className="relative z-10 space-y-4">
+                  <p className="text-purple-100 font-bold uppercase tracking-widest text-xs">Points Balance</p>
+                  <div className="flex items-end space-x-2">
+                    <h2 className="text-5xl font-black tracking-tighter">
+                      {points.toLocaleString()}
+                    </h2>
+                    <span className="text-purple-200 font-bold mb-1">pts</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2 text-purple-100 text-sm">
+                      <TrendingUp className="w-4 h-4" />
+                      <span>Value: ${ (points / 100).toFixed(2) }</span>
+                    </div>
+                    <button 
+                      onClick={handleRedeemPoints}
+                      disabled={isLoading || points <= 0}
+                      className="bg-white/20 hover:bg-white/30 backdrop-blur-md px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+                    >
+                      {isLoading ? "Processing..." : "Redeem to Cash"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="md:col-span-2 space-y-6">
+                <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center space-x-2">
+                    <DollarSign className="w-5 h-5 text-green-500" />
+                    <span>Withdraw Ad Revenue</span>
+                  </h3>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+                    {[
+                      { id: 'mpesa', label: 'M-Pesa', icon: Smartphone },
+                      { id: 'paypal', label: 'PayPal', icon: DollarSign },
+                      { id: 'stripe', label: 'Stripe', icon: CreditCard },
+                      { id: 'bank', label: 'Bank', icon: Landmark }
+                    ].map((method) => (
+                      <button
+                        key={method.id}
+                        onClick={() => setPayoutMethod(method.id as any)}
+                        className={cn(
+                          "p-4 rounded-2xl border-2 transition-all flex flex-col items-center space-y-2",
+                          payoutMethod === method.id 
+                            ? "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400" 
+                            : "border-gray-100 dark:border-gray-700 hover:border-green-200 dark:hover:border-green-800 text-gray-500"
+                        )}
+                      >
+                        <method.icon className="w-6 h-6" />
+                        <span className="text-xs font-bold">{method.label}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <form onSubmit={handleAdRevenueWithdrawal} className="space-y-6">
+                    {payoutMethod === 'mpesa' ? (
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">M-Pesa Number</label>
+                        <div className="relative">
+                          <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                          <input
+                            type="text"
+                            placeholder="07XX XXX XXX"
+                            value={phoneNumber}
+                            onChange={(e) => setPhoneNumber(e.target.value)}
+                            className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white font-medium"
+                          />
+                        </div>
+                      </div>
+                    ) : payoutMethod !== 'bank' ? (
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                          {payoutMethod === 'paypal' ? 'PayPal Email' : 'Stripe Email'}
+                        </label>
+                        <div className="relative">
+                          <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                          <input
+                            type="email"
+                            placeholder="email@example.com"
+                            value={payoutEmail}
+                            onChange={(e) => setPayoutEmail(e.target.value)}
+                            className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white font-medium"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Account Name</label>
+                          <input
+                            type="text"
+                            value={bankDetails.accountName}
+                            onChange={(e) => setBankDetails({...bankDetails, accountName: e.target.value})}
+                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white font-medium"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Account Number / IBAN</label>
+                          <input
+                            type="text"
+                            value={bankDetails.accountNumber}
+                            onChange={(e) => setBankDetails({...bankDetails, accountNumber: e.target.value})}
+                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white font-medium"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Bank Name</label>
+                          <input
+                            type="text"
+                            value={bankDetails.bankName}
+                            onChange={(e) => setBankDetails({...bankDetails, bankName: e.target.value})}
+                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white font-medium"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">SWIFT / BIC Code</label>
+                          <input
+                            type="text"
+                            value={bankDetails.swiftCode}
+                            onChange={(e) => setBankDetails({...bankDetails, swiftCode: e.target.value})}
+                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white font-medium"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount (USD)</label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">$</span>
+                        <input
+                          type="number"
+                          placeholder="0.00"
+                          value={payoutAmount}
+                          onChange={(e) => setPayoutAmount(e.target.value)}
+                          className="w-full pl-10 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white font-medium"
+                        />
+                      </div>
+                      {payoutMethod === 'mpesa' && payoutAmount && !isNaN(parseFloat(payoutAmount)) && (
+                        <p className="text-[10px] text-gray-500 mt-1">
+                          Approx. KES {(parseFloat(payoutAmount) * (rates['KES'] || 130)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        </p>
+                      )}
+                    </div>
+
+                    <AnimatePresence mode="wait">
+                      {error && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl flex items-center space-x-3 text-sm font-medium"
+                        >
+                          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                          <span>{error}</span>
+                        </motion.div>
+                      )}
+
+                      {success && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="p-4 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-2xl flex items-center space-x-3 text-sm font-medium"
+                        >
+                          <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+                          <span>{success}</span>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    <button
+                      type="submit"
+                      disabled={isLoading}
+                      className="w-full py-4 bg-green-600 text-white font-black rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center space-x-2 shadow-lg shadow-green-500/20"
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <span>Processing Withdrawal...</span>
+                        </>
+                      ) : (
+                        <span>Withdraw Ad Revenue</span>
+                      )}
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">Withdrawal Information</h3>
+                  <ul className="space-y-3 text-xs text-gray-500 dark:text-gray-400">
+                    <li className="flex items-start space-x-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1 flex-shrink-0" />
+                      <span>Processing time: 1-3 business days</span>
+                    </li>
+                    <li className="flex items-start space-x-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1 flex-shrink-0" />
+                      <span>Minimum withdrawal: $5.00</span>
+                    </li>
+                    <li className="flex items-start space-x-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1 flex-shrink-0" />
+                      <span>Transaction fees may apply depending on the provider</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">Recent Withdrawals</h3>
+                  <div className="space-y-3">
+                    {transactions.filter(tx => tx.id.startsWith('ADREV-') || tx.reference.startsWith('ADREV-')).length > 0 ? (
+                      transactions.filter(tx => tx.id.startsWith('ADREV-') || tx.reference.startsWith('ADREV-')).map(tx => (
+                        <div key={tx.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 rounded-full bg-green-50 text-green-600 flex items-center justify-center">
+                              <ArrowUpRight className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-bold text-gray-900 dark:text-white">${tx.amount.toFixed(2)}</p>
+                              <p className="text-[8px] text-gray-500">{tx.phoneNumber}</p>
+                            </div>
+                          </div>
+                          <span className="text-[8px] font-black text-green-600 uppercase">Success</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-[10px] text-gray-400 text-center py-4">No ad revenue withdrawals yet</p>
                     )}
                   </div>
                 </div>
