@@ -7,10 +7,22 @@ import * as Tremendous from 'tremendous';
 
 dotenv.config();
 
-const tremendous = new (Tremendous as any)({
-  apiKey: process.env.TREMENDOUS_API_KEY || '',
-  baseUrl: process.env.TREMENDOUS_API_URL || 'https://testflight.tremendous.com/api/v2'
-});
+let tremendousClient: any = null;
+
+function getTremendous() {
+  if (!tremendousClient) {
+    const apiKey = process.env.TREMENDOUS_API_KEY;
+    if (!apiKey) {
+      console.warn("TREMENDOUS_API_KEY not set, Tremendous payouts will fail.");
+      return null;
+    }
+    tremendousClient = new (Tremendous as any)({
+      apiKey: apiKey,
+      baseUrl: process.env.TREMENDOUS_API_URL || 'https://testflight.tremendous.com/api/v2'
+    });
+  }
+  return tremendousClient;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -76,9 +88,14 @@ async function startServer() {
     console.log(`Initiating ${method} payout for ${amount} to ${email || bankDetails?.accountNumber}`);
     
     try {
+      const client = getTremendous();
+      if (!client) {
+        throw new Error("Tremendous client not initialized");
+      }
+      
       // Tremendous Payout Logic
       // In a real app, you would map the method to Tremendous funding sources/products
-      // const payout = await tremendous.payouts.create({
+      // const payout = await client.payouts.create({
       //   payment: {
       //     method: method === 'bank' ? 'bank_transfer' : 'paypal',
       //     amount: amount,

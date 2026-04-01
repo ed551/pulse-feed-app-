@@ -766,7 +766,7 @@ export default function Rewards() {
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
-                      <span>Minimum withdrawal: $10.00 (1,000 points)</span>
+                      <span>Minimum withdrawal: $100.00 (10,000 points)</span>
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
