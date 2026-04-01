@@ -38,11 +38,18 @@ export default function Layout() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
   const [time, setTime] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop');
+  const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>(() => {
+    const saved = localStorage.getItem('viewMode');
+    return (saved as 'desktop' | 'mobile') || 'desktop';
+  });
 
   useEffect(() => {
     const handleToggleView = () => {
-      setViewMode(prev => prev === 'desktop' ? 'mobile' : 'desktop');
+      setViewMode(prev => {
+        const next = prev === 'desktop' ? 'mobile' : 'desktop';
+        localStorage.setItem('viewMode', next);
+        return next;
+      });
     };
     window.addEventListener('toggle-view-mode', handleToggleView);
     return () => window.removeEventListener('toggle-view-mode', handleToggleView);
@@ -72,9 +79,12 @@ export default function Layout() {
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
+      document.documentElement.style.colorScheme = 'dark';
     } else {
       document.documentElement.classList.remove('dark');
+      document.documentElement.style.colorScheme = 'light';
     }
+    window.dispatchEvent(new CustomEvent('theme-changed', { detail: { isDark } }));
   }, [isDark]);
 
   const toggleTheme = () => {
@@ -124,11 +134,55 @@ export default function Layout() {
         setFingerprintProgress((prev) => {
           if (prev >= 100) {
             clearInterval(progressInterval.current!);
-            setTimeout(() => {
-              alert('Identity Verified! Security, health status, and acknowledgement confirmed.');
-              setActiveModal(null);
-              setFingerprintProgress(0);
-            }, 300);
+            
+            // Generate health status and advice
+            const generateHealthAdvice = async () => {
+              try {
+                const prompt = "Act as a health advisor. Based on a simulated fingerprint biometric scan, generate a brief health status (e.g., 'Vitals: Stable', 'Stress: Elevated') and 2-3 practical tips to improve health. Keep it concise and encouraging.";
+                const response = await generateContentWithRetry({
+                  model: "gemini-3-flash-preview",
+                  contents: prompt,
+                });
+                
+                const advice = response.text || "Health status: Optimal. Tip: Stay hydrated and maintain a balanced diet.";
+                
+                // Speak the advice
+                const ttsResponse = await generateContentWithRetry({
+                  model: "gemini-2.5-flash-preview-tts",
+                  contents: [{ parts: [{ text: `Health Scan Complete. ${advice}` }] }],
+                  config: {
+                    responseModalities: [Modality.AUDIO],
+                    speechConfig: {
+                      voiceConfig: {
+                        prebuiltVoiceConfig: { voiceName: 'Kore' },
+                      },
+                    },
+                  },
+                });
+
+                const base64Audio = ttsResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+                if (base64Audio) {
+                  const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
+                  await audio.play();
+                } else {
+                  const msg = new SpeechSynthesisUtterance(`Health Scan Complete. ${advice}`);
+                  window.speechSynthesis.speak(msg);
+                }
+                
+                showNotification("Health Scan Complete", { body: advice });
+              } catch (err) {
+                console.error("Health Scan Error:", err);
+                const fallback = "Health status: Optimal. Tip: Stay hydrated and maintain a balanced diet.";
+                const msg = new SpeechSynthesisUtterance(`Health Scan Complete. ${fallback}`);
+                window.speechSynthesis.speak(msg);
+                showNotification("Health Scan Complete", { body: fallback });
+              } finally {
+                setActiveModal(null);
+                setFingerprintProgress(0);
+              }
+            };
+
+            generateHealthAdvice();
             return 100;
           }
           return prev + 2; // 50 ticks = ~1.5 seconds at 30ms
@@ -542,13 +596,22 @@ export default function Layout() {
   ];
 
   return (
-    <div className={cn("bg-gray-200 dark:bg-black min-h-[100dvh] flex items-center justify-center transition-colors duration-300", viewMode === 'desktop' ? "p-0" : "p-0 sm:p-8")}>
+    <div className={cn(
+      "bg-gray-200 dark:bg-black min-h-[100dvh] flex items-center justify-center transition-colors duration-300",
+      viewMode === 'desktop' ? "p-0" : "p-4 sm:p-8"
+    )}>
       <div className={cn(
         "flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden font-sans transition-all duration-500 relative",
         viewMode === 'mobile' 
-          ? "w-full sm:max-w-[375px] sm:h-[812px] sm:max-h-[90vh] sm:rounded-[2.5rem] sm:border-[8px] border-gray-800 dark:border-gray-800 shadow-2xl h-[100dvh]" 
+          ? "w-full max-w-[375px] h-[812px] max-h-[95vh] rounded-[3rem] border-[12px] border-gray-800 dark:border-gray-800 shadow-[0_0_50px_rgba(0,0,0,0.3)]" 
           : "w-full h-[100dvh]"
       )}>
+        {/* Mobile Notch Simulation */}
+        {viewMode === 'mobile' && (
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-gray-800 rounded-b-2xl z-50 flex items-center justify-center">
+            <div className="w-12 h-1 bg-gray-700 rounded-full"></div>
+          </div>
+        )}
         {/* Header */}
         <header className="flex flex-wrap items-center justify-between px-2 sm:px-4 py-2 bg-white dark:bg-gray-800 shadow-md z-10 shrink-0 gap-2">
           <div className="flex items-center">

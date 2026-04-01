@@ -51,7 +51,7 @@ export default function Home() {
   const [commentText, setCommentText] = useState("");
   const [isPostingComment, setIsPostingComment] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] = useState("Google Apps");
+  const [activeCategory, setActiveCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [dateFilter, setDateFilter] = useState("all"); // all, today, week, month
@@ -260,7 +260,14 @@ export default function Home() {
   };
 
   const feedItems = firebasePosts.map(p => ({ ...p, type: 'post', user: p.author }))
-    .sort((a, b) => new Date(b.time || b.createdAt?.toDate?.()?.toISOString?.() || new Date()).getTime() - new Date(a.time || a.createdAt?.toDate?.()?.toISOString?.() || new Date()).getTime());
+    .sort((a, b) => {
+      const getTime = (item: any) => {
+        if (item.createdAt?.toDate) return item.createdAt.toDate().getTime();
+        if (item.time && !isNaN(new Date(item.time).getTime())) return new Date(item.time).getTime();
+        return Date.now(); // Fallback for local optimistic updates
+      };
+      return getTime(b) - getTime(a);
+    });
 
   useEffect(() => {
     multimedia_stream_engine();

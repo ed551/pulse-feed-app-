@@ -1,4 +1,4 @@
-import { GoogleGenAI, GenerateContentParameters, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI, GenerateContentParameters, GenerateContentResponse, ThinkingLevel } from "@google/genai";
 
 const apiKey = process.env.GEMINI_API_KEY;
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
@@ -24,6 +24,14 @@ export async function generateContentWithRetry(params: GenerateContentParameters
   requestQueue = new Promise(resolve => { releaseQueue = resolve; });
   
   await currentQueue;
+  
+  // Enable High Thinking for Gemini 3 series models if not specified
+  if (params.model?.startsWith('gemini-3') && !params.config?.thinkingConfig) {
+    params.config = {
+      ...params.config,
+      thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
+    };
+  }
   
   try {
     let retries = 0;
