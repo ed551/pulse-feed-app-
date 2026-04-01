@@ -6,11 +6,13 @@ import {
   Fingerprint, HeartPulse, MapPin, Phone, MessageCircle, Gamepad2, Globe, BrainCircuit,
   Languages, Ticket, Snowflake, Calendar, Smartphone, Monitor, PhoneCall, Wrench,
   Calculator, LayoutGrid, Power, RefreshCw, ArrowUpCircle, ArrowDownCircle, XCircle, RotateCcw, Edit3, DollarSign, LogOut, Wallet, X, Send, Search, CheckCircle2, Plus,
-  Volume2, VolumeX, Share2, Brain, TrendingUp, TrendingDown, Minus, Menu, GraduationCap
+  Volume2, VolumeX, Share2, Brain, TrendingUp, TrendingDown, Minus, Menu, GraduationCap, Eye, Loader2
 } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { generateContentWithRetry } from "../lib/ai";
 import { cn } from "../lib/utils";
+import { saveInsight } from "../lib/insights";
 import { 
   pulse_feeds_auto_sync, daily_twin_sync, midnight_settlement_engine, 
   revenue_split_engine, auto_updater, resource_governor, 
@@ -19,6 +21,10 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { useRevenue } from "../contexts/RevenueContext";
 import { useNotifications } from "../hooks/useNotifications";
+import AIAssistant from "./AIAssistant";
+import SelfHealingManager from "./SelfHealingManager";
+import { db } from "../lib/firebase";
+import { setDoc, doc, arrayUnion, serverTimestamp } from "firebase/firestore";
 
 const weatherTypes = [
   { type: 'Hot / Sunny', icon: Sun, color: 'text-orange-500', bg: 'from-orange-500/20 to-yellow-500/20', glow: 'drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]', symbol: '☀️', temp: '32°C', tempValue: 32 },
@@ -56,6 +62,148 @@ export default function Layout() {
   }, []);
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [showAiEye, setShowAiEye] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiAdvice, setAiAdvice] = useState<string | null>(null);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const startAiEye = async () => {
+    setShowAiEye(true);
+    setAiAdvice(null);
+    setCapturedImage(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("Camera Error:", err);
+      alert("Please allow camera access to use the AI Eye.");
+      setShowAiEye(false);
+    }
+  };
+
+  const stopAiEye = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+    }
+    setShowAiEye(false);
+    setIsSpeaking(false);
+    window.speechSynthesis.cancel();
+  };
+
+  const analyzeProblem = async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    
+    setIsAnalyzing(true);
+    setAiAdvice(null);
+
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0);
+      const imageData = canvas.toDataURL('image/jpeg', 0.8);
+      setCapturedImage(imageData);
+      const base64Data = imageData.split(',')[1];
+
+      try {
+        const prompt = `Act as an expert Life, Security, Health, and Wealth Consultant. Analyze this image for real-world opportunities or problems. 
+        1. LIFE: How does this scene impact quality of life?
+        2. SECURITY: Are there any physical or digital security risks visible?
+        3. HEALTH: Are there health hazards or wellness opportunities?
+        4. WEALTH: Is there an economic opportunity or a waste of resources here?
+        
+        Provide practical, actionable advice for each category.
+        
+        Format the response clearly with these sections:
+        LIFE: [Advice]
+        SECURITY: [Advice]
+        HEALTH: [Advice]
+        WEALTH: [Advice]
+        BADGE: [Badge Name, e.g., "Security Specialist", "Wealth Architect", "Wellness Guru"]`;
+
+        const response = await generateContentWithRetry({
+          model: "gemini-3-flash-preview",
+          contents: {
+            parts: [
+              { text: prompt },
+              { inlineData: { mimeType: "image/jpeg", data: base64Data } }
+            ]
+          },
+          config: {
+            temperature: 0.7,
+            topP: 0.95,
+          }
+        });
+
+        const advice = response.text || "I couldn't identify any specific insights in this view. Try pointing me at something else!";
+        setAiAdvice(advice);
+        
+        // Speak the advice
+        speakAdvice(advice);
+
+        // Award a badge if a badge is mentioned
+        if (advice.includes("BADGE:") && currentUser) {
+          const badgeMatch = advice.match(/BADGE:\s*(.*)/i);
+          const badgeName = badgeMatch ? badgeMatch[1].trim() : "Insight Seeker";
+          
+          await setDoc(doc(db, 'users', currentUser.uid), {
+            badges: arrayUnion({
+              name: badgeName,
+              date: new Date().toISOString(),
+              type: 'LinkedIn-Style',
+              icon: 'Eye',
+              description: "Awarded for multi-domain AI Eye analysis."
+            })
+          }, { merge: true });
+        }
+
+      } catch (err) {
+        console.error("AI Analysis Error:", err);
+        setAiAdvice("The AI Eye is currently experiencing interference. Please try again in a moment.");
+      } finally {
+        setIsAnalyzing(false);
+      }
+    }
+  };
+
+  const speakAdvice = async (text: string) => {
+    setIsSpeaking(true);
+    try {
+      const response = await generateContentWithRetry({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: `Say clearly and helpfully: ${text}` }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Kore' },
+            },
+          },
+        },
+      });
+
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
+        audio.onended = () => setIsSpeaking(false);
+        await audio.play();
+      } else {
+        throw new Error("No audio data");
+      }
+    } catch (error) {
+      console.error("TTS Error:", error);
+      const msg = new SpeechSynthesisUtterance(text);
+      msg.onend = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(msg);
+    }
+  };
   const [notes, setNotes] = useState<{id: string, text: string, date: string}[]>(() => {
     const saved = localStorage.getItem('user_notes_list');
     return saved ? JSON.parse(saved) : [{ id: '1', text: localStorage.getItem('user_notes') || '', date: new Date().toISOString() }];
@@ -135,21 +283,41 @@ export default function Layout() {
           if (prev >= 100) {
             clearInterval(progressInterval.current!);
             
-            // Generate health status and advice
-            const generateHealthAdvice = async () => {
+            // Generate health, security, and wealth status and advice
+            const generateDeepScanAdvice = async () => {
               try {
-                const prompt = "Act as a health advisor. Based on a simulated fingerprint biometric scan, generate a brief health status (e.g., 'Vitals: Stable', 'Stress: Elevated') and 2-3 practical tips to improve health. Keep it concise and encouraging.";
+                const prompt = `Act as a multi-domain AI consultant (Health, Security, Wealth, Life). 
+                Based on a simulated deep biometric fingerprint scan, generate a comprehensive report.
+                Include:
+                1. HEALTH: Vitals and a tip.
+                2. SECURITY: Digital/Physical safety status and a tip.
+                3. WEALTH: Financial mindset/status and a tip.
+                4. LIFE: General wellbeing tip.
+                
+                Keep it concise, high-tech, and encouraging. 
+                Also, provide a developer insight if you notice any potential app improvement related to these domains.
+                Format developer insights as [INSIGHT:developer:category:content].`;
+
                 const response = await generateContentWithRetry({
                   model: "gemini-3-flash-preview",
                   contents: prompt,
                 });
                 
-                const advice = response.text || "Health status: Optimal. Tip: Stay hydrated and maintain a balanced diet.";
+                const advice = response.text || "Deep Scan Complete. Health: Optimal. Security: Secure. Wealth: Growing. Life: Balanced.";
                 
-                // Speak the advice
+                // Extract and save insights
+                const regex = /\[INSIGHT:(developer|user):(life|security|health|wealth|general):(.*?)\]/g;
+                let match;
+                while ((match = regex.exec(advice)) !== null) {
+                  saveInsight(match[1] as any, match[2] as any, match[3].trim());
+                }
+                
+                const cleanAdvice = advice.replace(/\[INSIGHT:[^\]]+\]/g, '').trim();
+
+                // Speak the summary
                 const ttsResponse = await generateContentWithRetry({
                   model: "gemini-2.5-flash-preview-tts",
-                  contents: [{ parts: [{ text: `Health Scan Complete. ${advice}` }] }],
+                  contents: [{ parts: [{ text: `Deep Scan Complete. ${cleanAdvice}` }] }],
                   config: {
                     responseModalities: [Modality.AUDIO],
                     speechConfig: {
@@ -165,24 +333,24 @@ export default function Layout() {
                   const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
                   await audio.play();
                 } else {
-                  const msg = new SpeechSynthesisUtterance(`Health Scan Complete. ${advice}`);
+                  const msg = new SpeechSynthesisUtterance(`Deep Scan Complete. ${cleanAdvice}`);
                   window.speechSynthesis.speak(msg);
                 }
                 
-                showNotification("Health Scan Complete", { body: advice });
+                showNotification("Deep Scan Complete", { body: cleanAdvice });
               } catch (err) {
-                console.error("Health Scan Error:", err);
-                const fallback = "Health status: Optimal. Tip: Stay hydrated and maintain a balanced diet.";
-                const msg = new SpeechSynthesisUtterance(`Health Scan Complete. ${fallback}`);
+                console.error("Deep Scan Error:", err);
+                const fallback = "Deep Scan Complete. All systems optimal. Stay focused on your goals.";
+                const msg = new SpeechSynthesisUtterance(fallback);
                 window.speechSynthesis.speak(msg);
-                showNotification("Health Scan Complete", { body: fallback });
+                showNotification("Deep Scan Complete", { body: fallback });
               } finally {
                 setActiveModal(null);
                 setFingerprintProgress(0);
               }
             };
 
-            generateHealthAdvice();
+            generateDeepScanAdvice();
             return 100;
           }
           return prev + 2; // 50 ticks = ~1.5 seconds at 30ms
@@ -592,6 +760,7 @@ export default function Layout() {
     { type: 'icon', icon: Calendar, color: 'text-blue-600', title: 'Calendar', action: () => setActiveModal('calendar') },
     { type: 'icon', icon: HeartPulse, color: 'text-red-500', title: 'Health Checker', action: () => setActiveModal('health') },
     { type: 'icon', icon: Fingerprint, color: 'text-pink-400', title: 'Fingerprint Reader', action: () => setActiveModal('fingerprint') },
+    { type: 'icon', icon: Brain, color: 'text-indigo-500', title: 'AI Assistant', action: () => window.dispatchEvent(new CustomEvent('toggle-ai-assistant')) },
     { type: 'icon', icon: Phone, color: 'text-blue-500', title: 'Calls', path: '/calls' },
   ];
 
@@ -617,16 +786,14 @@ export default function Layout() {
           <div className="flex items-center">
             <div 
               onClick={() => {
-                const msg = "Pulse Feeds Master AI is active. Use the AI Eye in the search bar to detect real-world problems and earn education badges.";
-                const utterance = new SpeechSynthesisUtterance(msg);
-                window.speechSynthesis.speak(utterance);
+                window.dispatchEvent(new CustomEvent('toggle-ai-assistant'));
               }}
               className="w-10 h-10 bg-gradient-to-br from-purple-600 to-blue-500 rounded-xl flex items-center justify-center text-white shadow-lg cursor-pointer hover:scale-110 transition-transform group relative" 
               title="Master AI: System Intelligence"
             >
               <BrainCircuit className="w-6 h-6" />
               <span className="absolute -bottom-10 left-0 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
-                Master AI: Click for Status
+                Master AI: Click for Assistant
               </span>
             </div>
           </div>
@@ -701,6 +868,12 @@ export default function Layout() {
             </div>
             <div className="flex flex-col items-center space-y-1" title="Fingerprint Reader" onClick={() => setActiveModal('fingerprint')}>
               <Fingerprint className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-500 cursor-pointer" />
+            </div>
+            <div className="flex flex-col items-center space-y-1" title="AI Eye: Universal Analysis" onClick={startAiEye}>
+              <Eye className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-500 cursor-pointer animate-pulse" />
+            </div>
+            <div className="flex flex-col items-center space-y-1" title="Master AI Assistant" onClick={() => window.dispatchEvent(new CustomEvent('toggle-ai-assistant'))}>
+              <BrainCircuit className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-500 cursor-pointer animate-pulse" />
             </div>
           </div>
 
@@ -853,50 +1026,92 @@ export default function Layout() {
           <PlusSquare className="w-6 h-6" />
         </Link>
 
-      {/* Master AI Icon - Subtle & Integrated */}
-      <div className="fixed bottom-20 left-4 sm:left-6 z-30 group">
-        <button 
-          onClick={() => {
-            if (isSpeaking) {
-              window.speechSynthesis.cancel();
-              setIsSpeaking(false);
-            } else {
-              speakSystemStatus();
-            }
-          }} 
-          className={cn(
-            "w-10 h-10 sm:w-12 sm:h-12 bg-white/5 dark:bg-black/5 backdrop-blur-[1px] rounded-full flex items-center justify-center text-purple-500/10 dark:text-purple-400/10 hover:text-purple-500 dark:hover:text-purple-400 hover:bg-white/10 dark:hover:bg-black/10 hover:backdrop-blur-md transition-all border border-transparent hover:border-purple-500/20 shadow-none hover:shadow-lg relative overflow-hidden",
-            isSpeaking && "text-purple-500 dark:text-purple-400 opacity-100 animate-pulse bg-white/10 dark:bg-black/10 backdrop-blur-md border-purple-500/30"
-          )}
-          title={isSpeaking ? "Stop Speaking" : "Master AI: System Controller"}
-        >
-          <BrainCircuit className={cn("w-5 h-5 sm:w-6 sm:h-6 transition-transform", isSpeaking ? "scale-110" : "group-hover:scale-110")} />
-          
-          {/* AI Activity Indicator */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-             <div className="w-full h-full border border-purple-500/10 rounded-full animate-ping opacity-20 group-hover:opacity-40"></div>
-          </div>
-        </button>
-        
-        {/* Tooltip/Status */}
-        <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 bg-gray-900/90 backdrop-blur-md text-white text-[9px] px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-all translate-x-2 group-hover:translate-x-0 border border-white/10 shadow-xl">
-          <div className="flex flex-col space-y-1">
-            <div className="flex items-center space-x-2">
-              <div className={cn(
-                "w-1.5 h-1.5 rounded-full animate-pulse",
-                systemStatus.status === 'optimal' ? "bg-green-500" : "bg-yellow-500"
-              )}></div>
-              <span className="font-bold tracking-wider uppercase">
-                {isSpeaking ? "AI Analyzing System..." : `Master AI: ${systemStatus.status}`}
-              </span>
-            </div>
-            <div className="text-[7px] text-gray-400 italic">{systemStatus.message}</div>
-            <div className="text-[6px] text-gray-500 text-right">Last check: {systemStatus.lastCheck}</div>
-          </div>
-        </div>
-      </div>
+        {/* AI Assistant Component */}
+        <AIAssistant />
 
-      {/* Bottom Smart Hub Navigation */}
+        {/* Self-Healing Manager Component */}
+        <SelfHealingManager />
+
+        {/* Global AI Eye Modal */}
+        <AnimatePresence>
+          {showAiEye && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/90 z-[200] flex flex-col items-center justify-center p-4"
+            >
+              <div className="relative w-full max-w-2xl aspect-video bg-black rounded-3xl overflow-hidden border-4 border-emerald-500/30 shadow-[0_0_50px_rgba(16,185,129,0.2)]">
+                <video 
+                  ref={videoRef} 
+                  autoPlay 
+                  playsInline 
+                  className="w-full h-full object-cover"
+                />
+                <canvas ref={canvasRef} className="hidden" />
+                
+                {/* Scanning Overlay */}
+                <div className="absolute inset-0 pointer-events-none">
+                  <div className="absolute inset-0 border-2 border-emerald-500/20"></div>
+                  <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-emerald-500"></div>
+                  <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-emerald-500"></div>
+                  <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-emerald-500"></div>
+                  <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-emerald-500"></div>
+                  
+                  {isAnalyzing && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-full h-1 bg-emerald-500/50 animate-scan"></div>
+                      <div className="bg-emerald-500 text-black px-4 py-1 rounded-full text-xs font-bold animate-pulse">
+                        AI ANALYZING DOMAINS...
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Controls */}
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 pointer-events-auto">
+                  <button 
+                    onClick={stopAiEye}
+                    className="p-4 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-all"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                  <button 
+                    onClick={analyzeProblem}
+                    disabled={isAnalyzing}
+                    className="px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full font-bold shadow-xl shadow-emerald-600/20 transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isAnalyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Eye className="w-5 h-5" />}
+                    {isAnalyzing ? "Analyzing..." : "Analyze Scene"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Advice Panel */}
+              <AnimatePresence>
+                {aiAdvice && (
+                  <motion.div 
+                    initial={{ y: 50, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    className="mt-6 w-full max-w-2xl bg-white dark:bg-gray-900 p-6 rounded-3xl shadow-2xl border border-emerald-500/20 max-h-[40vh] overflow-y-auto custom-scrollbar"
+                  >
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                        <BrainCircuit className="w-5 h-5 text-emerald-600" />
+                      </div>
+                      <h4 className="font-bold text-emerald-600">AI Eye Insights</h4>
+                    </div>
+                    <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                      {aiAdvice}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Bottom Smart Hub Navigation */}
       <nav className={cn(
         "bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shrink-0 z-20 pb-safe",
         viewMode === 'desktop' ? "sm:hidden" : ""

@@ -170,6 +170,15 @@ service cloud.firestore {
              (!('analytics' in data) || data.analytics is list) &&
              (!('createdAt' in data) || data.createdAt is timestamp);
     }
+
+    function isValidInsight(data) {
+      return data.keys().hasAll(['type', 'category', 'content', 'authorId', 'timestamp']) &&
+             data.type in ['developer', 'user'] &&
+             data.category is string && data.category.size() > 0 && data.category.size() <= 100 &&
+             data.content is string && data.content.size() > 0 && data.content.size() <= 5000 &&
+             data.authorId is string && data.authorId == request.auth.uid &&
+             data.timestamp is timestamp;
+    }
     
     // ===============================================================
     // Rules
@@ -182,6 +191,13 @@ service cloud.firestore {
     
     match /_connection_test_/ping {
       allow read: if true;
+    }
+    
+    match /insights/{insightId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.authorId == request.auth.uid);
+      allow create: if isAuthenticated() && isValidInsight(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
     
     match /users/{userId} {

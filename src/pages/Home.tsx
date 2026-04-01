@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { generateContentWithRetry } from "../lib/ai";
 import { Modality } from "@google/genai";
+import { saveInsight } from "../lib/insights";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -170,17 +171,23 @@ export default function Home() {
       const base64Data = imageData.split(',')[1];
 
       try {
-        const prompt = `Act as an expert problem solver and educator. Analyze this image for real-world problems (social, environmental, technical, or personal). 
-        1. Identify the core problem.
-        2. Provide a practical, actionable solution.
-        3. Suggest an educational topic related to this problem.
-        4. Award a specific "LinkedIn-style" education badge for learning about this.
+        const prompt = `Act as a multi-domain AI Eye (Life, Security, Health, Wealth). 
+        Analyze this image for:
+        1. LIFE: General environment improvement.
+        2. SECURITY: Potential risks or safety tips.
+        3. HEALTH: Wellness or hygiene observations.
+        4. WEALTH: Financial opportunities or resource management.
+        
+        Provide actionable advice for each. 
+        Also, provide a developer insight if you notice any potential app improvement related to these domains.
+        Format developer insights as [INSIGHT:developer:category:content].
         
         Format the response clearly with these sections:
-        PROBLEM: [The detected problem]
-        SOLUTION: [Practical advice]
-        EDUCATION: [Educational topic]
-        BADGE: [Badge Name, e.g., "Sustainability Advocate", "Tech Problem Solver", "Social Impact Leader"]`;
+        LIFE: [Advice]
+        SECURITY: [Advice]
+        HEALTH: [Advice]
+        WEALTH: [Advice]
+        BADGE: [Badge Name, e.g., "Safety Sentinel", "Wealth Builder", "Wellness Warrior"]`;
 
         const response = await generateContentWithRetry({
           model: "gemini-3-flash-preview",
@@ -196,15 +203,24 @@ export default function Home() {
           }
         });
 
-        const advice = response.text || "I couldn't identify any specific problems in this view, but I'm always learning. Try pointing me at something else!";
-        setAiAdvice(advice);
+        const advice = response.text || "I couldn't identify any specific details in this view, but I'm always learning. Try pointing me at something else!";
+        
+        // Extract and save insights
+        const regex = /\[INSIGHT:(developer|user):(life|security|health|wealth|general):(.*?)\]/g;
+        let match;
+        while ((match = regex.exec(advice)) !== null) {
+          saveInsight(match[1] as any, match[2] as any, match[3].trim());
+        }
+        
+        const cleanAdvice = advice.replace(/\[INSIGHT:[^\]]+\]/g, '').trim();
+        setAiAdvice(cleanAdvice);
         
         // Speak the advice
-        speakAdvice(advice);
+        speakAdvice(cleanAdvice);
 
         // Award a badge if a badge is mentioned
-        if (advice.includes("BADGE:") && currentUser) {
-          const badgeMatch = advice.match(/BADGE:\s*(.*)/i);
+        if (cleanAdvice.includes("BADGE:") && currentUser) {
+          const badgeMatch = cleanAdvice.match(/BADGE:\s*(.*)/i);
           const badgeName = badgeMatch ? badgeMatch[1].trim() : "Problem Solver";
           
           await setDoc(doc(db, 'users', currentUser.uid), {
@@ -213,7 +229,7 @@ export default function Home() {
               date: new Date().toISOString(),
               type: 'LinkedIn-Style',
               icon: 'Award',
-              description: advice.split('EDUCATION:')[1]?.split('BADGE:')[0]?.trim() || "Awarded for real-world problem detection."
+              description: cleanAdvice.split('WEALTH:')[1]?.split('BADGE:')[0]?.trim() || "Awarded for multi-domain environmental analysis."
             })
           }, { merge: true });
         }

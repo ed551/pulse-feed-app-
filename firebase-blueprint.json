@@ -99,6 +99,19 @@
         "comments": { "type": "number", "description": "The number of comments" }
       },
       "required": ["name", "views", "likes", "shares", "comments"]
+    },
+    "Insight": {
+      "title": "Insight",
+      "description": "AI-generated insight for app improvement or user coaching",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["developer", "user"], "description": "Who the insight is for" },
+        "category": { "type": "string", "description": "The category of the insight (e.g., UI, Performance, Health, Life)" },
+        "content": { "type": "string", "description": "The content of the insight" },
+        "authorId": { "type": "string", "description": "The ID of the user who triggered the insight" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the insight was generated" }
+      },
+      "required": ["type", "category", "content", "authorId", "timestamp"]
     }
   },
   "firestore": {
@@ -113,6 +126,10 @@
     "posts/{postId}": {
       "schema": "#/entities/Post",
       "description": "Stores posts"
+    },
+    "insights/{insightId}": {
+      "schema": "#/entities/Insight",
+      "description": "Stores AI-generated insights and feedback"
     }
   }
 }
