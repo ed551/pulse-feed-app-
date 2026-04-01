@@ -1,0 +1,199 @@
+336:    <div className="space-y-8 pb-12">
+337:      <div className="text-center py-4">
+340:      </div>
+342:      <div className="flex items-center justify-center p-1 bg-gray-100 dark:bg-gray-800 rounded-xl w-fit mx-auto mb-8">
+365:      </div>
+368:          <div className="space-y-8">
+369:          <div className="mt-4 flex items-center justify-center space-x-2">
+386:          </div>
+388:      <div className="bg-gradient-to-br from-yellow-400 to-orange-500 rounded-3xl p-8 text-white shadow-lg relative overflow-hidden">
+389:        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl"></div>
+390:        <div className="relative z-10 flex flex-col items-center justify-center">
+392:          <div className="text-6xl font-black mb-4 flex items-center">
+394:          </div>
+396:          <div className="flex space-x-4 mb-6">
+397:            <div className="text-center">
+400:            </div>
+401:            <div className="w-px h-8 bg-white/20"></div>
+402:            <div className="text-center">
+405:            </div>
+406:            <div className="w-px h-8 bg-white/20"></div>
+407:            <div className="text-center">
+410:            </div>
+411:          </div>
+414:                <div className="w-full max-w-sm bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 mb-6">
+415:                  <div className="flex items-center justify-between mb-3">
+416:                    <div className="flex items-center space-x-2">
+417:                      <div className={cn(
+420:                      )}></div>
+424:                    </div>
+428:                  </div>
+429:                  <div className="flex justify-between items-end">
+430:                    <div>
+433:                    </div>
+434:                    <div className="text-right">
+437:                    </div>
+438:                  </div>
+439:                </div>
+441:          <div className="flex flex-wrap justify-center gap-4">
+467:          </div>
+471:              <div
+474:                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 space-y-4">
+479:                  <div className="space-y-3">
+480:                    <div className="relative">
+489:                    </div>
+490:                    <div className="relative">
+499:                    </div>
+507:                  </div>
+508:                </div>
+509:              </div>
+514:              <div
+517:                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-xl space-y-6">
+523:                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+544:                  </div>
+548:                      <div className="space-y-1">
+550:                        <div className="relative">
+559:                        </div>
+560:                      </div>
+562:                      <div className="space-y-1">
+566:                        <div className="relative">
+575:                        </div>
+576:                      </div>
+578:                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+579:                        <div className="space-y-1">
+587:                        </div>
+588:                        <div className="space-y-1">
+596:                        </div>
+597:                        <div className="space-y-1">
+605:                        </div>
+606:                        <div className="space-y-1">
+614:                        </div>
+615:                      </div>
+618:                    <div className="space-y-1">
+620:                      <div className="relative">
+629:                      </div>
+630:                    </div>
+647:                </div>
+648:              </div>
+651:            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+653:              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800/50">
+661:              </div>
+662:            </div>
+664:            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+665:              <div className="flex items-center justify-between mb-6">
+668:              </div>
+669:              <div className="space-y-4">
+670:                <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-700">
+671:                  <div className="flex justify-between items-start mb-2">
+672:                    <div>
+673:                      <div className="font-bold text-gray-900 dark:text-white">March 2026 Payout</div>
+674:                      <div className="text-sm text-gray-500">Processed automatically via M-Pesa</div>
+675:                    </div>
+679:                  </div>
+680:                  <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
+681:                    <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
+682:                      <div className="text-gray-500 mb-1">Gross Earnings</div>
+683:                      <div className="font-bold text-gray-900 dark:text-white">{convert(50.00)}</div>
+684:                    </div>
+685:                    <div className="bg-red-50 dark:bg-red-900/10 p-3 rounded-lg border border-red-100 dark:border-red-900/20">
+686:                      <div className="text-red-500 mb-1 flex items-center"><Landmark className="w-3 h-3 mr-1"/> Tax Withheld (16%)</div>
+687:                      <div className="font-bold text-red-600 dark:text-red-400">-{convert(8.00)}</div>
+688:                    </div>
+689:                    <div className="bg-green-50 dark:bg-green-900/10 p-3 rounded-lg border border-green-100 dark:border-green-900/20">
+690:                      <div className="text-green-600 mb-1">Net Payout</div>
+691:                      <div className="font-bold text-green-700 dark:text-green-400">{convert(42.00)}</div>
+692:                    </div>
+693:                  </div>
+694:                </div>
+695:              </div>
+696:            </div>
+698:            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+700:              <div className="space-y-4">
+703:                    <div key={tx.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-700">
+704:                      <div className="flex items-center space-x-3">
+705:                        <div className={cn(
+710:                        </div>
+711:                        <div>
+714:                        </div>
+715:                      </div>
+716:                      <div className="text-right">
+730:                      </div>
+731:                    </div>
+734:                  <div className="text-center py-8 text-gray-500 text-sm italic">No recent activity found.</div>
+736:              </div>
+737:            </div>
+739:            <div>
+741:              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+745:                    <div key={ach.id} className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center hover:shadow-md transition-shadow">
+746:                      <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${ach.bg}`}>
+748:                      </div>
+751:                    </div>
+754:              </div>
+755:            </div>
+756:          </div>
+758:          <div className="space-y-8">
+759:            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+760:              <div className="md:col-span-2 space-y-6">
+761:                <div className="bg-gradient-to-br from-green-600 to-emerald-700 p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
+762:                  <div className="absolute top-0 right-0 p-8 opacity-10">
+764:                  </div>
+765:                  <div className="relative z-10 space-y-4">
+770:                    <div className="flex items-center space-x-2 text-green-100 text-sm">
+773:                    </div>
+774:                  </div>
+775:                </div>
+777:                <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
+783:                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+804:                  </div>
+808:                      <div className="space-y-2">
+810:                        <div className="relative">
+819:                        </div>
+820:                      </div>
+822:                      <div className="space-y-2">
+826:                        <div className="relative">
+835:                        </div>
+836:                      </div>
+838:                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+839:                        <div className="space-y-2">
+847:                        </div>
+848:                        <div className="space-y-2">
+856:                        </div>
+857:                        <div className="space-y-2">
+865:                        </div>
+866:                        <div className="space-y-2">
+874:                        </div>
+875:                      </div>
+878:                    <div className="space-y-2">
+880:                      <div className="relative">
+889:                      </div>
+895:                    </div>
+898:                        <div
+903:                        </div>
+907:                        <div
+912:                        </div>
+930:                </div>
+931:              </div>
+933:              <div className="space-y-6">
+934:                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
+938:                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1 flex-shrink-0" />
+942:                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1 flex-shrink-0" />
+946:                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1 flex-shrink-0" />
+950:                </div>
+952:                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
+954:                  <div className="space-y-3">
+957:                        <div key={tx.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
+958:                          <div className="flex items-center space-x-3">
+959:                            <div className="w-8 h-8 rounded-full bg-green-50 text-green-600 flex items-center justify-center">
+961:                            </div>
+962:                            <div>
+965:                            </div>
+966:                          </div>
+968:                        </div>
+973:                  </div>
+974:                </div>
+975:              </div>
+976:            </div>
+977:          </div>
+981:      <div className="hidden">
+991:      </div>
+992:    </div>

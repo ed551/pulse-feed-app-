@@ -22,27 +22,22 @@ export default function Rewards() {
   const { currentUser, userData } = useAuth();
   const { isIdle, activeSeconds, totalEarnedToday } = useRevenue();
   const { currency, availableCurrencies, changeCurrency, convert, loading, rates } = useCurrencyConverter();
-  const [activeTab, setActiveTab] = useState<'overview' | 'withdraw'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'mpesa' | 'international'>('overview');
 
   // Rewards State (from Firestore)
   const points = userData?.points || 0;
   const balance = userData?.balance || 0;
-  const adRevenue = userData?.adRevenue || 0;
-  const kesRate = rates['KES'] || 130;
-  const totalBalance = (points / 100) + adRevenue + (balance / kesRate);
 
   // M-Pesa State
   const [phoneNumber, setPhoneNumber] = useState("");
   const [amount, setAmount] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [showDeposit, setShowDeposit] = useState(false);
-  const [showWithdraw, setShowWithdraw] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   // International Payout State
-  const [payoutMethod, setPayoutMethod] = useState<'mpesa' | 'paypal' | 'stripe' | 'bank'>('mpesa');
+  const [payoutMethod, setPayoutMethod] = useState<'paypal' | 'stripe' | 'bank'>('paypal');
   const [payoutEmail, setPayoutEmail] = useState("");
   const [payoutAmount, setPayoutAmount] = useState("");
   const [bankDetails, setBankDetails] = useState({
@@ -89,6 +84,16 @@ export default function Rewards() {
       return;
     }
 
+    // Convert KES amount to USD to check points
+    const kesRate = rates['KES'] || 130;
+    const amountInUSD = numAmount / kesRate;
+    const pointsNeeded = Math.round(amountInUSD * 100);
+
+    if (points < pointsNeeded) {
+      setError(`Insufficient points. You need ${pointsNeeded} points for this payout.`);
+      return;
+    }
+
     if (!phoneNumber.match(/^(?:254|\+254|0)?(7|1)\d{8}$/)) {
       setError("Please enter a valid M-Pesa phone number");
       return;
@@ -97,7 +102,7 @@ export default function Rewards() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/mpesa/stkpush", {
+      const response = await fetch("/api/payout/mpesa", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -110,36 +115,37 @@ export default function Rewards() {
 
       const data = await response.json();
 
-      if (data.ResponseCode === "0") {
-        const checkoutRequestId = data.CheckoutRequestID;
-        const newTransaction = {
-          amount: numAmount,
-          phoneNumber,
-          status: 'pending',
-          timestamp: new Date().toISOString(),
-          reference: data.MerchantRequestID || "REF-" + Date.now(),
-          type: 'mpesa'
-        };
-
-        await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), newTransaction);
-        
-        setSuccess("STK Push sent! Please enter your M-Pesa PIN on your phone.");
-        
-        // Start polling for status
-        startPolling(checkoutRequestId, numAmount);
-        setAmount("");
-      } else {
-        setError(data.CustomerMessage || data.errorMessage || data.error || "Payment failed. Please try again.");
-        setIsLoading(false);
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to process M-Pesa payout");
       }
-    } catch (err) {
-      setError("Failed to connect to the server. Please check your connection.");
-      console.error(err);
+      
+      const newTransaction = {
+        amount: numAmount,
+        phoneNumber,
+        status: 'success',
+        timestamp: new Date().toISOString(),
+        reference: data.transactionId || "MPESA-" + Date.now(),
+        type: 'mpesa'
+      };
+
+      await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), newTransaction);
+      
+      // Update points in Firestore
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        points: increment(-pointsNeeded)
+      });
+      
+      setSuccess(`Payout of KES ${numAmount.toLocaleString()} initiated successfully via M-Pesa!`);
+      setAmount("");
+      setPhoneNumber("");
+    } catch (err: any) {
+      setError(err.message || "Failed to process M-Pesa payout. Please try again.");
+    } finally {
       setIsLoading(false);
     }
   };
 
-  const handleWithdrawal = async (e: React.FormEvent) => {
+  const handleInternationalPayout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
     setError(null);
@@ -151,17 +157,13 @@ export default function Rewards() {
       return;
     }
 
-    if (numAmount > totalBalance) {
-      setError(`Insufficient total balance. You have $${totalBalance.toFixed(2)} available.`);
+    const pointsNeeded = Math.round(numAmount * 100);
+    if (points < pointsNeeded) {
+      setError(`Insufficient points. You need ${pointsNeeded} points for this payout.`);
       return;
     }
 
-    if (payoutMethod === 'mpesa') {
-      if (!phoneNumber.match(/^(?:254|\+254|0)?(7|1)\d{8}$/)) {
-        setError("Please enter a valid M-Pesa phone number");
-        return;
-      }
-    } else if (payoutMethod === 'paypal' || payoutMethod === 'stripe') {
+    if (payoutMethod === 'paypal' || payoutMethod === 'stripe') {
       if (!payoutEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
         setError(`Please enter a valid ${payoutMethod === 'paypal' ? 'PayPal' : 'Stripe'} email`);
         return;
@@ -176,154 +178,51 @@ export default function Rewards() {
     setIsLoading(true);
 
     try {
-      // Logic to deduct from balances in order: Points -> Ad Revenue -> Cash Balance
-      let remainingToDeduct = numAmount;
-      const updates: any = {};
-      
-      // 1. Deduct from points
-      const pointsValue = points / 100;
-      if (remainingToDeduct > 0 && pointsValue > 0) {
-        const pointsToDeductValue = Math.min(remainingToDeduct, pointsValue);
-        const pointsToDeduct = Math.round(pointsToDeductValue * 100);
-        updates.points = increment(-pointsToDeduct);
-        remainingToDeduct -= pointsToDeductValue;
-      }
-      
-      // 2. Deduct from adRevenue
-      if (remainingToDeduct > 0 && adRevenue > 0) {
-        const adRevToDeduct = Math.min(remainingToDeduct, adRevenue);
-        updates.adRevenue = increment(-adRevToDeduct);
-        remainingToDeduct -= adRevToDeduct;
-      }
-      
-      // 3. Deduct from balance (KES)
-      if (remainingToDeduct > 0) {
-        const kesRate = rates['KES'] || 130;
-        const kesToDeduct = remainingToDeduct * kesRate;
-        updates.balance = increment(-kesToDeduct);
-      }
+      const response = await fetch("/api/payout/international", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          method: payoutMethod,
+          amount: numAmount,
+          email: payoutEmail,
+          bankDetails: payoutMethod === 'bank' ? bankDetails : undefined
+        }),
+      });
 
-      // Simulate API call for withdrawal
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to process payout");
+      }
       
       const newTransaction = {
         amount: numAmount,
-        phoneNumber: payoutMethod === 'bank' ? bankDetails.accountNumber : payoutMethod === 'mpesa' ? phoneNumber : payoutEmail,
+        phoneNumber: payoutMethod === 'bank' ? bankDetails.accountNumber : payoutEmail,
         status: 'success',
         timestamp: new Date().toISOString(),
-        reference: "WITHDRAW-" + Date.now(),
-        type: 'withdrawal',
+        reference: "PAY-" + Date.now(),
+        type: 'international',
         method: payoutMethod
       };
 
       await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), newTransaction);
-      await updateDoc(doc(db, 'users', currentUser.uid), updates);
+      
+      // Update points in Firestore
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        points: increment(-pointsNeeded)
+      });
 
-      setSuccess(`Withdrawal of $${numAmount.toFixed(2)} initiated successfully via ${payoutMethod.toUpperCase()}!`);
+      setSuccess(`Payout of ${convert(numAmount)} initiated successfully via ${payoutMethod.toUpperCase()}!`);
       setPayoutAmount("");
       setPayoutEmail("");
       setBankDetails({ accountName: "", accountNumber: "", bankName: "", swiftCode: "" });
     } catch (err: any) {
-      setError(err.message || "Failed to process withdrawal. Please try again.");
+      setError(err.message || "Failed to process international payout. Please try again.");
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleRedeemPoints = async () => {
-    if (!currentUser || points <= 0) return;
-    setError(null);
-    setSuccess(null);
-    setIsLoading(true);
-
-    try {
-      const cashValue = points / 100; // 100 points = $1
-      
-      await updateDoc(doc(db, 'users', currentUser.uid), {
-        points: 0,
-        adRevenue: increment(cashValue)
-      });
-
-      const newTransaction = {
-        amount: cashValue,
-        phoneNumber: "Internal Redemption",
-        status: 'success',
-        timestamp: new Date().toISOString(),
-        reference: "REDEEM-" + Date.now(),
-        type: 'points_redemption',
-        method: 'points'
-      };
-
-      await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), newTransaction);
-      
-      setSuccess(`Successfully redeemed ${points.toLocaleString()} points for $${cashValue.toFixed(2)}!`);
-    } catch (err: any) {
-      setError(err.message || "Failed to redeem points. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const startPolling = async (checkoutRequestId: string, paidAmount: number) => {
-    if (!currentUser) return;
-    let attempts = 0;
-    const maxAttempts = 20; 
-    
-    const poll = async () => {
-      if (attempts >= maxAttempts) {
-        // Update transaction status to failed in Firestore
-        const pendingTx = transactions.find(tx => tx.id === checkoutRequestId || tx.reference.includes(checkoutRequestId));
-        if (pendingTx) {
-          await updateDoc(doc(db, 'users', currentUser.uid, 'transactions', pendingTx.id), {
-            status: 'failed'
-          });
-        }
-        setError("Transaction timed out. Please check your M-Pesa messages.");
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const response = await fetch(`/api/mpesa/status/${checkoutRequestId}`);
-        const data = await response.json();
-
-        if (data.status !== 'pending') {
-          const pendingTx = transactions.find(tx => tx.id === checkoutRequestId || tx.reference.includes(checkoutRequestId));
-          if (pendingTx) {
-            await updateDoc(doc(db, 'users', currentUser.uid, 'transactions', pendingTx.id), {
-              status: data.status
-            });
-          }
-          
-          if (data.status === 'success') {
-            setSuccess("Payment confirmed! Your balance has been updated.");
-            
-            const kesRate = rates['KES'] || 130;
-            const amountInUSD = paidAmount / kesRate;
-            const pointsToDeduct = Math.round(amountInUSD * 100);
-            
-            // Update balance and points in Firestore
-            await updateDoc(doc(db, 'users', currentUser.uid), {
-              balance: increment(paidAmount),
-              points: increment(-pointsToDeduct)
-            });
-          } else {
-            setError(`Payment failed: ${data.resultDesc || "Unknown error"}`);
-          }
-          setIsLoading(false);
-          return;
-        }
-
-        attempts++;
-        setTimeout(poll, 3000); 
-      } catch (err) {
-        console.error("Polling error:", err);
-        attempts++;
-        setTimeout(poll, 3000);
-      }
-    };
-
-    poll();
   };
 
   const achievements = [
@@ -339,60 +238,76 @@ export default function Rewards() {
         <p className="text-gray-600 dark:text-gray-400 text-sm">Manage your earnings, redeem points, and initiate M-Pesa Express payments.</p>
       </div>
 
-      {/* Tabs removed for single-view refactoring */}
+      {/* Tabs */}
+      <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-2xl max-w-xl mx-auto overflow-x-auto">
+        <button 
+          onClick={() => setActiveTab('overview')}
+          className={cn(
+            "flex-1 py-2.5 px-4 text-sm font-bold rounded-xl transition-all flex items-center justify-center space-x-2 whitespace-nowrap",
+            activeTab === 'overview' ? "bg-white dark:bg-gray-700 text-orange-600 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+          )}
+        >
+          <Gem className="w-4 h-4" />
+          <span>Overview</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('mpesa')}
+          className={cn(
+            "flex-1 py-2.5 px-4 text-sm font-bold rounded-xl transition-all flex items-center justify-center space-x-2 whitespace-nowrap",
+            activeTab === 'mpesa' ? "bg-white dark:bg-gray-700 text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+          )}
+        >
+          <Smartphone className="w-4 h-4" />
+          <span>M-Pesa</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('international')}
+          className={cn(
+            "flex-1 py-2.5 px-4 text-sm font-bold rounded-xl transition-all flex items-center justify-center space-x-2 whitespace-nowrap",
+            activeTab === 'international' ? "bg-white dark:bg-gray-700 text-purple-600 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+          )}
+        >
+          <Globe className="w-4 h-4" />
+          <span>International</span>
+        </button>
+      </div>
 
       <AnimatePresence mode="wait">
-        <motion.div 
-          key="rewards-main"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          className="space-y-8"
-        >
-          <div className="mt-4 flex items-center justify-center space-x-2">
-            <Globe className="w-4 h-4 text-gray-400" />
-            <span className="text-sm text-gray-500 dark:text-gray-400">Display Currency:</span>
-            <select 
-              value={currency}
-              onChange={(e) => changeCurrency(e.target.value)}
-              disabled={loading}
-              className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
-            >
-              {loading ? (
-                <option>Loading...</option>
-              ) : (
-                availableCurrencies.map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))
-              )}
-            </select>
-          </div>
+        {activeTab === 'overview' ? (
+          <motion.div 
+            key="overview"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-8"
+          >
+            <div className="mt-4 flex items-center justify-center space-x-2">
+              <Globe className="w-4 h-4 text-gray-400" />
+              <span className="text-sm text-gray-500 dark:text-gray-400">Display Currency:</span>
+              <select 
+                value={currency}
+                onChange={(e) => changeCurrency(e.target.value)}
+                disabled={loading}
+                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
+              >
+                {loading ? (
+                  <option>Loading...</option>
+                ) : (
+                  availableCurrencies.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))
+                )}
+              </select>
+            </div>
 
-      <div className="bg-gradient-to-br from-yellow-400 to-orange-500 rounded-3xl p-8 text-white shadow-lg relative overflow-hidden">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl"></div>
-        <div className="relative z-10 flex flex-col items-center justify-center">
-          <span className="text-yellow-100 font-medium uppercase tracking-wider mb-2">Total Combined Balance</span>
-          <div className="text-6xl font-black mb-4 flex items-center">
-            {convert(totalBalance)}
-          </div>
-          
-          <div className="flex space-x-4 mb-6">
-            <div className="text-center">
-              <p className="text-[10px] uppercase font-bold opacity-70">Points Value</p>
-              <p className="text-sm font-black">{convert(points / 100)}</p>
-            </div>
-            <div className="w-px h-8 bg-white/20"></div>
-            <div className="text-center">
-              <p className="text-[10px] uppercase font-bold opacity-70">Ad Revenue</p>
-              <p className="text-sm font-black">{convert(adRevenue)}</p>
-            </div>
-            <div className="w-px h-8 bg-white/20"></div>
-            <div className="text-center">
-              <p className="text-[10px] uppercase font-bold opacity-70">Cash Balance</p>
-              <p className="text-sm font-black">{convert(balance / kesRate)}</p>
-            </div>
-          </div>
-
+            <div className="bg-gradient-to-br from-yellow-400 to-orange-500 rounded-3xl p-8 text-white shadow-lg relative overflow-hidden">
+              <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl"></div>
+              <div className="relative z-10 flex flex-col items-center justify-center">
+                <span className="text-yellow-100 font-medium uppercase tracking-wider mb-2">Total Balance ({points.toLocaleString()} Points)</span>
+                <div className="text-6xl font-black mb-4 flex items-center">
+                  {convert(points / 100)}
+                </div>
+                
                 {/* Activity Status Card */}
                 <div className="w-full max-w-sm bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 mb-6">
                   <div className="flex items-center justify-between mb-3">
@@ -421,225 +336,14 @@ export default function Rewards() {
                   </div>
                 </div>
 
-          <div className="flex flex-wrap justify-center gap-4">
-            <button 
-              onClick={() => {
-                setShowDeposit(!showDeposit);
-                setShowWithdraw(false);
-              }}
-              className="bg-white text-blue-600 hover:bg-blue-50 px-6 py-3 rounded-full font-bold shadow-md transition-all text-sm border border-blue-100"
-            >
-              {showDeposit ? "Hide Deposit" : "Deposit (M-Pesa)"}
-            </button>
-            <button 
-              onClick={handleRedeemPoints}
-              disabled={isLoading || points <= 0}
-              className="bg-white text-orange-600 hover:bg-yellow-50 px-6 py-3 rounded-full font-bold shadow-md transition-all text-sm disabled:opacity-50"
-            >
-              {isLoading ? "Redeeming..." : "Redeem Points"}
-            </button>
-            <button 
-              onClick={() => {
-                setShowWithdraw(!showWithdraw);
-                setShowDeposit(false);
-              }}
-              className="bg-orange-600 text-white hover:bg-orange-700 px-6 py-3 rounded-full font-bold shadow-md transition-all text-sm border border-white/20"
-            >
-              {showWithdraw ? "Hide Withdraw" : "Withdraw Funds"}
-            </button>
-          </div>
-
-          {/* Deposit Form */}
-          <AnimatePresence>
-            {showDeposit && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="w-full max-w-sm mt-6 overflow-hidden"
-              >
-                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 space-y-4">
-                  <h3 className="text-sm font-bold uppercase tracking-widest text-white flex items-center">
-                    <Smartphone className="w-4 h-4 mr-2" />
-                    M-Pesa Express Deposit
-                  </h3>
-                  <div className="space-y-3">
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/60" />
-                      <input
-                        type="text"
-                        placeholder="07XX XXX XXX"
-                        value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-white/50 outline-none text-white placeholder:text-white/40 text-sm"
-                      />
-                    </div>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-white/60">KES</span>
-                      <input
-                        type="number"
-                        placeholder="Amount"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        className="w-full pl-12 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-white/50 outline-none text-white placeholder:text-white/40 text-sm"
-                      />
-                    </div>
-                    <button
-                      onClick={handlePayment}
-                      disabled={isLoading}
-                      className="w-full py-3 bg-white text-blue-600 font-bold rounded-xl hover:bg-blue-50 transition-all disabled:opacity-50 text-sm"
-                    >
-                      {isLoading ? "Processing..." : "Deposit Now"}
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Withdraw Form */}
-          <AnimatePresence>
-            {showWithdraw && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="w-full max-w-md mt-6 overflow-hidden"
-              >
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-xl space-y-6">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center space-x-2">
-                    <DollarSign className="w-5 h-5 text-green-500" />
-                    <span>Initiate Withdrawal</span>
-                  </h3>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-                    {[
-                      { id: 'mpesa', label: 'M-Pesa', icon: Smartphone },
-                      { id: 'paypal', label: 'PayPal', icon: DollarSign },
-                      { id: 'stripe', label: 'Stripe', icon: CreditCard },
-                      { id: 'bank', label: 'Bank', icon: Landmark }
-                    ].map((method) => (
-                      <button
-                        key={method.id}
-                        onClick={() => setPayoutMethod(method.id as any)}
-                        className={cn(
-                          "p-3 rounded-xl border-2 transition-all flex flex-col items-center space-y-1",
-                          payoutMethod === method.id 
-                            ? "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400" 
-                            : "border-gray-100 dark:border-gray-700 hover:border-green-200 dark:hover:border-green-800 text-gray-500"
-                        )}
-                      >
-                        <method.icon className="w-5 h-5" />
-                        <span className="text-[10px] font-bold">{method.label}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  <form onSubmit={handleWithdrawal} className="space-y-4">
-                    {payoutMethod === 'mpesa' ? (
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">M-Pesa Number</label>
-                        <div className="relative">
-                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                          <input
-                            type="text"
-                            placeholder="07XX XXX XXX"
-                            value={phoneNumber}
-                            onChange={(e) => setPhoneNumber(e.target.value)}
-                            className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border-none rounded-xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white text-sm"
-                          />
-                        </div>
-                      </div>
-                    ) : payoutMethod !== 'bank' ? (
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                          {payoutMethod === 'paypal' ? 'PayPal Email' : 'Stripe Email'}
-                        </label>
-                        <div className="relative">
-                          <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                          <input
-                            type="email"
-                            placeholder="email@example.com"
-                            value={payoutEmail}
-                            onChange={(e) => setPayoutEmail(e.target.value)}
-                            className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border-none rounded-xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white text-sm"
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Account Name</label>
-                          <input
-                            type="text"
-                            value={bankDetails.accountName}
-                            onChange={(e) => setBankDetails({...bankDetails, accountName: e.target.value})}
-                            className="w-full px-3 py-3 bg-gray-50 dark:bg-gray-900 border-none rounded-xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white text-sm"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Account Number</label>
-                          <input
-                            type="text"
-                            value={bankDetails.accountNumber}
-                            onChange={(e) => setBankDetails({...bankDetails, accountNumber: e.target.value})}
-                            className="w-full px-3 py-3 bg-gray-50 dark:bg-gray-900 border-none rounded-xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white text-sm"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Bank Name</label>
-                          <input
-                            type="text"
-                            value={bankDetails.bankName}
-                            onChange={(e) => setBankDetails({...bankDetails, bankName: e.target.value})}
-                            className="w-full px-3 py-3 bg-gray-50 dark:bg-gray-900 border-none rounded-xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white text-sm"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">SWIFT Code</label>
-                          <input
-                            type="text"
-                            value={bankDetails.swiftCode}
-                            onChange={(e) => setBankDetails({...bankDetails, swiftCode: e.target.value})}
-                            className="w-full px-3 py-3 bg-gray-50 dark:bg-gray-900 border-none rounded-xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white text-sm"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Amount (USD)</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-gray-400">$</span>
-                        <input
-                          type="number"
-                          placeholder="0.00"
-                          value={payoutAmount}
-                          onChange={(e) => setPayoutAmount(e.target.value)}
-                          className="w-full pl-8 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border-none rounded-xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white text-sm"
-                        />
-                      </div>
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={isLoading}
-                      className="w-full py-3 bg-green-600 text-white font-black rounded-xl hover:bg-green-700 transition-all disabled:opacity-50 flex items-center justify-center space-x-2 shadow-lg shadow-green-500/20 text-sm"
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Processing...</span>
-                        </>
-                      ) : (
-                        <span>Withdraw Funds</span>
-                      )}
-                    </button>
-                  </form>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                <button 
+                  onClick={() => setActiveTab('mpesa')}
+                  className="bg-white text-orange-600 hover:bg-yellow-50 px-8 py-3 rounded-full font-bold shadow-md transition-all"
+                >
+                  Redeem Points
+                </button>
+              </div>
+            </div>
 
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Reward Distribution Policy</h2>
@@ -688,47 +392,6 @@ export default function Rewards() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Recent Activity</h2>
-              <div className="space-y-4">
-                {transactions.length > 0 ? (
-                  transactions.slice(0, 5).map((tx) => (
-                    <div key={tx.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-700">
-                      <div className="flex items-center space-x-3">
-                        <div className={cn(
-                          "w-10 h-10 rounded-full flex items-center justify-center",
-                          tx.type === 'withdrawal' ? "bg-red-100 text-red-600" : "bg-green-100 text-green-600"
-                        )}>
-                          {tx.type === 'withdrawal' ? <ArrowUpRight className="w-5 h-5" /> : <TrendingUp className="w-5 h-5" />}
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-gray-900 dark:text-white capitalize">{tx.type || 'Transaction'}</p>
-                          <p className="text-[10px] text-gray-500">{new Date(tx.timestamp).toLocaleDateString()}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className={cn(
-                          "text-sm font-black",
-                          tx.type === 'withdrawal' ? "text-red-600" : "text-green-600"
-                        )}>
-                          {tx.type === 'withdrawal' ? '-' : '+'}{convert(tx.amount)}
-                        </p>
-                        <span className={cn(
-                          "text-[10px] font-bold px-2 py-0.5 rounded-full",
-                          tx.status === 'success' ? "bg-green-100 text-green-700" : 
-                          tx.status === 'pending' ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"
-                        )}>
-                          {tx.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8 text-gray-500 text-sm italic">No recent activity found.</div>
-                )}
-              </div>
-            </div>
-
             <div>
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Unlocked Badges</h2>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -747,9 +410,9 @@ export default function Rewards() {
               </div>
             </div>
           </motion.div>
-        ) : (
+        ) : activeTab === 'mpesa' ? (
           <motion.div 
-            key="withdraw"
+            key="mpesa"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
@@ -757,140 +420,55 @@ export default function Rewards() {
           >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <div className="md:col-span-2 space-y-6">
-                <div className="bg-gradient-to-br from-green-600 to-emerald-700 p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
+                <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-8 opacity-10">
                     <Wallet className="w-32 h-32" />
                   </div>
                   <div className="relative z-10 space-y-4">
-                    <p className="text-green-100 font-bold uppercase tracking-widest text-xs">Available for Withdrawal</p>
+                    <p className="text-blue-100 font-bold uppercase tracking-widest text-xs">M-Pesa Wallet Balance</p>
                     <h2 className="text-5xl font-black tracking-tighter">
-                      {convert(totalBalance)}
+                      {new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format((points / 100) * (rates['KES'] || 130))}
                     </h2>
-                    <div className="flex items-center space-x-2 text-green-100 text-sm">
-                      <CheckCircle className="w-4 h-4" />
-                      <span>Unified Balance (Points + Ad Revenue + Cash)</span>
+                    <div className="flex items-center space-x-2 text-blue-100 text-sm">
+                      <Info className="w-4 h-4" />
+                      <span>STK Push will request payment from your phone</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center space-x-2">
-                    <DollarSign className="w-5 h-5 text-green-500" />
-                    <span>Select Withdrawal Method</span>
+                    <Smartphone className="w-5 h-5 text-blue-500" />
+                    <span>Initiate M-Pesa Express Payment</span>
                   </h3>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-                    {[
-                      { id: 'mpesa', label: 'M-Pesa', icon: Smartphone },
-                      { id: 'paypal', label: 'PayPal', icon: DollarSign },
-                      { id: 'stripe', label: 'Stripe', icon: CreditCard },
-                      { id: 'bank', label: 'Bank', icon: Landmark }
-                    ].map((method) => (
-                      <button
-                        key={method.id}
-                        onClick={() => setPayoutMethod(method.id as any)}
-                        className={cn(
-                          "p-4 rounded-2xl border-2 transition-all flex flex-col items-center space-y-2",
-                          payoutMethod === method.id 
-                            ? "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400" 
-                            : "border-gray-100 dark:border-gray-700 hover:border-green-200 dark:hover:border-green-800 text-gray-500"
-                        )}
-                      >
-                        <method.icon className="w-6 h-6" />
-                        <span className="text-xs font-bold">{method.label}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  <form onSubmit={handleWithdrawal} className="space-y-6">
-                    {payoutMethod === 'mpesa' ? (
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">M-Pesa Number</label>
-                        <div className="relative">
-                          <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                          <input
-                            type="text"
-                            placeholder="07XX XXX XXX"
-                            value={phoneNumber}
-                            onChange={(e) => setPhoneNumber(e.target.value)}
-                            className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white font-medium"
-                          />
-                        </div>
+                  <form onSubmit={handlePayment} className="space-y-6">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Phone Number</label>
+                      <div className="relative">
+                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input
+                          type="text"
+                          placeholder="07XX XXX XXX"
+                          value={phoneNumber}
+                          onChange={(e) => setPhoneNumber(e.target.value)}
+                          className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all text-gray-900 dark:text-white font-medium"
+                        />
                       </div>
-                    ) : payoutMethod !== 'bank' ? (
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                          {payoutMethod === 'paypal' ? 'PayPal Email' : 'Stripe Email'}
-                        </label>
-                        <div className="relative">
-                          <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                          <input
-                            type="email"
-                            placeholder="email@example.com"
-                            value={payoutEmail}
-                            onChange={(e) => setPayoutEmail(e.target.value)}
-                            className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white font-medium"
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Account Name</label>
-                          <input
-                            type="text"
-                            value={bankDetails.accountName}
-                            onChange={(e) => setBankDetails({...bankDetails, accountName: e.target.value})}
-                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white font-medium"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Account Number / IBAN</label>
-                          <input
-                            type="text"
-                            value={bankDetails.accountNumber}
-                            onChange={(e) => setBankDetails({...bankDetails, accountNumber: e.target.value})}
-                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white font-medium"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Bank Name</label>
-                          <input
-                            type="text"
-                            value={bankDetails.bankName}
-                            onChange={(e) => setBankDetails({...bankDetails, bankName: e.target.value})}
-                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white font-medium"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">SWIFT / BIC Code</label>
-                          <input
-                            type="text"
-                            value={bankDetails.swiftCode}
-                            onChange={(e) => setBankDetails({...bankDetails, swiftCode: e.target.value})}
-                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white font-medium"
-                          />
-                        </div>
-                      </div>
-                    )}
+                    </div>
 
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount (USD)</label>
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount (KES)</label>
                       <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">$</span>
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">KES</span>
                         <input
                           type="number"
                           placeholder="0.00"
-                          value={payoutAmount}
-                          onChange={(e) => setPayoutAmount(e.target.value)}
-                          className="w-full pl-10 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-green-500 transition-all text-gray-900 dark:text-white font-medium"
+                          value={amount}
+                          onChange={(e) => setAmount(e.target.value)}
+                          className="w-full pl-14 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all text-gray-900 dark:text-white font-medium"
                         />
                       </div>
-                      {payoutMethod === 'mpesa' && payoutAmount && !isNaN(parseFloat(payoutAmount)) && (
-                        <p className="text-[10px] text-gray-500 mt-1">
-                          Approx. KES {(parseFloat(payoutAmount) * (rates['KES'] || 130)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                        </p>
-                      )}
                     </div>
 
                     <AnimatePresence mode="wait">
@@ -922,15 +500,256 @@ export default function Rewards() {
                     <button
                       type="submit"
                       disabled={isLoading}
-                      className="w-full py-4 bg-green-600 text-white font-black rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center space-x-2 shadow-lg shadow-green-500/20"
+                      className="w-full py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-black rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center space-x-2"
                     >
                       {isLoading ? (
                         <>
                           <Loader2 className="w-5 h-5 animate-spin" />
-                          <span>Processing Withdrawal...</span>
+                          <span>Requesting PIN...</span>
                         </>
                       ) : (
-                        <span>Withdraw Funds</span>
+                        <span>Pay with M-Pesa Express</span>
+                      )}
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Recent Activity</h3>
+                  <button 
+                    onClick={() => setTransactions([])}
+                    className="text-[10px] font-bold text-red-500 hover:underline"
+                  >
+                    Clear History
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <AnimatePresence mode="popLayout">
+                    {transactions.length > 0 ? (
+                      transactions.map((tx) => (
+                        <motion.div
+                          key={tx.id}
+                          layout
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.9 }}
+                          className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm space-y-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <div className={cn(
+                                "w-10 h-10 rounded-full flex items-center justify-center",
+                                tx.status === 'success' ? "bg-green-50 text-green-600" :
+                                tx.status === 'failed' ? "bg-red-50 text-red-600" :
+                                "bg-blue-50 text-blue-600"
+                              )}>
+                                {tx.status === 'success' ? <CheckCircle2 className="w-5 h-5" /> :
+                                 tx.status === 'failed' ? <XCircle className="w-5 h-5" /> :
+                                 <Clock className="w-5 h-5" />}
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-gray-900 dark:text-white">KES {tx.amount.toLocaleString()}</p>
+                                <p className="text-[10px] text-gray-500">{tx.phoneNumber}</p>
+                              </div>
+                            </div>
+                            <span className={cn(
+                              "text-[8px] font-black uppercase px-2 py-1 rounded-md",
+                              tx.status === 'success' ? "bg-green-100 text-green-700" :
+                              tx.status === 'failed' ? "bg-red-100 text-red-700" :
+                              "bg-blue-100 text-blue-700"
+                            )}>
+                              {tx.status}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[8px] font-medium text-gray-400 uppercase tracking-tighter">
+                            <span>{new Date(tx.timestamp).toLocaleDateString()} • {new Date(tx.timestamp).toLocaleTimeString()}</span>
+                            <span className="font-mono">{tx.reference.slice(0, 12)}...</span>
+                          </div>
+                        </motion.div>
+                      ))
+                    ) : (
+                      <div className="text-center py-12 space-y-4">
+                        <div className="w-16 h-16 bg-gray-50 dark:bg-gray-900 rounded-full flex items-center justify-center mx-auto">
+                          <Info className="w-8 h-8 text-gray-300" />
+                        </div>
+                        <p className="text-sm text-gray-400 font-medium">No transactions yet</p>
+                      </div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div 
+            key="international"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-8"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="md:col-span-2 space-y-6">
+                <div className="bg-gradient-to-br from-purple-600 to-indigo-700 p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-8 opacity-10">
+                    <Globe className="w-32 h-32" />
+                  </div>
+                  <div className="relative z-10 space-y-4">
+                    <p className="text-purple-100 font-bold uppercase tracking-widest text-xs">International Payouts</p>
+                    <h2 className="text-5xl font-black tracking-tighter">
+                      {convert(points / 100)}
+                    </h2>
+                    <div className="flex items-center space-x-2 text-purple-100 text-sm">
+                      <CheckCircle className="w-4 h-4" />
+                      <span>Available for withdrawal globally</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center space-x-2">
+                    <Globe className="w-5 h-5 text-purple-500" />
+                    <span>Select Payout Method</span>
+                  </h3>
+
+                  <div className="grid grid-cols-3 gap-4 mb-8">
+                    {[
+                      { id: 'paypal', label: 'PayPal', icon: DollarSign },
+                      { id: 'stripe', label: 'Stripe', icon: CreditCard },
+                      { id: 'bank', label: 'Bank', icon: Landmark }
+                    ].map((method) => (
+                      <button
+                        key={method.id}
+                        onClick={() => setPayoutMethod(method.id as any)}
+                        className={cn(
+                          "p-4 rounded-2xl border-2 transition-all flex flex-col items-center space-y-2",
+                          payoutMethod === method.id 
+                            ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400" 
+                            : "border-gray-100 dark:border-gray-700 hover:border-purple-200 dark:hover:border-purple-800 text-gray-500"
+                        )}
+                      >
+                        <method.icon className="w-6 h-6" />
+                        <span className="text-xs font-bold">{method.label}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <form onSubmit={handleInternationalPayout} className="space-y-6">
+                    {payoutMethod !== 'bank' ? (
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                          {payoutMethod === 'paypal' ? 'PayPal Email' : 'Stripe Email'}
+                        </label>
+                        <div className="relative">
+                          <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                          <input
+                            type="email"
+                            placeholder="email@example.com"
+                            value={payoutEmail}
+                            onChange={(e) => setPayoutEmail(e.target.value)}
+                            className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-purple-500 transition-all text-gray-900 dark:text-white font-medium"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Account Name</label>
+                          <input
+                            type="text"
+                            value={bankDetails.accountName}
+                            onChange={(e) => setBankDetails({...bankDetails, accountName: e.target.value})}
+                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-purple-500 transition-all text-gray-900 dark:text-white font-medium"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Account Number / IBAN</label>
+                          <input
+                            type="text"
+                            value={bankDetails.accountNumber}
+                            onChange={(e) => setBankDetails({...bankDetails, accountNumber: e.target.value})}
+                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-purple-500 transition-all text-gray-900 dark:text-white font-medium"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Bank Name</label>
+                          <input
+                            type="text"
+                            value={bankDetails.bankName}
+                            onChange={(e) => setBankDetails({...bankDetails, bankName: e.target.value})}
+                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-purple-500 transition-all text-gray-900 dark:text-white font-medium"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">SWIFT / BIC Code</label>
+                          <input
+                            type="text"
+                            value={bankDetails.swiftCode}
+                            onChange={(e) => setBankDetails({...bankDetails, swiftCode: e.target.value})}
+                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-purple-500 transition-all text-gray-900 dark:text-white font-medium"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount (USD)</label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">$</span>
+                        <input
+                          type="number"
+                          placeholder="0.00"
+                          value={payoutAmount}
+                          onChange={(e) => setPayoutAmount(e.target.value)}
+                          className="w-full pl-10 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-purple-500 transition-all text-gray-900 dark:text-white font-medium"
+                        />
+                      </div>
+                      <p className="text-[10px] text-gray-500 mt-1">
+                        Equivalent to {payoutAmount ? Math.round(parseFloat(payoutAmount) * 100) : 0} points
+                      </p>
+                    </div>
+
+                    <AnimatePresence mode="wait">
+                      {error && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl flex items-center space-x-3 text-sm font-medium"
+                        >
+                          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                          <span>{error}</span>
+                        </motion.div>
+                      )}
+
+                      {success && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="p-4 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-2xl flex items-center space-x-3 text-sm font-medium"
+                        >
+                          <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+                          <span>{success}</span>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    <button
+                      type="submit"
+                      disabled={isLoading}
+                      className="w-full py-4 bg-purple-600 text-white font-black rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center space-x-2 shadow-lg shadow-purple-500/20"
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <span>Processing Payout...</span>
+                        </>
+                      ) : (
+                        <span>Request International Payout</span>
                       )}
                     </button>
                   </form>
@@ -939,31 +758,31 @@ export default function Rewards() {
 
               <div className="space-y-6">
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                  <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">Withdrawal Information</h3>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">Payout Information</h3>
                   <ul className="space-y-3 text-xs text-gray-500 dark:text-gray-400">
                     <li className="flex items-start space-x-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1 flex-shrink-0" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
                       <span>Processing time: 1-3 business days</span>
                     </li>
                     <li className="flex items-start space-x-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1 flex-shrink-0" />
-                      <span>Minimum withdrawal: $5.00</span>
+                      <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
+                      <span>Minimum withdrawal: $10.00 (1,000 points)</span>
                     </li>
                     <li className="flex items-start space-x-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1 flex-shrink-0" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
                       <span>Transaction fees may apply depending on the provider</span>
                     </li>
                   </ul>
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                  <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">Recent Withdrawals</h3>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">Recent Payouts</h3>
                   <div className="space-y-3">
-                    {transactions.filter(tx => tx.type === 'withdrawal').length > 0 ? (
-                      transactions.filter(tx => tx.type === 'withdrawal').map(tx => (
+                    {transactions.filter(tx => tx.id.startsWith('INT-')).length > 0 ? (
+                      transactions.filter(tx => tx.id.startsWith('INT-')).map(tx => (
                         <div key={tx.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
                           <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 rounded-full bg-green-50 text-green-600 flex items-center justify-center">
+                            <div className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center">
                               <ArrowUpRight className="w-4 h-4" />
                             </div>
                             <div>
@@ -975,7 +794,7 @@ export default function Rewards() {
                         </div>
                       ))
                     ) : (
-                      <p className="text-[10px] text-gray-400 text-center py-4">No withdrawals yet</p>
+                      <p className="text-[10px] text-gray-400 text-center py-4">No international payouts yet</p>
                     )}
                   </div>
                 </div>

@@ -362,6 +362,7 @@ export default function Layout() {
     const fetchWeather = async (lat: number, lon: number, city: string) => {
       try {
         const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+        if (!response.ok) throw new Error(`Weather API responded with status: ${response.status}`);
         const data = await response.json();
         const current = data.current_weather;
         

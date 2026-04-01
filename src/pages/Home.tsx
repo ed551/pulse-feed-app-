@@ -725,7 +725,7 @@ export default function Home() {
         }).map((item) => (
           <div key={item.id} className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow">
             {item.type === 'ad' ? (
-              <AdUnit slotId="1234567890" className="w-full rounded-xl overflow-hidden" />
+              <AdUnit slotId="2771846645" className="w-full rounded-xl overflow-hidden" />
             ) : (
               <div>
                 <div className="flex items-center justify-between mb-3">

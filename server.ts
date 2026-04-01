@@ -32,6 +32,18 @@ async function startServer() {
     });
   });
 
+  app.post("/api/payout/mpesa", (req, res) => {
+    const { phoneNumber, amount } = req.body;
+    console.log(`Initiating M-Pesa payout for ${phoneNumber} with amount ${amount}`);
+    
+    // Mock successful payout
+    res.json({
+      success: true,
+      transactionId: "MPESA-" + Math.random().toString(36).substr(2, 9),
+      message: "Payout initiated successfully"
+    });
+  });
+
   app.get("/api/mpesa/status/:checkoutRequestId", (req, res) => {
     const { checkoutRequestId } = req.params;
     console.log(`Checking status for ${checkoutRequestId}`);
