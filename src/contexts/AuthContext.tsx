@@ -17,7 +17,7 @@ interface UserData {
   role: string;
   points: number;
   balance: number;
-  adRevenue?: number;
+  adRevenue: number;
   bio?: string;
   createdAt: any;
   badges?: {
@@ -94,7 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 role: 'user',
                 points: 1250,
                 balance: 0,
-                adRevenue: 42.50, // Demo starting ad revenue
+                adRevenue: 0,
                 createdAt: serverTimestamp()
               }, { merge: true }).catch(err => {
                 console.error('Error initializing user document:', err);
@@ -138,6 +138,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           displayName: user.displayName,
           photoURL: user.photoURL,
           role: 'user', // Default role
+          points: 0,
+          balance: 0,
+          adRevenue: 0,
           createdAt: serverTimestamp()
         }, { merge: true });
       }

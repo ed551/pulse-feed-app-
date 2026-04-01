@@ -225,6 +225,26 @@ export default function Rewards() {
     }
   };
 
+  const handleClaimAdRevenue = async () => {
+    if (!currentUser || !userData?.adRevenue || userData.adRevenue <= 0) return;
+
+    try {
+      setIsLoading(true);
+      setError(null);
+      setSuccess(null);
+      const userRef = doc(db, 'users', currentUser.uid);
+      await updateDoc(userRef, {
+        points: increment(userData.adRevenue),
+        adRevenue: 0
+      });
+      setSuccess(`Successfully claimed ${convert(userData.adRevenue)} in ad revenue!`);
+    } catch (err: any) {
+      setError(err.message || "Failed to claim ad revenue. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const achievements = [
     { id: 1, title: 'Early Adopter', desc: 'Joined during the beta phase.', icon: Award, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30' },
     { id: 2, title: 'Gold Predictor', desc: 'Correctly predicted gold movement 5 times.', icon: TrendingUp, color: 'text-yellow-500', bg: 'bg-yellow-100 dark:bg-yellow-900/30' },
@@ -355,6 +375,26 @@ export default function Rewards() {
                   <br/><br/>
                   <strong>Tax Compliance:</strong> The platform operates via a global Merchant of Record (MoR). This means your local and international taxes (e.g., VAT, WHT) are automatically calculated, withheld, and legally remitted directly to your country's tax authority (like KRA, IRS, or HMRC) on your behalf. You will receive a net payout and a tax compliance receipt.
                 </p>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Ad Revenue</h2>
+                <DollarSign className="w-6 h-6 text-yellow-500" />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm text-gray-500">Available Ad Revenue</div>
+                  <div className="text-2xl font-bold text-gray-900 dark:text-white">{convert(userData?.adRevenue || 0)}</div>
+                </div>
+                <button
+                  onClick={handleClaimAdRevenue}
+                  disabled={isLoading || !userData?.adRevenue || userData.adRevenue <= 0}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {isLoading ? 'Claiming...' : 'Claim Ad Revenue'}
+                </button>
               </div>
             </div>
 
