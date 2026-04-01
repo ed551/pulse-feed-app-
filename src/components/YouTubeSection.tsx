@@ -7,7 +7,7 @@ export default function YouTubeSection() {
       <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Watch My Channel</h2>
       <div className="aspect-video w-full rounded-xl overflow-hidden">
         <ReactPlayer
-          url="https://www.youtube.com/playlist?list=PLJKQ-nLJ-21LgxH8A-7YMFZuZhUnLuGHY"
+          url="https://www.youtube.com/watch?v=dQw4w9WgXcQ"
           width="100%"
           height="100%"
           controls={true}
