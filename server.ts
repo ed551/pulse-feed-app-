@@ -119,6 +119,36 @@ async function startServer() {
     }
   });
 
+  // Weather Proxy
+  app.get("/api/weather", async (req, res) => {
+    const { lat, lon } = req.query;
+    try {
+      const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error("Weather proxy error:", error);
+      res.status(500).json({ error: "Failed to fetch weather" });
+    }
+  });
+
+  // Geocoding Proxy
+  app.get("/api/geocode", async (req, res) => {
+    const { lat, lon } = req.query;
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`, {
+        headers: {
+          'User-Agent': 'PulseFeedApp/1.0'
+        }
+      });
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error("Geocode proxy error:", error);
+      res.status(500).json({ error: "Failed to fetch geocode" });
+    }
+  });
+
   // Health check route
   app.get("/health", (req, res) => {
     res.send("Server is alive!");

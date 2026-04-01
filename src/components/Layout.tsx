@@ -69,15 +69,18 @@ export default function Layout() {
 
   const { showNotification } = useNotifications();
 
-  const toggleTheme = () => {
-    const newTheme = !isDark;
-    setIsDark(newTheme);
-    localStorage.setItem('theme', newTheme ? 'dark' : 'light');
-    if (newTheme) {
+  useEffect(() => {
+    if (isDark) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
+  }, [isDark]);
+
+  const toggleTheme = () => {
+    const newTheme = !isDark;
+    setIsDark(newTheme);
+    localStorage.setItem('theme', newTheme ? 'dark' : 'light');
   };
 
   const [systemStatus, setSystemStatus] = useState<{
@@ -361,7 +364,7 @@ export default function Layout() {
   useEffect(() => {
     const fetchWeather = async (lat: number, lon: number, city: string) => {
       try {
-        const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+        const response = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
         if (!response.ok) throw new Error(`Weather API responded with status: ${response.status}`);
         const data = await response.json();
         const current = data.current_weather;
@@ -441,11 +444,12 @@ export default function Layout() {
             const { latitude, longitude } = position.coords;
             let city = 'Your Region';
             try {
-              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+              const res = await fetch(`/api/geocode?lat=${latitude}&lon=${longitude}`);
               const data = await res.json();
               city = data.address.city || data.address.town || data.address.village || data.address.suburb || 'Your Region';
               setLocationName(city);
             } catch (e) {
+              console.error("Geocoding Error:", e);
               setLocationName('Your Region');
             }
             fetchWeather(latitude, longitude, city);

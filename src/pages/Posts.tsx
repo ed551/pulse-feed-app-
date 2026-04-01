@@ -377,6 +377,18 @@ export default function Posts() {
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = postContent;
       const textOnly = tempDiv.textContent || tempDiv.innerText || "";
+
+      if (!currentUser) {
+        setError("You must be logged in to create a post.");
+        setIsPosting(false);
+        return;
+      }
+
+      if (!textOnly.trim() && selectedImages.length === 0) {
+        setError("Post must have text or at least one image.");
+        setIsPosting(false);
+        return;
+      }
       
       const fullContent = `${postTitle}\n${textOnly}`;
       const moderationResult = await moderateContent(fullContent, 'post');
@@ -388,10 +400,10 @@ export default function Posts() {
       }
 
       const newPostData = {
-        authorId: currentUser?.uid || 'anonymous',
-        author: currentUser?.displayName || "You",
-        avatar: currentUser?.photoURL || "U",
-        title: postTitle,
+        authorId: currentUser.uid,
+        author: currentUser.displayName || "You",
+        avatar: currentUser.photoURL || "U",
+        title: postTitle || "",
         content: postContent,
         category: selectedCategory,
         tags: postTags,
