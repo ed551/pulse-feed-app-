@@ -5,7 +5,6 @@ import { useNavigate } from "react-router-dom";
 export default function AdsDashboard() {
   const { userData } = useAuth();
   const navigate = useNavigate();
-  const adRevenue = userData?.adRevenue || 0;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
@@ -19,7 +18,7 @@ export default function AdsDashboard() {
       <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg text-white flex flex-col md:flex-row items-center justify-between">
         <div>
           <h2 className="text-green-100 font-medium uppercase tracking-wider text-sm mb-1">Your Ad Revenue Share</h2>
-          <div className="text-4xl font-black">${adRevenue.toFixed(2)}</div>
+          <div className="text-4xl font-black">N/A</div>
           <p className="text-green-100 text-sm mt-2">Earned from your engagement and content views.</p>
         </div>
         <button 

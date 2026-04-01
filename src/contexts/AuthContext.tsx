@@ -17,7 +17,6 @@ interface UserData {
   role: string;
   points: number;
   balance: number;
-  adRevenue: number;
   bio?: string;
   createdAt: any;
   badges?: {

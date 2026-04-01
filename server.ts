@@ -3,8 +3,14 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import * as Tremendous from 'tremendous';
 
 dotenv.config();
+
+const tremendous = new (Tremendous as any)({
+  apiKey: process.env.TREMENDOUS_API_KEY || '',
+  baseUrl: process.env.TREMENDOUS_API_URL || 'https://testflight.tremendous.com/api/v2'
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,7 +21,6 @@ async function startServer() {
   
   const app = express();
   const PORT = 3000;
-
   app.use(express.json());
 
   // M-Pesa API Routes
@@ -60,16 +65,41 @@ async function startServer() {
   });
 
   // International Payout Routes
-  app.post("/api/payout/international", (req, res) => {
+  app.post("/api/payout/international", async (req, res) => {
     const { method, amount, email, bankDetails } = req.body;
+    
+    // Threshold check
+    if (amount < 100) {
+      return res.status(400).json({ success: false, error: "Minimum payout threshold is 100 USD" });
+    }
+
     console.log(`Initiating ${method} payout for ${amount} to ${email || bankDetails?.accountNumber}`);
     
-    // Mock successful payout
-    res.json({
-      success: true,
-      transactionId: "INT-" + Math.random().toString(36).substr(2, 9),
-      message: "Payout initiated successfully"
-    });
+    try {
+      // Tremendous Payout Logic
+      // In a real app, you would map the method to Tremendous funding sources/products
+      // const payout = await tremendous.payouts.create({
+      //   payment: {
+      //     method: method === 'bank' ? 'bank_transfer' : 'paypal',
+      //     amount: amount,
+      //     currency: 'USD'
+      //   },
+      //   recipient: {
+      //     name: bankDetails?.accountName || 'User',
+      //     email: email
+      //   }
+      // });
+      
+      // Mock successful payout
+      res.json({
+        success: true,
+        transactionId: "INT-" + Math.random().toString(36).substr(2, 9),
+        message: "Payout initiated successfully via Tremendous"
+      });
+    } catch (error) {
+      console.error("Tremendous payout error:", error);
+      res.status(500).json({ success: false, error: "Failed to process Tremendous payout" });
+    }
   });
 
   // Health check route

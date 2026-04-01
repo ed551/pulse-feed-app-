@@ -9,6 +9,7 @@ import {
 import { multimedia_stream_engine, content_governor, revenue_logic } from "../lib/engines";
 import { cn } from "../lib/utils";
 import AdUnit from "../components/AdUnit";
+import YouTubeSection from "../components/YouTubeSection";
 import { moderateContent } from "../services/moderationService";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { usePosts } from "../hooks/usePosts";
@@ -357,6 +358,8 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      <YouTubeSection />
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
         <div className="flex items-center space-x-2 group relative">
