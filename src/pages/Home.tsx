@@ -276,7 +276,7 @@ export default function Home() {
   };
 
   const feedItems = firebasePosts
-    .filter(p => p.isUserAdded)
+    .filter(p => !p.isUserAdded)
     .map(p => ({ ...p, type: 'post', user: p.author }))
     .sort((a, b) => {
       const getTime = (item: any) => {
@@ -777,7 +777,10 @@ export default function Home() {
                   </button>
                 </div>
 
-                <p className="text-gray-800 dark:text-gray-200 mb-3">{item.content}</p>
+                <div 
+                  className="text-gray-800 dark:text-gray-200 mb-3 prose dark:prose-invert max-w-none"
+                  dangerouslySetInnerHTML={{ __html: item.content }}
+                />
 
                 <div className="flex items-center space-x-6 text-gray-500 dark:text-gray-400 mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
                   <button 
