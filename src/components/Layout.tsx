@@ -177,7 +177,7 @@ export default function Layout() {
     setIsSpeaking(true);
     try {
       const response = await generateContentWithRetry({
-        model: "gemini-2.5-flash-preview-tts",
+        model: "gemini-3-flash-preview",
         contents: [{ parts: [{ text: `Say clearly and helpfully: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
@@ -316,7 +316,7 @@ export default function Layout() {
 
                 // Speak the summary
                 const ttsResponse = await generateContentWithRetry({
-                  model: "gemini-2.5-flash-preview-tts",
+                  model: "gemini-3-flash-preview",
                   contents: [{ parts: [{ text: `Deep Scan Complete. ${cleanAdvice}` }] }],
                   config: {
                     responseModalities: [Modality.AUDIO],
@@ -400,7 +400,7 @@ export default function Layout() {
       const statusMessage = "Pulse Feeds is currently in development. To be fully functional, I need a secure backend connection, valid API keys for all integrated services, and a verified administrative account. System health is currently optimal, but these components are required for full feature deployment.";
       
       const response = await generateContentWithRetry({
-        model: "gemini-2.5-flash-preview-tts",
+        model: "gemini-3-flash-preview",
         contents: [{ parts: [{ text: `Say clearly and professionally: ${statusMessage}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],

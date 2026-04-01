@@ -162,7 +162,7 @@ export default function Posts() {
 
   const CATEGORIES = ['General', 'Gold Prediction', 'Tech', 'News', 'Gaming', 'Finance'];
 
-  const posts = firebasePosts;
+  const posts = firebasePosts.filter(p => !p.isUserAdded);
 
   useEffect(() => {
     intelligent_dispatcher();

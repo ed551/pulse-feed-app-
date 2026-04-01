@@ -42,6 +42,7 @@ export interface Post {
   commentsList: PostComment[];
   analytics: PostAnalytics[];
   createdAt?: any;
+  isUserAdded?: boolean;
 }
 
 export function usePosts() {
@@ -66,10 +67,11 @@ export function usePosts() {
     return () => unsubscribe();
   }, []);
 
-  const addPost = async (post: Omit<Post, 'id' | 'createdAt'>) => {
+  const addPost = async (post: Omit<Post, 'id' | 'createdAt' | 'isUserAdded'>) => {
     try {
       await addDoc(collection(db, 'posts'), {
         ...post,
+        isUserAdded: true,
         createdAt: serverTimestamp()
       });
     } catch (error) {

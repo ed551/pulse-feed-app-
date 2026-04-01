@@ -247,7 +247,7 @@ export default function Home() {
     setIsSpeaking(true);
     try {
       const response = await generateContentWithRetry({
-        model: "gemini-2.5-flash-preview-tts",
+        model: "gemini-3-flash-preview",
         contents: [{ parts: [{ text: `Say clearly and helpfully: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
@@ -275,7 +275,9 @@ export default function Home() {
     }
   };
 
-  const feedItems = firebasePosts.map(p => ({ ...p, type: 'post', user: p.author }))
+  const feedItems = firebasePosts
+    .filter(p => p.isUserAdded)
+    .map(p => ({ ...p, type: 'post', user: p.author }))
     .sort((a, b) => {
       const getTime = (item: any) => {
         if (item.createdAt?.toDate) return item.createdAt.toDate().getTime();
