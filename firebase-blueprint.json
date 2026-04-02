@@ -57,18 +57,40 @@
         "avatar": { "type": "string", "description": "The avatar of the user who created the post" },
         "title": { "type": "string", "description": "The title of the post" },
         "content": { "type": "string", "description": "The content of the post" },
+        "type": { "type": "string", "enum": ["post", "announcement", "update", "video", "live", "poll"], "description": "The type of post" },
         "category": { "type": "string", "description": "The category of the post" },
         "tags": { "type": "array", "items": { "type": "string" }, "description": "The tags associated with the post" },
         "images": { "type": "array", "items": { "type": "string" }, "description": "The images associated with the post" },
+        "gifUrl": { "type": "string", "description": "The URL of a GIF associated with the post" },
+        "videoUrl": { "type": "string", "description": "The URL of a video associated with the post" },
+        "poll": { 
+          "type": "object", 
+          "properties": {
+            "question": { "type": "string" },
+            "options": { 
+              "type": "array", 
+              "items": { 
+                "type": "object",
+                "properties": {
+                  "text": { "type": "string" },
+                  "votes": { "type": "number" },
+                  "voters": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
         "likes": { "type": "number", "description": "The number of likes the post has received" },
+        "reactions": { "type": "object", "description": "Emoji reactions for the post" },
         "comments": { "type": "number", "description": "The number of comments the post has received" },
         "shares": { "type": "number", "description": "The number of shares the post has received" },
+        "reports": { "type": "number", "description": "The number of times the post has been reported" },
         "time": { "type": "string", "format": "date-time", "description": "When the post was created" },
         "isLiked": { "type": "boolean", "description": "Whether the current user has liked the post" },
         "commentsList": { "type": "array", "items": { "$ref": "#/entities/PostComment" }, "description": "The comments on the post" },
         "analytics": { "type": "array", "items": { "$ref": "#/entities/PostAnalytics" }, "description": "The analytics for the post" }
       },
-      "required": ["id", "authorId", "author", "title", "content", "category", "time"]
+      "required": ["id", "authorId", "author", "title", "content", "category", "time", "type"]
     },
     "PostComment": {
       "title": "PostComment",

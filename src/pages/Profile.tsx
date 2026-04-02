@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { Settings, LogOut, Edit3, Shield, Star, Activity, Check, X, Loader2, AlertTriangle, Fingerprint, Camera, Sparkles, Upload, RotateCcw, Sliders, Award, Trophy, Zap, Users, Heart as HeartIcon, Beaker } from "lucide-react";
+import { Settings, LogOut, Edit3, Shield, Star, Activity, Check, X, Loader2, AlertTriangle, Fingerprint, Camera, Sparkles, Upload, RotateCcw, Sliders, Award, Trophy, Zap, Users, Heart as HeartIcon, Beaker, Trash2, MessageSquare, Share2, Heart, PlusSquare, Brain, Wand2, MoreHorizontal, PlusCircle, MinusCircle, Bookmark, EyeOff, Bell, Link, XCircle, AlertCircle, Copy, ExternalLink, Pin, Tag, Globe, Archive } from "lucide-react";
 import { auth_logic, user_history, wallet_engine } from "../lib/engines";
 import { moderateContent } from "../services/moderationService";
 import { generateAvatar } from "../services/imageService";
+import { generateContentWithRetry } from "../lib/ai";
 import FingerprintModal from "../components/FingerprintModal";
 import Cropper from 'react-easy-crop';
 import { cn } from "../lib/utils";
@@ -12,12 +13,87 @@ import { usePosts } from "../hooks/usePosts";
 import { db, handleFirestoreError, OperationType, storage } from "../lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import { ref, uploadString, getDownloadURL } from "firebase/storage";
+import { motion, AnimatePresence } from "motion/react";
 
 export default function Profile() {
   const { currentUser, userData, logout } = useAuth();
   const navigate = useNavigate();
-  const { posts } = usePosts();
+  const { posts, deletePost, updatePost } = usePosts();
   const [isEditingBio, setIsEditingBio] = useState(false);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [smartSummary, setSmartSummary] = useState<string | null>(null);
+  const [isGeneratingTitle, setIsGeneratingTitle] = useState<string | null>(null);
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [isSavingPost, setIsSavingPost] = useState(false);
+  const [activeMenuPostId, setActiveMenuPostId] = useState<string | null>(null);
+
+  const handleStartEdit = (post: any) => {
+    setEditingPostId(post.id);
+    setEditTitle(post.title || "");
+    setEditContent(post.content || "");
+  };
+
+  const handleCancelPostEdit = () => {
+    setEditingPostId(null);
+    setEditTitle("");
+    setEditContent("");
+  };
+
+  const handleSavePostEdit = async (postId: string) => {
+    setIsSavingPost(true);
+    try {
+      await updatePost(postId, {
+        title: editTitle,
+        content: editContent
+      });
+      setEditingPostId(null);
+    } catch (err) {
+      console.error("Failed to save post:", err);
+    } finally {
+      setIsSavingPost(false);
+    }
+  };
+
+  const handleGenerateSummary = async () => {
+    const userPosts = posts.filter(p => p.authorId === currentUser?.uid);
+    if (userPosts.length === 0) return;
+
+    setIsGeneratingSummary(true);
+    try {
+      const postsText = userPosts.map(p => `${p.title || 'Untitled'}: ${p.content}`).join('\n\n');
+      const prompt = `Based on these posts by ${currentUser?.displayName || 'the user'}, provide a short, 2-sentence "Smart Personality Summary" that captures their vibe and interests:\n\n${postsText}`;
+      const response = await generateContentWithRetry({ 
+        model: "gemini-3-flash-preview",
+        contents: prompt 
+      });
+      setSmartSummary(response.text || null);
+    } catch (err) {
+      console.error("Failed to generate summary:", err);
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
+
+  const handleGenerateSmartTitle = async (postId: string, content: string) => {
+    setIsGeneratingTitle(postId);
+    try {
+      const prompt = `Generate a short, catchy title (max 5 words) for this post content: "${content}". Return ONLY the title text.`;
+      const response = await generateContentWithRetry({ 
+        model: "gemini-3-flash-preview",
+        contents: prompt 
+      });
+      const smartTitle = response.text;
+      if (smartTitle) {
+        await updatePost(postId, { title: smartTitle.replace(/"/g, '') });
+      }
+    } catch (err) {
+      console.error("Failed to generate smart title:", err);
+    } finally {
+      setIsGeneratingTitle(null);
+    }
+  };
   const [bio, setBio] = useState(userData?.bio || "Digital creator & tech enthusiast. Building the future one line of code at a time. 🚀");
   const [tempBio, setTempBio] = useState("");
   const [isSavingBio, setIsSavingBio] = useState(false);
@@ -372,6 +448,320 @@ export default function Profile() {
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">View All Locked</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* My Posts Section */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center">
+            <PlusSquare className="w-5 h-5 mr-2 text-blue-500" />
+            {currentUser?.displayName || 'My'} Posts
+            <span className="ml-2 px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-[8px] font-black uppercase tracking-tighter rounded flex items-center">
+              <Brain className="w-2 h-2 mr-0.5" /> AI Managed
+            </span>
+          </h2>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleGenerateSummary}
+              disabled={isGeneratingSummary || userPostsCount === 0}
+              className="p-2 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-xl hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-all disabled:opacity-50"
+              title="Generate AI Summary"
+            >
+              {isGeneratingSummary ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
+            </button>
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{userPostsCount} Posts</span>
+          </div>
+        </div>
+
+        <AnimatePresence>
+          {smartSummary && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-6 p-4 bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/10 dark:to-blue-900/10 border border-purple-100 dark:border-purple-800/30 rounded-2xl relative group"
+            >
+              <button 
+                onClick={() => setSmartSummary(null)}
+                className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <X className="w-3 h-3" />
+              </button>
+              <div className="flex items-start space-x-3">
+                <div className="p-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+                  <Sparkles className="w-4 h-4 text-purple-500" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider mb-1">AI Personality Insight</h4>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 italic leading-relaxed">"{smartSummary}"</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="space-y-4">
+          <AnimatePresence mode="popLayout">
+            {posts
+              .filter(post => post.authorId === currentUser?.uid)
+              .sort((a, b) => {
+                const timeA = a.createdAt?.seconds || 0;
+                const timeB = b.createdAt?.seconds || 0;
+                return timeB - timeA;
+              })
+              .map((post) => (
+                <motion.div
+                  key={post.id}
+                  layout
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="p-4 rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 group"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2">
+                        <h3 className="font-bold text-gray-900 dark:text-white truncate">
+                          {post.title || currentUser?.displayName || "Untitled Post"}
+                        </h3>
+                        {!post.title && (
+                          <button
+                            onClick={() => handleGenerateSmartTitle(post.id, post.content)}
+                            disabled={isGeneratingTitle === post.id}
+                            className="p-1 text-purple-400 hover:text-purple-600 transition-colors"
+                            title="Generate Smart Title"
+                          >
+                            {isGeneratingTitle === post.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{post.category} • {post.time}</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="relative">
+                        <button 
+                          onClick={() => setActiveMenuPostId(activeMenuPostId === post.id ? null : post.id)}
+                          className="p-2 text-gray-400 hover:text-purple-500 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                          title="More options"
+                        >
+                          <MoreHorizontal className="w-5 h-5" />
+                        </button>
+
+                        <AnimatePresence>
+                          {activeMenuPostId === post.id && (
+                            <>
+                              <div 
+                                className="fixed inset-0 z-40" 
+                                onClick={() => setActiveMenuPostId(null)}
+                              />
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                className="fixed inset-x-0 bottom-0 sm:absolute sm:right-0 sm:top-full sm:bottom-auto sm:inset-x-auto mt-2 w-full sm:w-64 bg-white dark:bg-gray-800 rounded-t-[2rem] sm:rounded-2xl shadow-2xl border-t sm:border border-gray-100 dark:border-gray-700 z-50 overflow-hidden"
+                              >
+                                <div className="w-12 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto my-3 sm:hidden" />
+                                <div className="p-2 sm:p-2 space-y-1 pb-8 sm:pb-2">
+                                  <div className="px-4 py-2 sm:hidden">
+                                    <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-widest text-xs">Post Options</h3>
+                                  </div>
+                                  
+                                  <button 
+                                    onClick={() => setActiveMenuPostId(null)}
+                                    className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
+                                  >
+                                    <Pin className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
+                                    <span className="font-bold">Pin post</span>
+                                  </button>
+
+                                  <button 
+                                    onClick={() => setActiveMenuPostId(null)}
+                                    className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
+                                  >
+                                    <Bell className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
+                                    <span className="font-bold">Turn off notifications for this post</span>
+                                  </button>
+
+                                  <button 
+                                    onClick={() => setActiveMenuPostId(null)}
+                                    className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
+                                  >
+                                    <Bookmark className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
+                                    <span className="font-bold">Save post</span>
+                                  </button>
+
+                                  <button 
+                                    onClick={async () => {
+                                      if (navigator.share) {
+                                        try {
+                                          await navigator.share({
+                                            title: post.title || 'Post',
+                                            text: post.content,
+                                            url: window.location.href
+                                          });
+                                        } catch (err) {
+                                          // Ignore AbortError (user canceled)
+                                          if (err instanceof Error && err.name !== 'AbortError') {
+                                            console.error('Error sharing:', err);
+                                          }
+                                        }
+                                      }
+                                      setActiveMenuPostId(null);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
+                                  >
+                                    <Share2 className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
+                                    <span className="font-bold">Share</span>
+                                  </button>
+
+                                  <button 
+                                    onClick={() => setActiveMenuPostId(null)}
+                                    className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
+                                  >
+                                    <Tag className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
+                                    <span className="font-bold">Tag photo</span>
+                                  </button>
+
+                                  <button 
+                                    onClick={() => setActiveMenuPostId(null)}
+                                    className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
+                                  >
+                                    <Globe className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
+                                    <span className="font-bold">Edit Privacy</span>
+                                  </button>
+
+                                  <button 
+                                    onClick={() => {
+                                      handleStartEdit(post);
+                                      setActiveMenuPostId(null);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
+                                  >
+                                    <Edit3 className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
+                                    <span className="font-bold">Edit Post</span>
+                                  </button>
+
+                                  <button 
+                                    onClick={() => setActiveMenuPostId(null)}
+                                    className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
+                                  >
+                                    <Archive className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
+                                    <span className="font-bold">Move to archive</span>
+                                  </button>
+
+                                  <button 
+                                    onClick={async () => {
+                                      if (confirm("Move this post to recycle bin? Items in your bin are deleted after 30 days.")) {
+                                        await deletePost(post.id);
+                                      }
+                                      setActiveMenuPostId(null);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
+                                  >
+                                    <Trash2 className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
+                                    <div>
+                                      <div className="font-bold">Move to recycle bin</div>
+                                      <div className="text-[10px] text-gray-500">Items in your bin are deleted after 30 days.</div>
+                                    </div>
+                                  </button>
+
+                                  <button 
+                                    onClick={() => {
+                                      const url = `${window.location.origin}/post/${post.id}`;
+                                      navigator.clipboard.writeText(url);
+                                      setActiveMenuPostId(null);
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
+                                  >
+                                    <Link className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
+                                    <span className="font-bold">Copy link</span>
+                                  </button>
+                                </div>
+                              </motion.div>
+                            </>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {editingPostId === post.id ? (
+                    <div className="space-y-3 mb-3">
+                      <input 
+                        type="text"
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        placeholder="Post Title"
+                        className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                      <textarea 
+                        value={editContent}
+                        onChange={(e) => setEditContent(e.target.value)}
+                        placeholder="Post Content"
+                        rows={3}
+                        className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <button 
+                          onClick={handleCancelPostEdit}
+                          className="px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button 
+                          onClick={() => handleSavePostEdit(post.id)}
+                          disabled={isSavingPost || !editContent.trim()}
+                          className="px-3 py-1.5 text-xs font-bold bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 flex items-center gap-1"
+                        >
+                          {isSavingPost ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                          Save Changes
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-3">
+                      {post.content}
+                    </p>
+                  )}
+
+                  <div className="flex items-center gap-4 text-xs font-bold text-gray-400">
+                    <div className="flex items-center gap-1">
+                      <Heart className="w-3 h-3" /> {post.likes}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <MessageSquare className="w-3 h-3" /> {post.comments}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Share2 className="w-3 h-3" /> {post.shares}
+                    </div>
+                    <div className="ml-auto">
+                      <span className={cn(
+                        "px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider",
+                        post.type === 'announcement' ? "bg-purple-100 text-purple-600 dark:bg-purple-900/30" :
+                        post.type === 'poll' ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30" :
+                        "bg-blue-100 text-blue-600 dark:bg-blue-900/30"
+                      )}>
+                        {post.type}
+                      </span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+          </AnimatePresence>
+          
+          {userPostsCount === 0 && (
+            <div className="text-center py-12 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-2xl">
+              <PlusSquare className="w-12 h-12 text-gray-200 dark:text-gray-700 mx-auto mb-3" />
+              <p className="text-gray-500 dark:text-gray-400 font-medium">You haven't posted anything yet.</p>
+              <button 
+                onClick={() => navigate('/')}
+                className="mt-4 text-blue-500 font-bold text-sm hover:underline"
+              >
+                Create your first post
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

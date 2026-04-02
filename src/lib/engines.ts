@@ -35,7 +35,19 @@ export const email_system_reporter = () => console.log("email_system_reporter in
 export const pulse_feeds_auto_sync = () => console.log("pulse_feeds_auto_sync running");
 export const daily_twin_sync = () => console.log("daily_twin_sync running");
 export const midnight_settlement_engine = () => console.log("midnight_settlement_engine running");
-export const revenue_split_engine = () => console.log("revenue_split_engine running");
+export const revenue_split_engine = (amount: number) => {
+  const developerShare = amount * 0.75;
+  const userShare = amount * 0.25;
+  console.log(`Revenue Split: Developer ($${developerShare.toFixed(2)}), User ($${userShare.toFixed(2)})`);
+  return { developerShare, userShare };
+};
+
+export const calculateRevenueSplit = (amount: number) => {
+  return {
+    developer: amount * 0.75,
+    user: amount * 0.25
+  };
+};
 export const auto_updater = () => console.log("auto_updater running");
 export const resource_governor = () => console.log("resource_governor running");
 export const theme_engine = () => console.log("theme_engine running");

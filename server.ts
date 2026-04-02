@@ -4,6 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import * as Tremendous from 'tremendous';
+import axios from 'axios';
 
 dotenv.config();
 
@@ -122,31 +123,56 @@ async function startServer() {
   // Weather Proxy
   app.get("/api/weather", async (req, res) => {
     const { lat, lon } = req.query;
+    console.log(`[Weather] Fetching for lat=${lat}, lon=${lon}`);
+    
+    if (!lat || !lon || lat === 'undefined' || lon === 'undefined') {
+      console.warn("[Weather] Invalid coordinates provided");
+      return res.status(400).json({ error: "Invalid coordinates" });
+    }
+
     try {
-      const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
-      const data = await response.json();
-      res.json(data);
-    } catch (error) {
-      console.error("Weather proxy error:", error);
-      res.status(500).json({ error: "Failed to fetch weather" });
+      const response = await axios.get(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`, {
+        timeout: 10000 // 10s timeout
+      });
+      res.json(response.data);
+    } catch (error: any) {
+      console.error("[Weather] Proxy error:", error.message);
+      res.status(500).json({ error: "Failed to fetch weather", details: error.message });
     }
   });
 
   // Geocoding Proxy
   app.get("/api/geocode", async (req, res) => {
     const { lat, lon } = req.query;
+    console.log(`[Geocode] Fetching for lat=${lat}, lon=${lon}`);
+    
+    if (!lat || !lon || lat === 'undefined' || lon === 'undefined') {
+      console.warn("[Geocode] Invalid coordinates provided");
+      return res.status(400).json({ error: "Invalid coordinates" });
+    }
+
     try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`, {
+      const response = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`, {
         headers: {
           'User-Agent': 'PulseFeedApp/1.0'
-        }
+        },
+        timeout: 10000 // 10s timeout
       });
-      const data = await response.json();
-      res.json(data);
-    } catch (error) {
-      console.error("Geocode proxy error:", error);
-      res.status(500).json({ error: "Failed to fetch geocode" });
+      res.json(response.data);
+    } catch (error: any) {
+      console.error("[Geocode] Proxy error:", error.message);
+      res.status(500).json({ error: "Failed to fetch geocode", details: error.message });
     }
+  });
+
+  // URL Shortener Proxy (Mock)
+  app.get("/api/shorten", (req, res) => {
+    const { url } = req.query;
+    console.log(`[Shorten] URL: ${url}`);
+    // In a real app, you'd use a service like Bitly or TinyURL
+    // For now, we'll return a mock shortened URL
+    const mockShort = `https://pulse.feed/${Math.random().toString(36).substr(2, 6)}`;
+    res.json({ shortUrl: mockShort });
   });
 
   // Health check route

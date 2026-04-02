@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { 
   Sparkles, 
   X, 
@@ -13,8 +13,15 @@ import {
   Maximize2,
   Heart,
   Code,
-  Lightbulb
+  Lightbulb,
+  GripVertical,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
+  Phone
 } from 'lucide-react';
+import { GoogleGenAI, Modality } from "@google/genai";
 import { generateContentWithRetry } from '../lib/ai';
 import { cn } from '../lib/utils';
 import { useLocation } from 'react-router-dom';
@@ -31,16 +38,10 @@ export default function AIAssistant() {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
 
-  useEffect(() => {
-    const handleToggle = () => setIsOpen(prev => !prev);
-    window.addEventListener('toggle-ai-assistant', handleToggle);
-    return () => window.removeEventListener('toggle-ai-assistant', handleToggle);
-  }, []);
-
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'model',
-      text: "Hello! I'm your Pulse Feeds Master AI & Life Coach. I'm here to help you navigate the app, improve your health, and even suggest ways to make this app better for you. How can I assist today?",
+      text: "Hello! I'm your Pulse Feeds Master AI & Life Coach. I'm here to help you navigate the app, improve your health, and even train custom courses for you in the Education Hub. How can I assist today?",
       timestamp: Date.now()
     }
   ]);
@@ -48,6 +49,175 @@ export default function AIAssistant() {
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
+  const dragControls = useDragControls();
+
+  // Voice Conversation State
+  const [isLiveMode, setIsLiveMode] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const sessionRef = useRef<any>(null);
+  const audioQueueRef = useRef<Int16Array[]>([]);
+  const isPlayingRef = useRef(false);
+
+  // Helper to convert Float32Array to Int16Array (PCM)
+  const floatTo16BitPCM = (input: Float32Array) => {
+    const output = new Int16Array(input.length);
+    for (let i = 0; i < input.length; i++) {
+      const s = Math.max(-1, Math.min(1, input[i]));
+      output[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    return output;
+  };
+
+  // Helper to convert Int16Array to Float32Array
+  const pcmToFloat32 = (input: Int16Array) => {
+    const output = new Float32Array(input.length);
+    for (let i = 0; i < input.length; i++) {
+      output[i] = input[i] / 0x8000;
+    }
+    return output;
+  };
+
+  const stopVoiceSession = () => {
+    if (sessionRef.current) {
+      sessionRef.current.close();
+      sessionRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (processorRef.current) {
+      processorRef.current.disconnect();
+      processorRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    setIsLiveMode(false);
+    setIsConnecting(false);
+    audioQueueRef.current = [];
+    isPlayingRef.current = false;
+  };
+
+  const startVoiceSession = async () => {
+    if (isConnecting || isLiveMode) return;
+    setIsConnecting(true);
+
+    try {
+      // 1. Setup Audio
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+      audioContextRef.current = audioContext;
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      const source = audioContext.createMediaStreamSource(stream);
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      processorRef.current = processor;
+
+      // 2. Setup Gemini Live
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const session = await ai.live.connect({
+        model: "gemini-3.1-flash-live-preview",
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } }
+          },
+          systemInstruction: "You are the Pulse Feeds Master AI Coach. You are in a live voice conversation. Be concise, friendly, and helpful. Use a natural conversational tone."
+        },
+        callbacks: {
+          onopen: () => {
+            setIsConnecting(false);
+            setIsLiveMode(true);
+            setMessages(prev => [...prev, {
+              role: 'model',
+              text: "[Voice Session Started]",
+              timestamp: Date.now()
+            }]);
+          },
+          onmessage: async (message) => {
+            if (message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data) {
+              const base64Audio = message.serverContent.modelTurn.parts[0].inlineData.data;
+              const binaryString = atob(base64Audio);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              const pcmData = new Int16Array(bytes.buffer);
+              audioQueueRef.current.push(pcmData);
+              playNextInQueue();
+            }
+
+            if (message.serverContent?.interrupted) {
+              audioQueueRef.current = [];
+              isPlayingRef.current = false;
+            }
+          },
+          onclose: () => stopVoiceSession(),
+          onerror: (err) => {
+            console.error("Live API Error:", err);
+            stopVoiceSession();
+          }
+        }
+      });
+      sessionRef.current = session;
+
+      // 3. Audio Streaming Logic
+      processor.onaudioprocess = (e) => {
+        if (!isMuted && sessionRef.current) {
+          const inputData = e.inputBuffer.getChannelData(0);
+          const pcmData = floatTo16BitPCM(inputData);
+          const base64Data = btoa(String.fromCharCode(...new Uint8Array(pcmData.buffer)));
+          sessionRef.current.sendRealtimeInput({
+            audio: { data: base64Data, mimeType: 'audio/pcm;rate=16000' }
+          });
+        }
+      };
+
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+
+    } catch (error) {
+      console.error("Failed to start voice session:", error);
+      stopVoiceSession();
+      alert("Could not access microphone or connect to AI. Please check permissions.");
+    }
+  };
+
+  const playNextInQueue = () => {
+    if (isPlayingRef.current || audioQueueRef.current.length === 0 || !audioContextRef.current) return;
+
+    isPlayingRef.current = true;
+    const pcmData = audioQueueRef.current.shift()!;
+    const floatData = pcmToFloat32(pcmData);
+
+    const buffer = audioContextRef.current.createBuffer(1, floatData.length, 16000);
+    buffer.getChannelData(0).set(floatData);
+
+    const source = audioContextRef.current.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContextRef.current.destination);
+    source.onended = () => {
+      isPlayingRef.current = false;
+      playNextInQueue();
+    };
+    source.start();
+  };
+
+  useEffect(() => {
+    const handleToggle = () => setIsOpen(prev => !prev);
+    window.addEventListener('toggle-ai-assistant', handleToggle);
+    return () => {
+      window.removeEventListener('toggle-ai-assistant', handleToggle);
+      stopVoiceSession();
+    };
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -74,7 +244,7 @@ export default function AIAssistant() {
       const systemInstruction = `You are the Pulse Feeds Master AI Assistant, Developer Consultant, and Life/Health Coach.
       Your goals are:
       1. ASSISTANCE: Help users navigate and understand app features.
-      2. COACHING: Provide advice on improving life and health. If they use the fingerprint tool, use the simulated data to give health tips. Remind them you are an AI, not a doctor.
+      2. COACHING: Provide advice on improving life and health. You can also "train" custom courses for users in the Education Hub.
       3. IMPROVEMENT: Identify ways to improve the app. If the user expresses frustration or suggests a feature, acknowledge it and say you'll "log it for the developers". 
       
       When you identify a clear suggestion for the developer or a significant coaching tip, format your response normally but include a hidden signal at the end like [INSIGHT:developer:category:content] or [INSIGHT:user:category:content] so the system can log it.
@@ -150,11 +320,20 @@ export default function AIAssistant() {
               width: '350px'
             }}
             exit={{ opacity: 0, y: -100, scale: 0.9 }}
-            className="fixed top-24 right-6 bg-white dark:bg-gray-900 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-[70] flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden"
+            drag
+            dragControls={dragControls}
+            dragListener={false}
+            dragMomentum={false}
+            whileDrag={{ scale: 1.02, boxShadow: "0 30px 60px rgba(0,0,0,0.4)" }}
+            className="fixed top-24 right-6 bg-white dark:bg-gray-900 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-[70] flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden touch-none"
           >
             {/* Header */}
-            <div className="p-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between shrink-0">
+            <div 
+              onPointerDown={(e) => dragControls.start(e)}
+              className="p-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between shrink-0 cursor-move active:cursor-grabbing select-none"
+            >
               <div className="flex items-center gap-3">
+                <GripVertical className="w-4 h-4 text-white/40" />
                 <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
                   <BrainCircuit className="w-5 h-5" />
                 </div>
@@ -167,6 +346,28 @@ export default function AIAssistant() {
                 </div>
               </div>
               <div className="flex items-center gap-1">
+                <button 
+                  onClick={isLiveMode ? stopVoiceSession : startVoiceSession}
+                  disabled={isConnecting}
+                  className={cn(
+                    "p-1.5 rounded-lg transition-all flex items-center gap-1",
+                    isLiveMode 
+                      ? "bg-red-500/20 text-red-200 hover:bg-red-500/30" 
+                      : "hover:bg-white/10 text-white"
+                  )}
+                  title={isLiveMode ? "End Voice Session" : "Start Voice Session"}
+                >
+                  {isConnecting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : isLiveMode ? (
+                    <>
+                      <Phone className="w-4 h-4" />
+                      <span className="text-[10px] font-bold">LIVE</span>
+                    </>
+                  ) : (
+                    <Mic className="w-4 h-4" />
+                  )}
+                </button>
                 <button 
                   onClick={() => setIsMinimized(!isMinimized)}
                   className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
@@ -187,8 +388,31 @@ export default function AIAssistant() {
                 {/* Messages */}
                 <div 
                   ref={scrollRef}
-                  className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-gray-50/50 dark:bg-gray-950/50"
+                  className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-gray-50/50 dark:bg-gray-950/50 relative"
                 >
+                  {isLiveMode && (
+                    <div className="sticky top-0 z-10 flex justify-center mb-4">
+                      <div className="bg-indigo-600/90 backdrop-blur-sm text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-3 border border-white/20">
+                        <div className="flex gap-1">
+                          {[1, 2, 3].map(i => (
+                            <motion.div
+                              key={i}
+                              animate={{ height: [4, 12, 4] }}
+                              transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.1 }}
+                              className="w-1 bg-white rounded-full"
+                            />
+                          ))}
+                        </div>
+                        <span className="text-[10px] font-bold tracking-wider uppercase">Voice Active</span>
+                        <button 
+                          onClick={() => setIsMuted(!isMuted)}
+                          className="p-1 hover:bg-white/20 rounded-full transition-colors"
+                        >
+                          {isMuted ? <MicOff className="w-3.5 h-3.5 text-red-300" /> : <Mic className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {/* Role Badges */}
                   <div className="flex gap-2 mb-2">
                     <div className="flex items-center gap-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-full text-[9px] font-bold uppercase tracking-wider">

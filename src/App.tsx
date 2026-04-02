@@ -1,8 +1,8 @@
-import { HashRouter, Routes, Route } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import React, { Suspense, lazy } from "react";
 import Layout from "./components/Layout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { RevenueProvider } from "./contexts/RevenueContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { Loader2 } from "lucide-react";
@@ -10,7 +10,7 @@ import { Loader2 } from "lucide-react";
 // Lazy load pages
 const Home = lazy(() => import("./pages/Home"));
 const Groups = lazy(() => import("./pages/Groups"));
-const Posts = lazy(() => import("./pages/Posts"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const Rewards = lazy(() => import("./pages/Rewards"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -31,6 +31,15 @@ const LoadingFallback = () => (
   </div>
 );
 
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const { userData, loading } = useAuth();
+  if (loading) return <LoadingFallback />;
+  if (!userData || userData.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+};
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -43,7 +52,11 @@ export default function App() {
               <Route path="/" element={<Layout />}>
                 <Route index element={<Home />} />
                 <Route path="groups" element={<Groups />} />
-                <Route path="posts" element={<Posts />} />
+                <Route path="admin" element={
+                  <AdminRoute>
+                    <AdminDashboard />
+                  </AdminRoute>
+                } />
                 <Route path="education" element={
                   <ProtectedRoute>
                     <Education />

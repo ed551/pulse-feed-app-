@@ -5,8 +5,8 @@ import {
   Sun, Moon, CloudRain, Cloud, CloudLightning, Clock, Watch, BellRing, StickyNote,
   Fingerprint, HeartPulse, MapPin, Phone, MessageCircle, Gamepad2, Globe, BrainCircuit,
   Languages, Ticket, Snowflake, Calendar, Smartphone, Monitor, PhoneCall, Wrench,
-  Calculator, LayoutGrid, Power, RefreshCw, ArrowUpCircle, ArrowDownCircle, XCircle, RotateCcw, Edit3, DollarSign, LogOut, Wallet, X, Send, Search, CheckCircle2, Plus,
-  Volume2, VolumeX, Share2, Brain, TrendingUp, TrendingDown, Minus, Menu, GraduationCap, Eye, Loader2
+  Calculator, LayoutGrid, Power, RefreshCw, ArrowUpCircle, ArrowDownCircle, XCircle, RotateCcw, Edit3, DollarSign, LogOut, Wallet, X, Send, Search, CheckCircle2, Plus, ShieldCheck,
+  Volume2, VolumeX, Share2, Brain, TrendingUp, TrendingDown, Minus, Menu, GraduationCap, Eye, Loader2, Video, Type, Radio, Megaphone, BarChart2, Smile
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { GoogleGenAI, Modality } from "@google/genai";
@@ -22,7 +22,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { useRevenue } from "../contexts/RevenueContext";
 import { useNotifications } from "../hooks/useNotifications";
 import AIAssistant from "./AIAssistant";
-import SelfHealingManager from "./SelfHealingManager";
+import SelfHealing from "./SelfHealing";
+import CreatePostModal from "./CreatePostModal";
 import { db } from "../lib/firebase";
 import { setDoc, doc, arrayUnion, serverTimestamp } from "firebase/firestore";
 
@@ -35,7 +36,7 @@ const weatherTypes = [
 ];
 
 export default function Layout() {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, userData, logout } = useAuth();
   const { isIdle, totalEarnedToday } = useRevenue();
   const navigate = useNavigate();
   const [isDark, setIsDark] = useState(() => {
@@ -62,6 +63,7 @@ export default function Layout() {
   }, []);
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [showAddPostMenu, setShowAddPostMenu] = useState(false);
   const [showAiEye, setShowAiEye] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
@@ -585,11 +587,21 @@ export default function Layout() {
 
   useEffect(() => {
     const fetchWeather = async (lat: number, lon: number, city: string) => {
+      if (!lat || !lon || isNaN(lat) || isNaN(lon)) {
+        console.warn("Weather: Invalid coordinates, skipping fetch");
+        return;
+      }
+      
       try {
         const response = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
-        if (!response.ok) throw new Error(`Weather API responded with status: ${response.status}`);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Weather API responded with status: ${response.status}`);
+        }
         const data = await response.json();
         const current = data.current_weather;
+        
+        if (!current) throw new Error("No weather data in response");
         
         let typeIndex = 3; // Default Cloudy
         if (current.weathercode === 0) typeIndex = 0; // Hot/Sunny
@@ -654,8 +666,21 @@ export default function Layout() {
           setPrevTemp(newWeather.tempValue);
           setCurrentWeather(newWeather);
         }
-      } catch (error) {
-        console.error("Weather Fetch Error:", error);
+      } catch (error: any) {
+        console.error("Weather Fetch Error:", error.message || error);
+        // Set a fallback weather state instead of leaving it empty/broken
+        if (!currentWeather) {
+          setCurrentWeather({
+            type: 'Cloudy / Fair',
+            icon: Cloud,
+            color: 'text-slate-400',
+            bg: 'from-slate-500/20 to-gray-500/20',
+            glow: 'drop-shadow-[0_0_8px_rgba(226,232,240,0.8)]',
+            symbol: '⛅',
+            temp: '--°C',
+            tempValue: 20
+          });
+        }
       }
     };
 
@@ -667,6 +692,7 @@ export default function Layout() {
             let city = 'Your Region';
             try {
               const res = await fetch(`/api/geocode?lat=${latitude}&lon=${longitude}`);
+              if (!res.ok) throw new Error(`Geocode API responded with status: ${res.status}`);
               const data = await res.json();
               city = data.address.city || data.address.town || data.address.village || data.address.suburb || 'Your Region';
               setLocationName(city);
@@ -699,7 +725,6 @@ export default function Layout() {
   const coreNavItems = [
     { path: '/', icon: Home, color: 'text-blue-500', label: 'Home' },
     { path: '/groups', icon: Users, color: 'text-green-500', label: 'Groups' },
-    { path: '/posts', icon: PlusSquare, color: 'text-pink-500', label: 'Posts' },
     { path: '/rewards', icon: Gem, color: 'text-yellow-500', label: 'Rewards' },
     { path: '/profile', icon: User, color: 'text-purple-500', label: 'Profile' },
   ];
@@ -713,6 +738,10 @@ export default function Layout() {
     { path: '/privacy', icon: Lock, color: 'text-indigo-500', label: 'Privacy' },
     { path: '/support', icon: Headphones, color: 'text-cyan-500', label: 'Support' },
   ];
+
+  if (userData?.role === 'admin') {
+    extraNavItems.unshift({ path: '/admin', icon: ShieldCheck, color: 'text-purple-600', label: 'Admin' });
+  }
 
   const navItems = [...coreNavItems, ...extraNavItems];
 
@@ -803,14 +832,28 @@ export default function Layout() {
               <span className="font-black text-[10px] sm:text-xs text-yellow-700 dark:text-yellow-500 tracking-widest uppercase">Gold</span>
               <span className="text-sm sm:text-xl font-bold drop-shadow-sm">{goldPrediction}</span>
             </div>
-            <div className="flex items-center space-x-1 mt-1">
-              <div className={cn(
-                "w-1.5 h-1.5 rounded-full animate-pulse",
-                isIdle ? "bg-gray-400" : "bg-green-500"
-              )}></div>
-              <span className="text-[7px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-tighter">
-                {isIdle ? "Idle - Earning Paused" : `Active - Earned ${totalEarnedToday} pts`}
-              </span>
+            <div className="flex items-center space-x-3 mt-1">
+              <div className="flex items-center space-x-1" title="Your Points">
+                <Gem className="w-3 h-3 text-yellow-500" />
+                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 tracking-tighter">
+                  {userData?.points?.toLocaleString() || 0}
+                </span>
+              </div>
+              <div className="flex items-center space-x-1" title="Your Cash Balance">
+                <DollarSign className="w-3 h-3 text-green-500" />
+                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 tracking-tighter">
+                  ${userData?.balance?.toLocaleString() || 0}
+                </span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <div className={cn(
+                  "w-1.5 h-1.5 rounded-full animate-pulse",
+                  isIdle ? "bg-gray-400" : "bg-green-500"
+                )}></div>
+                <span className="text-[7px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-tighter">
+                  {isIdle ? "Idle" : "Active"}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -1021,16 +1064,176 @@ export default function Layout() {
           </div>
         </div>
 
-        {/* Floating Action Button (FAB) - Moved outside main for fixed positioning */}
-        <Link to="/posts#add-post" className="fixed bottom-24 right-20 sm:right-24 w-14 h-14 bg-gradient-to-r from-purple-600 to-blue-500 rounded-full flex items-center justify-center text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all z-30">
-          <PlusSquare className="w-6 h-6" />
-        </Link>
+        {/* Floating Action Button (FAB) - Expanded with options */}
+        <div className="fixed bottom-24 right-20 sm:right-24 z-30 flex flex-col items-center space-y-4">
+          <AnimatePresence>
+            {showAddPostMenu && (
+              <div className="flex flex-col items-center space-y-3 mb-2">
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.5, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.5, y: 20 }}
+                  onClick={() => {
+                    setActiveModal('create-post-video');
+                    setShowAddPostMenu(false);
+                  }}
+                  className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform group relative"
+                  title="Add Video"
+                >
+                  <Video className="w-5 h-5" />
+                  <span className="absolute right-full mr-3 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">Video</span>
+                </motion.button>
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.5, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.5, y: 20 }}
+                  transition={{ delay: 0.05 }}
+                  onClick={() => {
+                    setActiveModal('create-post-live');
+                    setShowAddPostMenu(false);
+                  }}
+                  className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform group relative"
+                  title="Go Live"
+                >
+                  <Radio className="w-5 h-5" />
+                  <span className="absolute right-full mr-3 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">Live</span>
+                </motion.button>
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.5, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.5, y: 20 }}
+                  transition={{ delay: 0.1 }}
+                  onClick={() => {
+                    setActiveModal('create-post-poll');
+                    setShowAddPostMenu(false);
+                  }}
+                  className="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform group relative"
+                  title="Create Poll"
+                >
+                  <BarChart2 className="w-5 h-5" />
+                  <span className="absolute right-full mr-3 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">Poll</span>
+                </motion.button>
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.5, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.5, y: 20 }}
+                  transition={{ delay: 0.15 }}
+                  onClick={() => {
+                    setActiveModal('create-post-announcement');
+                    setShowAddPostMenu(false);
+                  }}
+                  className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform group relative"
+                  title="Announcement"
+                >
+                  <Megaphone className="w-5 h-5" />
+                  <span className="absolute right-full mr-3 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">Announcement</span>
+                </motion.button>
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.5, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.5, y: 20 }}
+                  transition={{ delay: 0.2 }}
+                  onClick={() => {
+                    setActiveModal('create-post-update');
+                    setShowAddPostMenu(false);
+                  }}
+                  className="w-12 h-12 bg-blue-400 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform group relative"
+                  title="Update"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                  <span className="absolute right-full mr-3 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">Update</span>
+                </motion.button>
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.5, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.5, y: 20 }}
+                  transition={{ delay: 0.25 }}
+                  onClick={() => {
+                    setActiveModal('create-post-text');
+                    setShowAddPostMenu(false);
+                  }}
+                  className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform group relative"
+                  title="Add Text"
+                >
+                  <Type className="w-5 h-5" />
+                  <span className="absolute right-full mr-3 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">Text</span>
+                </motion.button>
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.5, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.5, y: 20 }}
+                  transition={{ delay: 0.35 }}
+                  onClick={() => {
+                    setActiveModal('create-post-gif');
+                    setShowAddPostMenu(false);
+                  }}
+                  className="w-12 h-12 bg-pink-500 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform group relative"
+                  title="Add GIF"
+                >
+                  <Smile className="w-5 h-5" />
+                  <span className="absolute right-full mr-3 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">GIF</span>
+                </motion.button>
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.5, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.5, y: 20 }}
+                  transition={{ delay: 0.4 }}
+                  onClick={() => {
+                    // Smart Suggest logic
+                    const suggestions = ['poll', 'announcement', 'update', 'text', 'video'];
+                    const randomType = suggestions[Math.floor(Math.random() * suggestions.length)];
+                    setActiveModal(`create-post-${randomType}`);
+                    setShowAddPostMenu(false);
+                    showNotification("Smart Suggestion", { body: `Gemini suggests you create a ${randomType} post!` });
+                  }}
+                  className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform group relative"
+                  title="Smart Suggest"
+                >
+                  <Brain className="w-5 h-5" />
+                  <span className="absolute right-full mr-3 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">Smart Suggest</span>
+                </motion.button>
+              </div>
+            )}
+          </AnimatePresence>
+          <button 
+            onClick={() => setShowAddPostMenu(!showAddPostMenu)}
+            className={cn(
+              "w-14 h-14 bg-gradient-to-r from-purple-600 to-blue-500 rounded-full flex items-center justify-center text-white shadow-lg hover:shadow-xl transition-all z-30",
+              showAddPostMenu ? "rotate-45 scale-90" : "hover:scale-105"
+            )}
+          >
+            <Plus className="w-6 h-6" />
+          </button>
+        </div>
 
         {/* AI Assistant Component */}
         <AIAssistant />
+        <SelfHealing />
 
-        {/* Self-Healing Manager Component */}
-        <SelfHealingManager />
+        {/* Create Post Modals */}
+        <AnimatePresence>
+          {activeModal === 'create-post-text' && (
+            <CreatePostModal type="text" onClose={() => setActiveModal(null)} />
+          )}
+          {activeModal === 'create-post-video' && (
+            <CreatePostModal type="video" onClose={() => setActiveModal(null)} />
+          )}
+          {activeModal === 'create-post-live' && (
+            <CreatePostModal type="live" onClose={() => setActiveModal(null)} />
+          )}
+          {activeModal === 'create-post-poll' && (
+            <CreatePostModal type="poll" onClose={() => setActiveModal(null)} />
+          )}
+          {activeModal === 'create-post-announcement' && (
+            <CreatePostModal type="announcement" onClose={() => setActiveModal(null)} />
+          )}
+          {activeModal === 'create-post-update' && (
+            <CreatePostModal type="update" onClose={() => setActiveModal(null)} />
+          )}
+          {activeModal === 'create-post-gif' && (
+            <CreatePostModal type="gif" onClose={() => setActiveModal(null)} />
+          )}
+        </AnimatePresence>
 
         {/* Global AI Eye Modal */}
         <AnimatePresence>
@@ -1145,7 +1348,7 @@ export default function Layout() {
       </nav>
       
       {/* Modals */}
-      {activeModal && (
+      {activeModal && !activeModal.startsWith('create-post-') && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
             <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700">

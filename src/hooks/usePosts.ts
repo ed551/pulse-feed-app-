@@ -31,12 +31,21 @@ export interface Post {
   avatar: string;
   title: string;
   content: string;
+  type: 'post' | 'announcement' | 'update' | 'video' | 'live' | 'poll' | 'ad';
   category: string;
   tags: string[];
   images?: string[];
+  gifUrl?: string;
+  videoUrl?: string;
+  poll?: {
+    question: string;
+    options: { text: string; votes: number; voters: string[] }[];
+  };
   likes: number;
+  reactions?: { [emoji: string]: string[] };
   comments: number;
   shares: number;
+  reports?: number;
   time: string;
   isLiked: boolean;
   commentsList: PostComment[];
@@ -51,8 +60,15 @@ export function usePosts() {
   const { currentUser } = useAuth();
 
   useEffect(() => {
-    const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 5000);
+
+    const q = query(collection(db, 'posts'));
+    console.log("Setting up onSnapshot for posts");
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      clearTimeout(timer);
+      console.log("onSnapshot received snapshot, docs count:", snapshot.docs.length);
       const postsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -60,11 +76,16 @@ export function usePosts() {
       setPosts(postsData);
       setLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'posts');
+      clearTimeout(timer);
+      console.error("Firestore error:", error);
       setLoading(false);
+      handleFirestoreError(error, OperationType.LIST, 'posts');
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
   }, []);
 
   const addPost = async (post: Omit<Post, 'id' | 'createdAt' | 'isUserAdded'>) => {

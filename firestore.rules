@@ -219,7 +219,7 @@ service cloud.firestore {
     }
     
     match /posts/{postId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isAuthenticated() && isValidPostCreate(request.resource.data) && uidUnchanged();
       allow update: if isAuthenticated() && isValidPostUpdate(request.resource.data) && uidNotModified() && (isDocOwner() || isAdmin());
       allow delete: if isDocOwner() || isAdmin();
