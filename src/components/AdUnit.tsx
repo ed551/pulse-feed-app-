@@ -8,17 +8,39 @@ interface AdUnitProps {
 
 export default function AdUnit({ slotId, format = 'auto', className = '' }: AdUnitProps) {
   const adRef = useRef<HTMLModElement>(null);
-  const isDev = import.meta.env.DEV || !import.meta.env.VITE_ADSENSE_CLIENT_ID;
+  const pushedRef = useRef(false);
+  const isDev = !import.meta.env.VITE_ADSENSE_CLIENT_ID;
+
+  const isTestId = import.meta.env.VITE_ADSENSE_CLIENT_ID === 'ca-pub-3940256099942544';
 
   useEffect(() => {
-    if (!isDev && adRef.current) {
-      try {
-        ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
-      } catch (e) {
-        console.error('AdSense error', e);
+    if (isDev || !adRef.current || pushedRef.current) return;
+
+    let retryCount = 0;
+    const maxRetries = 10;
+
+    const tryPush = () => {
+      if (!adRef.current || pushedRef.current) return;
+
+      const width = adRef.current.offsetWidth;
+      if (width > 0) {
+        try {
+          pushedRef.current = true;
+          ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+        } catch (e) {
+          console.error('AdSense push error:', e);
+        }
+      } else if (retryCount < maxRetries) {
+        retryCount++;
+        setTimeout(tryPush, 500);
       }
-    }
-  }, [isDev]);
+    };
+
+    // Initial delay to let layout settle
+    const initialTimer = setTimeout(tryPush, 500);
+
+    return () => clearTimeout(initialTimer);
+  }, [isDev, slotId]);
 
   if (isDev) {
     return (
@@ -31,14 +53,21 @@ export default function AdUnit({ slotId, format = 'auto', className = '' }: AdUn
   }
 
   return (
-    <ins
-      ref={adRef}
-      className={`adsbygoogle ${className}`}
-      style={{ display: 'block' }}
-      data-ad-client={import.meta.env.VITE_ADSENSE_CLIENT_ID}
-      data-ad-slot={slotId}
-      data-ad-format={format}
-      data-full-width-responsive="true"
-    />
+    <div className={`relative group ${className}`}>
+      {isTestId && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none border border-purple-500/20 rounded-xl">
+          <span className="text-[10px] font-black uppercase tracking-widest text-purple-500/40">Google Test Ad Active</span>
+        </div>
+      )}
+      <ins
+        ref={adRef}
+        className="adsbygoogle"
+        style={{ display: 'block', minHeight: '100px', minWidth: '250px' }}
+        data-ad-client={import.meta.env.VITE_ADSENSE_CLIENT_ID}
+        data-ad-slot={slotId}
+        data-ad-format={format}
+        data-full-width-responsive="true"
+      />
+    </div>
   );
 }

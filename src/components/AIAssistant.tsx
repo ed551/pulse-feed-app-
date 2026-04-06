@@ -299,12 +299,13 @@ export default function AIAssistant() {
         whileTap={{ scale: 0.9 }}
         onClick={() => setIsOpen(true)}
         className={cn(
-          "fixed top-24 right-6 w-14 h-14 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-2xl z-[60] flex items-center justify-center border-2 border-white/20",
+          "absolute bottom-[340px] right-6 w-14 h-14 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-2xl z-[110] flex items-center justify-center border-2 border-white/20 hover:scale-110 transition-transform group",
           isOpen && "hidden"
         )}
       >
         <Sparkles className="w-7 h-7" />
         <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-pulse" />
+        <span className="absolute right-full mr-3 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none">Master AI Assistant</span>
       </motion.button>
 
       {/* Chat Window */}
@@ -325,7 +326,7 @@ export default function AIAssistant() {
             dragListener={false}
             dragMomentum={false}
             whileDrag={{ scale: 1.02, boxShadow: "0 30px 60px rgba(0,0,0,0.4)" }}
-            className="fixed top-24 right-6 bg-white dark:bg-gray-900 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-[70] flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden touch-none"
+            className="absolute bottom-[340px] right-6 bg-white dark:bg-gray-900 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-[120] flex flex-col border border-gray-200 dark:border-gray-700 overflow-hidden touch-none"
           >
             {/* Header */}
             <div 
@@ -335,7 +336,7 @@ export default function AIAssistant() {
               <div className="flex items-center gap-3">
                 <GripVertical className="w-4 h-4 text-white/40" />
                 <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
-                  <BrainCircuit className="w-5 h-5" />
+                  <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold">Master AI Coach</h3>

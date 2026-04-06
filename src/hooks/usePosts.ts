@@ -60,14 +60,9 @@ export function usePosts() {
   const { currentUser } = useAuth();
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 5000);
-
     const q = query(collection(db, 'posts'));
     console.log("Setting up onSnapshot for posts");
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      clearTimeout(timer);
       console.log("onSnapshot received snapshot, docs count:", snapshot.docs.length);
       const postsData = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -76,14 +71,12 @@ export function usePosts() {
       setPosts(postsData);
       setLoading(false);
     }, (error) => {
-      clearTimeout(timer);
       console.error("Firestore error:", error);
       setLoading(false);
       handleFirestoreError(error, OperationType.LIST, 'posts');
     });
 
     return () => {
-      clearTimeout(timer);
       unsubscribe();
     };
   }, []);

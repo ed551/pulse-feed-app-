@@ -1,2 +1,10 @@
 @import "tailwindcss";
 @import "react-quill-new/dist/quill.snow.css";
+
+@layer base {
+  html, body, #root {
+    @apply h-full overflow-hidden;
+    margin: 0;
+    padding: 0;
+  }
+}

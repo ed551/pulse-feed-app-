@@ -17,7 +17,6 @@ import { generateContentWithRetry } from "../lib/ai";
 
 const MODELS = [
   { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', desc: 'Fast & efficient' },
-  { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', desc: 'Complex reasoning' },
   { id: 'gemini-3.1-flash-image-preview', name: 'Gemini 3.1 Flash Image', desc: 'Best for visual tasks' }
 ];
 

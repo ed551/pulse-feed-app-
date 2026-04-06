@@ -62,6 +62,186 @@ const COURSES = [
       'Statistical Analysis',
       'Data Visualization with D3'
     ]
+  },
+  {
+    id: 'c4',
+    title: 'Digital Marketing & SEO Mastery',
+    instructor: 'Emma Thompson',
+    duration: '5 weeks',
+    students: 4500,
+    price: 79.99,
+    image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&q=80&w=800',
+    badge: 'Digital Marketing Specialist',
+    badgeIcon: 'https://cdn.simpleicons.org/linkedin/0A66C2',
+    description: 'Master the art of digital growth. Learn SEO, SEM, content marketing, and social media analytics to scale any business.',
+    modules: [
+      'Search Engine Optimization (SEO)',
+      'Pay-Per-Click (PPC) Advertising',
+      'Content Strategy & Copywriting',
+      'Social Media & Email Marketing'
+    ]
+  },
+  {
+    id: 'c5',
+    title: 'Financial Literacy & Investment',
+    instructor: 'Robert Kiyosaki Jr.',
+    duration: '4 weeks',
+    students: 8900,
+    price: 59.99,
+    image: 'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?auto=format&fit=crop&q=80&w=800',
+    badge: 'Financial Intelligence Pro',
+    badgeIcon: 'https://cdn.simpleicons.org/linkedin/0A66C2',
+    description: 'Take control of your financial future. Learn about stock markets, real estate, crypto, and wealth management strategies.',
+    modules: [
+      'Personal Finance Foundations',
+      'Stock Market & ETF Investing',
+      'Real Estate & Passive Income',
+      'Cryptocurrency & Web3 Finance'
+    ]
+  },
+  {
+    id: 'c6',
+    title: 'Cybersecurity Fundamentals',
+    instructor: 'Kevin Mitnick II',
+    duration: '7 weeks',
+    students: 1800,
+    price: 119.99,
+    image: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=800',
+    badge: 'Cyber Defense Associate',
+    badgeIcon: 'https://cdn.simpleicons.org/linkedin/0A66C2',
+    description: 'Protect digital assets from cyber threats. Learn ethical hacking, network security, and risk management.',
+    modules: [
+      'Introduction to Cybersecurity',
+      'Network Security & Firewalls',
+      'Ethical Hacking & Pentesting',
+      'Incident Response & Recovery'
+    ]
+  },
+  {
+    id: 'c7',
+    title: 'Graphic Design & UI/UX',
+    instructor: 'Sophia Martinez',
+    duration: '6 weeks',
+    students: 2800,
+    price: 89.99,
+    image: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?auto=format&fit=crop&q=80&w=800',
+    badge: 'Creative Design Professional',
+    badgeIcon: 'https://cdn.simpleicons.org/linkedin/0A66C2',
+    description: 'Create stunning visuals and intuitive user experiences. Master Figma, Adobe Creative Suite, and design principles.',
+    modules: [
+      'Visual Design Principles',
+      'User Experience (UX) Research',
+      'User Interface (UI) Design',
+      'Prototyping & Design Systems'
+    ]
+  },
+  {
+    id: 'c8',
+    title: 'Advanced AI & Machine Learning',
+    instructor: 'Dr. Michael Zhang',
+    duration: '10 weeks',
+    students: 850,
+    price: 199.99,
+    image: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&q=80&w=800',
+    badge: 'Advanced AI Specialist',
+    badgeIcon: 'https://cdn.simpleicons.org/linkedin/0A66C2',
+    description: 'Deep dive into neural networks, deep learning, and advanced AI architectures. Build complex models for real-world problems.',
+    modules: [
+      'Deep Learning Architectures',
+      'Reinforcement Learning',
+      'Generative AI & LLMs',
+      'AI Deployment & Scaling'
+    ]
+  },
+  {
+    id: 'c9',
+    title: 'Blockchain & Cryptocurrency',
+    instructor: 'Vitalik Buterin Jr.',
+    duration: '6 weeks',
+    students: 3100,
+    price: 129.99,
+    image: 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&q=80&w=800',
+    badge: 'Blockchain Developer',
+    badgeIcon: 'https://cdn.simpleicons.org/linkedin/0A66C2',
+    description: 'Understand the technology behind Bitcoin, Ethereum, and the future of decentralized finance. Learn Smart Contract development.',
+    modules: [
+      'Blockchain Fundamentals',
+      'Ethereum & Smart Contracts',
+      'DeFi & NFT Ecosystems',
+      'Web3 Application Development'
+    ]
+  },
+  {
+    id: 'c10',
+    title: 'Sustainable Living & Environmental Science',
+    instructor: 'Dr. Jane Goodall III',
+    duration: '4 weeks',
+    students: 1500,
+    price: 49.99,
+    image: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&q=80&w=800',
+    badge: 'Sustainability Advocate',
+    badgeIcon: 'https://cdn.simpleicons.org/linkedin/0A66C2',
+    description: 'Learn practical ways to reduce your carbon footprint and understand global environmental challenges. Build a sustainable future.',
+    modules: [
+      'Climate Change Science',
+      'Sustainable Resource Management',
+      'Eco-friendly Living Practices',
+      'Environmental Policy & Advocacy'
+    ]
+  },
+  {
+    id: 'c11',
+    title: 'Mental Health & Well-being',
+    instructor: 'Dr. Andrew Huberman Jr.',
+    duration: '4 weeks',
+    students: 12000,
+    price: 0,
+    image: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&q=80&w=800',
+    badge: 'Well-being Champion',
+    badgeIcon: 'https://cdn.simpleicons.org/linkedin/0A66C2',
+    description: 'Strategies for stress management, mindfulness, and emotional resilience. Improve your mental health and daily performance.',
+    modules: [
+      'Neuroscience of Stress',
+      'Mindfulness & Meditation',
+      'Emotional Intelligence',
+      'Sleep & Performance Optimization'
+    ]
+  },
+  {
+    id: 'c12',
+    title: 'Entrepreneurship & Startup Management',
+    instructor: 'Elon Musk IV',
+    duration: '12 weeks',
+    students: 2500,
+    price: 179.99,
+    image: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80&w=800',
+    badge: 'Certified Entrepreneur',
+    badgeIcon: 'https://cdn.simpleicons.org/linkedin/0A66C2',
+    description: 'From idea to exit: learn how to build and scale a successful business. Master fundraising, product-market fit, and leadership.',
+    modules: [
+      'Ideation & Market Research',
+      'Product Development & MVP',
+      'Fundraising & Venture Capital',
+      'Scaling & Operations'
+    ]
+  },
+  {
+    id: 'c13',
+    title: 'Public Speaking & Leadership',
+    instructor: 'Barack Obama Jr.',
+    duration: '5 weeks',
+    students: 3800,
+    price: 99.99,
+    image: 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?auto=format&fit=crop&q=80&w=800',
+    badge: 'Leadership Professional',
+    badgeIcon: 'https://cdn.simpleicons.org/linkedin/0A66C2',
+    description: 'Master the art of communication and inspire others through effective leadership. Build confidence and influence.',
+    modules: [
+      'Art of Persuasion',
+      'Effective Communication',
+      'Leadership Styles',
+      'Conflict Resolution'
+    ]
   }
 ];
 
@@ -248,19 +428,18 @@ export default function Education() {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Master AI & Life Coach Training</h2>
-              <p className="text-indigo-600 dark:text-indigo-400 font-medium">Personalized Course Generation</p>
+              <p className="text-indigo-600 dark:text-indigo-400 font-medium">Personalized Course Generation from Online Research</p>
             </div>
           </div>
           
           <p className="text-gray-600 dark:text-gray-300 mb-8 max-w-2xl">
-            Let our Master AI & Life Coach train a custom course specifically for your needs. 
-            Whether it's health optimization, career growth, or technical skills, the AI will build a 
-            comprehensive curriculum and award you a verified badge upon completion.
+            Let our Master AI & Life Coach gather educational content from across the web to train a custom course specifically for your needs. 
+            The AI will research the topic, synthesize a curriculum, and award you a verified badge upon completion.
           </p>
 
           <div className="mb-8 max-w-xl">
             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
-              What would you like to learn today?
+              Search for a topic or course to train on:
             </label>
             <div className="relative">
               <input 
@@ -272,7 +451,7 @@ export default function Education() {
                 disabled={isTrainingAI}
               />
               <div className="absolute right-4 top-1/2 -translate-y-1/2 text-indigo-500">
-                <BrainCircuit className="w-6 h-6 animate-pulse" />
+                <Search className="w-6 h-6 animate-pulse" />
               </div>
             </div>
           </div>

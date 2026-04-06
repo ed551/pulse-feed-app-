@@ -3,11 +3,11 @@ import { GoogleGenAI, GenerateContentParameters, GenerateContentResponse, Thinki
 const apiKey = process.env.GEMINI_API_KEY;
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
-const MAX_RETRIES = 2;
-const INITIAL_DELAY = 2000; // 2 seconds
+const MAX_RETRIES = 3;
+const INITIAL_DELAY = 3000; // 3 seconds
 
 let requestQueue: Promise<void> = Promise.resolve();
-const MIN_REQUEST_INTERVAL = 2000; // 2 seconds between any AI requests in the same tab
+const MIN_REQUEST_INTERVAL = 1500; // 1.5 seconds between any AI requests in the same tab
 
 async function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -43,19 +43,20 @@ export async function generateContentWithRetry(params: GenerateContentParameters
         await delay(MIN_REQUEST_INTERVAL);
         return response;
       } catch (error: any) {
-        const isQuotaExceeded = error?.status === 429 || error?.message?.includes("quota") || error?.message?.includes("RESOURCE_EXHAUSTED");
-        const isProxyError = error?.message?.includes("Rpc failed due to xhr error") || error?.status === 500;
+        const isQuotaExceeded = error?.status === 429 || error?.message?.includes("quota") || error?.message?.includes("RESOURCE_EXHAUSTED") || error?.message?.includes("429");
+        const isProxyError = error?.message?.includes("Rpc failed due to xhr error") || error?.status === 500 || error?.status === 503;
         
         if ((isQuotaExceeded || isProxyError) && retries < MAX_RETRIES) {
           retries++;
-          const backoffDelay = INITIAL_DELAY * Math.pow(3, retries); // More aggressive backoff
-          console.warn(`AI Quota/Proxy limit hit. Retrying in ${backoffDelay}ms... (Attempt ${retries}/${MAX_RETRIES})`);
+          // Exponential backoff with jitter
+          const backoffDelay = (INITIAL_DELAY * Math.pow(2, retries)) + (Math.random() * 1000); 
+          console.warn(`AI service busy. Retrying in ${Math.round(backoffDelay)}ms... (Attempt ${retries}/${MAX_RETRIES})`);
           await delay(backoffDelay);
           continue;
         }
         
         if (isQuotaExceeded) {
-          const cleanError = new Error("AI service is temporarily unavailable due to high demand. Please try again later.");
+          const cleanError = new Error("The AI service is currently experiencing high volume. We'll try again automatically in a moment.");
           (cleanError as any).status = 429;
           (cleanError as any).originalError = error;
           throw cleanError;
@@ -64,7 +65,7 @@ export async function generateContentWithRetry(params: GenerateContentParameters
         throw error;
       }
     }
-    throw new Error("Max retries exceeded");
+    throw new Error("AI service unavailable after multiple retries.");
   } finally {
     releaseQueue!();
   }

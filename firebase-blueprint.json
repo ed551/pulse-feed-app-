@@ -42,9 +42,10 @@
         "timestamp": { "type": "string", "format": "date-time", "description": "When the transaction occurred" },
         "reference": { "type": "string", "description": "The transaction reference" },
         "type": { "type": "string", "enum": ["mpesa", "international"], "description": "The type of transaction" },
-        "method": { "type": "string", "description": "The payout method (e.g., paypal, stripe, bank)" }
+        "method": { "type": "string", "description": "The payout method (e.g., paypal, stripe, bank)" },
+        "revenueSource": { "type": "string", "enum": ["ad", "education"], "description": "The source of the revenue" }
       },
-      "required": ["amount", "status", "timestamp", "reference", "type"]
+      "required": ["amount", "status", "timestamp", "reference", "type", "revenueSource"]
     },
     "Post": {
       "title": "Post",
@@ -134,6 +135,23 @@
         "timestamp": { "type": "string", "format": "date-time", "description": "When the insight was generated" }
       },
       "required": ["type", "category", "content", "authorId", "timestamp"]
+    },
+    "Event": {
+      "title": "Event",
+      "description": "An event organized by a user or the platform",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The event's unique ID" },
+        "title": { "type": "string", "description": "The title of the event" },
+        "description": { "type": "string", "description": "The description of the event" },
+        "date": { "type": "string", "format": "date-time", "description": "The date and time of the event" },
+        "location": { "type": "string", "description": "The location of the event" },
+        "organizerId": { "type": "string", "description": "The ID of the user organizing the event" },
+        "attendees": { "type": "array", "items": { "type": "string" }, "description": "The IDs of users attending the event" },
+        "category": { "type": "string", "description": "The category of the event" },
+        "imageUrl": { "type": "string", "description": "The URL of the event image" }
+      },
+      "required": ["id", "title", "description", "date", "location", "organizerId", "category"]
     }
   },
   "firestore": {
@@ -152,6 +170,10 @@
     "insights/{insightId}": {
       "schema": "#/entities/Insight",
       "description": "Stores AI-generated insights and feedback"
+    },
+    "events/{eventId}": {
+      "schema": "#/entities/Event",
+      "description": "Stores events"
     }
   }
 }

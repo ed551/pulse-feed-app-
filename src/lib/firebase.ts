@@ -11,13 +11,14 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
 // Initialize Firestore with better connection reliability
-const dbId = firebaseConfig.firestoreDatabaseId;
-// Common mistake: setting database ID to project ID when it should be (default)
-const firestoreDatabaseId = (dbId && dbId !== '(default)' && dbId !== firebaseConfig.projectId) ? dbId : undefined;
+const firestoreDatabaseId = firebaseConfig.firestoreDatabaseId;
 
 console.log('Initializing Firestore with database ID:', firestoreDatabaseId || '(default)');
 
-export const db = firestoreDatabaseId ? getFirestore(app, firestoreDatabaseId) : getFirestore(app);
+// Use the named database if provided, otherwise use the default one
+export const db = (firestoreDatabaseId && firestoreDatabaseId !== '(default)') 
+  ? getFirestore(app, firestoreDatabaseId) 
+  : getFirestore(app);
 
 // Initialize Storage
 export const storage = getStorage(app);
@@ -104,4 +105,7 @@ async function testConnection() {
   }
 }
 
-testConnection();
+// Run connection test in the background
+setTimeout(() => {
+  testConnection().catch(err => console.error("Background connection test failed:", err));
+}, 1000);

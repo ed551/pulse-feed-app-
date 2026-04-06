@@ -16,6 +16,7 @@ interface Transaction {
   status: 'pending' | 'success' | 'failed';
   timestamp: string;
   reference: string;
+  revenueSource: 'ad' | 'education';
 }
 
 export default function Rewards() {
@@ -125,7 +126,8 @@ export default function Rewards() {
         status: 'success',
         timestamp: new Date().toISOString(),
         reference: data.transactionId || "MPESA-" + Date.now(),
-        type: 'mpesa'
+        type: 'mpesa',
+        revenueSource: 'ad'
       };
 
       await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), newTransaction);
@@ -204,7 +206,8 @@ export default function Rewards() {
         timestamp: new Date().toISOString(),
         reference: data.transactionId || "PAY-" + Date.now(),
         type: 'international',
-        method: payoutMethod
+        method: payoutMethod,
+        revenueSource: 'ad'
       };
 
       await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), newTransaction);
@@ -214,7 +217,7 @@ export default function Rewards() {
         points: increment(-pointsNeeded)
       });
 
-      setSuccess(`Payout of ${convert(numAmount)} initiated successfully via Tremendous (${payoutMethod.toUpperCase()})!`);
+      setSuccess(`Payout of ${convert(numAmount)} initiated successfully (${payoutMethod.toUpperCase()})!`);
       setPayoutAmount("");
       setPayoutEmail("");
       setBankDetails({ accountName: "", accountNumber: "", bankName: "", swiftCode: "" });
@@ -346,12 +349,32 @@ export default function Rewards() {
             </div>
 
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Earnings Breakdown</h2>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-100 dark:border-orange-800/50">
+                  <p className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-1">Community (Ads)</p>
+                  <p className="text-2xl font-black text-gray-900 dark:text-white">
+                    {convert(transactions.filter(t => t.revenueSource === 'ad').reduce((sum, t) => sum + t.amount, 0))}
+                  </p>
+                </div>
+                <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-100 dark:border-purple-800/50">
+                  <p className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1">Education</p>
+                  <p className="text-2xl font-black text-gray-900 dark:text-white">
+                    {convert(transactions.filter(t => t.revenueSource === 'education').reduce((sum, t) => sum + t.amount, 0))}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Reward Distribution Policy</h2>
               <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800/50">
                 <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm">
                   Users earn points for participation. Points can be redeemed for cash rewards. The platform retains a portion to cover hosting and development costs.
                   <br/><br/>
                   <strong>Distribution:</strong> Users receive 50% of reward credits generated from their direct activity. Developers retain the other 50% to sustain the platform.
+                  <br/><br/>
+                  <strong>Withdrawal Schedule:</strong> All withdrawals are processed <strong>monthly</strong>. Once you initiate a payout, it will be queued for the next monthly batch.
                   <br/><br/>
                   <strong>Tax Compliance:</strong> The platform operates via a global Merchant of Record (MoR). This means your local and international taxes (e.g., VAT, WHT) are automatically calculated, withheld, and legally remitted directly to your country's tax authority (like KRA, IRS, or HMRC) on your behalf. You will receive a net payout and a tax compliance receipt.
                 </p>
@@ -610,6 +633,11 @@ export default function Rewards() {
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 p-4 rounded-r-xl mb-6">
+                    <p className="text-amber-800 dark:text-amber-200 text-sm font-bold">
+                      ⚠️ Minimum withdrawal amount is $100.00 USD.
+                    </p>
+                  </div>
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center space-x-2">
                     <Globe className="w-5 h-5 text-purple-500" />
                     <span>Select Payout Method</span>

@@ -27,7 +27,6 @@ export default function Notifications() {
               { id: 'replies', label: 'Replies & Mentions', icon: MessageSquare, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
               { id: 'groups', label: 'Group Updates', icon: Users, color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/30' },
               { id: 'rewards', label: 'Rewards & Points', icon: Gem, color: 'text-yellow-500', bg: 'bg-yellow-100 dark:bg-yellow-900/30' },
-              { id: 'premium', label: 'Priority Alerts (Premium)', icon: Star, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30', premium: true },
             ].map((item) => {
               const Icon = item.icon;
               return (
@@ -39,12 +38,11 @@ export default function Notifications() {
                     <div>
                       <div className="font-bold text-gray-900 dark:text-white text-lg flex items-center">
                         {item.label}
-                        {item.premium && <span className="ml-2 text-xs font-bold bg-gradient-to-r from-purple-500 to-pink-500 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">Pro</span>}
                       </div>
                     </div>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only peer" defaultChecked={!item.premium} />
+                    <input type="checkbox" className="sr-only peer" defaultChecked={true} />
                     <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all dark:border-gray-600 peer-checked:bg-orange-500"></div>
                   </label>
                 </div>

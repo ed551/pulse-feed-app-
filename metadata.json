@@ -1,5 +1,5 @@
 {
   "name": "Pulse Feeds",
-  "description": "An AI-powered community app for social interaction, real-world problem detection, and educational badges.",
+  "description": "An AI-powered community app for social interaction, real-world problem detection, educational badges, dating, and watch-to-earn rewards.",
   "requestFramePermissions": ["geolocation", "camera", "microphone"]
 }

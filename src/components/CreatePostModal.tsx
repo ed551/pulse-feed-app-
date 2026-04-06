@@ -35,7 +35,7 @@ export default function CreatePostModal({ type: initialType, onClose }: CreatePo
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const CATEGORIES = ['General', 'Tech', 'News', 'Gaming', 'Finance', 'Life', 'Announcement'];
+  const CATEGORIES = ['General', 'Elite', 'Tech', 'News', 'Gaming', 'Finance', 'Life', 'Announcement'];
 
   const handleAiGenerate = async (mode: 'draft' | 'refine' | 'poll') => {
     setIsGenerating(true);

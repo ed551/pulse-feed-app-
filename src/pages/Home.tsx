@@ -5,7 +5,7 @@ import {
   LayoutGrid, Globe, Gem, Smartphone, FileText, Gamepad2, DollarSign, Calendar, Clock,
   Mail, Map, Youtube, Image, Languages, ExternalLink, Eye, Camera, Award, Sparkles, Volume2, VolumeX,
   Home as HomeIcon, Flag, BarChart2, Megaphone, RefreshCw, Radio, Video, Type, Smile,
-  PlusCircle, MinusCircle, Bookmark, EyeOff, Bell, Link, XCircle, AlertCircle, Copy
+  PlusCircle, MinusCircle, Bookmark, EyeOff, Bell, Link, XCircle, AlertCircle, Copy, Crown
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { multimedia_stream_engine, content_governor, revenue_logic } from "../lib/engines";
@@ -27,7 +27,18 @@ import { saveInsight } from "../lib/insights";
 
 export default function Home() {
   const navigate = useNavigate();
-  const { currentWeather, forecastWeather, locationName, tempTrend, weatherAnalysis } = useOutletContext<any>();
+  const { 
+    currentWeather, 
+    forecastWeather, 
+    locationName, 
+    tempTrend, 
+    weatherAnalysis,
+    searchQuery,
+    setSearchQuery,
+    activeCategory,
+    setActiveCategory,
+    showAdvancedSearch
+  } = useOutletContext<any>();
   const { posts: firebasePosts, updatePost, loading: postsLoading } = usePosts();
   const { currentUser, loading: authLoading } = useAuth();
   const [dbStatus, setDbStatus] = useState<'testing' | 'online' | 'offline'>('testing');
@@ -54,33 +65,9 @@ export default function Home() {
   const [commentText, setCommentText] = useState("");
   const [isPostingComment, setIsPostingComment] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] = useState("All");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
-  const [dateFilter, setDateFilter] = useState("all"); // all, today, week, month
   const [userFilter, setUserFilter] = useState("");
   const [activeMenuPostId, setActiveMenuPostId] = useState<string | null>(null);
   
-  // AI Eye & Education State
-  const [showAiEye, setShowAiEye] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [aiAdvice, setAiAdvice] = useState<string | null>(null);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  
-  const CATEGORIES = [
-    { name: 'All', icon: HomeIcon, color: 'text-purple-500' },
-    { name: 'Google Apps', icon: LayoutGrid, color: 'text-blue-500' },
-    { name: 'Browsers', icon: Globe, color: 'text-orange-500' },
-    { name: 'Rewards', icon: Gem, color: 'text-yellow-500' },
-    { name: 'View Mode', icon: Smartphone, color: 'text-purple-500' },
-    { name: 'Terms', icon: FileText, color: 'text-teal-500' },
-    { name: 'Games', icon: Gamepad2, color: 'text-red-500' },
-    { name: 'Ads', icon: DollarSign, color: 'text-green-500' }
-  ];
-
   const GOOGLE_APPS = [
     { name: 'Gmail', icon: Mail, url: 'https://mail.google.com', color: 'text-red-500', bg: 'bg-red-50' },
     { name: 'Drive', icon: Cloud, url: 'https://drive.google.com', color: 'text-blue-500', bg: 'bg-blue-50' },
@@ -101,7 +88,8 @@ export default function Home() {
     { name: 'Brave', icon: Globe, url: 'https://brave.com', color: 'text-orange-600', bg: 'bg-orange-50' },
   ];
 
-  const GAMES = [
+  const INDOOR_GAMES = [
+    { name: 'Chess', icon: Gamepad2, url: 'https://chess.com', color: 'text-gray-700', bg: 'bg-gray-50' },
     { name: 'Poki', icon: Gamepad2, url: 'https://poki.com', color: 'text-yellow-500', bg: 'bg-yellow-50' },
     { name: 'CrazyGames', icon: Gamepad2, url: 'https://crazygames.com', color: 'text-purple-500', bg: 'bg-purple-50' },
     { name: 'Armor Games', icon: Gamepad2, url: 'https://armorgames.com', color: 'text-red-500', bg: 'bg-red-50' },
@@ -110,173 +98,12 @@ export default function Home() {
     { name: 'MiniClip', icon: Gamepad2, url: 'https://miniclip.com', color: 'text-green-500', bg: 'bg-green-50' },
   ];
 
-  const handleCategoryClick = (categoryName: string) => {
-    if (categoryName === 'Rewards') {
-      navigate('/rewards');
-      return;
-    }
-    if (categoryName === 'Terms') {
-      navigate('/terms');
-      return;
-    }
-    if (categoryName === 'Ads') {
-      navigate('/ads');
-      return;
-    }
-    if (categoryName === 'View Mode') {
-      window.dispatchEvent(new CustomEvent('toggle-view-mode'));
-      return;
-    }
-    setActiveCategory(categoryName);
-  };
-
-  const startAiEye = async () => {
-    setShowAiEye(true);
-    setAiAdvice(null);
-    setCapturedImage(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch (err) {
-      console.error("Camera Error:", err);
-      alert("Please allow camera access to use the AI Eye.");
-      setShowAiEye(false);
-    }
-  };
-
-  const stopAiEye = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-    }
-    setShowAiEye(false);
-    setIsSpeaking(false);
-    window.speechSynthesis.cancel();
-  };
-
-  const analyzeProblem = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    
-    setIsAnalyzing(true);
-    setAiAdvice(null);
-
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(video, 0, 0);
-      const imageData = canvas.toDataURL('image/jpeg', 0.8);
-      setCapturedImage(imageData);
-      const base64Data = imageData.split(',')[1];
-
-      try {
-        const prompt = `Act as a multi-domain AI Eye (Life, Security, Health, Wealth). 
-        Analyze this image for:
-        1. LIFE: General environment improvement.
-        2. SECURITY: Potential risks or safety tips.
-        3. HEALTH: Wellness or hygiene observations.
-        4. WEALTH: Financial opportunities or resource management.
-        
-        Provide actionable advice for each. 
-        Also, provide a developer insight if you notice any potential app improvement related to these domains.
-        Format developer insights as [INSIGHT:developer:category:content].
-        
-        Format the response clearly with these sections:
-        LIFE: [Advice]
-        SECURITY: [Advice]
-        HEALTH: [Advice]
-        WEALTH: [Advice]
-        BADGE: [Badge Name, e.g., "Safety Sentinel", "Wealth Builder", "Wellness Warrior"]`;
-
-        const response = await generateContentWithRetry({
-          model: "gemini-3-flash-preview",
-          contents: {
-            parts: [
-              { text: prompt },
-              { inlineData: { mimeType: "image/jpeg", data: base64Data } }
-            ]
-          },
-          config: {
-            temperature: 0.7,
-            topP: 0.95,
-          }
-        });
-
-        const advice = response.text || "I couldn't identify any specific details in this view, but I'm always learning. Try pointing me at something else!";
-        
-        // Extract and save insights
-        const regex = /\[INSIGHT:(developer|user):(life|security|health|wealth|general):(.*?)\]/g;
-        let match;
-        while ((match = regex.exec(advice)) !== null) {
-          saveInsight(match[1] as any, match[2] as any, match[3].trim());
-        }
-        
-        const cleanAdvice = advice.replace(/\[INSIGHT:[^\]]+\]/g, '').trim();
-        setAiAdvice(cleanAdvice);
-        
-        // Speak the advice
-        speakAdvice(cleanAdvice);
-
-        // Award a badge if a badge is mentioned
-        if (cleanAdvice.includes("BADGE:") && currentUser) {
-          const badgeMatch = cleanAdvice.match(/BADGE:\s*(.*)/i);
-          const badgeName = badgeMatch ? badgeMatch[1].trim() : "Problem Solver";
-          
-          await setDoc(doc(db, 'users', currentUser.uid), {
-            badges: arrayUnion({
-              name: badgeName,
-              date: new Date().toISOString(),
-              type: 'LinkedIn-Style',
-              icon: 'Award',
-              description: cleanAdvice.split('WEALTH:')[1]?.split('BADGE:')[0]?.trim() || "Awarded for multi-domain environmental analysis."
-            })
-          }, { merge: true });
-        }
-
-      } catch (err) {
-        console.error("AI Analysis Error:", err);
-        setAiAdvice("The AI Eye is currently experiencing interference. Please try again in a moment.");
-      } finally {
-        setIsAnalyzing(false);
-      }
-    }
-  };
-
-  const speakAdvice = async (text: string) => {
-    setIsSpeaking(true);
-    try {
-      const response = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
-        contents: [{ parts: [{ text: `Say clearly and helpfully: ${text}` }] }],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: 'Kore' },
-            },
-          },
-        },
-      });
-
-      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (base64Audio) {
-        const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
-        audio.onended = () => setIsSpeaking(false);
-        await audio.play();
-      } else {
-        throw new Error("No audio data");
-      }
-    } catch (error) {
-      console.error("TTS Error:", error);
-      const msg = new SpeechSynthesisUtterance(text);
-      msg.onend = () => setIsSpeaking(false);
-      window.speechSynthesis.speak(msg);
-    }
-  };
+  const OUTDOOR_GAMES = [
+    { name: 'Pokemon GO', icon: Globe, url: 'https://pokemongolive.com', color: 'text-blue-500', bg: 'bg-blue-50' },
+    { name: 'Geocaching', icon: Map, url: 'https://geocaching.com', color: 'text-green-600', bg: 'bg-green-50' },
+    { name: 'Ingress', icon: Globe, url: 'https://ingress.com', color: 'text-emerald-500', bg: 'bg-emerald-50' },
+    { name: 'Zombies, Run!', icon: Globe, url: 'https://zombiesrungame.com', color: 'text-red-600', bg: 'bg-red-50' },
+  ];
 
   const feedItems = firebasePosts
     .map(p => ({ ...p, type: p.type || 'post', user: p.author }))
@@ -437,6 +264,9 @@ export default function Home() {
 
   return (
     <div className="space-y-6 pb-20">
+      <div className="px-6 pt-6">
+        <AdUnit slotId="home-top-banner" />
+      </div>
       {/* Connection Status Badge */}
       <div className="flex justify-end">
         <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border ${
@@ -461,6 +291,9 @@ export default function Home() {
               <div className="flex items-end space-x-4">
                 <currentWeather.icon className={cn("w-16 h-16", currentWeather.color, currentWeather.glow)} />
                 <div>
+                  <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1">
+                    {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                  </div>
                   <div className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter">{currentWeather.temp}</div>
                   <div className={cn("text-lg font-medium", currentWeather.color)}>{currentWeather.type}</div>
                 </div>
@@ -484,78 +317,9 @@ export default function Home() {
 
       <YouTubeSection />
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
-        <div className="flex items-center space-x-2 group relative">
-          <TrendingUp className="w-6 h-6 text-purple-600" />
-          <span className="absolute -top-8 left-0 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Latest Feed</span>
-        </div>
-        
-        <div className="flex items-center space-x-2 w-full sm:w-auto">
-          <div className="relative flex-1 sm:w-64 group">
-            <div 
-              className="absolute inset-y-0 left-0 pl-3 flex items-center cursor-pointer z-10"
-              onClick={() => document.getElementById('search-input')?.focus()}
-            >
-              <Search className="h-4 w-4 text-gray-400 group-focus-within:text-purple-500 transition-colors" />
-            </div>
-            <input
-              id="search-input"
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search or ask AI Eye..."
-              className="block w-full pl-9 pr-20 py-2 border border-gray-200 dark:border-gray-700 rounded-full bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none dark:text-white transition-all"
-            />
-            <div className="absolute inset-y-0 right-0 flex items-center pr-1 space-x-1">
-              {searchQuery && (
-                <button 
-                  onClick={() => setSearchQuery("")}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-              <button 
-                onClick={startAiEye}
-                className="p-1.5 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800/60 transition-all group relative"
-                title="AI Eye: Detect Real-World Problems"
-              >
-                <Eye className="h-4 w-4" />
-                <span className="absolute -top-8 right-0 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">AI Eye</span>
-              </button>
-            </div>
-          </div>
-          <button 
-            onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
-            className={cn(
-              "p-2 rounded-full transition-colors border",
-              showAdvancedSearch 
-                ? "bg-purple-100 text-purple-600 border-purple-200 dark:bg-purple-900/40 dark:text-purple-400 dark:border-purple-800" 
-                : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
-            )}
-            title="Advanced Search Filters"
-          >
-            <Filter className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
       {showAdvancedSearch && (
         <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 mb-4 animate-in fade-in slide-in-from-top-2">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Date Range</label>
-              <select 
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-purple-500 outline-none"
-              >
-                <option value="all">All Time</option>
-                <option value="today">Past 24 Hours</option>
-                <option value="week">Past Week</option>
-                <option value="month">Past Month</option>
-              </select>
-            </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Filter by User</label>
               <input 
@@ -570,130 +334,7 @@ export default function Home() {
         </div>
       )}
 
-      <div className="flex overflow-x-auto hide-scrollbar space-x-2 pb-2 mb-4">
-            {CATEGORIES.map(cat => (
-              <button
-                key={cat.name}
-                onClick={() => handleCategoryClick(cat.name)}
-                className={cn(
-                  "flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-bold transition-all border group relative",
-                  activeCategory === cat.name
-                    ? "bg-purple-600 text-white border-purple-600 shadow-lg scale-105"
-                    : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-purple-200 dark:hover:border-purple-900/30"
-                )}
-              >
-                <cat.icon className={cn("w-4 h-4", activeCategory === cat.name ? "text-white" : cat.color)} />
-                <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
-                  {cat.name}
-                </span>
-              </button>
-            ))}
-      </div>
-
       <div className="space-y-4">
-        {/* AI Eye Modal */}
-        {showAiEye && (
-          <div className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[110] flex flex-col items-center justify-center p-4">
-            <div className="relative w-full max-w-3xl aspect-video bg-gray-950 rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl">
-              <video 
-                ref={videoRef} 
-                autoPlay 
-                playsInline 
-                className={cn("w-full h-full object-cover transition-opacity duration-500", isAnalyzing && "opacity-40")}
-              />
-              <canvas ref={canvasRef} className="hidden" />
-              
-              {capturedImage && (
-                <img src={capturedImage} alt="Captured" className="absolute inset-0 w-full h-full object-cover opacity-20 animate-pulse" />
-              )}
-
-              {/* HUD Overlay */}
-              <div className="absolute inset-0 pointer-events-none">
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-64 h-64 border-2 border-purple-500/20 rounded-full animate-[ping_3s_linear_infinite]" />
-                  <div className="absolute w-48 h-48 border border-purple-500/40 rounded-full animate-pulse" />
-                </div>
-                
-                {/* Corner Accents */}
-                <div className="absolute top-8 left-8 w-12 h-12 border-t-2 border-l-2 border-purple-500/50 rounded-tl-xl" />
-                <div className="absolute top-8 right-8 w-12 h-12 border-t-2 border-r-2 border-purple-500/50 rounded-tr-xl" />
-                <div className="absolute bottom-8 left-8 w-12 h-12 border-b-2 border-l-2 border-purple-500/50 rounded-bl-xl" />
-                <div className="absolute bottom-8 right-8 w-12 h-12 border-b-2 border-r-2 border-purple-500/50 rounded-br-xl" />
-
-                <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center space-x-3 bg-black/60 px-4 py-2 rounded-full backdrop-blur-xl border border-white/10">
-                  <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
-                  <span className="text-[10px] font-black text-white uppercase tracking-[0.2em]">AI Eye: Real-World Detection</span>
-                </div>
-              </div>
-
-              {/* Analysis Result */}
-              {aiAdvice && (
-                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/95 via-black/80 to-transparent p-8 animate-in slide-in-from-bottom-8 duration-700">
-                  <div className="flex items-start space-x-6">
-                    <div className="w-14 h-14 bg-gradient-to-br from-purple-600 to-blue-500 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-2xl rotate-3">
-                      <Sparkles className="w-8 h-8 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-purple-400 font-black text-xs uppercase tracking-[0.15em]">AI Analysis Complete</h4>
-                        {aiAdvice.includes("BADGE:") && (
-                          <div className="flex items-center space-x-2 bg-yellow-500/20 border border-yellow-500/30 px-3 py-1 rounded-full">
-                            <Award className="w-3.5 h-3.5 text-yellow-500" />
-                            <span className="text-yellow-500 text-[9px] font-black uppercase tracking-wider">Badge Earned</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-white text-sm leading-relaxed font-medium whitespace-pre-wrap">
-                        {aiAdvice}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {isAnalyzing && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md">
-                  <div className="relative">
-                    <Loader2 className="w-16 h-16 text-purple-500 animate-spin mb-6" />
-                    <div className="absolute inset-0 blur-xl bg-purple-500/20 animate-pulse" />
-                  </div>
-                  <p className="text-white font-black text-xs animate-pulse uppercase tracking-[0.3em]">Decoding Reality Matrix...</p>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-10 flex items-center space-x-6">
-              <button 
-                onClick={stopAiEye}
-                className="px-8 py-4 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all border border-white/10 backdrop-blur-xl"
-              >
-                Deactivate
-              </button>
-              <button 
-                onClick={analyzeProblem}
-                disabled={isAnalyzing}
-                className="px-10 py-4 bg-gradient-to-r from-purple-600 to-blue-500 hover:from-purple-500 hover:to-blue-400 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-[0_0_30px_rgba(168,85,247,0.3)] hover:shadow-[0_0_40px_rgba(168,85,247,0.5)] transition-all flex items-center space-x-3 disabled:opacity-50 active:scale-95"
-              >
-                <Camera className="w-5 h-5" />
-                <span>{isAnalyzing ? "Processing..." : "Capture & Detect"}</span>
-              </button>
-              {aiAdvice && (
-                <button 
-                  onClick={() => speakAdvice(aiAdvice)}
-                  className={cn(
-                    "p-4 rounded-2xl transition-all border backdrop-blur-xl",
-                    isSpeaking 
-                      ? "bg-purple-600 text-white border-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.5)]" 
-                      : "bg-white/5 text-white/70 border-white/10 hover:bg-white/10 hover:text-white"
-                  )}
-                >
-                  {isSpeaking ? <Volume2 className="w-6 h-6 animate-bounce" /> : <VolumeX className="w-6 h-6" />}
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
         {activeCategory === 'Google Apps' && !searchQuery && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {GOOGLE_APPS.map((app) => (
@@ -734,9 +375,29 @@ export default function Home() {
           </div>
         )}
 
-        {activeCategory === 'Games' && !searchQuery && (
+        {activeCategory === 'Indoor Games' && !searchQuery && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {GAMES.map((app) => (
+            {INDOOR_GAMES.map((app) => (
+              <a 
+                key={app.name}
+                href={app.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 hover:shadow-xl hover:scale-105 transition-all group"
+              >
+                <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center mb-3 group-hover:rotate-12 transition-transform", app.bg, "dark:bg-gray-700")}>
+                  <app.icon className={cn("w-6 h-6", app.color)} />
+                </div>
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{app.name}</span>
+                <ExternalLink className="w-3 h-3 text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </a>
+            ))}
+          </div>
+        )}
+
+        {activeCategory === 'Outdoor Games' && !searchQuery && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {OUTDOOR_GAMES.map((app) => (
               <a 
                 key={app.name}
                 href={app.url}
@@ -764,7 +425,15 @@ export default function Home() {
           if (item.type === 'ad') return true;
 
           // Category Filter
-          if (activeCategory !== 'All' && item.category?.toLowerCase() !== activeCategory.toLowerCase()) return false;
+          if (activeCategory !== 'All') {
+            const cat = activeCategory.toLowerCase();
+            const itemCat = item.category?.toLowerCase();
+            if (cat === 'elite') {
+              if (itemCat !== 'elite' && itemCat !== 'premium') return false;
+            } else if (itemCat !== cat) {
+              return false;
+            }
+          }
 
           // Search Query Filter
           if (searchQuery) {
@@ -779,18 +448,8 @@ export default function Home() {
           if (userFilter && !item.user?.toLowerCase().includes(userFilter.toLowerCase())) return false;
 
           // Date Filter
-          if (dateFilter !== 'all') {
-            const itemDate = item.createdAt?.toDate?.() || (item.time ? new Date(item.time) : null);
-            if (!itemDate || isNaN(itemDate.getTime())) return true; // Show if date is invalid/missing
-
-            const now = new Date();
-            const diffTime = Math.abs(now.getTime() - itemDate.getTime());
-            const diffDays = diffTime / (1000 * 60 * 60 * 24);
-
-            if (dateFilter === 'today' && diffDays > 1) return false;
-            if (dateFilter === 'week' && diffDays > 7) return false;
-            if (dateFilter === 'month' && diffDays > 30) return false;
-          }
+          const itemDate = item.createdAt?.toDate?.() || (item.time ? new Date(item.time) : null);
+          if (!itemDate || isNaN(itemDate.getTime())) return true; // Show if date is invalid/missing
 
           return true;
         }).length === 0 ? (
@@ -806,7 +465,6 @@ export default function Home() {
               onClick={() => {
                 setActiveCategory("All");
                 setSearchQuery("");
-                setDateFilter("all");
                 setUserFilter("");
               }}
               className="mt-6 px-6 py-2 bg-purple-600 text-white rounded-full font-semibold hover:bg-purple-700 transition-colors"
@@ -819,7 +477,15 @@ export default function Home() {
           if (item.type === 'ad') return true;
 
           // Category Filter
-          if (activeCategory !== 'All' && item.category?.toLowerCase() !== activeCategory.toLowerCase()) return false;
+          if (activeCategory !== 'All') {
+            const cat = activeCategory.toLowerCase();
+            const itemCat = item.category?.toLowerCase();
+            if (cat === 'elite') {
+              if (itemCat !== 'elite' && itemCat !== 'premium') return false;
+            } else if (itemCat !== cat) {
+              return false;
+            }
+          }
 
           // Search Query Filter
           if (searchQuery) {
@@ -832,20 +498,6 @@ export default function Home() {
 
           // User Filter
           if (userFilter && !item.user?.toLowerCase().includes(userFilter.toLowerCase())) return false;
-
-          // Date Filter
-          if (dateFilter !== 'all') {
-            const itemDate = item.createdAt?.toDate?.() || (item.time ? new Date(item.time) : null);
-            if (!itemDate || isNaN(itemDate.getTime())) return true;
-
-            const now = new Date();
-            const diffTime = Math.abs(now.getTime() - itemDate.getTime());
-            const diffDays = diffTime / (1000 * 60 * 60 * 24);
-
-            if (dateFilter === 'today' && diffDays > 1) return false;
-            if (dateFilter === 'week' && diffDays > 7) return false;
-            if (dateFilter === 'month' && diffDays > 30) return false;
-          }
 
           return true;
         }).map((item) => (

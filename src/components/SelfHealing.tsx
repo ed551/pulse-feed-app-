@@ -96,7 +96,7 @@ export default function SelfHealing() {
   if (healStatus === 'idle') return null;
 
   return (
-    <div className="fixed bottom-24 right-6 z-[9999]">
+    <div className="absolute bottom-60 right-6 z-[9999]">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-purple-100 dark:border-purple-900/30 p-4 max-w-xs animate-in fade-in slide-in-from-bottom-4 duration-300">
         <div className="flex items-center gap-3 mb-2">
           <div className={`w-3 h-3 rounded-full animate-pulse ${

@@ -4,57 +4,6 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: users
-    // Document ID: {userId}
-    // Fields:
-    //   - uid: string (required) - The user's unique ID
-    //   - email: string (required, email format) - The user's email address
-    //   - displayName: string (optional) - The user's display name
-    //   - photoURL: string (optional) - The user's profile picture URL
-    //   - role: string (required, enum: ['admin', 'user']) - The user's role
-    //   - points: number (optional) - The user's reward points
-    //   - balance: number (optional) - The user's wallet balance
-    //   - bio: string (optional) - The user's bio
-    //   - badges: list (optional) - The user's earned badges
-    //   - createdAt: timestamp (required) - When the user was created
-    //
-    // Collection: transactions
-    // Document ID: {transactionId}
-    // Path: /users/{userId}/transactions/{transactionId}
-    // Fields:
-    //   - amount: number (required) - The amount of the transaction
-    //   - phoneNumber: string (optional) - The phone number or email
-    //   - status: string (required, enum: ['pending', 'success', 'failed']) - The status
-    //   - timestamp: timestamp (required) - When the transaction occurred
-    //   - reference: string (required) - The transaction reference
-    //   - type: string (required, enum: ['mpesa', 'international']) - The type
-    //   - method: string (optional) - The payout method
-    //
-    // Collection: posts
-    // Document ID: {postId}
-    // Fields:
-    //   - id: string (required) - The post's unique ID
-    //   - authorId: string (required) - The ID of the user who created the post
-    //   - author: string (required, max 100) - The name of the user who created the post
-    //   - avatar: string (optional, url format) - The avatar of the user who created the post
-    //   - title: string (required, max 200) - The title of the post
-    //   - content: string (required, max 10000) - The content of the post
-    //   - category: string (required, max 50) - The category of the post
-    //   - tags: list (optional) - The tags associated with the post
-    //   - images: list (optional) - The images associated with the post
-    //   - likes: number (optional) - The number of likes
-    //   - comments: number (optional) - The number of comments
-    //   - shares: number (optional) - The number of shares
-    //   - time: string (required) - Display time string
-    //   - isLiked: bool (optional) - Whether liked by current user
-    //   - createdAt: timestamp (required) - Server timestamp
-    //
-    // ===============================================================
-
-    // ===============================================================
     // Helper Functions
     // ===============================================================
     
@@ -78,151 +27,117 @@ service cloud.firestore {
       return !('authorId' in request.resource.data) || request.resource.data.authorId == resource.data.authorId;
     }
     
-    function hasRequiredFields(fields) {
-      return request.resource.data.keys().hasAll(fields);
-    }
-    
     function isValidEmail(email) {
       return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     }
 
     function isValidDateString(dateStr) {
       return dateStr is string &&
-        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*$");
     }
     
     function isAdmin() {
-      return isAuthenticated() && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-        (request.auth.token.email == "edwinmuoha@gmail.com" && request.auth.token.email_verified == true)
-      );
+      return isAuthenticated() && 
+             (request.auth.token.email == "edwinmuoha@gmail.com" && request.auth.token.email_verified == true);
+    }
+
+    function immutable(field) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([field]);
     }
     
     // ===============================================================
     // Domain Validators
     // ===============================================================
     
-    function isValidBadge(badge) {
-      return badge.keys().hasAll(['name', 'date', 'type', 'icon', 'description']) &&
-             badge.name is string && badge.name.size() > 0 && badge.name.size() <= 100 &&
-             isValidDateString(badge.date) &&
-             badge.type is string && badge.type.size() > 0 && badge.type.size() <= 50 &&
-             badge.icon is string && badge.icon.size() > 0 && badge.icon.size() <= 50 &&
-             badge.description is string && badge.description.size() > 0 && badge.description.size() <= 1000;
-    }
-
     function isValidUser(data) {
       return data.keys().hasAll(['uid', 'email', 'role', 'createdAt']) &&
-             data.uid is string && data.uid.size() > 0 && data.uid.size() < 128 &&
+             data.uid == request.auth.uid &&
              data.email is string && isValidEmail(data.email) &&
              data.role in ['admin', 'user'] &&
-             (!('points' in data) || data.points is number) &&
-             (!('balance' in data) || data.balance is number) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500)) &&
              (!('bio' in data) || (data.bio is string && data.bio.size() <= 500)) &&
-             (!('badges' in data) || (data.badges is list && data.badges.size() <= 100)) &&
              data.createdAt is timestamp;
     }
 
-    function isValidTransaction(data) {
-      return data.keys().hasAll(['amount', 'status', 'timestamp', 'reference', 'type']) &&
-             data.amount is number &&
-             data.status in ['pending', 'success', 'failed'] &&
-             data.timestamp is timestamp &&
-             data.reference is string && data.reference.size() > 0 &&
-             data.type in ['mpesa', 'international'];
-    }
-    
-    function isValidPostCreate(data) {
-      return data.keys().hasAll(['authorId', 'author', 'content', 'category', 'time']) &&
-             data.authorId is string && data.authorId.size() > 0 && data.authorId.size() < 128 &&
-             data.author is string && data.author.size() > 0 && data.author.size() <= 100 &&
-             (!('title' in data) || (data.title is string && data.title.size() <= 200)) &&
-             data.content is string && data.content.size() > 0 && data.content.size() <= 10000 &&
-             data.category is string && data.category.size() > 0 && data.category.size() <= 50 &&
-             data.time is string &&
-             (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 500)) &&
-             (!('tags' in data) || (data.tags is list && data.tags.size() <= 20)) &&
-             (!('images' in data) || (data.images is list && data.images.size() <= 10)) &&
-             (!('likes' in data) || data.likes is number) &&
-             (!('comments' in data) || data.comments is number) &&
-             (!('shares' in data) || data.shares is number) &&
-             (!('isLiked' in data) || data.isLiked is bool) &&
-             (!('commentsList' in data) || data.commentsList is list) &&
-             (!('analytics' in data) || data.analytics is list) &&
-             (!('createdAt' in data) || data.createdAt is timestamp);
+    function isValidPost(data) {
+      return data.keys().hasAll(['authorId', 'author', 'content', 'category', 'time', 'type', 'title']) &&
+             data.authorId == request.auth.uid &&
+             data.author is string && data.author.size() <= 100 &&
+             data.title is string && data.title.size() <= 200 &&
+             data.content is string && data.content.size() <= 10000 &&
+             data.category is string && data.category.size() <= 50 &&
+             data.type in ['post', 'announcement', 'update', 'video', 'live', 'poll'] &&
+             data.time is string && data.time.size() <= 100;
     }
 
-    function isValidPostUpdate(data) {
-      return (!('authorId' in data) || (data.authorId is string && data.authorId.size() > 0 && data.authorId.size() < 128)) &&
-             (!('author' in data) || (data.author is string && data.author.size() > 0 && data.author.size() <= 100)) &&
-             (!('title' in data) || (data.title is string && data.title.size() <= 200)) &&
-             (!('content' in data) || (data.content is string && data.content.size() > 0 && data.content.size() <= 10000)) &&
-             (!('category' in data) || (data.category is string && data.category.size() > 0 && data.category.size() <= 50)) &&
-             (!('time' in data) || (data.time is string)) &&
-             (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 500)) &&
-             (!('tags' in data) || (data.tags is list && data.tags.size() <= 20)) &&
-             (!('images' in data) || (data.images is list && data.images.size() <= 10)) &&
-             (!('likes' in data) || data.likes is number) &&
-             (!('comments' in data) || data.comments is number) &&
-             (!('shares' in data) || data.shares is number) &&
-             (!('isLiked' in data) || data.isLiked is bool) &&
-             (!('commentsList' in data) || data.commentsList is list) &&
-             (!('analytics' in data) || data.analytics is list) &&
-             (!('createdAt' in data) || data.createdAt is timestamp);
+    function isValidEvent(data) {
+      return data.keys().hasAll(['id', 'title', 'description', 'date', 'location', 'organizerId', 'category']) &&
+             data.organizerId == request.auth.uid &&
+             data.title is string && data.title.size() <= 200 &&
+             data.description is string && data.description.size() <= 5000 &&
+             data.date is string && isValidDateString(data.date) &&
+             data.location is string && data.location.size() <= 200 &&
+             data.category is string && data.category.size() <= 50;
+    }
+
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['amount', 'status', 'timestamp', 'reference', 'type', 'revenueSource']) &&
+             data.amount is number &&
+             data.status in ['pending', 'success', 'failed'] &&
+             data.timestamp is string && isValidDateString(data.timestamp) &&
+             data.reference is string && data.reference.size() <= 100 &&
+             data.type in ['mpesa', 'international'] &&
+             data.revenueSource in ['ad', 'education'];
     }
 
     function isValidInsight(data) {
       return data.keys().hasAll(['type', 'category', 'content', 'authorId', 'timestamp']) &&
+             data.authorId == request.auth.uid &&
              data.type in ['developer', 'user'] &&
-             data.category is string && data.category.size() > 0 && data.category.size() <= 100 &&
-             data.content is string && data.content.size() > 0 && data.content.size() <= 5000 &&
-             data.authorId is string && data.authorId == request.auth.uid &&
-             data.timestamp is timestamp;
+             data.category is string && data.category.size() <= 50 &&
+             data.content is string && data.content.size() <= 5000 &&
+             data.timestamp is string && isValidDateString(data.timestamp);
     }
     
     // ===============================================================
     // Rules
     // ===============================================================
     
-    // Allow public read for connection testing
     match /system/health {
       allow read: if true;
     }
     
-    match /_connection_test_/ping {
-      allow read: if true;
-    }
-    
-    match /insights/{insightId} {
-      allow read: if isAdmin() || (isAuthenticated() && resource.data.authorId == request.auth.uid);
-      allow create: if isAuthenticated() && isValidInsight(request.resource.data);
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-    
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (
-        (isOwner(userId) && request.resource.data.role == 'user') || isAdmin()
-      );
-      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (
-        (isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin()
-      );
-      allow delete: if isAdmin();
-
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && immutable('uid') && immutable('createdAt');
+      
       match /transactions/{transactionId} {
         allow read: if isOwner(userId) || isAdmin();
         allow create: if isOwner(userId) && isValidTransaction(request.resource.data);
-        allow update: if (isOwner(userId) || isAdmin()) && isValidTransaction(request.resource.data);
-        allow delete: if isAdmin();
+        allow update, delete: if isAdmin();
       }
     }
     
     match /posts/{postId} {
       allow read: if true;
-      allow create: if isAuthenticated() && isValidPostCreate(request.resource.data) && uidUnchanged();
-      allow update: if isAuthenticated() && isValidPostUpdate(request.resource.data) && uidNotModified() && (isDocOwner() || isAdmin());
+      allow create: if isAuthenticated() && isValidPost(request.resource.data);
+      allow update: if isAuthenticated() && isValidPost(request.resource.data) && (isDocOwner() || isAdmin()) && uidNotModified() && immutable('authorId');
       allow delete: if isDocOwner() || isAdmin();
+    }
+
+    match /events/{eventId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidEvent(request.resource.data);
+      allow update: if isAuthenticated() && isValidEvent(request.resource.data) && (resource.data.organizerId == request.auth.uid || isAdmin()) && immutable('organizerId');
+      allow delete: if resource.data.organizerId == request.auth.uid || isAdmin();
+    }
+
+    match /insights/{insightId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.authorId == request.auth.uid);
+      allow create: if isAuthenticated() && isValidInsight(request.resource.data);
+      allow update, delete: if isAdmin();
     }
   }
 }

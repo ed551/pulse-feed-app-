@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { Settings, LogOut, Edit3, Shield, Star, Activity, Check, X, Loader2, AlertTriangle, Fingerprint, Camera, Sparkles, Upload, RotateCcw, Sliders, Award, Trophy, Zap, Users, Heart as HeartIcon, Beaker, Trash2, MessageSquare, Share2, Heart, PlusSquare, Brain, Wand2, MoreHorizontal, PlusCircle, MinusCircle, Bookmark, EyeOff, Bell, Link, XCircle, AlertCircle, Copy, ExternalLink, Pin, Tag, Globe, Archive } from "lucide-react";
+import { Settings, LogOut, Edit3, Shield, Star, Activity, Check, X, Loader2, AlertTriangle, Fingerprint, Camera, Sparkles, Upload, RotateCcw, Sliders, Award, Trophy, Zap, Users, Heart as HeartIcon, Beaker, Trash2, MessageSquare, Share2, Heart, PlusSquare, Brain, Wand2, MoreHorizontal, PlusCircle, MinusCircle, Bookmark, EyeOff, Bell, Link, XCircle, AlertCircle, Copy, ExternalLink, Pin, Tag, Globe, Archive, Crown } from "lucide-react";
 import { auth_logic, user_history, wallet_engine } from "../lib/engines";
 import { moderateContent } from "../services/moderationService";
 import { generateAvatar } from "../services/imageService";
@@ -360,9 +360,6 @@ export default function Profile() {
             </div>
 
             <div className="flex flex-wrap justify-center sm:justify-start gap-2">
-              <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center">
-                <Star className="w-3 h-3 mr-1" /> Premium
-              </span>
               <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center">
                 <Activity className="w-3 h-3 mr-1" /> Active
               </span>

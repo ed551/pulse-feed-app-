@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { ShieldCheck, Download } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { auto_translation_engine } from "../lib/engines";
 
 export default function Privacy() {
@@ -8,53 +8,410 @@ export default function Privacy() {
   }, []);
 
   return (
-    <div className="space-y-8 max-w-3xl mx-auto">
+    <div className="space-y-8 max-w-5xl mx-auto">
       <div className="text-center py-8">
         <div className="w-20 h-20 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
           <ShieldCheck className="w-10 h-10 text-indigo-600 dark:text-indigo-400" />
         </div>
         <h1 className="text-4xl font-black text-gray-900 dark:text-white mb-4">Privacy Policy</h1>
-        <p className="text-xl text-gray-600 dark:text-gray-400">Last updated: March 2026</p>
+        <p className="text-xl text-gray-600 dark:text-gray-400">Last updated: April 2026</p>
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-100 dark:border-gray-700 prose dark:prose-invert max-w-none">
         <div className="p-6 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800/50 mb-8">
-          <h3 className="text-indigo-800 dark:text-indigo-300 font-bold mt-0">Data Collection Notice</h3>
+          <h3 className="text-indigo-800 dark:text-indigo-300 font-bold mt-0">Privacy Commitment and Global Compliance</h3>
           <p className="text-indigo-700 dark:text-indigo-400 mb-0 font-medium">
-            This platform is for market research and user testing. Rewards are given for feedback and engagement. No financial investment is required.
+            Pulse Feeds is dedicated to maintaining the highest standards of data protection and transparency. This Privacy Policy outlines our rigorous data handling practices, ensuring your information is secure while powering our innovative AI-driven community ecosystem.
           </p>
         </div>
 
-        <h2>1. Information We Collect</h2>
-        <p>We collect information you provide directly to us, such as when you create or modify your account, request on-demand services, contact customer support, or otherwise communicate with us.</p>
+        <h2>1. Introduction and Comprehensive Scope</h2>
+        <p>
+          Pulse Feeds ("we," "us," or "our") operates the Pulse Feeds mobile and web application (the "Service"). This Privacy Policy informs you of our policies regarding the collection, use, and disclosure of personal data when you use our Service and the choices you have associated with that data.
+        </p>
+        <p>
+          We use your data to provide and improve the Service. By using the Service, you agree to the collection and use of information in accordance with this policy. Unless otherwise defined in this Privacy Policy, terms used in this Privacy Policy have the same meanings as in our Terms and Conditions.
+        </p>
+        <p>
+          This policy applies to all users globally, with specific sections dedicated to regional regulations such as the General Data Protection Regulation (GDPR) in the European Economic Area (EEA), the California Consumer Privacy Act (CCPA) and California Privacy Rights Act (CPRA) in the United States, the Lei Geral de Proteção de Dados (LGPD) in Brazil, and the Personal Information Protection and Electronic Documents Act (PIPEDA) in Canada.
+        </p>
+        <p>
+          Pulse Feeds is a multi-dimensional ecosystem. Our privacy practices are designed to be as dynamic as our services, ensuring that whether you are using our AI Eye for community problem solving, engaging in our Education Hub, or interacting in our social feeds, your data is handled with the utmost care and legal precision.
+        </p>
+        <p>
+          We are committed to protecting your privacy and ensuring that your personal information is handled in a safe and responsible manner. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our mobile application or website. Please read this privacy policy carefully. If you do not agree with the terms of this privacy policy, please do not access the application.
+        </p>
 
-        <h2>2. How We Use Your Information</h2>
-        <p>We use the information we collect about you to provide, maintain, and improve our services, including to facilitate payments, send receipts, provide products and services you request, and develop new features.</p>
-        
-        <h2>3. Reward System & Data</h2>
-        <p>Users earn points for participation. Points can be redeemed for cash rewards. The platform retains a portion to cover hosting and development costs.</p>
+        <h2>2. Detailed Definitions and Interpretations</h2>
         <ul>
-          <li>Users receive 50% of reward credits.</li>
-          <li>Developers retain 50% to sustain the platform.</li>
+          <li><strong>"Personal Data"</strong> means any information relating to an identified or identifiable natural person ("Data Subject"); an identifiable natural person is one who can be identified, directly or indirectly, in particular by reference to an identifier such as a name, an identification number, location data, an online identifier or to one or more factors specific to the physical, physiological, genetic, mental, economic, cultural or social identity of that natural person.</li>
+          <li><strong>"Usage Data"</strong> is data collected automatically either generated by the use of the Service or from the Service infrastructure itself (for example, the duration of a page visit, device type, and interaction patterns).</li>
+          <li><strong>"Cookies"</strong> are small pieces of data stored on your device (computer or mobile device) that help us track preferences and improve performance.</li>
+          <li><strong>"Data Controller"</strong> means the natural or legal person who (either alone or jointly or in common with other persons) determines the purposes for which and the manner in which any personal information are, or are to be, processed. For the purpose of this Privacy Policy, Pulse Feeds is the Data Controller of your Personal Data.</li>
+          <li><strong>"Data Processors (or Service Providers)"</strong> means any natural or legal person who processes the data on behalf of the Data Controller. We may use the services of various Service Providers in order to process your data more effectively.</li>
+          <li><strong>"Data Subject (or User)"</strong> is any living individual who is using our Service and is the subject of Personal Data.</li>
+          <li><strong>"AI Interaction Data"</strong> refers to the specific inputs (prompts), outputs (responses), and metadata generated during your interactions with our integrated AI models, primarily Gemini 3 Flash.</li>
+          <li><strong>"Biometric Data"</strong> refers to personal data resulting from specific technical processing relating to the physical, physiological or behavioural characteristics of a natural person, which allow or confirm the unique identification of that natural person, such as facial images or dactyloscopic data.</li>
+          <li><strong>"Anonymized Data"</strong> refers to data that has been rendered anonymous in such a way that the data subject is no longer identifiable.</li>
         </ul>
 
-        <h2>4. Data Security</h2>
-        <p>We take reasonable measures to help protect information about you from loss, theft, misuse and unauthorized access, disclosure, alteration and destruction.</p>
+        <h2>3. Information Collection: A Multi-Layered Approach</h2>
+        <p>
+          We collect several different types of information for various purposes to provide and improve our Service to you. Our collection methods include direct input from you, automated tracking, and information from third-party sources.
+        </p>
 
-        <div className="mt-12 pt-8 border-t border-gray-100 dark:border-gray-700 flex justify-center">
-          <button 
-            onClick={() => {
-              const link = document.createElement('a');
-              link.href = 'data:application/pdf;base64,JVBERi0xLjQKJWRmYm9keQoxIDAgb2JqCjw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+CmVuZG9iagoyIDAgb2JqCjw8L1R5cGUvUGFnZXMvQ291bnQgMS9LaWRzWzMgMCBSXT4+CmVuZG9iagozIDAgb2JqCjw8L1R5cGUvUGFnZS9QYXJlbnQgMiAwIFIvTWVkaWFCb3hbMCAwIDYxMiA3OTJdL0NvbnRlbnRzIDQgMCBSPj4KZW5kb2JqCjQgIDAgb2JqCjw8L0xlbmd0aCA0ND4+CnN0cmVhbQpCVAovRjEgMjQgVGYKODAgNzAwIFRkCihQdWxzZSBGZWVkIERvY3VtZW50KSBUagpFVAplbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA1CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxOCAwMDAwMCBuIAowMDAwMDAwMDY3IDAwMDAwIG4gCjAwMDAwMDAxMjYgMDAwMDAgbiAKMDAwMDAwMDIyNiAwMDAwMCBuIAp0cmFpbGVyCjw8L1NpemUgNS9Sb290IDEgMCBSPj4Kc3RhcnR4cmVmCjMyMQolJUVPRgo='; 
-              link.download = 'Pulse_Feed_Privacy.pdf';
-              link.click();
-              alert('Privacy PDF download started!');
-            }}
-            className="flex items-center space-x-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 px-6 py-3 rounded-full font-bold transition-colors"
-          >
-            <Download className="w-5 h-5" />
-            <span>Download Full PDF</span>
-          </button>
+        <h3>3.1 Types of Data Collected</h3>
+        <h4>3.1.1 Personal Identification Information</h4>
+        <p>
+          While using our Service, we may ask you to provide us with certain personally identifiable information that can be used to contact or identify you ("Personal Data"). Personally identifiable information may include, but is not limited to:
+        </p>
+        <ul>
+          <li><strong>Identity Data:</strong> Full name, username, profile picture, and date of birth.</li>
+          <li><strong>Contact Data:</strong> Email address, phone number, and physical address.</li>
+          <li><strong>Financial Data:</strong> Wallet addresses, bank account details (for payouts), and transaction history.</li>
+          <li><strong>Profile Data:</strong> Interests, preferences, feedback, and survey responses.</li>
+          <li><strong>Social Data:</strong> Connections, followers, and interaction history within the community feeds.</li>
+          <li><strong>Dating Data:</strong> Gender identity, sexual orientation (optional), relationship goals, and matching preferences.</li>
+          <li><strong>Educational Data:</strong> Enrolled courses, progress tracking, assessment results, and earned badges.</li>
+        </ul>
+
+        <h4>3.1.2 Usage and Technical Data</h4>
+        <p>
+          When you access the Service by or through a mobile device, we may collect certain information automatically, including, but not limited to:
+        </p>
+        <ul>
+          <li><strong>Device Information:</strong> Mobile device unique ID, IP address, operating system, and hardware model.</li>
+          <li><strong>Browser Information:</strong> Browser type, version, and language settings.</li>
+          <li><strong>Log Data:</strong> Time and date of your visit, pages viewed, and time spent on those pages.</li>
+          <li><strong>Network Data:</strong> Mobile network information and signal strength.</li>
+          <li><strong>Interaction Data:</strong> Clickstream data, heatmaps (anonymized), and feature usage frequency.</li>
+        </ul>
+
+        <h4>3.1.3 Precise Location Data</h4>
+        <p>
+          We may use and store information about your location if you give us permission to do so ("Location Data"). We use this data to provide features of our Service, such as local community reporting in AI Eye and localized dating matches.
+        </p>
+        <p>
+          You can enable or disable location services when you use our Service at any time, through your device settings. However, disabling location services may limit the functionality of certain features.
+        </p>
+
+        <h4>3.1.4 AI Interaction and Training Data (Gemini 3 Flash)</h4>
+        <p>
+          Our Service utilizes advanced AI models. We collect:
+        </p>
+        <ul>
+          <li><strong>Prompts:</strong> The text, images, or files you provide to the AI for analysis or generation.</li>
+          <li><strong>AI Outputs:</strong> The content generated in response to your prompts.</li>
+          <li><strong>Contextual Metadata:</strong> Information about the session, such as the time of interaction and the specific tool used (e.g., AI Eye, Education Hub).</li>
+        </ul>
+        <p>
+          This data is used to personalize your experience. We may also use anonymized and aggregated interaction data to fine-tune our AI models and improve the accuracy of our community problem-solving algorithms.
+        </p>
+
+        <h4>3.1.5 Biometric and Health Data (Optional)</h4>
+        <p>
+          If you choose to use certain advanced features, such as facial recognition for account recovery or health-related tracking in specific community challenges, we may collect biometric or health data. This data is processed with explicit consent and is encrypted using industry-standard protocols.
+        </p>
+
+        <h2>4. Use of Data: Powering the Pulse Feeds Ecosystem</h2>
+        <p>Pulse Feeds uses the collected data for various purposes, categorized by our core service pillars:</p>
+        
+        <h3>4.1 Core Service Operations</h3>
+        <ul>
+          <li><strong>Account Management:</strong> To manage your registration and provide access to different functionalities.</li>
+          <li><strong>Customer Support:</strong> To provide care and support, and to respond to your requests.</li>
+          <li><strong>Service Improvement:</strong> To gather analysis or valuable information so that we can improve our Service.</li>
+          <li><strong>Security and Fraud Prevention:</strong> To monitor the usage of our Service and detect, prevent, and address technical issues or fraudulent activities.</li>
+          <li><strong>Communication:</strong> To send you technical notices, updates, security alerts, and support and administrative messages.</li>
+        </ul>
+
+        <h3>4.2 Feature-Specific Processing</h3>
+        <ul>
+          <li><strong>AI Eye:</strong> To analyze community reports, categorize real-world problems, and facilitate communication with community leaders.</li>
+          <li><strong>Education Hub:</strong> To personalize learning paths, track progress, and award digital badges.</li>
+          <li><strong>Dating Hub:</strong> To facilitate matches based on your preferences and interaction history.</li>
+          <li><strong>Reward System:</strong> To calculate Pulse Points, manage your wallet, and process monthly withdrawals.</li>
+          <li><strong>Social Feeds:</strong> To curate content that matches your interests and facilitate community engagement.</li>
+          <li><strong>Watch-to-Earn:</strong> To track viewing progress and credit rewards accurately.</li>
+        </ul>
+
+        <h3>4.3 Marketing and Communications</h3>
+        <p>
+          We may use your Personal Data to contact you with newsletters, marketing or promotional materials, and other information that may be of interest to you. You may opt out of receiving any, or all, of these communications from us by following the unsubscribe link or instructions provided in any email we send.
+        </p>
+
+        <h2>5. Legal Basis for Processing Personal Data</h2>
+        <p>
+          Our legal basis for collecting and using the personal information described in this Privacy Policy depends on the Personal Data we collect and the specific context in which we collect it.
+        </p>
+        <ul>
+          <li><strong>Performance of a Contract:</strong> When we need to process your data to fulfill our obligations under the Terms & Conditions.</li>
+          <li><strong>Consent:</strong> When you have given us clear consent to process your personal data for a specific purpose (e.g., location tracking).</li>
+          <li><strong>Legitimate Interests:</strong> When processing is necessary for our legitimate interests (e.g., improving AI models, ensuring platform security) and your interests and fundamental rights do not override those interests.</li>
+          <li><strong>Legal Obligation:</strong> When we are required to process your data to comply with the law (e.g., tax reporting for rewards).</li>
+        </ul>
+
+        <h2>6. Data Retention and Deletion Schedule</h2>
+        <p>
+          Pulse Feeds will retain your Personal Data only for as long as is necessary for the purposes set out in this Privacy Policy.
+        </p>
+        <ul>
+          <li><strong>Account Data:</strong> Retained for the duration of your active account. Upon account deletion, data is purged within 30 days, except where legal retention is required.</li>
+          <li><strong>Usage Data:</strong> Generally retained for a period of 12 months for analysis purposes, unless needed for security or legal reasons.</li>
+          <li><strong>AI Interaction Data:</strong> Prompts and outputs are retained for 24 months to improve model performance, after which they are anonymized.</li>
+          <li><strong>Financial Records:</strong> Retained for 7 years to comply with global tax and accounting regulations.</li>
+          <li><strong>Dating Data:</strong> Profiles and matches are retained as long as the account is active. Inactive dating profiles are archived after 6 months of inactivity.</li>
+        </ul>
+
+        <h2>7. International Data Transfers and Global Safeguards</h2>
+        <p>
+          Your information, including Personal Data, may be transferred to — and maintained on — computers located outside of your state, province, country or other governmental jurisdiction where the data protection laws may differ from those in your jurisdiction.
+        </p>
+        <p>
+          Pulse Feeds operates globally and utilizes cloud infrastructure primarily located in the United States and the European Union. We implement Standard Contractual Clauses (SCCs) and other approved mechanisms to ensure that your data receives an equivalent level of protection regardless of where it is processed.
+        </p>
+
+        <h2>8. Disclosure of Data: Transparency and Accountability</h2>
+        <h3>8.1 Service Providers and Partners</h3>
+        <p>
+          We may share your data with third-party vendors who perform services for us, such as payment processing, data analysis, email delivery, hosting services, and customer service.
+        </p>
+        <h3>8.2 Community Leaders and NGOs (AI Eye)</h3>
+        <p>
+          In the context of the AI Eye feature, anonymized report data may be shared with verified community leaders, NGOs, or government agencies to facilitate the resolution of reported problems.
+        </p>
+        <h3>8.3 Legal Requirements and Law Enforcement</h3>
+        <p>
+          We may disclose your Personal Data if required to do so by law or in response to valid requests by public authorities (e.g., a court or a government agency).
+        </p>
+        <h3>8.4 Business Transfers</h3>
+        <p>
+          If we are involved in a merger, acquisition, or asset sale, your Personal Data may be transferred. We will provide notice before your Personal Data is transferred and becomes subject to a different Privacy Policy.
+        </p>
+
+        <h2>9. Security of Data: Our Technical and Organizational Measures</h2>
+        <p>
+          We implement a variety of security measures to maintain the safety of your personal information:
+        </p>
+        <ul>
+          <li><strong>Encryption:</strong> All data in transit is encrypted using TLS 1.3, and sensitive data at rest is encrypted using AES-256.</li>
+          <li><strong>Access Control:</strong> We restrict access to personal data to employees, contractors, and agents who need that information to process it.</li>
+          <li><strong>Regular Audits:</strong> We conduct periodic security audits and vulnerability assessments.</li>
+          <li><strong>Anonymization:</strong> We use data masking and anonymization techniques wherever possible, especially for AI training.</li>
+          <li><strong>Physical Security:</strong> Data centers used by our cloud providers have rigorous physical security controls.</li>
+        </ul>
+
+        <h2>10. Your Rights: Empowering the Data Subject</h2>
+        <p>
+          Depending on your location, you have specific rights regarding your personal data. Pulse Feeds is committed to honoring these rights globally.
+        </p>
+        
+        <h3>10.1 European Union (GDPR) Rights</h3>
+        <ul>
+          <li><strong>Right of Access:</strong> Request a copy of your data.</li>
+          <li><strong>Right of Rectification:</strong> Correct inaccurate data.</li>
+          <li><strong>Right to Erasure:</strong> Request deletion of your data ("Right to be Forgotten").</li>
+          <li><strong>Right to Restriction:</strong> Limit how we process your data.</li>
+          <li><strong>Right to Data Portability:</strong> Receive your data in a structured, machine-readable format.</li>
+          <li><strong>Right to Object:</strong> Object to processing based on legitimate interests.</li>
+          <li><strong>Right to Withdraw Consent:</strong> Withdraw consent at any time where we rely on it.</li>
+        </ul>
+
+        <h3>10.2 California (CCPA/CPRA) Rights</h3>
+        <ul>
+          <li><strong>Right to Know:</strong> Know what personal information is collected, used, shared, or sold.</li>
+          <li><strong>Right to Delete:</strong> Request deletion of personal information.</li>
+          <li><strong>Right to Opt-Out:</strong> Opt-out of the "sale" or "sharing" of personal information.</li>
+          <li><strong>Right to Correct:</strong> Request correction of inaccurate personal information.</li>
+          <li><strong>Right to Limit Use of Sensitive PI:</strong> Limit the use of sensitive personal information.</li>
+          <li><strong>Right to Non-Discrimination:</strong> We will not discriminate against you for exercising your rights.</li>
+        </ul>
+
+        <h2>11. AI Ethics and Automated Decision Making</h2>
+        <p>
+          Pulse Feeds uses AI to enhance your experience. We do not use AI for automated decision-making that produces legal effects or similarly significant effects on you without human oversight, unless authorized by law or necessary for entering into a contract.
+        </p>
+        <p>
+          You have the right to request human intervention in AI-driven processes, to express your point of view, and to contest decisions made by AI.
+        </p>
+
+        <h2>12. Children's Privacy</h2>
+        <p>
+          Our Service is not intended for individuals under the age of 18. We do not knowingly collect personal data from children. If we become aware that we have collected data from a child without parental consent, we will take immediate steps to delete that information.
+        </p>
+
+        <h2>13. Cookies and Tracking Technologies: Detailed Disclosure</h2>
+        <p>
+          We use cookies to enhance your experience. Our use includes:
+        </p>
+        <ul>
+          <li><strong>Essential Cookies:</strong> Necessary for the Service to function.</li>
+          <li><strong>Analytics Cookies:</strong> To understand how users interact with the App.</li>
+          <li><strong>Advertising Cookies:</strong> To deliver relevant ads and measure their effectiveness.</li>
+          <li><strong>Social Media Cookies:</strong> To enable social sharing features.</li>
+          <li><strong>Preference Cookies:</strong> To remember your settings and preferences.</li>
+        </ul>
+        <p>
+          You can manage your cookie preferences through your browser or device settings.
+        </p>
+
+        <h2>14. Data Protection Officer (DPO)</h2>
+        <p>
+          We have appointed a Data Protection Officer to oversee our privacy practices. You can contact our DPO at:
+        </p>
+        <p>
+          Email: dpo@pulsefeeds.com<br />
+          Attn: Data Protection Officer
+        </p>
+
+        <h2>15. Changes to This Privacy Policy</h2>
+        <p>
+          We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the "Last updated" date. We will also provide a more prominent notice (e.g., email notification) for significant changes.
+        </p>
+
+        <h2>16. Detailed Data Processing for AI Eye</h2>
+        <p>
+          The AI Eye feature processes real-world community data. When you submit a report:
+        </p>
+        <ul>
+          <li><strong>Visual Data:</strong> Images or videos are analyzed for objects, text, and context using advanced computer vision.</li>
+          <li><strong>Location Metadata:</strong> GPS coordinates are used to map the report accurately and identify regional trends.</li>
+          <li><strong>Natural Language:</strong> Your descriptions are parsed for sentiment, urgency, and categorization.</li>
+        </ul>
+        <p>
+          This data is shared with verified community leaders in an aggregated and anonymized format to protect your specific identity while ensuring the problem is addressed.
+        </p>
+
+        <h2>17. Detailed Data Processing for Education Hub</h2>
+        <p>
+          Our Education Hub tracks your learning journey to provide a personalized experience:
+        </p>
+        <ul>
+          <li><strong>Engagement Metrics:</strong> Time spent on modules, quiz scores, and interaction frequency are tracked.</li>
+          <li><strong>AI Personalization:</strong> The AI Brain uses your progress to suggest relevant courses and adjust difficulty.</li>
+          <li><strong>Credentialing:</strong> Your completion data is used to generate verifiable digital badges and certificates.</li>
+        </ul>
+
+        <h2>18. Detailed Data Processing for Dating Hub</h2>
+        <p>
+          The Dating Hub requires sensitive data processing to facilitate meaningful connections:
+        </p>
+        <ul>
+          <li><strong>Preference Matching:</strong> We use your stated interests, relationship goals, and interaction patterns to suggest matches.</li>
+          <li><strong>Safety Monitoring:</strong> AI algorithms scan for predatory behavior, harassment, or scamming in chats.</li>
+          <li><strong>Optional Attributes:</strong> Data like height, religion, or lifestyle habits are only processed if you choose to provide them.</li>
+        </ul>
+
+        <h2>19. Detailed Data Processing for Watch-to-Earn</h2>
+        <p>
+          To ensure fair rewards and platform integrity in Watch-to-Earn:
+        </p>
+        <ul>
+          <li><strong>Attention Tracking:</strong> We monitor active viewing time and engagement to prevent automated bot usage.</li>
+          <li><strong>Ad Interaction:</strong> Data on which ads you engage with is shared with advertisers in an anonymized format for performance tracking.</li>
+        </ul>
+
+        <h2>20. Detailed Data Processing for Rewards and Payouts</h2>
+        <p>
+          Financial transparency and compliance are paramount:
+        </p>
+        <ul>
+          <li><strong>Wallet Activity:</strong> Every Pulse Point earned is logged with a detailed timestamp and source identifier.</li>
+          <li><strong>KYC (Know Your Customer):</strong> For large withdrawals, we may require identity verification to comply with anti-money laundering (AML) laws.</li>
+        </ul>
+
+        <h2>21. Data Breach Notification Protocols</h2>
+        <p>
+          In the unlikely event of a data breach, Pulse Feeds follows a strict protocol:
+        </p>
+        <ul>
+          <li><strong>Discovery:</strong> Immediate internal investigation upon detection of unauthorized access.</li>
+          <li><strong>Notification:</strong> Affected users will be notified via email and in-app notification within 72 hours of discovery.</li>
+          <li><strong>Mitigation:</strong> Steps taken to secure the system, rotate keys, and prevent further unauthorized access.</li>
+        </ul>
+
+        <h2>22. Third-Party Data Sharing Categories</h2>
+        <p>
+          We share data with the following categories of partners to provide our services:
+        </p>
+        <ul>
+          <li><strong>Cloud Infrastructure:</strong> Google Cloud Platform, Amazon Web Services for hosting and storage.</li>
+          <li><strong>AI Model Providers:</strong> Google (Gemini API) for AI-driven features.</li>
+          <li><strong>Analytics:</strong> Google Analytics, Mixpanel for understanding user behavior.</li>
+          <li><strong>Payment Processors:</strong> Stripe, PayPal, Crypto Gateways for processing rewards and payments.</li>
+          <li><strong>Communication Tools:</strong> SendGrid, Twilio for email and SMS notifications.</li>
+        </ul>
+
+        <h2>23. Accessibility and Transparency</h2>
+        <p>
+          We strive to make our privacy practices easy to understand for everyone. If you require this policy in an alternative format (e.g., audio, large print), please contact our support team.
+        </p>
+
+        <h2>24. Final Provisions</h2>
+        <p>
+          This Privacy Policy constitutes the entire understanding between you and Pulse Feeds regarding privacy matters.
+        </p>
+
+        <h2>25. Contact Us</h2>
+        <p>
+          If you have any questions about this Privacy Policy or our data practices, please contact us:
+        </p>
+        <p>
+          Pulse Feeds Privacy Team<br />
+          Email: privacy@pulsefeeds.com<br />
+          Address: [Your Company Address Here]
+        </p>
+
+        <h2>25. Regional Compliance: Brazil (LGPD)</h2>
+        <p>
+          If you are a resident of Brazil, you have specific rights under the Lei Geral de Proteção de Dados (LGPD):
+        </p>
+        <ul>
+          <li><strong>Confirmation of Processing:</strong> You have the right to confirm whether we are processing your data.</li>
+          <li><strong>Access to Data:</strong> You have the right to access the data we hold about you.</li>
+          <li><strong>Correction of Data:</strong> You have the right to correct incomplete, inaccurate, or out-of-date data.</li>
+          <li><strong>Anonymization or Deletion:</strong> You have the right to request the anonymization, blocking, or deletion of unnecessary or excessive data.</li>
+          <li><strong>Data Portability:</strong> You have the right to request the transfer of your data to another service provider.</li>
+        </ul>
+
+        <h2>26. Regional Compliance: Canada (PIPEDA)</h2>
+        <p>
+          Pulse Feeds complies with the Personal Information Protection and Electronic Documents Act (PIPEDA). We ensure that:
+        </p>
+        <ul>
+          <li><strong>Accountability:</strong> We are responsible for personal information under our control.</li>
+          <li><strong>Identifying Purposes:</strong> We identify the purposes for which personal information is collected at or before the time of collection.</li>
+          <li><strong>Consent:</strong> We obtain your knowledge and consent for the collection, use, or disclosure of personal information.</li>
+          <li><strong>Limiting Collection:</strong> We limit the collection of personal information to that which is necessary for the purposes identified.</li>
+        </ul>
+
+        <h2>27. Regional Compliance: Australia (Privacy Act 1988)</h2>
+        <p>
+          For our Australian users, we adhere to the Australian Privacy Principles (APPs):
+        </p>
+        <ul>
+          <li><strong>Open and Transparent Management:</strong> We manage personal information in an open and transparent way.</li>
+          <li><strong>Anonymity and Pseudonymity:</strong> You have the option of not identifying yourself, or of using a pseudonym, in certain circumstances.</li>
+          <li><strong>Direct Marketing:</strong> We only use or disclose personal information for direct marketing if certain conditions are met.</li>
+        </ul>
+
+        <h2>28. Data Privacy Impact Assessments (DPIA)</h2>
+        <p>
+          Pulse Feeds conducts regular Data Privacy Impact Assessments for high-risk processing activities, particularly those involving AI and large-scale data analysis. These assessments help us identify and mitigate privacy risks before they occur.
+        </p>
+
+        <h2>29. Employee Training and Awareness</h2>
+        <p>
+          All Pulse Feeds employees and contractors undergo mandatory privacy and security training. We foster a culture of privacy-by-design, ensuring that data protection is integrated into every stage of our product development lifecycle.
+        </p>
+
+        <h2>30. Final Privacy Statement</h2>
+        <p>
+          Your trust is our most valuable asset. We are committed to being transparent about our data practices and providing you with the tools you need to control your privacy.
+        </p>
+
+        <div className="mt-12 pt-8 border-t border-gray-100 dark:border-gray-700 text-center text-sm text-gray-500">
+          <p>© 2026 Pulse Feeds. Your privacy is our priority. Built with trust and AI innovation.</p>
         </div>
       </div>
     </div>

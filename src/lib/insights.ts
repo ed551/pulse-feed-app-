@@ -21,7 +21,7 @@ export async function saveInsight(type: InsightType, category: InsightCategory, 
       category,
       content,
       authorId: auth.currentUser.uid,
-      timestamp: serverTimestamp()
+      timestamp: new Date().toISOString()
     });
     console.log(`Insight saved: [${type}:${category}] ${content.substring(0, 50)}...`);
   } catch (err) {

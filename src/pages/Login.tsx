@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LogIn, ShieldAlert } from 'lucide-react';
+import { LogIn, ShieldAlert, Fingerprint } from 'lucide-react';
+import { isBiometricsSupported, authenticateBiometric } from '../lib/biometrics';
 
 export default function Login() {
   const { loginWithGoogle } = useAuth();
@@ -9,6 +10,11 @@ export default function Login() {
   const location = useLocation();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [biometricSupported, setBiometricSupported] = useState(false);
+
+  useEffect(() => {
+    setBiometricSupported(isBiometricsSupported());
+  }, []);
 
   const from = location.state?.from?.pathname || "/";
 
@@ -20,6 +26,20 @@ export default function Login() {
       navigate(from, { replace: true });
     } catch (err: any) {
       setError(err.message || 'Failed to sign in');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBiometricLogin = async () => {
+    try {
+      setError('');
+      setLoading(true);
+      await authenticateBiometric();
+      // In a real app, you'd verify the credential with your backend here
+      navigate(from, { replace: true });
+    } catch (err: any) {
+      setError('Biometric authentication failed');
     } finally {
       setLoading(false);
     }
@@ -57,6 +77,19 @@ export default function Login() {
             </span>
             {loading ? 'Signing in...' : 'Sign in with Google'}
           </button>
+          
+          {biometricSupported && (
+            <button
+              onClick={handleBiometricLogin}
+              disabled={loading}
+              className="group relative w-full flex justify-center py-3 px-4 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-xl text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 transition-colors"
+            >
+              <span className="absolute left-0 inset-y-0 flex items-center pl-3">
+                <Fingerprint className="h-5 w-5 text-gray-400 group-hover:text-gray-500" aria-hidden="true" />
+              </span>
+              {loading ? 'Authenticating...' : 'Sign in with Biometrics'}
+            </button>
+          )}
         </div>
         
         <div className="mt-6">

@@ -26,6 +26,20 @@ interface UserData {
     icon: string;
     description?: string;
   }[];
+  // Dating Hub parameters
+  isDatingActive?: boolean;
+  tribe?: string;
+  radius?: number;
+  age?: number;
+  gender?: string;
+  location?: string;
+  hobbies?: string[];
+  job?: string;
+  religion?: string;
+  foods?: string[];
+  education?: string;
+  status?: string;
+  sports?: string[];
 }
 
 interface AuthContextType {

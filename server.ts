@@ -3,27 +3,9 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
-import * as Tremendous from 'tremendous';
 import axios from 'axios';
 
 dotenv.config();
-
-let tremendousClient: any = null;
-
-function getTremendous() {
-  if (!tremendousClient) {
-    const apiKey = process.env.TREMENDOUS_API_KEY;
-    if (!apiKey) {
-      console.warn("TREMENDOUS_API_KEY not set, Tremendous payouts will fail.");
-      return null;
-    }
-    tremendousClient = new (Tremendous as any)({
-      apiKey: apiKey,
-      baseUrl: process.env.TREMENDOUS_API_URL || 'https://testflight.tremendous.com/api/v2'
-    });
-  }
-  return tremendousClient;
-}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -88,42 +70,18 @@ async function startServer() {
 
     console.log(`Initiating ${method} payout for ${amount} to ${email || bankDetails?.accountNumber}`);
     
-    try {
-      const client = getTremendous();
-      if (!client) {
-        throw new Error("Tremendous client not initialized");
-      }
-      
-      // Tremendous Payout Logic
-      // In a real app, you would map the method to Tremendous funding sources/products
-      // const payout = await client.payouts.create({
-      //   payment: {
-      //     method: method === 'bank' ? 'bank_transfer' : 'paypal',
-      //     amount: amount,
-      //     currency: 'USD'
-      //   },
-      //   recipient: {
-      //     name: bankDetails?.accountName || 'User',
-      //     email: email
-      //   }
-      // });
-      
-      // Mock successful payout
-      res.json({
-        success: true,
-        transactionId: "INT-" + Math.random().toString(36).substr(2, 9),
-        message: "Payout initiated successfully via Tremendous"
-      });
-    } catch (error) {
-      console.error("Tremendous payout error:", error);
-      res.status(500).json({ success: false, error: "Failed to process Tremendous payout" });
-    }
+    // Mock successful payout
+    res.json({
+      success: true,
+      transactionId: "INT-" + Math.random().toString(36).substr(2, 9),
+      message: "Payout initiated successfully"
+    });
   });
 
   // Weather Proxy
   app.get("/api/weather", async (req, res) => {
     const { lat, lon } = req.query;
-    console.log(`[Weather] Fetching for lat=${lat}, lon=${lon}`);
+    console.log(`[Weather] Request received: lat=${lat}, lon=${lon}`);
     
     if (!lat || !lon || lat === 'undefined' || lon === 'undefined') {
       console.warn("[Weather] Invalid coordinates provided");
@@ -131,12 +89,20 @@ async function startServer() {
     }
 
     try {
+      console.log(`[Weather] Fetching from Open-Meteo...`);
       const response = await axios.get(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`, {
-        timeout: 10000 // 10s timeout
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'PulseFeedApp/1.0'
+        }
       });
+      console.log(`[Weather] Open-Meteo response received: ${response.status}`);
       res.json(response.data);
     } catch (error: any) {
       console.error("[Weather] Proxy error:", error.message);
+      if (error.response) {
+        console.error("[Weather] Open-Meteo error response:", error.response.status, error.response.data);
+      }
       res.status(500).json({ error: "Failed to fetch weather", details: error.message });
     }
   });
@@ -182,15 +148,20 @@ async function startServer() {
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
+    console.log("Starting Vite in development mode...");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
+    console.log("Vite middleware attached.");
   } else {
+    console.log("Starting server in production mode...");
     const distPath = path.join(process.cwd(), "dist");
+    console.log("Serving static files from:", distPath);
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
+      console.log(`Serving index.html for path: ${req.path}`);
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

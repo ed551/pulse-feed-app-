@@ -13,7 +13,8 @@ import {
   UserCircle,
   ArrowLeft,
   Check,
-  Loader2
+  Loader2,
+  Heart
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -35,10 +36,41 @@ export default function Settings() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Dating states
+  const [isDatingActive, setIsDatingActive] = useState(userData?.isDatingActive || false);
+  const [datingTribe, setDatingTribe] = useState(userData?.tribe || "");
+  const [datingRadius, setDatingRadius] = useState(userData?.radius || 50);
+  const [datingAge, setDatingAge] = useState(userData?.age || 18);
+  const [datingGender, setDatingGender] = useState(userData?.gender || "Male");
+  const [datingLocation, setDatingLocation] = useState(userData?.location || "");
+  const [datingHobbies, setDatingHobbies] = useState(userData?.hobbies?.join(", ") || "");
+  const [datingJob, setDatingJob] = useState(userData?.job || "");
+  const [datingReligion, setDatingReligion] = useState(userData?.religion || "");
+  const [datingFoods, setDatingFoods] = useState(userData?.foods?.join(", ") || "");
+  const [datingEducation, setDatingEducation] = useState(userData?.education || "");
+  const [datingStatus, setDatingStatus] = useState(userData?.status || "Single");
+  const [datingSports, setDatingSports] = useState(userData?.sports?.join(", ") || "");
+
   useEffect(() => {
     if (currentUser?.displayName) setDisplayName(currentUser.displayName);
     if (currentUser?.email) setEmail(currentUser.email);
-  }, [currentUser]);
+    
+    if (userData) {
+      setIsDatingActive(userData.isDatingActive || false);
+      setDatingTribe(userData.tribe || "");
+      setDatingRadius(userData.radius || 50);
+      setDatingAge(userData.age || 18);
+      setDatingGender(userData.gender || "Male");
+      setDatingLocation(userData.location || "");
+      setDatingHobbies(userData.hobbies?.join(", ") || "");
+      setDatingJob(userData.job || "");
+      setDatingReligion(userData.religion || "");
+      setDatingFoods(userData.foods?.join(", ") || "");
+      setDatingEducation(userData.education || "");
+      setDatingStatus(userData.status || "Single");
+      setDatingSports(userData.sports?.join(", ") || "");
+    }
+  }, [currentUser, userData]);
 
   const handleSaveProfile = async () => {
     if (!currentUser) return;
@@ -70,6 +102,34 @@ export default function Settings() {
       setActiveSection('security-details');
     }
     setPendingAction(null);
+  };
+
+  const handleSaveDatingProfile = async () => {
+    if (!currentUser) return;
+    setIsSaving(true);
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        isDatingActive,
+        tribe: datingTribe,
+        radius: Number(datingRadius),
+        age: Number(datingAge),
+        gender: datingGender,
+        location: datingLocation,
+        hobbies: datingHobbies.split(",").map(s => s.trim()).filter(s => s !== ""),
+        job: datingJob,
+        religion: datingReligion,
+        foods: datingFoods.split(",").map(s => s.trim()).filter(s => s !== ""),
+        education: datingEducation,
+        status: datingStatus,
+        sports: datingSports.split(",").map(s => s.trim()).filter(s => s !== "")
+      });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (error) {
+      console.error("Error updating dating profile:", error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const sections = [
@@ -106,6 +166,171 @@ export default function Settings() {
           >
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : saveSuccess ? <Check className="w-4 h-4 mr-2" /> : null}
             {saveSuccess ? "Saved Successfully" : "Save Changes"}
+          </button>
+        </div>
+      )
+    },
+    {
+      id: 'dating',
+      title: 'Dating Profile',
+      description: 'Manage your dating hub parameters',
+      icon: <Heart className="w-5 h-5 text-pink-500" />,
+      content: (
+        <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center justify-between p-3 bg-pink-50 dark:bg-pink-900/10 rounded-xl border border-pink-100 dark:border-pink-900/30 mb-4">
+            <div>
+              <p className="text-sm font-bold text-pink-900 dark:text-pink-300">Dating Hub Active</p>
+              <p className="text-[10px] text-pink-700/70 dark:text-pink-400/70">Show your profile in the Dating Hub</p>
+            </div>
+            <button 
+              onClick={() => setIsDatingActive(!isDatingActive)}
+              className={cn(
+                "w-12 h-6 rounded-full relative transition-colors",
+                isDatingActive ? "bg-pink-500" : "bg-gray-300 dark:bg-gray-600"
+              )}
+            >
+              <div className={cn(
+                "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
+                isDatingActive ? "right-1" : "left-1"
+              )} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Tribe</label>
+              <input 
+                type="text" 
+                value={datingTribe}
+                onChange={(e) => setDatingTribe(e.target.value)}
+                placeholder="e.g. Kikuyu"
+                className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Radius (km)</label>
+              <input 
+                type="number" 
+                value={datingRadius}
+                onChange={(e) => setDatingRadius(Number(e.target.value))}
+                className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Age</label>
+              <input 
+                type="number" 
+                value={datingAge}
+                onChange={(e) => setDatingAge(Number(e.target.value))}
+                className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Sex</label>
+              <select 
+                value={datingGender}
+                onChange={(e) => setDatingGender(e.target.value)}
+                className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
+              >
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Location</label>
+              <input 
+                type="text" 
+                value={datingLocation}
+                onChange={(e) => setDatingLocation(e.target.value)}
+                placeholder="City, Country"
+                className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Favourite Job</label>
+              <input 
+                type="text" 
+                value={datingJob}
+                onChange={(e) => setDatingJob(e.target.value)}
+                placeholder="Software Engineer"
+                className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Religion</label>
+              <input 
+                type="text" 
+                value={datingReligion}
+                onChange={(e) => setDatingReligion(e.target.value)}
+                placeholder="Christian"
+                className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Education</label>
+              <input 
+                type="text" 
+                value={datingEducation}
+                onChange={(e) => setDatingEducation(e.target.value)}
+                placeholder="University Degree"
+                className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</label>
+              <select 
+                value={datingStatus}
+                onChange={(e) => setDatingStatus(e.target.value)}
+                className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
+              >
+                <option value="Single">Single</option>
+                <option value="Married">Married</option>
+                <option value="Divorced">Divorced</option>
+                <option value="Widower">Widower</option>
+                <option value="Widowee">Widowee</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Hobbies (comma separated)</label>
+            <input 
+              type="text" 
+              value={datingHobbies}
+              onChange={(e) => setDatingHobbies(e.target.value)}
+              placeholder="Reading, Travel, Music"
+              className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Foods (comma separated)</label>
+            <input 
+              type="text" 
+              value={datingFoods}
+              onChange={(e) => setDatingFoods(e.target.value)}
+              placeholder="Pizza, Sushi, Pasta"
+              className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Sports (comma separated)</label>
+            <input 
+              type="text" 
+              value={datingSports}
+              onChange={(e) => setDatingSports(e.target.value)}
+              placeholder="Football, Basketball, Tennis"
+              className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
+            />
+          </div>
+
+          <button 
+            onClick={handleSaveDatingProfile}
+            disabled={isSaving}
+            className="w-full py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-sm font-bold transition-all flex items-center justify-center disabled:opacity-50"
+          >
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : saveSuccess ? <Check className="w-4 h-4 mr-2" /> : null}
+            {saveSuccess ? "Saved Successfully" : "Save Dating Profile"}
           </button>
         </div>
       )
