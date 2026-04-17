@@ -44,13 +44,13 @@
     "react-router-dom": "^7.13.2",
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   },
   "devDependencies": {
     "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "tailwindcss": "^4.1.14"
+    "@types/react-dom": "^19.2.3"
   }
 }

@@ -117,7 +117,9 @@ async function monitorIP() {
 
 async function startServer() {
   console.log("Starting server...");
-  await monitorIP(); // Check IP on startup
+  // Run IP monitor in background so it doesn't block startup
+  monitorIP().catch(err => console.error("Initial IP check failed:", err));
+  
   setInterval(monitorIP, 1000 * 60 * 60); // Check every hour
   console.log("NODE_ENV:", process.env.NODE_ENV);
   
