@@ -12,6 +12,7 @@
         "role": { "type": "string", "description": "The user's role (e.g., admin, user)" },
         "points": { "type": "number", "description": "The user's reward points" },
         "balance": { "type": "number", "description": "The user's wallet balance" },
+        "adRevenue": { "type": "number", "description": "The user's total ad revenue generated" },
         "bio": { "type": "string", "description": "The user's bio" },
         "badges": { "type": "array", "items": { "$ref": "#/entities/Badge" }, "description": "The user's earned badges" },
         "createdAt": { "type": "string", "format": "date-time", "description": "When the user was created" }
@@ -152,6 +153,104 @@
         "imageUrl": { "type": "string", "description": "The URL of the event image" }
       },
       "required": ["id", "title", "description", "date", "location", "organizerId", "category"]
+    },
+    "CommunityReport": {
+      "title": "CommunityReport",
+      "description": "A report of a local community issue",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The report's unique ID" },
+        "title": { "type": "string", "description": "The title of the report" },
+        "description": { "type": "string", "description": "The description of the problem" },
+        "category": { "type": "string", "description": "The category of the problem (e.g., Safety, Infrastructure)" },
+        "status": { "type": "string", "enum": ["Pending", "Investigating", "Resolved"], "description": "The current status of the report" },
+        "location": { "type": "string", "description": "The location of the problem" },
+        "reporterName": { "type": "string", "description": "The name of the user who reported the issue" },
+        "reporterUid": { "type": "string", "description": "The UID of the user who reported the issue" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the report was submitted" },
+        "upvotes": { "type": "number", "description": "The number of upvotes the report has received" },
+        "aiAnalysis": { "type": "string", "description": "AI-generated assessment of the report" }
+      },
+      "required": ["title", "description", "location", "reporterName", "reporterUid", "timestamp", "status"]
+    },
+    "CommunityPoll": {
+      "title": "CommunityPoll",
+      "description": "A community-wide poll for governance or feedback",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The poll's unique ID" },
+        "question": { "type": "string", "description": "The question being asked" },
+        "options": { 
+          "type": "array", 
+          "items": { 
+            "type": "object",
+            "properties": {
+              "text": { "type": "string" },
+              "votes": { "type": "number" }
+            }
+          }
+        },
+        "voters": { "type": "array", "items": { "type": "string" }, "description": "UIDs of users who voted" },
+        "endsAt": { "type": "string", "format": "date-time", "description": "When the poll ends" },
+        "category": { "type": "string", "description": "The category of the poll" },
+        "status": { "type": "string", "enum": ["Active", "Closed"] }
+      },
+      "required": ["question", "options", "endsAt", "category", "status"]
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "A chat conversation between users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The chat's unique ID" },
+        "participants": { "type": "array", "items": { "type": "string" }, "description": "The UIDs of the users in the chat" },
+        "lastMessage": { "type": "string", "description": "The content of the last message" },
+        "lastMessageTime": { "type": "string", "format": "date-time", "description": "When the last message was sent" },
+        "unreadCount": { "type": "number", "description": "The number of unread messages" },
+        "lastSenderId": { "type": "string", "description": "The UID of the last message sender" }
+      },
+      "required": ["participants"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "A message within a chat",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The message's unique ID" },
+        "senderId": { "type": "string", "description": "The UID of the user who sent the message" },
+        "text": { "type": "string", "description": "The content of the message" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the message was sent" },
+        "status": { "type": "string", "enum": ["sent", "delivered", "read"], "description": "The status of the message" }
+      },
+      "required": ["senderId", "text", "timestamp", "status"]
+    },
+    "UserPublic": {
+      "title": "UserPublic",
+      "description": "Publicly accessible user profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string" },
+        "status": { "type": "string" },
+        "isOnline": { "type": "boolean" },
+        "lastSeen": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName"]
+    },
+    "PlatformStats": {
+      "title": "PlatformStats",
+      "description": "Global platform financial and engagement statistics",
+      "type": "object",
+      "properties": {
+        "platformRevenue": { "type": "number", "description": "Total revenue generated by the platform" },
+        "developerShare": { "type": "number", "description": "Current withdrawable share for the developer" },
+        "totalUsers": { "type": "number", "description": "Total number of registered users" },
+        "totalPosts": { "type": "number", "description": "Total number of posts created" },
+        "lastUpdated": { "type": "string", "format": "date-time", "description": "When the stats were last updated" }
+      },
+      "required": ["platformRevenue", "developerShare", "lastUpdated"]
     }
   },
   "firestore": {
@@ -174,6 +273,30 @@
     "events/{eventId}": {
       "schema": "#/entities/Event",
       "description": "Stores events"
+    },
+    "community_reports/{reportId}": {
+      "schema": "#/entities/CommunityReport",
+      "description": "Stores community problem reports"
+    },
+    "community_polls/{pollId}": {
+      "schema": "#/entities/CommunityPoll",
+      "description": "Stores community-wide polls"
+    },
+    "chats/{chatId}": {
+      "schema": "#/entities/Chat",
+      "description": "Stores chat conversations"
+    },
+    "chats/{chatId}/messages/{messageId}": {
+      "schema": "#/entities/ChatMessage",
+      "description": "Stores messages within a chat"
+    },
+    "users_public/{userId}": {
+      "schema": "#/entities/UserPublic",
+      "description": "Stores public user profiles"
+    },
+    "platform/stats": {
+      "schema": "#/entities/PlatformStats",
+      "description": "Stores global platform statistics"
     }
   }
 }

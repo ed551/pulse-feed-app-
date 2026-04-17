@@ -29,6 +29,7 @@ export interface Post {
   authorId: string;
   author: string;
   avatar: string;
+  user: string;
   title: string;
   content: string;
   type: 'post' | 'announcement' | 'update' | 'video' | 'live' | 'poll' | 'ad';
@@ -48,6 +49,10 @@ export interface Post {
   reports?: number;
   time: string;
   isLiked: boolean;
+  isVerified?: boolean;
+  isSponsored?: boolean;
+  cta?: string;
+  ctaUrl?: string;
   commentsList: PostComment[];
   analytics: PostAnalytics[];
   createdAt?: any;

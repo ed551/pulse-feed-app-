@@ -1,13 +1,15 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { useAuth } from './AuthContext';
-import { doc, updateDoc, increment } from 'firebase/firestore';
+import { doc, updateDoc, increment, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 interface RevenueContextType {
   isIdle: boolean;
   activeSeconds: number;
   totalEarnedToday: number;
-  addRevenue: (amount: number, reason: string) => Promise<void>;
+  addRevenue: (userAmount: number, platformAmount: number, reason: string, source: 'ad' | 'education' | 'active_time' | 'dating' | 'community' | 'events') => Promise<void>;
+  addPlatformRevenue: (amount: number, reason: string) => Promise<void>;
+  addPlatformExpense: (amount: number, reason: string) => Promise<void>;
 }
 
 const RevenueContext = createContext<RevenueContextType | undefined>(undefined);
@@ -31,20 +33,130 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const EARNING_INTERVAL = 30000; // 30 seconds
   const POINTS_PER_INTERVAL = 1;
 
-  const addRevenue = async (amount: number, reason: string) => {
+  const addRevenue = async (userAmount: number, platformAmount: number, reason: string, source: 'ad' | 'education' | 'active_time' | 'dating' | 'community' | 'events') => {
     if (!currentUser) return;
     try {
       const userRef = doc(db, 'users', currentUser.uid);
-      // Assuming 1 point = $0.01 for simplicity, or we just add to points
-      // Let's add amount * 100 as points
-      const pointsToAdd = Math.floor(amount * 100);
-      await updateDoc(userRef, {
-        points: increment(pointsToAdd)
+      const statsRef = doc(db, 'platform', 'stats');
+
+      // 1 point = $0.01. So $1.00 = 100 points.
+      const pointsToAdd = Math.floor(userAmount * 100);
+      
+      // Update User Data with specific revenue source tracking
+      const updateData: any = {
+        points: increment(pointsToAdd),
+        balance: increment(userAmount)
+      };
+
+      if (source === 'ad') updateData.adRevenue = increment(userAmount);
+      if (source === 'education') updateData.educationRevenue = increment(userAmount);
+      if (source === 'active_time') updateData.activeTimeRevenue = increment(userAmount);
+      if (source === 'dating') updateData.datingRevenue = increment(userAmount);
+      if (source === 'community') updateData.communityRevenue = increment(userAmount);
+      if (source === 'events') updateData.eventsRevenue = increment(userAmount);
+      
+      await updateDoc(userRef, updateData);
+
+      // Update Platform Stats (Platform Share & Total User Balances)
+      await updateDoc(statsRef, {
+        platformRevenue: increment(userAmount + platformAmount),
+        platformShare: increment(platformAmount),
+        totalUserBalances: increment(userAmount),
+        serverSecret: "pulse-feeds-server-secret-2026"
+      }).catch(async (err) => {
+        // If document doesn't exist, create it (though it should exist)
+        if (err.message.includes('not-found')) {
+          const { setDoc } = await import('firebase/firestore');
+          await setDoc(statsRef, {
+            platformRevenue: userAmount + platformAmount,
+            platformShare: platformAmount,
+            totalUserBalances: userAmount,
+            serverSecret: "pulse-feeds-server-secret-2026"
+          });
+        }
       });
+
+      // Log Platform Transaction
+      await addDoc(collection(db, 'platform_transactions'), {
+        type: 'revenue',
+        source: source,
+        userAmount,
+        platformAmount,
+        totalAmount: userAmount + platformAmount,
+        reason,
+        userId: currentUser.uid,
+        timestamp: serverTimestamp(),
+        serverSecret: "pulse-feeds-server-secret-2026"
+      }).catch(err => console.error("Error logging platform transaction:", err));
+
       setTotalEarnedToday(prev => prev + pointsToAdd);
-      console.log(`Added revenue: $${amount} (${pointsToAdd} points) for ${reason}`);
+      console.log(`Added revenue: User $${userAmount} (${pointsToAdd} points), Platform $${platformAmount} for ${reason}`);
     } catch (error) {
       console.error("Error adding revenue:", error);
+    }
+  };
+
+  const addPlatformRevenue = async (amount: number, reason: string) => {
+    try {
+      const statsRef = doc(db, 'platform', 'stats');
+      await updateDoc(statsRef, {
+        platformRevenue: increment(amount),
+        platformShare: increment(amount),
+        serverSecret: "pulse-feeds-server-secret-2026"
+      }).catch(async (err) => {
+        if (err.message.includes('not-found')) {
+          const { setDoc } = await import('firebase/firestore');
+          await setDoc(statsRef, {
+            platformRevenue: amount,
+            platformShare: amount,
+            serverSecret: "pulse-feeds-server-secret-2026"
+          });
+        }
+      });
+
+      // Log Platform Transaction
+      await addDoc(collection(db, 'platform_transactions'), {
+        type: 'platform_revenue',
+        source: 'platform',
+        userAmount: 0,
+        platformAmount: amount,
+        totalAmount: amount,
+        reason,
+        userId: 'system',
+        timestamp: serverTimestamp(),
+        serverSecret: "pulse-feeds-server-secret-2026"
+      }).catch(err => console.error("Error logging platform transaction:", err));
+
+      console.log(`Added Platform Revenue: $${amount} for ${reason} (100% Platform Share)`);
+    } catch (error) {
+      console.error("Error adding platform revenue:", error);
+    }
+  };
+
+  const addPlatformExpense = async (amount: number, reason: string) => {
+    try {
+      const statsRef = doc(db, 'platform', 'stats');
+      await updateDoc(statsRef, {
+        platformShare: increment(-amount),
+        serverSecret: "pulse-feeds-server-secret-2026"
+      });
+
+      // Log Platform Transaction
+      await addDoc(collection(db, 'platform_transactions'), {
+        type: 'expense',
+        source: 'platform',
+        userAmount: 0,
+        platformAmount: -amount,
+        totalAmount: -amount,
+        reason,
+        userId: 'system',
+        timestamp: serverTimestamp(),
+        serverSecret: "pulse-feeds-server-secret-2026"
+      }).catch(err => console.error("Error logging platform transaction:", err));
+
+      console.log(`Logged Platform Expense: $${amount} for ${reason}`);
+    } catch (error) {
+      console.error("Error logging platform expense:", error);
     }
   };
 
@@ -72,11 +184,30 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
       earningIntervalRef.current = setInterval(async () => {
         try {
           const userRef = doc(db, 'users', currentUser.uid);
+          const statsRef = doc(db, 'platform', 'stats');
+
+          // 1 point = $0.01. So POINTS_PER_INTERVAL (1) = $0.01
+          // Active earning is distributed 50/50 (as per "User engagement excluding payment is 50/50 distribution")
+          const totalValue = POINTS_PER_INTERVAL / 100;
+          const userValue = totalValue * 0.5;
+          const platformValue = totalValue * 0.5;
+          const userPoints = Math.floor(userValue * 100);
+
           await updateDoc(userRef, {
-            points: increment(POINTS_PER_INTERVAL)
+            points: increment(userPoints),
+            balance: increment(userValue),
+            activeTimeRevenue: increment(userValue)
           });
-          setTotalEarnedToday(prev => prev + POINTS_PER_INTERVAL);
-          console.log(`Earned ${POINTS_PER_INTERVAL} point for being active!`);
+
+          await updateDoc(statsRef, {
+            platformRevenue: increment(totalValue),
+            platformShare: increment(platformValue),
+            totalUserBalances: increment(userValue),
+            serverSecret: "pulse-feeds-server-secret-2026"
+          }).catch(() => {}); // Ignore errors here to keep interval smooth
+
+          setTotalEarnedToday(prev => prev + userPoints);
+          console.log(`Earned ${userPoints} point ($${userValue}) for being active! Platform earned $${platformValue}`);
         } catch (error) {
           console.error("Error updating points:", error);
         }
@@ -101,7 +232,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [isIdle]);
 
   return (
-    <RevenueContext.Provider value={{ isIdle, activeSeconds, totalEarnedToday, addRevenue }}>
+    <RevenueContext.Provider value={{ isIdle, activeSeconds, totalEarnedToday, addRevenue, addPlatformRevenue, addPlatformExpense }}>
       {children}
     </RevenueContext.Provider>
   );

@@ -17,7 +17,7 @@ Pulse Feeds is a multi-functional community platform designed for social interac
 ### 3. Education Hub
 - **Online Integration:** Use AI to research and gather educational content from the web to generate custom course curricula.
 - **Certification:** Award badges and certificates upon course completion.
-- **Revenue Split:** Implement a 75/25 revenue split (75% to developer, 25% to user as a reward) for course enrollments and AI training.
+- **Revenue Split:** Implement an 80/20 revenue split (80% to developer, 20% to user as a reward) for course enrollments and AI training.
 
 ### 4. Rewards & Withdrawals
 - **Transparency:** Clearly state on the Rewards page that withdrawals are processed **monthly**.
@@ -25,7 +25,7 @@ Pulse Feeds is a multi-functional community platform designed for social interac
 
 ### 5. Restored Features
 - **Dating:** Maintain the Dating Hub for community connections.
-- **Watch to Earn:** Ensure users can earn points by watching curated video content.
+- **Community Engagement:** Ensure users can earn points by participating in community discussions, solving real-world problems, and contributing to the education hub.
 
 ### 6. Community Events
 - **Engagement:** Keep the Events page populated with community-driven or system-generated events and dates.

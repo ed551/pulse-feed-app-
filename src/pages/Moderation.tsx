@@ -1,15 +1,20 @@
-import React, { useEffect, useState, useRef } from "react";
-import { ShieldAlert, Power, RefreshCw, UploadCloud, DownloadCloud, AlertTriangle, Fingerprint, CheckCircle, XCircle, Smartphone, KeyRound, Lock, Settings, Plus, Trash2 } from "lucide-react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
+import { ShieldAlert, Power, RefreshCw, UploadCloud, DownloadCloud, AlertTriangle, Fingerprint, CheckCircle, XCircle, Smartphone, KeyRound, Lock, Settings, Plus, Trash2, DollarSign, Loader2, ShieldCheck, AlertCircle, CheckCircle2, Award } from "lucide-react";
 import { admin_logic, integrity_audit_engine, global_kill_switch } from "../lib/engines";
 import { cn } from "../lib/utils";
 import { getModerationSettings, saveModerationSettings, ModerationSettings } from "../services/moderationService";
 import { db, handleFirestoreError, OperationType } from "../lib/firebase";
-import { collection, getCountFromServer } from "firebase/firestore";
+import { collection, getCountFromServer, query, onSnapshot } from "firebase/firestore";
 import { Users } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
+import { useCurrencyConverter } from "../hooks/useCurrencyConverter";
+import { motion, AnimatePresence } from "motion/react";
 
 type AuthState = 'phone_input' | 'phone_verify' | 'fingerprint' | 'verified';
 
 export default function Moderation() {
+  const { currentUser, userData } = useAuth();
+  const { convert } = useCurrencyConverter();
   const [authState, setAuthState] = useState<AuthState>('phone_input');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
@@ -21,10 +26,21 @@ export default function Moderation() {
   const [newRule, setNewRule] = useState("");
   const [userCount, setUserCount] = useState<number | null>(null);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  // Admin/Moderator Access Check
+  const isAdminOrModerator = useMemo(() => {
+    if (!currentUser) return false;
+    const isAdminRole = userData?.role === 'admin';
+    const isModeratorRole = userData?.role === 'moderator';
+    return isAdminRole || isModeratorRole;
+  }, [currentUser, userData?.role]);
 
   const handleSaveSettings = () => {
     saveModerationSettings(modSettings);
-    alert("AI Moderation Settings Saved!");
+    setSuccess("AI Moderation Settings Saved!");
+    setTimeout(() => setSuccess(null), 3000);
   };
 
   const addRule = () => {
@@ -64,8 +80,14 @@ export default function Moderation() {
       };
 
       fetchUserCount();
+
+      // If admin/moderator, we no longer calculate mock stats here.
+      // Financial management has been moved to the Platform Dashboard.
+      if (isAdminOrModerator) {
+        return () => {};
+      }
     }
-  }, [authState]);
+  }, [authState, isAdminOrModerator]);
 
   // Fingerprint logic
   useEffect(() => {
@@ -272,7 +294,7 @@ export default function Moderation() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-red-500 to-orange-600 flex items-center">
           <ShieldAlert className="w-8 h-8 mr-3 text-red-500" />
-          Admin Dashboard
+          Moderation Dashboard
         </h1>
         <div className="flex items-center space-x-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 px-4 py-2 rounded-full font-bold text-sm animate-pulse">
           <Fingerprint className="w-4 h-4 mr-2" />
@@ -299,7 +321,6 @@ export default function Moderation() {
             </h3>
           </div>
         </div>
-        {/* Add more stats here if needed in the future */}
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">

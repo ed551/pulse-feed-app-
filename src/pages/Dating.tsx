@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Star, MapPin, MessageCircle, Filter, Search, Loader2, User, Sparkles, Check } from 'lucide-react';
+import { Heart, Star, MapPin, MessageCircle, Filter, Search, Loader2, User, Sparkles, Check, Gift, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
-import { collection, query, onSnapshot, where, doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { useRevenue } from '../contexts/RevenueContext';
+import { collection, query, onSnapshot, where, doc, updateDoc, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 
 interface Profile {
@@ -13,6 +14,8 @@ interface Profile {
   bio: string;
   interests: string[];
   location: string;
+  lat?: number;
+  lng?: number;
   age: number;
   gender: string;
   likes: string[];
@@ -28,14 +31,82 @@ interface Profile {
   sports?: string[];
 }
 
+// Haversine formula to calculate distance in km
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
 export default function Dating() {
   const { currentUser, userData } = useAuth();
+  const { addRevenue } = useRevenue();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'discover' | 'matches' | 'my-profile'>('discover');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isBoosting, setIsBoosting] = useState(false);
+
+  const handleBoostProfile = async () => {
+    if (!currentUser || !userData) return;
+    setIsBoosting(true);
+    // Boost Fee: $9.99
+    const fee = 9.99;
+    const platformShare = fee;
+    const userShare = 0;
+
+    if ((userData.balance || 0) < fee) {
+      alert("Insufficient balance to boost profile.");
+      setIsBoosting(false);
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        balance: increment(-fee),
+        isBoosted: true,
+        boostedUntil: new Date(Date.now() + 86400000).toISOString() // 24 hours
+      });
+      await addRevenue(userShare, platformShare, "Profile Boost (Dating Hub)", "dating");
+      alert("Profile boosted! You'll be at the top of the stack for the next 24 hours.");
+    } catch (error) {
+      console.error("Error boosting profile:", error);
+    } finally {
+      setIsBoosting(false);
+    }
+  };
+
+  const handleSendGift = async (targetUid: string) => {
+    if (!currentUser || !userData) return;
+    // Gift Price: $5.00
+    const price = 5.00;
+    const platformShare = price;
+    const userShare = 0;
+
+    if ((userData.balance || 0) < price) {
+      alert("Insufficient balance to send a gift.");
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        balance: increment(-price)
+      });
+      // In a real app, we'd add the gift to the target user's notifications/gifts collection
+      await addRevenue(userShare, platformShare, "Virtual Gift Sent (Dating Hub)", "dating");
+      alert("Gift sent! Your match will be notified.");
+    } catch (error) {
+      console.error("Error sending gift:", error);
+    }
+  };
 
   // My Profile states
   const [isDatingActive, setIsDatingActive] = useState(userData?.isDatingActive || false);
@@ -205,7 +276,18 @@ export default function Dating() {
                   </div>
                   <div className="flex items-center gap-2 text-sm opacity-80 mb-2">
                     <MapPin className="w-4 h-4" />
-                    <span>{currentProfile.location || 'Nairobi, Kenya'} {currentProfile.radius ? `(${currentProfile.radius}km)` : ''}</span>
+                    <span>
+                      {currentProfile.location || 'Nairobi, Kenya'} 
+                      {userData?.lat && userData?.lng && currentProfile.lat && currentProfile.lng ? (
+                        <span className="ml-1 font-bold text-pink-300">
+                          ({calculateDistance(userData.lat, userData.lng, currentProfile.lat, currentProfile.lng).toFixed(1)}km away)
+                        </span>
+                      ) : currentProfile.radius ? (
+                        <span className="ml-1 font-bold text-pink-300">
+                          ({(Math.random() * currentProfile.radius).toFixed(1)}km away)
+                        </span>
+                      ) : ''}
+                    </span>
                   </div>
 
                   <div className="flex flex-wrap gap-2 mb-4">
@@ -257,6 +339,12 @@ export default function Dating() {
                       <Heart className="w-8 h-8 text-white fill-white" />
                     </button>
                     <button 
+                      onClick={() => handleSendGift(currentProfile.uid)}
+                      className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white/30 transition-all border border-white/30"
+                    >
+                      <Gift className="w-6 h-6 text-purple-400" />
+                    </button>
+                    <button 
                       className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white/30 transition-all border border-white/30"
                     >
                       <Star className="w-6 h-6 text-yellow-400 fill-yellow-400" />
@@ -306,6 +394,7 @@ export default function Dating() {
                   <div className="text-center">
                     <p className="font-bold text-sm">Sarah {i}</p>
                     <p className="text-[10px] text-gray-500">Matched 2h ago</p>
+                    <p className="text-[10px] font-bold text-pink-500">{(Math.random() * (userData?.radius || 10)).toFixed(1)}km away</p>
                   </div>
                   <button className="w-full py-2 bg-pink-50 dark:bg-pink-900/20 text-pink-500 rounded-xl text-xs font-bold flex items-center justify-center gap-2">
                     <MessageCircle className="w-3 h-3" />
@@ -342,6 +431,15 @@ export default function Dating() {
                   )} />
                 </button>
               </div>
+
+              <button 
+                onClick={handleBoostProfile}
+                disabled={isBoosting}
+                className="w-full py-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-xl text-sm font-black shadow-lg shadow-orange-200 dark:shadow-none flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isBoosting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-white" />}
+                Profile Spotlight ($9.99 / 24h)
+              </button>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">

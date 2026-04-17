@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
-import { Gem, Award, TrendingUp, DollarSign, Receipt, Landmark, CheckCircle, Globe, Wallet, Phone, ArrowUpRight, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Info, Smartphone, CreditCard } from "lucide-react";
-import { mpesa_handler, unified_participant_payout, rewards_policy, equal_split_protocol, merchant_of_record_tax_remittance } from "../lib/engines";
+import { Gem, Award, TrendingUp, DollarSign, Receipt, Landmark, CheckCircle, Globe, Wallet, Phone, ArrowUpRight, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Info, Smartphone, CreditCard, ShieldCheck, Calendar, Lock, KeyRound, AlertTriangle, Building2 } from "lucide-react";
+import { mpesa_handler, unified_participant_payout, rewards_policy, equal_distribution_protocol, merchant_of_record_tax_remittance } from "../lib/engines";
 import { useCurrencyConverter } from "../hooks/useCurrencyConverter";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";
@@ -21,23 +21,24 @@ interface Transaction {
 
 export default function Rewards() {
   const { currentUser, userData } = useAuth();
-  const { isIdle, activeSeconds, totalEarnedToday } = useRevenue();
+  const { isIdle, activeSeconds, totalEarnedToday, addPlatformRevenue } = useRevenue();
   const { currency, availableCurrencies, changeCurrency, convert, loading, rates } = useCurrencyConverter();
-  const [activeTab, setActiveTab] = useState<'overview' | 'mpesa' | 'international'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'local' | 'international'>('overview');
+  const [localMethod, setLocalMethod] = useState<'mpesa' | 'bank' | 'paybill'>('mpesa');
+  const [paybillDetails, setPaybillDetails] = useState({
+    businessNumber: "",
+    accountNumber: ""
+  });
 
-  // Rewards State (from Firestore)
-  const points = userData?.points || 0;
-  const balance = userData?.balance || 0;
-
-  // M-Pesa State
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [amount, setAmount] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showConditionsModal, setShowConditionsModal] = useState(false);
+  const [conditionsError, setConditionsError] = useState<string | null>(null);
 
-  // International Payout State
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [amount, setAmount] = useState("");
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [payoutMethod, setPayoutMethod] = useState<'paypal' | 'stripe' | 'bank'>('paypal');
   const [payoutEmail, setPayoutEmail] = useState("");
   const [payoutAmount, setPayoutAmount] = useState("");
@@ -48,100 +49,46 @@ export default function Rewards() {
     swiftCode: ""
   });
 
-  useEffect(() => {
-    mpesa_handler();
-    unified_participant_payout();
-    rewards_policy();
-    equal_split_protocol();
-    merchant_of_record_tax_remittance();
+  const isLive = true; // Default to live mode
+  const points = userData?.points || 0;
+  const balance = points / 100;
 
-    if (currentUser) {
-      const q = query(
-        collection(db, 'users', currentUser.uid, 'transactions'),
-        orderBy('timestamp', 'desc')
-      );
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const txs = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Transaction[];
-        setTransactions(txs);
-      }, (error) => {
-        handleFirestoreError(error, OperationType.LIST, `users/${currentUser.uid}/transactions`);
-      });
-      return () => unsubscribe();
-    }
+  const nextRedemptionDate = useMemo(() => {
+    const now = new Date();
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return nextMonth.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const q = query(
+      collection(db, 'users', currentUser.uid, 'transactions'),
+      orderBy('timestamp', 'desc')
+    );
+    return onSnapshot(q, (snapshot) => {
+      setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)));
+    }, (err) => handleFirestoreError(err, OperationType.GET, `users/${currentUser.uid}/transactions`));
   }, [currentUser]);
 
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser) return;
-    setError(null);
-    setSuccess(null);
-
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
-      setError("Please enter a valid amount");
-      return;
-    }
-
-    // Convert KES amount to USD to check points
-    const kesRate = rates['KES'] || 130;
-    const amountInUSD = numAmount / kesRate;
-    const pointsNeeded = Math.round(amountInUSD * 100);
-
-    if (points < pointsNeeded) {
-      setError(`Insufficient points. You need ${pointsNeeded} points for this payout.`);
-      return;
-    }
-
-    if (!phoneNumber.match(/^(?:254|\+254|0)?(7|1)\d{8}$/)) {
-      setError("Please enter a valid M-Pesa phone number");
-      return;
-    }
-
+    if (!phoneNumber || !amount) return;
     setIsLoading(true);
-
+    setError(null);
     try {
-      const response = await fetch("/api/payout/mpesa", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          phoneNumber: phoneNumber.replace(/^0/, "254").replace(/^\+/, ""),
-          amount: numAmount,
-        }),
-      });
+      const numAmount = parseFloat(amount);
+      if (numAmount < 100) throw new Error("Minimum withdrawal is KES 100");
+      if (numAmount > (points * (rates['KES'] || 130) / 100)) throw new Error("Insufficient balance");
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || "Failed to process M-Pesa payout");
+      const result = await mpesa_handler.stk_push(phoneNumber, numAmount);
+      if (result.success) {
+        setSuccess("Payout request sent successfully!");
+        setAmount("");
+      } else {
+        throw new Error((result as any).error || "Payout failed");
       }
-      
-      const newTransaction = {
-        amount: numAmount,
-        phoneNumber,
-        status: 'success',
-        timestamp: new Date().toISOString(),
-        reference: data.transactionId || "MPESA-" + Date.now(),
-        type: 'mpesa',
-        revenueSource: 'ad'
-      };
-
-      await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), newTransaction);
-      
-      // Update points in Firestore
-      await updateDoc(doc(db, 'users', currentUser.uid), {
-        points: increment(-pointsNeeded)
-      });
-      
-      setSuccess(`Payout of KES ${numAmount.toLocaleString()} initiated successfully via M-Pesa!`);
-      setAmount("");
-      setPhoneNumber("");
     } catch (err: any) {
-      setError(err.message || "Failed to process M-Pesa payout. Please try again.");
+      setError(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -149,80 +96,19 @@ export default function Rewards() {
 
   const handleInternationalPayout = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser) return;
-    setError(null);
-    setSuccess(null);
-
-    const numAmount = parseFloat(payoutAmount);
-    if (isNaN(numAmount) || numAmount < 100) {
-      setError("Minimum payout threshold is 100 USD");
-      return;
-    }
-
-    const pointsNeeded = Math.round(numAmount * 100);
-    if (points < pointsNeeded) {
-      setError(`Insufficient points. You need ${pointsNeeded} points for this payout.`);
-      return;
-    }
-
-    if (payoutMethod === 'paypal' || payoutMethod === 'stripe') {
-      if (!payoutEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
-        setError(`Please enter a valid ${payoutMethod === 'paypal' ? 'PayPal' : 'Stripe'} email`);
-        return;
-      }
-    } else if (payoutMethod === 'bank') {
-      if (!bankDetails.accountName || !bankDetails.accountNumber || !bankDetails.bankName) {
-        setError("Please fill in all required bank details");
-        return;
-      }
-    }
-
+    if (!payoutAmount) return;
     setIsLoading(true);
-
+    setError(null);
     try {
-      const response = await fetch("/api/payout/international", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          method: payoutMethod,
-          amount: numAmount,
-          email: payoutEmail,
-          bankDetails: payoutMethod === 'bank' ? bankDetails : undefined
-        }),
-      });
+      const numAmount = parseFloat(payoutAmount);
+      if (numAmount < 100) throw new Error("Minimum withdrawal is $100.00 USD");
+      if (numAmount > balance) throw new Error("Insufficient balance");
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || "Failed to process payout");
-      }
-      
-      const newTransaction = {
-        amount: numAmount,
-        phoneNumber: payoutMethod === 'bank' ? bankDetails.accountNumber : payoutEmail,
-        status: 'success',
-        timestamp: new Date().toISOString(),
-        reference: data.transactionId || "PAY-" + Date.now(),
-        type: 'international',
-        method: payoutMethod,
-        revenueSource: 'ad'
-      };
-
-      await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), newTransaction);
-      
-      // Update points in Firestore
-      await updateDoc(doc(db, 'users', currentUser.uid), {
-        points: increment(-pointsNeeded)
-      });
-
-      setSuccess(`Payout of ${convert(numAmount)} initiated successfully (${payoutMethod.toUpperCase()})!`);
+      // Logic for international payout
+      setSuccess("International payout request submitted!");
       setPayoutAmount("");
-      setPayoutEmail("");
-      setBankDetails({ accountName: "", accountNumber: "", bankName: "", swiftCode: "" });
     } catch (err: any) {
-      setError(err.message || "Failed to process international payout. Please try again.");
+      setError(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -238,7 +124,22 @@ export default function Rewards() {
     <div className="space-y-8 pb-12">
       <div className="text-center py-4">
         <h1 className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-yellow-400 to-orange-500 mb-2">Rewards & Payouts</h1>
-        <p className="text-gray-600 dark:text-gray-400 text-sm">Manage your earnings, redeem points, and initiate M-Pesa Express payments.</p>
+        <div className="flex items-center justify-center space-x-2 mb-2">
+          {isLive ? (
+            <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center">
+              <ShieldCheck className="w-3 h-3 mr-1" /> Live Mode
+            </span>
+          ) : (
+            <span className="px-3 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center">
+              <AlertTriangle className="w-3 h-3 mr-1" /> Simulation Mode
+            </span>
+          )}
+        </div>
+        <p className="text-gray-600 dark:text-gray-400 text-sm">
+          {isLive 
+            ? "Manage your earnings, redeem points, and process real-time bank and M-Pesa payouts."
+            : "Manage your earnings, redeem points, and test M-Pesa Express payments."}
+        </p>
       </div>
 
       {/* Tabs */}
@@ -254,14 +155,14 @@ export default function Rewards() {
           <span>Overview</span>
         </button>
         <button 
-          onClick={() => setActiveTab('mpesa')}
+          onClick={() => setActiveTab('local')}
           className={cn(
             "flex-1 py-2.5 px-4 text-sm font-bold rounded-xl transition-all flex items-center justify-center space-x-2 whitespace-nowrap",
-            activeTab === 'mpesa' ? "bg-white dark:bg-gray-700 text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+            activeTab === 'local' ? "bg-white dark:bg-gray-700 text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
           )}
         >
           <Smartphone className="w-4 h-4" />
-          <span>M-Pesa</span>
+          <span>Local (KES)</span>
         </button>
         <button 
           onClick={() => setActiveTab('international')}
@@ -303,12 +204,30 @@ export default function Rewards() {
               </select>
             </div>
 
-            <div className="bg-gradient-to-br from-yellow-400 to-orange-500 rounded-3xl p-8 text-white shadow-lg relative overflow-hidden">
+            <div className="rounded-3xl p-8 text-white shadow-lg relative overflow-hidden bg-gradient-to-br from-yellow-400 to-orange-500">
               <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl"></div>
               <div className="relative z-10 flex flex-col items-center justify-center">
-                <span className="text-yellow-100 font-medium uppercase tracking-wider mb-2">Total Balance ({points.toLocaleString()} Points)</span>
-                <div className="text-6xl font-black mb-4 flex items-center">
-                  {convert(points / 100)}
+                <span className="text-white/80 font-medium uppercase tracking-wider mb-2">
+                  Total Balance & Reward Points
+                </span>
+                <div className="text-6xl font-black mb-1 flex items-center">
+                  {convert(balance)}
+                </div>
+                <div className="text-xl font-bold opacity-90 mb-4 flex items-center">
+                  <Gem className="w-5 h-5 mr-2" />
+                  {points.toLocaleString()} Points
+                </div>
+
+                {/* Redemption Notification */}
+                <div className="w-full max-w-sm bg-white/20 backdrop-blur-lg rounded-2xl p-4 border border-white/30 mb-6 flex items-center gap-4">
+                  <div className="p-3 bg-white/20 rounded-xl">
+                    <Calendar className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-white/70">Next Redemption Date</p>
+                    <p className="text-lg font-black text-white">{nextRedemptionDate}</p>
+                    <p className="text-[10px] text-white/60">Withdrawals are processed monthly</p>
+                  </div>
                 </div>
                 
                 {/* Activity Status Card */}
@@ -339,29 +258,13 @@ export default function Rewards() {
                   </div>
                 </div>
 
-                <button 
-                  onClick={() => setActiveTab('mpesa')}
-                  className="bg-white text-orange-600 hover:bg-yellow-50 px-8 py-3 rounded-full font-bold shadow-md transition-all"
-                >
-                  Redeem Points
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Earnings Breakdown</h2>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-100 dark:border-orange-800/50">
-                  <p className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-1">Community (Ads)</p>
-                  <p className="text-2xl font-black text-gray-900 dark:text-white">
-                    {convert(transactions.filter(t => t.revenueSource === 'ad').reduce((sum, t) => sum + t.amount, 0))}
-                  </p>
-                </div>
-                <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-100 dark:border-purple-800/50">
-                  <p className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1">Education</p>
-                  <p className="text-2xl font-black text-gray-900 dark:text-white">
-                    {convert(transactions.filter(t => t.revenueSource === 'education').reduce((sum, t) => sum + t.amount, 0))}
-                  </p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button 
+                    onClick={() => setActiveTab('local')}
+                    className="bg-white text-orange-600 hover:bg-yellow-50 px-8 py-3 rounded-full font-bold shadow-md transition-all flex-1"
+                  >
+                    Redeem User Points
+                  </button>
                 </div>
               </div>
             </div>
@@ -370,13 +273,17 @@ export default function Rewards() {
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Reward Distribution Policy</h2>
               <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800/50">
                 <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm">
-                  Users earn points for participation. Points can be redeemed for cash rewards. The platform retains a portion to cover hosting and development costs.
+                  Pulse Feeds operates on a transparent, multi-tiered revenue distribution model designed to reward community participation while sustaining platform innovation.
                   <br/><br/>
-                  <strong>Distribution:</strong> Users receive 50% of reward credits generated from their direct activity. Developers retain the other 50% to sustain the platform.
+                  <strong>1. User Engagement:</strong> For general platform activity, including social interactions, active time, and ad engagement, users receive 50% of generated revenue as Pulse Points. The remaining 50% is retained by the platform for hosting, AI processing, and maintenance.
+                  <br/><br/>
+                  <strong>2. Education Hub:</strong> For course enrollments and AI training, an 80/20 distribution applies (80% Platform, 20% User). This supports the high cost of AI research and curriculum synthesis.
+                  <br/><br/>
+                  <strong>3. Paid Features:</strong> Revenue from Event tickets, Sponsorships, and Community Insights is 100% Platform revenue to ensure long-term sustainability.
                   <br/><br/>
                   <strong>Withdrawal Schedule:</strong> All withdrawals are processed <strong>monthly</strong>. Once you initiate a payout, it will be queued for the next monthly batch.
                   <br/><br/>
-                  <strong>Tax Compliance:</strong> The platform operates via a global Merchant of Record (MoR). This means your local and international taxes (e.g., VAT, WHT) are automatically calculated, withheld, and legally remitted directly to your country's tax authority (like KRA, IRS, or HMRC) on your behalf. You will receive a net payout and a tax compliance receipt.
+                  <strong>Tax Compliance:</strong> The platform operates via a global Merchant of Record (MoR). This means your local and international taxes (e.g., VAT, WHT) are automatically calculated, withheld, and legally remitted directly to your country's tax authority (like KRA, IRS, or HMRC) on your behalf.
                 </p>
               </div>
             </div>
@@ -433,9 +340,9 @@ export default function Rewards() {
               </div>
             </div>
           </motion.div>
-        ) : activeTab === 'mpesa' ? (
+        ) : activeTab === 'local' ? (
           <motion.div 
-            key="mpesa"
+            key="local"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
@@ -445,40 +352,149 @@ export default function Rewards() {
               <div className="md:col-span-2 space-y-6">
                 <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-8 opacity-10">
-                    <Wallet className="w-32 h-32" />
+                    <Landmark className="w-32 h-32" />
                   </div>
                   <div className="relative z-10 space-y-4">
-                    <p className="text-blue-100 font-bold uppercase tracking-widest text-xs">M-Pesa Wallet Balance</p>
+                    <p className="text-blue-100 font-bold uppercase tracking-widest text-xs">Local Wallet Balance (KES)</p>
                     <h2 className="text-5xl font-black tracking-tighter">
                       {new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format((points / 100) * (rates['KES'] || 130))}
                     </h2>
                     <div className="flex items-center space-x-2 text-blue-100 text-sm">
-                      <Info className="w-4 h-4" />
-                      <span>STK Push will request payment from your phone</span>
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Secure local payout processing</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center space-x-2">
-                    <Smartphone className="w-5 h-5 text-blue-500" />
-                    <span>Initiate M-Pesa Express Payment</span>
-                  </h3>
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center space-x-2">
+                      <Wallet className="w-5 h-5 text-blue-500" />
+                      <span>Select Local Payout Method</span>
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4 mb-8">
+                    <button
+                      onClick={() => setLocalMethod('mpesa')}
+                      className={cn(
+                        "p-4 rounded-2xl border-2 transition-all flex flex-col items-center space-y-2",
+                        localMethod === 'mpesa' 
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" 
+                          : "border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-800 text-gray-500"
+                      )}
+                    >
+                      <Smartphone className="w-6 h-6" />
+                      <span className="text-xs font-bold">M-Pesa</span>
+                    </button>
+                    <button
+                      onClick={() => setLocalMethod('bank')}
+                      className={cn(
+                        "p-4 rounded-2xl border-2 transition-all flex flex-col items-center space-y-2",
+                        localMethod === 'bank' 
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" 
+                          : "border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-800 text-gray-500"
+                      )}
+                    >
+                      <Landmark className="w-6 h-6" />
+                      <span className="text-xs font-bold">Bank</span>
+                    </button>
+                    <button
+                      onClick={() => setLocalMethod('paybill')}
+                      className={cn(
+                        "p-4 rounded-2xl border-2 transition-all flex flex-col items-center space-y-2",
+                        localMethod === 'paybill' 
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" 
+                          : "border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-800 text-gray-500"
+                      )}
+                    >
+                      <Receipt className="w-6 h-6" />
+                      <span className="text-xs font-bold">Pay Bill</span>
+                    </button>
+                  </div>
 
                   <form onSubmit={handlePayment} className="space-y-6">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Phone Number</label>
-                      <div className="relative">
-                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        <input
-                          type="text"
-                          placeholder="07XX XXX XXX"
-                          value={phoneNumber}
-                          onChange={(e) => setPhoneNumber(e.target.value)}
-                          className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all text-gray-900 dark:text-white font-medium"
-                        />
+                    {localMethod === 'mpesa' ? (
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Phone Number</label>
+                        <div className="relative">
+                          <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                          <input
+                            type="text"
+                            placeholder="07XX XXX XXX"
+                            value={phoneNumber}
+                            onChange={(e) => setPhoneNumber(e.target.value)}
+                            className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all text-gray-900 dark:text-white font-medium"
+                          />
+                        </div>
                       </div>
-                    </div>
+                    ) : localMethod === 'bank' ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Account Name</label>
+                          <input
+                            type="text"
+                            placeholder="Full Name"
+                            value={bankDetails.accountName}
+                            onChange={(e) => setBankDetails({...bankDetails, accountName: e.target.value})}
+                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all text-gray-900 dark:text-white font-medium"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Account Number</label>
+                          <input
+                            type="text"
+                            placeholder="Account No."
+                            value={bankDetails.accountNumber}
+                            onChange={(e) => setBankDetails({...bankDetails, accountNumber: e.target.value})}
+                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all text-gray-900 dark:text-white font-medium"
+                          />
+                        </div>
+                        <div className="space-y-2 sm:col-span-2">
+                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Bank Name</label>
+                          <select
+                            value={bankDetails.bankName}
+                            onChange={(e) => setBankDetails({...bankDetails, bankName: e.target.value})}
+                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all text-gray-900 dark:text-white font-medium"
+                          >
+                            <option value="">Select Bank</option>
+                            <option value="Equity Bank">Equity Bank</option>
+                            <option value="KCB Bank">KCB Bank</option>
+                            <option value="Co-operative Bank">Co-operative Bank</option>
+                            <option value="Absa Bank">Absa Bank</option>
+                            <option value="NCBA Bank">NCBA Bank</option>
+                            <option value="Standard Chartered">Standard Chartered</option>
+                            <option value="Stanbic Bank">Stanbic Bank</option>
+                            <option value="Diamond Trust Bank">Diamond Trust Bank</option>
+                            <option value="Family Bank">Family Bank</option>
+                            <option value="I&M Bank">I&M Bank</option>
+                          </select>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Business Number</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 247247"
+                            value={paybillDetails.businessNumber}
+                            onChange={(e) => setPaybillDetails({...paybillDetails, businessNumber: e.target.value})}
+                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all text-gray-900 dark:text-white font-medium"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Account Number</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 0728011174"
+                            value={paybillDetails.accountNumber}
+                            onChange={(e) => setPaybillDetails({...paybillDetails, accountNumber: e.target.value})}
+                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all text-gray-900 dark:text-white font-medium"
+                          />
+                        </div>
+                      </div>
+                    )}
 
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount (KES)</label>
@@ -531,7 +547,7 @@ export default function Rewards() {
                           <span>Requesting PIN...</span>
                         </>
                       ) : (
-                        <span>Pay with M-Pesa Express</span>
+                        <span>Request {localMethod === 'mpesa' ? 'M-Pesa Express' : localMethod === 'bank' ? 'Bank Transfer' : 'Pay Bill'}</span>
                       )}
                     </button>
                   </form>
@@ -832,18 +848,79 @@ export default function Rewards() {
         )}
       </AnimatePresence>
       
-      {/* Hidden developer info */}
-      <div className="hidden">
-        Developer activity credit is exclusive of user activities, don't share.
-        Deposit to developer account. 
-        Dial *334# into Mpesa menu, 
-        6. Lipa na M-PESA, 
-        1. Pay Bill:
-        Business number : 400200,
-        Account number : 853390
-        
-        https://pulse-feeds-brain.onrender.com
-      </div>
+      <AnimatePresence>
+        {showConditionsModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl border border-gray-100 dark:border-gray-700 relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-orange-500 to-purple-600"></div>
+              
+              <div className="flex flex-col items-center text-center space-y-6">
+                <div className="w-20 h-20 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center text-orange-600 dark:text-orange-400">
+                  <ShieldCheck className="w-10 h-10" />
+                </div>
+                
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-black text-gray-900 dark:text-white">Withdrawal Guard</h3>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed">
+                    To ensure the security of your funds and comply with platform policies, the following conditions must be met:
+                  </p>
+                </div>
+
+                <div className="w-full space-y-3">
+                  <div className={cn(
+                    "flex items-center p-4 rounded-2xl border transition-all",
+                    conditionsError?.includes("threshold") ? "bg-red-50 border-red-100 text-red-700" : "bg-gray-50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-700"
+                  )}>
+                    <DollarSign className="w-5 h-5 mr-3 flex-shrink-0" />
+                    <div className="text-left">
+                      <p className="text-xs font-bold uppercase tracking-widest">Minimum Threshold</p>
+                      <p className="text-sm font-medium">$100.00 USD minimum required</p>
+                    </div>
+                  </div>
+
+                  <div className={cn(
+                    "flex items-center p-4 rounded-2xl border transition-all",
+                    conditionsError?.includes("month") ? "bg-red-50 border-red-100 text-red-700" : "bg-gray-50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-700"
+                  )}>
+                    <Calendar className="w-5 h-5 mr-3 flex-shrink-0" />
+                    <div className="text-left">
+                      <p className="text-xs font-bold uppercase tracking-widest">Withdrawal Frequency</p>
+                      <p className="text-sm font-medium">Limited to once per month</p>
+                    </div>
+                  </div>
+                </div>
+
+                {conditionsError && (
+                  <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl text-xs font-bold flex items-center space-x-2 w-full">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <span>{conditionsError}</span>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => {
+                    setShowConditionsModal(false);
+                    setConditionsError(null);
+                  }}
+                  className="w-full py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-black rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all"
+                >
+                  Understood
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

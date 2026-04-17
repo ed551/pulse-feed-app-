@@ -1,10 +1,36 @@
-import { DollarSign, TrendingUp, Users, MousePointerClick, Activity, PieChart, Landmark, Send, CheckCircle, Clock, ArrowRight } from "lucide-react";
+import { DollarSign, TrendingUp, Users, MousePointerClick, Activity, PieChart, Landmark, Send, CheckCircle, Clock, ArrowRight, Play, Loader2 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { useRevenue } from "../contexts/RevenueContext";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 
 export default function AdsDashboard() {
   const { userData } = useAuth();
+  const { addRevenue } = useRevenue();
   const navigate = useNavigate();
+  const [isWatching, setIsWatching] = useState(false);
+
+  const handleWatchAd = async () => {
+    setIsWatching(true);
+    // Simulate ad watching
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    // Ad revenue: $0.10 per view (example)
+    // Distribution 50/50
+    const totalRevenue = 0.10;
+    const userShare = totalRevenue * 0.5;
+    const platformShare = totalRevenue * 0.5;
+    
+    await addRevenue(userShare, platformShare, "Ad Engagement Reward", "ad");
+    
+    setIsWatching(false);
+    window.dispatchEvent(new CustomEvent('show-notification', { 
+      detail: { 
+        title: "Ad Reward Received!", 
+        body: `You earned $${userShare.toFixed(2)} from watching an ad. Thank you for supporting the platform!` 
+      } 
+    }));
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
@@ -18,16 +44,26 @@ export default function AdsDashboard() {
       <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg text-white flex flex-col md:flex-row items-center justify-between">
         <div>
           <h2 className="text-green-100 font-medium uppercase tracking-wider text-sm mb-1">Your Ad Revenue Share</h2>
-          <div className="text-4xl font-black">N/A</div>
+          <div className="text-4xl font-black">{userData?.adRevenue ? `$${userData.adRevenue.toFixed(2)}` : '$0.00'}</div>
           <p className="text-green-100 text-sm mt-2">Earned from your engagement and content views.</p>
         </div>
-        <button 
-          onClick={() => navigate('/rewards')}
-          className="mt-4 md:mt-0 bg-white text-green-600 px-6 py-3 rounded-xl font-bold hover:bg-green-50 transition-colors flex items-center shadow-sm"
-        >
-          Withdraw at Rewards
-          <ArrowRight className="w-4 h-4 ml-2" />
-        </button>
+        <div className="flex flex-col sm:flex-row gap-3 mt-4 md:mt-0">
+          <button 
+            onClick={handleWatchAd}
+            disabled={isWatching}
+            className="bg-green-400 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-300 transition-colors flex items-center justify-center shadow-sm disabled:opacity-50"
+          >
+            {isWatching ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+            Watch Ad & Earn
+          </button>
+          <button 
+            onClick={() => navigate('/rewards')}
+            className="bg-white text-green-600 px-6 py-3 rounded-xl font-bold hover:bg-green-50 transition-colors flex items-center justify-center shadow-sm"
+          >
+            Withdraw at Rewards
+            <ArrowRight className="w-4 h-4 ml-2" />
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -91,20 +127,20 @@ export default function AdsDashboard() {
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
         <div className="flex items-center mb-6">
           <PieChart className="w-6 h-6 text-purple-500 mr-2" />
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Revenue Distribution (50/50 Split)</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Revenue Distribution</h2>
         </div>
         
         <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-6 border border-purple-100 dark:border-purple-800/50 mb-6">
           <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-            Pulse Feeds operates on a <strong>50/50 revenue sharing model for user-driven activity</strong>. Revenue generated directly from user interactions (like viewing ads or creating content) is split equally between the community and the platform.
+            Pulse Feeds operates on a <strong>community-first revenue sharing model</strong>. Revenue generated from ad engagement is distributed back to the community to support creators, rewards, and platform growth.
             <br/><br/>
-            <span className="text-sm italic text-purple-700 dark:text-purple-300">Note: Revenue generated independently by developer activity (not involving users) is retained 100% by the platform and is not shared.</span>
+            <span className="text-sm italic text-purple-700 dark:text-purple-300">Note: Platform fees and operational costs are handled by the treasury to ensure long-term sustainability.</span>
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">User Pool (50%)</h3>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Community Rewards Pool</h3>
             <div className="text-3xl font-black text-green-500 mb-2">$622.94</div>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Distributed back to users via the Rewards system for viewing ads, creating content, and participating in the community.
@@ -114,10 +150,10 @@ export default function AdsDashboard() {
           </div>
           
           <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Developer Pool (50%)</h3>
-            <div className="text-3xl font-black text-blue-500 mb-2">$622.95</div>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Platform Sustainability</h3>
+            <div className="text-3xl font-black text-blue-500 mb-2">Active</div>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Retained by the platform to cover server hosting, AI API costs, maintenance, and future development.
+              A portion of revenue is allocated to cover server hosting, AI API costs, maintenance, and future development to keep the platform running smoothly.
             </p>
           </div>
         </div>
@@ -129,7 +165,7 @@ export default function AdsDashboard() {
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Hands-Free Global Tax Remittance (MoR)</h2>
         </div>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-          <strong>Developer Zero-Liability:</strong> The platform uses a Merchant of Record (MoR) API. The MoR legally assumes all tax liabilities (VAT, GST, WHT) globally. It automatically calculates, deducts, and remits taxes directly to international authorities (IRS, KRA, HMRC, etc.) on your behalf. <strong>You do not need to file or remit these taxes yourself.</strong>
+          <strong>Platform Zero-Liability:</strong> The platform uses a Merchant of Record (MoR) API. The MoR legally assumes all tax liabilities (VAT, GST, WHT) globally. It automatically calculates, deducts, and remits taxes directly to international authorities (IRS, KRA, HMRC, etc.) on your behalf. <strong>You do not need to file or remit these taxes yourself.</strong>
         </p>
         <div className="space-y-3">
           <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-700">

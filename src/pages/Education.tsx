@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GraduationCap, Award, BookOpen, Clock, Users, PlayCircle, CheckCircle2, DollarSign, ExternalLink, User, Sparkles, BrainCircuit, Zap, Loader2, Brain, Search } from 'lucide-react';
+import { GraduationCap, Award, BookOpen, Clock, Users, PlayCircle, CheckCircle2, DollarSign, ExternalLink, User, Sparkles, BrainCircuit, Zap, Loader2, Brain, Search, Shield, Star } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
@@ -7,6 +7,14 @@ import { useRevenue } from '../contexts/RevenueContext';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { generateContentWithRetry } from '../lib/ai';
+
+const CATEGORIES = [
+  { id: 'all', name: 'All Courses', icon: BookOpen },
+  { id: 'ai', name: 'AI & Tech', icon: BrainCircuit },
+  { id: 'corporate', name: 'Corporate Training', icon: Shield },
+  { id: 'masterclass', name: 'Expert Masterclasses', icon: Star },
+  { id: 'personal', name: 'Personal Growth', icon: Zap },
+];
 
 const COURSES = [
   {
@@ -256,6 +264,51 @@ export default function Education() {
   const [trainingStatus, setTrainingStatus] = useState('');
   const [trainingTopic, setTrainingTopic] = useState('');
   const [customCourses, setCustomCourses] = useState<any[]>([]);
+  const [activeCategory, setActiveCategory] = useState('all');
+  const [isBuyingCertificate, setIsBuyingCertificate] = useState(false);
+
+  const handleCompleteModule = async (courseTitle: string, moduleTitle: string) => {
+    // Engagement Reward: $0.50
+    const reward = 0.50;
+    const platformShare = reward * 0.80;
+    const userShare = reward * 0.20;
+
+    await addRevenue(userShare, platformShare, `Completed Module: ${moduleTitle} in ${courseTitle}`, 'education');
+    
+    window.dispatchEvent(new CustomEvent('show-notification', { 
+      detail: { 
+        title: "Module Completed!", 
+        body: `You earned $${userShare.toFixed(2)} for completing "${moduleTitle}". Keep going!` 
+      } 
+    }));
+  };
+
+  const handleBuyCertificate = async (course: any) => {
+    setIsBuyingCertificate(true);
+    // Certificate Fee: $19.99
+    const fee = 19.99;
+    const platformShare = fee;
+    const userShare = 0;
+
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    await addRevenue(userShare, platformShare, `Premium Certificate: ${course.title}`, 'education');
+    
+    window.dispatchEvent(new CustomEvent('show-notification', { 
+      detail: { 
+        title: "Certificate Issued!", 
+        body: `Your premium certificate for "${course.title}" is now available on your profile.` 
+      } 
+    }));
+    setIsBuyingCertificate(false);
+  };
+
+  const filteredCourses = [...customCourses, ...COURSES].filter(c => 
+    activeCategory === 'all' || 
+    (activeCategory === 'corporate' && c.price > 150) ||
+    (activeCategory === 'masterclass' && c.instructor.includes('Jr.')) ||
+    (activeCategory === 'ai' && (c.title.includes('AI') || c.title.includes('ML'))) ||
+    (activeCategory === 'personal' && (c.title.includes('Mental') || c.title.includes('Sustainable')))
+  );
 
   const handleEnroll = async (course: typeof COURSES[0]) => {
     setIsEnrolling(true);
@@ -263,13 +316,13 @@ export default function Education() {
     // Simulate payment processing
     await new Promise(resolve => setTimeout(resolve, 1500));
     
-    // Revenue Split Logic
-    // Course fees: developer gets 75% and user 25% of the revenue
-    const developerShare = course.price * 0.75;
-    const userShare = course.price * 0.25;
+    // Revenue Distribution Logic
+    // Course fees: 80% Platform, 20% User (as per "80/20 apply's on education hub only for user engagement and course enrollment")
+    const platformShare = course.price * 0.80;
+    const userShare = course.price * 0.20;
     
     // Add user's share to their revenue
-    addRevenue(userShare, `Course Reward: ${course.title} (25% Share)`);
+    addRevenue(userShare, platformShare, `Course Purchase: ${course.title}`, 'education');
     
     setEnrolledCourses([...enrolledCourses, course.id]);
     setIsEnrolling(false);
@@ -278,7 +331,13 @@ export default function Education() {
 
   const handleAITraining = async () => {
     if (!trainingTopic.trim()) {
-      alert("Please enter a topic for your custom course.");
+      // Use custom notification instead of alert
+      window.dispatchEvent(new CustomEvent('show-notification', { 
+        detail: { 
+          title: "Topic Required", 
+          body: "Please enter a topic for your custom course." 
+        } 
+      }));
       return;
     }
 
@@ -287,9 +346,10 @@ export default function Education() {
     setTrainingStatus('Initializing Master AI Brain...');
     
     // Training Fee: $49.99
+    // Education Hub: 80/20 distribution
     const trainingFee = 49.99;
-    const developerShare = trainingFee * 0.75;
-    const userShare = trainingFee * 0.25;
+    const platformShare = trainingFee * 0.80;
+    const userShare = trainingFee * 0.20;
 
     try {
       // Step 1: Research Phase
@@ -353,7 +413,7 @@ export default function Education() {
       setAiTrainingProgress(100);
 
       // Step 3: Add user's share to their revenue
-      await addRevenue(userShare, `AI Training Reward: ${courseData.title} (25% Share)`);
+      await addRevenue(userShare, platformShare, `AI Training Purchase: ${courseData.title}`, 'education');
       
       // Step 4: Award Badge in Firestore
       if (userData?.uid) {
@@ -371,11 +431,21 @@ export default function Education() {
       setIsTrainingAI(false);
       setTrainingTopic('');
       
-      alert(`AI Training Complete!\n\n"${courseData.title}" has been added to your courses.\n\nA new badge "${courseData.badgeName}" has been awarded to your profile!\n\nRevenue Split:\nDeveloper Share (75%): $${developerShare.toFixed(2)}\nYour Reward (25%): $${userShare.toFixed(2)} added to your wallet.`);
+      window.dispatchEvent(new CustomEvent('show-notification', { 
+        detail: { 
+          title: "AI Training Complete!", 
+          body: `"${courseData.title}" has been added to your courses. A new badge "${courseData.badgeName}" has been awarded to your profile!` 
+        } 
+      }));
     } catch (error) {
       console.error("AI Training Error:", error);
       setIsTrainingAI(false);
-      alert("Failed to train course. Please try again.");
+      window.dispatchEvent(new CustomEvent('show-notification', { 
+        detail: { 
+          title: "Training Failed", 
+          body: "Failed to train course. Please try again." 
+        } 
+      }));
     }
   };
 
@@ -388,7 +458,7 @@ export default function Education() {
             Education Hub
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-2">
-            Learn new skills, earn LinkedIn badges, and get 25% cashback on course fees.
+            Learn new skills, earn LinkedIn badges, and master your future.
           </p>
         </div>
         <div className="hidden sm:flex items-center space-x-2 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-4 py-2 rounded-full font-bold text-sm">
@@ -397,20 +467,39 @@ export default function Education() {
         </div>
       </div>
 
+      {/* Categories */}
+      <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+        {CATEGORIES.map(cat => (
+          <button
+            key={cat.id}
+            onClick={() => setActiveCategory(cat.id)}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all whitespace-nowrap",
+              activeCategory === cat.id 
+                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none"
+                : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-100 dark:border-gray-700 hover:bg-gray-50"
+            )}
+          >
+            <cat.icon className="w-4 h-4" />
+            {cat.name}
+          </button>
+        ))}
+      </div>
+
       <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="space-y-2">
             <h2 className="text-2xl font-bold flex items-center">
               <DollarSign className="w-6 h-6 mr-2" />
-              Learn & Earn Program
+              Learn & Grow Program
             </h2>
             <p className="text-indigo-100 max-w-md">
-              When you enroll in a course or use AI Training, the fee is split: 75% goes to the developer, and you earn 25% back directly to your wallet!
+              Enroll in professional courses or use AI Training to master new skills. Engagement in the Education Hub earns you 20% back!
             </p>
           </div>
           <div className="bg-white/20 backdrop-blur-sm p-4 rounded-xl border border-white/30 text-center min-w-[200px]">
             <div className="text-sm font-medium text-indigo-100 mb-1">Your Learning Rewards</div>
-            <div className="text-3xl font-bold">${(enrolledCourses.length * 25).toFixed(2)}+</div>
+            <div className="text-3xl font-bold">${(enrolledCourses.length * 20).toFixed(2)}+</div>
           </div>
         </div>
       </div>
@@ -486,13 +575,12 @@ export default function Education() {
             </div>
           ) : (
             <div className="flex flex-col sm:flex-row items-center justify-between gap-6 p-6 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800">
-              <div>
-                <div className="text-sm text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-wider mb-1">Training Fee</div>
-                <div className="text-3xl font-bold text-gray-900 dark:text-white">$49.99</div>
-                <div className="text-sm text-green-600 dark:text-green-400 font-medium mt-1">
-                  You earn $12.50 back (25% Reward)
+                <div>
+                  <div className="text-3xl font-bold text-gray-900 dark:text-white">$49.99</div>
+                  <div className="text-sm text-indigo-600 dark:text-indigo-400 font-medium mt-1">
+                    Supports Platform Sustainability
+                  </div>
                 </div>
-              </div>
               
               <button 
                 onClick={handleAITraining}
@@ -571,7 +659,7 @@ export default function Education() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {[...customCourses, ...COURSES].map((course) => {
+        {filteredCourses.map((course) => {
           const isEnrolled = enrolledCourses.includes(course.id);
           
           return (
@@ -605,10 +693,20 @@ export default function Education() {
                 </div>
                 
                 {isEnrolled ? (
-                  <button className="w-full py-3 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 font-bold rounded-xl flex items-center justify-center cursor-default">
-                    <CheckCircle2 className="w-5 h-5 mr-2" />
-                    Enrolled
-                  </button>
+                  <div className="space-y-2">
+                    <button className="w-full py-3 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 font-bold rounded-xl flex items-center justify-center cursor-default">
+                      <CheckCircle2 className="w-5 h-5 mr-2" />
+                      Enrolled
+                    </button>
+                    <button 
+                      onClick={() => handleBuyCertificate(course)}
+                      disabled={isBuyingCertificate}
+                      className="w-full py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-xs font-bold rounded-xl hover:bg-indigo-100 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Award className="w-4 h-4" />
+                      {isBuyingCertificate ? 'Processing...' : 'Get Premium Certificate ($19.99)'}
+                    </button>
+                  </div>
                 ) : (
                   <button 
                     onClick={() => setSelectedCourse(course)}
@@ -668,12 +766,22 @@ export default function Education() {
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">Course Modules</h3>
                   <div className="space-y-3">
                     {selectedCourse.modules.map((module: string, idx: number) => (
-                      <div key={idx} className="flex items-start p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-700">
-                        <PlayCircle className="w-5 h-5 text-blue-500 mr-3 shrink-0 mt-0.5" />
-                        <div>
-                          <div className="font-medium text-gray-900 dark:text-white">Module {idx + 1}: {module}</div>
-                          <div className="text-sm text-gray-500 mt-1">Video lessons, quizzes, and hands-on projects.</div>
+                      <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-700">
+                        <div className="flex items-start">
+                          <PlayCircle className="w-5 h-5 text-blue-500 mr-3 shrink-0 mt-0.5" />
+                          <div>
+                            <div className="font-medium text-gray-900 dark:text-white">Module {idx + 1}: {module}</div>
+                            <div className="text-sm text-gray-500 mt-1">Video lessons, quizzes, and projects.</div>
+                          </div>
                         </div>
+                        {enrolledCourses.includes(selectedCourse.id) && (
+                          <button 
+                            onClick={() => handleCompleteModule(selectedCourse.title, module)}
+                            className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 uppercase tracking-wider px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg"
+                          >
+                            Complete
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -702,8 +810,8 @@ export default function Education() {
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div>
                   <div className="text-3xl font-bold text-gray-900 dark:text-white">${selectedCourse.price}</div>
-                  <div className="text-sm text-green-600 dark:text-green-400 font-medium mt-1">
-                    Earn ${(selectedCourse.price * 0.25).toFixed(2)} cashback!
+                  <div className="text-sm text-indigo-600 dark:text-indigo-400 font-medium mt-1">
+                    Supports Platform Sustainability
                   </div>
                 </div>
                 <button 

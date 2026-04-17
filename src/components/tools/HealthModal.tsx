@@ -21,7 +21,7 @@ export default function HealthModal() {
           <span className="text-lg font-bold">85/100</span>
         </div>
       </div>
-      <button onClick={() => alert('Scanning health data...')} className="w-full py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors">Run Full Diagnostic</button>
+      <button onClick={() => console.log('Scanning health data...')} className="w-full py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors">Run Full Diagnostic</button>
     </div>
   );
 }

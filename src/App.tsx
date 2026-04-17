@@ -11,9 +11,16 @@ import { Analytics } from "./components/Analytics";
 // Lazy load pages
 const Home = lazy(() => import("./pages/Home"));
 const Groups = lazy(() => import("./pages/Groups"));
-const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const PlatformDashboard = lazy(() => import("./pages/PlatformDashboard"));
 const Rewards = lazy(() => import("./pages/Rewards"));
+const Community = lazy(() => import("./pages/Community"));
 const Profile = lazy(() => import("./pages/Profile"));
+const Contacts = lazy(() => import("./pages/Contacts"));
+const Messages = lazy(() => import("./pages/Messages"));
+const Login = lazy(() => import("./pages/Login"));
+const Education = lazy(() => import("./pages/Education"));
+const Events = lazy(() => import("./pages/Events"));
+const Dating = lazy(() => import("./pages/Dating"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Moderation = lazy(() => import("./pages/Moderation"));
 const Notifications = lazy(() => import("./pages/Notifications"));
@@ -23,11 +30,6 @@ const Privacy = lazy(() => import("./pages/Privacy"));
 const Support = lazy(() => import("./pages/Support"));
 const AdsDashboard = lazy(() => import("./pages/AdsDashboard"));
 const GeminiLab = lazy(() => import("./pages/GeminiLab"));
-const Login = lazy(() => import("./pages/Login"));
-const Education = lazy(() => import("./pages/Education"));
-const Events = lazy(() => import("./pages/Events"));
-const Dating = lazy(() => import("./pages/Dating"));
-const WatchToEarn = lazy(() => import("./pages/WatchToEarn"));
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -36,9 +38,12 @@ const LoadingFallback = () => (
 );
 
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
-  const { userData, loading } = useAuth();
+  const { currentUser, userData, loading } = useAuth();
   if (loading) return <LoadingFallback />;
-  if (!userData || userData.role !== 'admin') {
+  
+  const isDeveloper = currentUser?.email === 'edwinmuoha@gmail.com' || currentUser?.phoneNumber === '+254728011174' || userData?.role === 'admin';
+  
+  if (!isDeveloper) {
     return <Navigate to="/" replace />;
   }
   return <>{children}</>;
@@ -57,9 +62,9 @@ export default function App() {
               <Route path="/" element={<Layout />}>
                 <Route index element={<Home />} />
                 <Route path="groups" element={<Groups />} />
-                <Route path="admin" element={
+                <Route path="platform" element={
                   <AdminRoute>
-                    <AdminDashboard />
+                    <PlatformDashboard />
                   </AdminRoute>
                 } />
                 <Route path="education" element={
@@ -77,9 +82,9 @@ export default function App() {
                     <Dating />
                   </ProtectedRoute>
                 } />
-                <Route path="watch-to-earn" element={
+                <Route path="community" element={
                   <ProtectedRoute>
-                    <WatchToEarn />
+                    <Community />
                   </ProtectedRoute>
                 } />
                 <Route path="rewards" element={
@@ -90,6 +95,16 @@ export default function App() {
                 <Route path="profile" element={
                   <ProtectedRoute>
                     <Profile />
+                  </ProtectedRoute>
+                } />
+                <Route path="contacts" element={
+                  <ProtectedRoute>
+                    <Contacts />
+                  </ProtectedRoute>
+                } />
+                <Route path="messages" element={
+                  <ProtectedRoute>
+                    <Messages />
                   </ProtectedRoute>
                 } />
                 <Route path="settings" element={

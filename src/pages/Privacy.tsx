@@ -132,7 +132,6 @@ export default function Privacy() {
           <li><strong>Dating Hub:</strong> To facilitate matches based on your preferences and interaction history.</li>
           <li><strong>Reward System:</strong> To calculate Pulse Points, manage your wallet, and process monthly withdrawals.</li>
           <li><strong>Social Feeds:</strong> To curate content that matches your interests and facilitate community engagement.</li>
-          <li><strong>Watch-to-Earn:</strong> To track viewing progress and credit rewards accurately.</li>
         </ul>
 
         <h3>4.3 Marketing and Communications</h3>
@@ -302,15 +301,6 @@ export default function Privacy() {
           <li><strong>Optional Attributes:</strong> Data like height, religion, or lifestyle habits are only processed if you choose to provide them.</li>
         </ul>
 
-        <h2>19. Detailed Data Processing for Watch-to-Earn</h2>
-        <p>
-          To ensure fair rewards and platform integrity in Watch-to-Earn:
-        </p>
-        <ul>
-          <li><strong>Attention Tracking:</strong> We monitor active viewing time and engagement to prevent automated bot usage.</li>
-          <li><strong>Ad Interaction:</strong> Data on which ads you engage with is shared with advertisers in an anonymized format for performance tracking.</li>
-        </ul>
-
         <h2>20. Detailed Data Processing for Rewards and Payouts</h2>
         <p>
           Financial transparency and compliance are paramount:
@@ -359,6 +349,7 @@ export default function Privacy() {
         <p>
           Pulse Feeds Privacy Team<br />
           Email: privacy@pulsefeeds.com<br />
+          Fax: +1 845-908-0052<br />
           Address: [Your Company Address Here]
         </p>
 

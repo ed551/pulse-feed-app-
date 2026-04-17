@@ -291,22 +291,18 @@ export default function AIAssistant() {
 
   return (
     <>
-      {/* Floating Button */}
-      <motion.button
-        initial={{ scale: 0, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
-        onClick={() => setIsOpen(true)}
-        className={cn(
-          "absolute bottom-[340px] right-6 w-14 h-14 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-2xl z-[110] flex items-center justify-center border-2 border-white/20 hover:scale-110 transition-transform group",
-          isOpen && "hidden"
+      {/* Backdrop for easy closing */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsOpen(false)}
+            className="fixed inset-0 bg-black/5 backdrop-blur-[1px] z-[115]"
+          />
         )}
-      >
-        <Sparkles className="w-7 h-7" />
-        <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-pulse" />
-        <span className="absolute right-full mr-3 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none">Master AI Assistant</span>
-      </motion.button>
+      </AnimatePresence>
 
       {/* Chat Window */}
       <AnimatePresence>
@@ -326,12 +322,12 @@ export default function AIAssistant() {
             dragListener={false}
             dragMomentum={false}
             whileDrag={{ scale: 1.02, boxShadow: "0 30px 60px rgba(0,0,0,0.4)" }}
-            className="absolute bottom-[340px] right-6 bg-white dark:bg-gray-900 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-[120] flex flex-col border border-gray-200 dark:border-gray-700 overflow-hidden touch-none"
+            className="absolute bottom-28 sm:bottom-24 right-6 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-[120] flex flex-col border border-white/20 dark:border-gray-800/50 overflow-hidden touch-none"
           >
             {/* Header */}
             <div 
               onPointerDown={(e) => dragControls.start(e)}
-              className="p-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex items-center justify-between shrink-0 cursor-move active:cursor-grabbing select-none"
+              className="p-4 bg-purple-600 text-white flex items-center justify-between shrink-0 cursor-move active:cursor-grabbing select-none"
             >
               <div className="flex items-center gap-3">
                 <GripVertical className="w-4 h-4 text-white/40" />
@@ -377,9 +373,10 @@ export default function AIAssistant() {
                 </button>
                 <button 
                   onClick={() => setIsOpen(false)}
-                  className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+                  className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-all flex items-center gap-1.5 border border-white/10"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-5 h-5" />
+                  <span className="text-xs font-bold hidden sm:inline">Close</span>
                 </button>
               </div>
             </div>
@@ -476,9 +473,18 @@ export default function AIAssistant() {
                     </button>
                   </div>
                   <div className="flex items-center justify-between mt-2">
-                    <p className="text-[9px] text-gray-400">
-                      High Thinking Enabled
-                    </p>
+                    <div className="flex items-center gap-3">
+                      <p className="text-[9px] text-gray-400">
+                        High Thinking Enabled
+                      </p>
+                      <button 
+                        onClick={() => setIsOpen(false)}
+                        className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                        Dismiss Chat
+                      </button>
+                    </div>
                     <div className="flex items-center gap-1 text-[9px] text-indigo-500 font-medium">
                       <Lightbulb className="w-2.5 h-2.5" /> AI Coach Mode
                     </div>

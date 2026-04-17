@@ -91,8 +91,8 @@ export default function ClockModal({ activeTab, onTabChange }: ClockModalProps) 
             />
             <button 
               onClick={() => {
-                if (alarmTime) alert(`Alarm set for ${alarmTime}`);
-                else alert('Please select a time');
+                if (alarmTime) console.log(`Alarm set for ${alarmTime}`);
+                else console.warn('Please select a time');
               }}
               className="w-full py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-all"
             >

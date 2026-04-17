@@ -1,14 +1,14 @@
-# Supervybe Privacy Policy
+# Pulse Feeds Privacy Policy
 
 **Effective Date:** January 1, 2026
 
 ## 1. Introduction
-Welcome to Supervybe. This Privacy Policy is designed to inform you of our practices regarding the collection, use, and disclosure of Personal Information for users of our service. By choosing to utilize Supervybe, you agree to the collection and use of information in accordance with this policy.
+Welcome to Pulse Feeds. This Privacy Policy is designed to inform you of our practices regarding the collection, use, and disclosure of Personal Information for users of our service. By choosing to utilize Pulse Feeds, you agree to the collection and use of information in accordance with this policy.
 
 ## 2. Information Collection and Use
 To provide a more personalized and efficient experience, we may require you to provide certain personally identifiable information.
 
-*   **Data Retention:** Any information requested will be retained by Supervybe and utilized strictly as described within this policy.
+*   **Data Retention:** Any information requested will be retained by Pulse Feeds and utilized strictly as described within this policy.
 *   **Third-Party Integration:** The application utilizes third-party services that may collect data used to identify you. These include:
     *   Google Play Services
     *   One Signal
@@ -37,10 +37,12 @@ We value your trust in providing your Personal Information and strive to use com
 Our services are not directed at individuals under the age of 13. We do not knowingly collect personally identifiable information from children. If we discover that a child under 13 has provided personal data, we will perform an immediate deletion from our servers.
 
 ## 8. External Links
-Supervybe may contain links to external sites. If you click on a third-party link, you will be directed to that site. Note that these external platforms are not operated by us, and we assume no responsibility for their content or privacy practices.
+Pulse Feeds may contain links to external sites. If you click on a third-party link, you will be directed to that site. Note that these external platforms are not operated by us, and we assume no responsibility for their content or privacy practices.
 
 ## 9. Policy Updates
 We may update this Privacy Policy periodically. We advise users to review this page regularly for any changes. All updates are effective immediately upon being posted on this page.
 
 ## 10. Contact Information
-If you have any questions or suggestions regarding this Privacy Policy, please contact our support team.
+If you have any questions or suggestions regarding this Privacy Policy, please contact our support team:
+*   Email: privacy@pulsefeeds.com
+*   Fax: +1 845-908-0052

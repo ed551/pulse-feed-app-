@@ -10,15 +10,13 @@ import firebaseConfig from '../../firebase-applet-config.json';
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
-// Initialize Firestore with better connection reliability
+// Initialize Firestore
 const firestoreDatabaseId = firebaseConfig.firestoreDatabaseId;
 
 console.log('Initializing Firestore with database ID:', firestoreDatabaseId || '(default)');
 
-// Use the named database if provided, otherwise use the default one
-export const db = (firestoreDatabaseId && firestoreDatabaseId !== '(default)') 
-  ? getFirestore(app, firestoreDatabaseId) 
-  : getFirestore(app);
+// Use standard getFirestore for better stability
+export const db = getFirestore(app, (firestoreDatabaseId && firestoreDatabaseId !== '(default)') ? firestoreDatabaseId : undefined);
 
 // Initialize Storage
 export const storage = getStorage(app);
@@ -74,33 +72,36 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-async function testConnection() {
+async function testConnection(retries = 3) {
   try {
-    console.log("Testing Firebase connection...");
+    console.log(`Testing Firebase connection (Attempt ${4 - retries}/3)...`);
     console.log("Project ID:", firebaseConfig.projectId);
     console.log("Database ID:", firestoreDatabaseId || "(default)");
     
     // Attempt to fetch a non-existent document to test connectivity
     // Using getDocFromServer to bypass cache and force a network check
-    await getDocFromServer(doc(db, '_connection_test_', 'ping'));
-    console.log("Firebase connection test successful (reached server).");
+    const testDocRef = doc(db, '_connection_test_', 'ping');
+    await getDocFromServer(testDocRef);
+    console.log("Firebase connection confirmed (reached server).");
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorCode = (error as any)?.code;
     
-    if (errorMessage.includes('the client is offline') || errorMessage.includes('unavailable')) {
-      console.error("CRITICAL: Firestore connection failed.");
-      console.error("Error:", errorMessage);
-      console.error("This usually means one of two things:");
-      console.error("1. The Firestore database has not been created yet.");
-      console.error("2. The Database ID in your config is incorrect.");
-      console.error("");
-      console.error("ACTION REQUIRED:");
-      console.error("Go to: https://console.firebase.google.com/project/" + firebaseConfig.projectId + "/firestore/databases");
-      console.error("Check if a database exists. If not, create one.");
-      console.error("If the database ID is '(default)', ensure your firebase-applet-config.json reflects that.");
+    console.warn(`Firestore connection test result: [${errorCode || 'unknown'}] ${errorMessage}`);
+    
+    if (errorMessage.includes('the client is offline') || errorMessage.includes('unavailable') || errorCode === 'unavailable') {
+      if (retries > 1) {
+        console.warn(`Connection unavailable (Code: ${errorCode}). Retrying in 3s...`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        return testConnection(retries - 1);
+      }
+      
+      console.error("CRITICAL: Firestore connection failed after multiple attempts.");
+      console.error(`Last Error: [${errorCode}] ${errorMessage}`);
+      console.error("Troubleshooting: 1. Check if the database 'ai-studio-5dd0f0b0-4dc9-4cc3-82e8-070c94b6bcd3' exists in the Firebase console. 2. Ensure the project 'consumer-rewards-app-2026' is active.");
     } else {
       // Other errors (like 404 or permission denied) actually confirm we ARE online and reaching the server
-      console.log("Firebase connection confirmed (received server response):", errorMessage);
+      console.log("Firebase connection confirmed (received server response).");
     }
   }
 }

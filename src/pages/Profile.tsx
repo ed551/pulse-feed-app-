@@ -401,8 +401,12 @@ export default function Profile() {
             <div className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">Groups</div>
           </div>
           <div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{userData?.points || 0}</div>
-            <div className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">Points</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              ${(userData?.balance || 0).toFixed(2)}
+            </div>
+            <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider font-bold">
+              {userData?.points || 0} Points
+            </div>
           </div>
         </div>
       </div>

@@ -17,6 +17,9 @@ interface UserData {
   role: string;
   points: number;
   balance: number;
+  adRevenue?: number;
+  educationRevenue?: number;
+  activeTimeRevenue?: number;
   bio?: string;
   createdAt: any;
   badges?: {
@@ -33,6 +36,8 @@ interface UserData {
   age?: number;
   gender?: string;
   location?: string;
+  lat?: number;
+  lng?: number;
   hobbies?: string[];
   job?: string;
   religion?: string;
@@ -99,7 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             } else {
               console.log('Initializing new user document...');
               // Initialize user data if it doesn't exist
-              setDoc(userRef, {
+              const initialData = {
                 uid: user.uid,
                 email: user.email,
                 displayName: user.displayName,
@@ -109,8 +114,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 balance: 0,
                 adRevenue: 0,
                 createdAt: serverTimestamp()
-              }, { merge: true }).catch(err => {
+              };
+              
+              setDoc(userRef, initialData, { merge: true }).catch(err => {
                 console.error('Error initializing user document:', err);
+              });
+
+              // Also initialize public profile
+              const publicRef = doc(db, 'users_public', user.uid);
+              setDoc(publicRef, {
+                uid: user.uid,
+                displayName: user.displayName,
+                photoURL: user.photoURL,
+                role: 'user',
+                status: "Hey there! I'm using Pulse Feeds.",
+                isOnline: true,
+                lastSeen: serverTimestamp()
+              }, { merge: true }).catch(err => {
+                console.error('Error initializing public user document:', err);
               });
             }
           }, (error) => {
@@ -145,6 +166,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (user) {
         // Sync user data to Firestore
         const userRef = doc(db, 'users', user.uid);
+        // We use merge: true to update profile info without overwriting existing data
+        // We DO NOT include createdAt here because it's immutable in security rules
+        // and is handled by the initial document creation logic in onSnapshot
         await setDoc(userRef, {
           uid: user.uid,
           email: user.email,
@@ -153,8 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           role: 'user', // Default role
           points: 0,
           balance: 0,
-          adRevenue: 0,
-          createdAt: serverTimestamp()
+          adRevenue: 0
         }, { merge: true });
       }
     } catch (error) {

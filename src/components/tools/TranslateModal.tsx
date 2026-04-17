@@ -13,7 +13,7 @@ export default function TranslateModal({ onClose }: TranslateModalProps) {
         {languages.map(lang => (
           <button 
             key={lang} 
-            onClick={() => { alert(`Language changed to ${lang}`); onClose(); }} 
+            onClick={() => { console.log(`Language changed to ${lang}`); onClose(); }} 
             className="py-2 px-4 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
           >
             {lang}

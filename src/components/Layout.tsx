@@ -1,12 +1,12 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { 
   Home, Users, PlusSquare, Gem, User, ShieldAlert, Bell, FileText, Lock, Headphones,
   Sun, Moon, CloudRain, Cloud, CloudLightning, Clock, Watch, BellRing, StickyNote,
   Fingerprint, HeartPulse, MapPin, Phone, MessageCircle, Gamepad2, Globe, BrainCircuit,
   Languages, Ticket, Snowflake, Calendar, Smartphone, Monitor, PhoneCall, Wrench,
-  Calculator, LayoutGrid, Power, RefreshCw, ArrowUpCircle, ArrowDownCircle, XCircle, RotateCcw, Edit3, DollarSign, LogOut, Wallet, X, Send, Search, CheckCircle2, Plus, ShieldCheck,
-  Volume2, VolumeX, Share2, Brain, TrendingUp, TrendingDown, Minus, Menu, GraduationCap, Eye, Loader2, Video, Type, Radio, Megaphone, BarChart2, Smile, Crown, Filter, Sparkles, Camera, Heart, Youtube
+  Calculator, LayoutGrid, Power, RefreshCw, ArrowUpCircle, ArrowDownCircle, XCircle, RotateCcw, Edit3, DollarSign, LogOut, Wallet, X, Send, Search, CheckCircle2, Plus, ShieldCheck, Zap,
+  Volume2, VolumeX, Share2, Brain, TrendingUp, TrendingDown, Minus, Menu, GraduationCap, Eye, Loader2, Video, Type, Radio, Megaphone, BarChart2, Smile, Crown, Filter, Sparkles, Camera, Heart, Youtube, Layers, Map
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { GoogleGenAI, Modality } from "@google/genai";
@@ -15,7 +15,7 @@ import { cn } from "../lib/utils";
 import { saveInsight } from "../lib/insights";
 import { 
   pulse_feeds_auto_sync, daily_twin_sync, midnight_settlement_engine, 
-  revenue_split_engine, auto_updater, resource_governor, 
+  revenue_distribution_engine, auto_updater, resource_governor, 
   theme_engine, HeaderIntelligence 
 } from "../lib/engines";
 import { goldBrain, GoldPrediction } from "../lib/goldEngine";
@@ -36,14 +36,14 @@ import CallModal from "./tools/CallModal";
 import TranslateModal from "./tools/TranslateModal";
 import ClockModal from "./tools/ClockModal";
 import { db } from "../lib/firebase";
-import { setDoc, doc, arrayUnion, serverTimestamp } from "firebase/firestore";
+import { setDoc, doc, arrayUnion, serverTimestamp, getDocFromServer } from "firebase/firestore";
 
 const weatherTypes = [
-  { type: 'Hot / Sunny', icon: Sun, color: 'text-orange-500', bg: 'from-orange-500/20 to-yellow-500/20', glow: 'drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]', symbol: '☀️', temp: '32°C', tempValue: 32 },
-  { type: 'Cold / Chilly', icon: Snowflake, color: 'text-cyan-300', bg: 'from-cyan-500/20 to-blue-500/20', glow: 'drop-shadow-[0_0_8px_rgba(103,232,249,0.8)]', symbol: '❄️', temp: '2°C', tempValue: 2 },
-  { type: 'Rainy', icon: CloudRain, color: 'text-teal-700', bg: 'from-teal-500/20 to-emerald-500/20', glow: 'drop-shadow-[0_0_8px_rgba(15,118,110,0.8)]', symbol: '🌧️', temp: '14°C', tempValue: 14 },
-  { type: 'Cloudy / Fair', icon: Cloud, color: 'text-slate-400', bg: 'from-slate-500/20 to-gray-500/20', glow: 'drop-shadow-[0_0_8px_rgba(226,232,240,0.8)]', symbol: '⛅', temp: '20°C', tempValue: 20 },
-  { type: 'Stormy', icon: CloudLightning, color: 'text-purple-500', bg: 'from-purple-500/20 to-indigo-500/20', glow: 'drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]', symbol: '⛈️', temp: '18°C', tempValue: 18 }
+  { type: 'Hot / Sunny', icon: Sun, color: 'text-orange-500', bg: 'from-orange-500/20 to-yellow-500/20', glow: 'drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]', symbol: '☀️', temp: '--°C', tempValue: 25 },
+  { type: 'Cold / Chilly', icon: Snowflake, color: 'text-cyan-300', bg: 'from-cyan-500/20 to-blue-500/20', glow: 'drop-shadow-[0_0_8px_rgba(103,232,249,0.8)]', symbol: '❄️', temp: '--°C', tempValue: 5 },
+  { type: 'Rainy', icon: CloudRain, color: 'text-teal-700', bg: 'from-teal-500/20 to-emerald-500/20', glow: 'drop-shadow-[0_0_8px_rgba(15,118,110,0.8)]', symbol: '🌧️', temp: '--°C', tempValue: 15 },
+  { type: 'Cloudy / Fair', icon: Cloud, color: 'text-slate-400', bg: 'from-slate-500/20 to-gray-500/20', glow: 'drop-shadow-[0_0_8px_rgba(226,232,240,0.8)]', symbol: '⛅', temp: '--°C', tempValue: 20 },
+  { type: 'Stormy', icon: CloudLightning, color: 'text-purple-500', bg: 'from-purple-500/20 to-indigo-500/20', glow: 'drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]', symbol: '⛈️', temp: '--°C', tempValue: 18 }
 ];
 
 export default function Layout() {
@@ -90,11 +90,22 @@ export default function Layout() {
     return () => window.removeEventListener('toggle-view-mode', handleToggleView);
   }, []);
 
+  const mainRef = useRef<HTMLDivElement>(null);
+
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [showAddPostMenu, setShowAddPostMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
+
+  const bottomNavItems = [
+    { path: '/', icon: Home, label: 'Home' },
+    { path: '/groups', icon: Users, label: 'Groups' },
+    { path: '/videos', icon: Video, label: 'Videos' },
+    { path: '/rewards', icon: Gem, label: 'Rewards' },
+    { path: '/notifications', icon: Bell, label: 'Notifications' },
+    { path: '/profile', icon: User, label: 'Profile' },
+  ];
 
   const CATEGORIES = [
     { name: 'All', icon: Home, color: 'text-purple-500' },
@@ -102,7 +113,7 @@ export default function Layout() {
     { name: 'Browsers', icon: Globe, color: 'text-orange-500' },
     { name: 'Rewards', icon: Gem, color: 'text-yellow-500' },
     { name: 'Indoor Games', icon: Gamepad2, color: 'text-pink-500' },
-    { name: 'Outdoor Games', icon: Gamepad2, color: 'text-emerald-500' },
+    { name: 'Outdoor Games', icon: Map, color: 'text-emerald-500' },
     { name: 'Toggle Frame', icon: Smartphone, color: 'text-purple-500' },
     { name: 'Terms', icon: FileText, color: 'text-teal-500' },
     { name: 'Ads', icon: DollarSign, color: 'text-green-500' }
@@ -159,6 +170,24 @@ export default function Layout() {
     }
     window.dispatchEvent(new CustomEvent('theme-changed', { detail: { isDark } }));
   }, [isDark]);
+
+  const [dbStatus, setDbStatus] = useState<'testing' | 'online' | 'offline'>('testing');
+
+  useEffect(() => {
+    async function testConnection() {
+      try {
+        await getDocFromServer(doc(db, 'system', 'health'));
+        setDbStatus('online');
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('the client is offline')) {
+          setDbStatus('offline');
+        } else {
+          setDbStatus('online');
+        }
+      }
+    }
+    testConnection();
+  }, []);
 
   const toggleTheme = () => {
     const newTheme = !isDark;
@@ -310,23 +339,46 @@ export default function Layout() {
             goldBrain.updateAnalysis(effectiveDate, response.text);
             setGoldData({ ...goldBrain.getDailyPrediction(effectiveDate) });
             lastGoldAnalysisDateRef.current = dateStr;
+            localStorage.setItem('gold_analysis_date', dateStr);
+            localStorage.setItem('gold_analysis_text', response.text);
           }
         } catch (err: any) {
-          // If it's a quota error, we don't set lastGoldAnalysisDateRef so it can retry on the next interval
-          // We only log it once per hour as a warning to avoid console spam
-          const now = new Date();
-          if (now.getMinutes() === 0) {
-            if (err?.status === 429) {
-              console.warn("Gold Smart Analysis Service busy (will retry).");
-            } else {
-              console.error("Gold Smart Analysis Error (will retry):", err);
+          const errorMsg = err?.message || JSON.stringify(err);
+          if (err?.status === 429) {
+            console.warn("Gold Smart Analysis Service busy (will retry).");
+            // Use cached text if available even if date is old
+            const cachedText = localStorage.getItem('gold_analysis_text');
+            if (cachedText) {
+              goldBrain.updateAnalysis(effectiveDate, cachedText);
             }
+          } else if (errorMsg.includes('Rpc failed') || errorMsg.includes('xhr error')) {
+            // Silent retry for transient network errors
+            const cachedText = localStorage.getItem('gold_analysis_text');
+            if (cachedText) {
+              goldBrain.updateAnalysis(effectiveDate, cachedText);
+            }
+          } else {
+            console.error("Gold Smart Analysis Error (will retry):", err);
           }
           // Ensure we still have the default data
           setGoldData({ ...goldBrain.getDailyPrediction(effectiveDate) });
         }
+      } else {
+        // Load from cache if available
+        const cachedText = localStorage.getItem('gold_analysis_text');
+        if (cachedText) {
+          goldBrain.updateAnalysis(effectiveDate, cachedText);
+        }
+        setGoldData({ ...goldBrain.getDailyPrediction(effectiveDate) });
       }
     };
+
+    // Initial load from cache
+    const cachedDate = localStorage.getItem('gold_analysis_date');
+    const cachedText = localStorage.getItem('gold_analysis_text');
+    if (cachedDate && cachedText) {
+      lastGoldAnalysisDateRef.current = cachedDate;
+    }
 
     updateGoldPrediction();
     const interval = setInterval(updateGoldPrediction, 60000); // Check every minute
@@ -343,7 +395,17 @@ export default function Layout() {
   const lastWeatherAnalysisTimeRef = useRef<number>(0);
   const [locationName, setLocationName] = useState<string>('Detecting...');
   const [weatherAnalysis, setWeatherAnalysis] = useState<string>('Analyzing weather patterns...');
+  const [weatherStatus, setWeatherStatus] = useState<'idle' | 'detecting' | 'healing' | 'complete'>('idle');
+  const [weatherHealProgress, setWeatherHealProgress] = useState(0);
+  const [isCorrectingWeather, setIsCorrectingWeather] = useState(false);
+  const [isSearchingCity, setIsSearchingCity] = useState(false);
+  const [citySearchQuery, setCitySearchQuery] = useState('');
+  const [correctionInput, setCorrectionInput] = useState({ temp: '', condition: '' });
   
+  const [brightness, setBrightness] = useState(100);
+  const [bestSeller, setBestSeller] = useState("Edwin Muoha");
+  const [bestBuyer, setBestBuyer] = useState("Community");
+
   const dateFormats = ['US', 'UK', 'ISO', 'Full'];
   const [dateFormatIndex, setDateFormatIndex] = useState(0);
   
@@ -360,144 +422,403 @@ export default function Layout() {
 
   const toggleDateFormat = () => setDateFormatIndex((prev) => (prev + 1) % dateFormats.length);
 
-  useEffect(() => {
-    const fetchWeather = async (lat: number, lon: number, city: string) => {
-      if (lat === undefined || lon === undefined || isNaN(lat) || isNaN(lon)) {
-        console.warn("Weather: Invalid coordinates, skipping fetch", { lat, lon });
-        return;
-      }
-      
+  const fetchWeather = useCallback(async (lat: number, lon: number, city: string) => {
+    if (lat === undefined || lon === undefined || isNaN(lat) || isNaN(lon)) {
+      console.warn("Weather: Invalid coordinates, skipping fetch", { lat, lon });
+      return;
+    }
+    
+    // Check Local Storage Cache first
+    const cacheKey = `weather_${lat.toFixed(1)}_${lon.toFixed(1)}`;
+    const cachedData = localStorage.getItem(cacheKey);
+    if (cachedData) {
       try {
-        console.log(`Weather: Fetching for ${city} (${lat}, ${lon})...`);
-        const response = await fetch(`${window.location.origin}/api/weather?lat=${lat}&lon=${lon}`);
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          console.error("Weather: Server responded with error", { status: response.status, errorData });
-          throw new Error(errorData.error || `Weather API responded with status: ${response.status}`);
-        }
-        const data = await response.json();
-        const current = data.current_weather;
-        
-        if (!current) throw new Error("No weather data in response");
-        
-        let typeIndex = 3; // Default Cloudy
-        if (current.weathercode === 0) typeIndex = 0; // Hot/Sunny
-        else if (current.weathercode >= 1 && current.weathercode <= 3) typeIndex = 3; // Cloudy
-        else if (current.weathercode >= 51 && current.weathercode <= 82) typeIndex = 2; // Rainy
-        else if (current.weathercode >= 95) typeIndex = 4; // Stormy
-        else if (current.weathercode >= 71 && current.weathercode <= 77) typeIndex = 1; // Cold
-        
-        const newWeather = {
-          ...weatherTypes[typeIndex],
-          temp: `${Math.round(current.temperature)}°C`,
-          tempValue: Math.round(current.temperature)
-        };
-
-        // Only update and speak if there's a significant change to avoid "frequent changes"
-        const tempDiff = Math.abs(newWeather.tempValue - prevTempRef.current);
-        const typeChanged = newWeather.type !== prevTypeRef.current;
-        const now = Date.now();
-        const analysisCooldown = 30 * 60 * 1000; // 30 minutes cooldown for AI analysis
-        
-        if (tempDiff >= 2 || typeChanged) {
-          // Smart Analysis via Gemini
-          const shouldAnalyze = now - lastWeatherAnalysisTimeRef.current > analysisCooldown || typeChanged;
+        const { data, timestamp } = JSON.parse(cachedData);
+        if (data && data.current && data.forecast && Date.now() - timestamp < 30 * 60 * 1000) { // 30 mins
+          console.log("Weather: Using localStorage cache");
           
-          if (shouldAnalyze) {
-            try {
-              const analysisResponse = await generateContentWithRetry({
-                model: "gemini-3-flash-preview",
-                contents: `Analyze this weather for ${city}: ${newWeather.temp}, ${newWeather.type}. Provide a 1-sentence smart summary for the user.`,
-              });
-              
-              if (analysisResponse.text) {
-                setWeatherAnalysis(analysisResponse.text);
-                lastWeatherAnalysisTimeRef.current = Date.now();
-                const msg = new SpeechSynthesisUtterance(analysisResponse.text);
-                window.speechSynthesis.speak(msg);
-              }
-            } catch (aiErr: any) {
-              // If it's a quota error, don't log it as an error, just a warning
-              if (aiErr?.status === 429) {
-                console.warn("Smart Analysis Quota Exceeded. Using fallback.");
-              } else {
-                console.error("Smart Analysis Error:", aiErr);
-              }
-              
-              const trendText = newWeather.tempValue > prevTempRef.current ? "increasing" : (newWeather.tempValue < prevTempRef.current ? "decreasing" : "stable");
-              const fallbackText = `Weather update for ${city}: It is now ${newWeather.type} with a temperature of ${newWeather.tempValue} degrees. The temperature is ${trendText}.`;
-              setWeatherAnalysis(fallbackText);
-              const msg = new SpeechSynthesisUtterance(fallbackText);
+          // Re-attach icons because functions (components) are lost in JSON.stringify
+          const currentType = weatherTypes.find(t => t.type === data.current.type) || weatherTypes[3];
+          const forecastType = weatherTypes.find(t => t.type === data.forecast.type) || weatherTypes[3];
+          
+          setCurrentWeather({ ...data.current, icon: currentType.icon });
+          setForecastWeather({ ...data.forecast, icon: forecastType.icon });
+          
+          setWeatherStatus('idle');
+          return;
+        }
+      } catch (e) {
+        localStorage.removeItem(cacheKey);
+      }
+    }
+    
+    setWeatherStatus('detecting');
+    try {
+      const url = `${window.location.origin}/api/weather?lat=${lat}&lon=${lon}`;
+      console.log(`Weather: Fetching ${url} for ${city}...`);
+      const response = await fetch(url);
+      const contentType = response.headers.get("content-type");
+      
+      if (!response.ok) {
+        let errorMsg = `Weather API responded with status: ${response.status}`;
+        try {
+          if (contentType && contentType.includes("application/json")) {
+            const errorData = await response.json();
+            if (errorData.details) errorMsg += ` (${errorData.details})`;
+          }
+        } catch (e) {
+          // Ignore JSON parse error for the error response itself
+        }
+        throw new Error(errorMsg);
+      }
+
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Weather API returned an invalid response format (HTML instead of JSON)");
+      }
+
+      const data = await response.json();
+      const current = data.current_weather;
+      const daily = data.daily;
+      
+      if (!current) throw new Error("No weather data in response");
+      
+      // Update Current Weather
+      let typeIndex = 3; // Default Cloudy
+      if (current.weathercode === 0) typeIndex = 0; // Hot/Sunny
+      else if (current.weathercode >= 1 && current.weathercode <= 3) typeIndex = 3; // Cloudy
+      else if (current.weathercode >= 51 && current.weathercode <= 82) typeIndex = 2; // Rainy
+      else if (current.weathercode >= 95) typeIndex = 4; // Stormy
+      else if (current.weathercode >= 71 && current.weathercode <= 77) typeIndex = 1; // Cold
+      
+      const newWeather = {
+        ...weatherTypes[typeIndex],
+        temp: `${Math.round(current.temperature)}°C`,
+        tempValue: Math.round(current.temperature)
+      };
+
+      // Update Forecast Weather (Tomorrow)
+      let newForecast = forecastWeather;
+      if (daily && daily.temperature_2m_max && (daily.weather_code || daily.weathercode)) {
+        let forecastTypeIndex = 3;
+        const forecastCode = daily.weather_code ? daily.weather_code[1] : daily.weathercode[1];
+        const forecastTemp = daily.temperature_2m_max[1];
+
+        if (forecastCode === 0) forecastTypeIndex = 0;
+        else if (forecastCode >= 1 && forecastCode <= 3) forecastTypeIndex = 3;
+        else if (forecastCode >= 51 && forecastCode <= 82) forecastTypeIndex = 2;
+        else if (forecastCode >= 95) forecastTypeIndex = 4;
+        else if (forecastCode >= 71 && forecastCode <= 77) forecastTypeIndex = 1;
+
+        newForecast = {
+          ...weatherTypes[forecastTypeIndex],
+          temp: `${Math.round(forecastTemp)}°C`,
+          tempValue: Math.round(forecastTemp)
+        };
+        setForecastWeather(newForecast);
+      }
+
+      // Save to Local Storage Cache
+      localStorage.setItem(cacheKey, JSON.stringify({
+        data: { current: newWeather, forecast: newForecast },
+        timestamp: Date.now()
+      }));
+
+      // Only update and speak if there's a significant change to avoid "frequent changes"
+      const tempDiff = Math.abs(newWeather.tempValue - prevTempRef.current);
+      const typeChanged = newWeather.type !== prevTypeRef.current;
+      const now = Date.now();
+      const analysisCooldown = 2 * 60 * 60 * 1000; // 2 hours cooldown for AI analysis to save quota
+      
+      // Load cached analysis if available
+      const cachedAnalysis = localStorage.getItem('weather_analysis');
+      const cachedAnalysisTime = parseInt(localStorage.getItem('weather_analysis_time') || '0');
+      
+      if (tempDiff >= 2 || typeChanged || !cachedAnalysis) {
+        // Smart Analysis via Gemini
+        const shouldAnalyze = now - cachedAnalysisTime > analysisCooldown || typeChanged || !cachedAnalysis;
+        
+        if (shouldAnalyze) {
+          try {
+            const analysisResponse = await generateContentWithRetry({
+              model: "gemini-3-flash-preview",
+              contents: `Analyze this weather for ${city}: Today is ${newWeather.temp} and ${newWeather.type}. Tomorrow's forecast is ${forecastWeather.temp} and ${forecastWeather.type}. Provide a 1-sentence smart summary for the user about the current conditions and the transition to tomorrow.`,
+            });
+            
+            if (analysisResponse.text) {
+              setWeatherAnalysis(analysisResponse.text);
+              localStorage.setItem('weather_analysis', analysisResponse.text);
+              localStorage.setItem('weather_analysis_time', Date.now().toString());
+              lastWeatherAnalysisTimeRef.current = Date.now();
+              const msg = new SpeechSynthesisUtterance(analysisResponse.text);
               window.speechSynthesis.speak(msg);
             }
-          } else {
-            // Just update the basic text without AI if on cooldown
-            const trendText = newWeather.tempValue > prevTempRef.current ? "increasing" : (newWeather.tempValue < prevTempRef.current ? "decreasing" : "stable");
-            const updateText = `Weather update for ${city}: It is now ${newWeather.type} with a temperature of ${newWeather.tempValue} degrees. The temperature is ${trendText}.`;
-            setWeatherAnalysis(updateText);
-          }
-
-          setTempTrend(newWeather.tempValue > prevTempRef.current ? '+' : (newWeather.tempValue < prevTempRef.current ? '-' : ''));
-          prevTempRef.current = newWeather.tempValue;
-          prevTypeRef.current = newWeather.type;
-          setPrevTemp(newWeather.tempValue);
-          setCurrentWeather(newWeather);
-        }
-      } catch (error: any) {
-        console.error("Weather Fetch Error:", error.message || error);
-        // Set a fallback weather state instead of leaving it empty/broken
-        if (!currentWeather) {
-          setCurrentWeather({
-            type: 'Cloudy / Fair',
-            icon: Cloud,
-            color: 'text-slate-400',
-            bg: 'from-slate-500/20 to-gray-500/20',
-            glow: 'drop-shadow-[0_0_8px_rgba(226,232,240,0.8)]',
-            symbol: '⛅',
-            temp: '--°C',
-            tempValue: 20
-          });
-        }
-      }
-    };
-
-    const getLocation = () => {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (position) => {
-            const { latitude, longitude } = position.coords;
-            let city = 'Your Region';
-            try {
-              const res = await fetch(`${window.location.origin}/api/geocode?lat=${latitude}&lon=${longitude}`);
-              if (!res.ok) throw new Error(`Geocode API responded with status: ${res.status}`);
-              const data = await res.json();
-              city = data.address.city || data.address.town || data.address.village || data.address.suburb || 'Your Region';
-              setLocationName(city);
-            } catch (e) {
-              console.error("Geocoding Error:", e);
-              setLocationName('Your Region');
+          } catch (aiErr: any) {
+            if (aiErr?.status === 429) {
+              console.warn("Smart Analysis Quota Exceeded. Using fallback.");
+              if (cachedAnalysis) {
+                setWeatherAnalysis(cachedAnalysis);
+              } else {
+                const trendText = newWeather.tempValue > prevTempRef.current ? "increasing" : (newWeather.tempValue < prevTempRef.current ? "decreasing" : "stable");
+                const fallbackText = `Weather update for ${city}: It is now ${newWeather.type} with a temperature of ${newWeather.tempValue} degrees. The temperature is ${trendText}.`;
+                setWeatherAnalysis(fallbackText);
+              }
+            } else {
+              console.error("Smart Analysis Error:", aiErr);
             }
-            fetchWeather(latitude, longitude, city);
-          },
-          (error) => {
-            console.error("Geolocation Error:", error);
-            setLocationName('Global');
-            fetchWeather(-1.286389, 36.817223, 'Global'); // Default to Nairobi
           }
-        );
-      } else {
-        setLocationName('Global');
-        fetchWeather(-1.286389, 36.817223, 'Global');
+        } else if (cachedAnalysis) {
+          setWeatherAnalysis(cachedAnalysis);
+        }
+      } else if (cachedAnalysis) {
+        setWeatherAnalysis(cachedAnalysis);
       }
-    };
 
-    getLocation();
-    const interval = setInterval(getLocation, 600000); // Update every 10 mins
-    return () => clearInterval(interval);
-  }, []);
+      setTempTrend(newWeather.tempValue > prevTempRef.current ? '+' : (newWeather.tempValue < prevTempRef.current ? '-' : ''));
+      prevTempRef.current = newWeather.tempValue;
+      prevTypeRef.current = newWeather.type;
+      setPrevTemp(newWeather.tempValue);
+      setCurrentWeather(newWeather);
+      
+      setWeatherStatus('complete');
+      setTimeout(() => setWeatherStatus('idle'), 3000);
+    } catch (error: any) {
+      console.error("Weather Fetch Error:", error.message || error);
+      setWeatherStatus('healing');
+      
+      // Smart Self-Healing via Gemini Search
+      try {
+        setWeatherHealProgress(20);
+        const searchResponse = await generateContentWithRetry({
+          model: "gemini-3-flash-preview",
+          contents: `What is the current weather in ${city}? Provide temperature in Celsius and general condition.`,
+          config: {
+            tools: [{ googleSearch: {} }]
+          }
+        });
+        setWeatherHealProgress(60);
+        
+        if (searchResponse.text) {
+          const analysis = await generateContentWithRetry({
+            model: "gemini-3-flash-preview",
+            contents: `Extract temperature (number only) and condition from this weather report: "${searchResponse.text}". Format: TEMP: [number] | CONDITION: [Hot/Sunny, Cold/Chilly, Rainy, Cloudy/Fair, Stormy]`,
+          });
+          
+          const text = analysis.text || "";
+          const tempMatch = text.match(/TEMP:\s*(\d+)/);
+          const condMatch = text.match(/CONDITION:\s*([^|]+)/);
+          
+          if (tempMatch && condMatch) {
+            const temp = parseInt(tempMatch[1]);
+            const cond = condMatch[1].trim();
+            
+            const foundIndex = weatherTypes.findIndex(t => t.type.toLowerCase().includes(cond.toLowerCase()));
+            const typeIndex = foundIndex === -1 ? 3 : foundIndex;
+            const healedWeather = {
+              ...weatherTypes[typeIndex],
+              temp: `${temp}°C`,
+              tempValue: temp
+            };
+            
+            setCurrentWeather(healedWeather);
+            setWeatherAnalysis(`Smart Brain recovered weather data: ${searchResponse.text.substring(0, 100)}...`);
+            setWeatherHealProgress(100);
+            setWeatherStatus('complete');
+            setTimeout(() => {
+              setWeatherStatus('idle');
+              setWeatherHealProgress(0);
+            }, 5000);
+            return;
+          }
+        }
+      } catch (healErr) {
+        console.error("Smart Healing Failed:", healErr);
+      }
+
+      // Final fallback
+      if (!currentWeather) {
+        setCurrentWeather({
+          type: 'Cloudy / Fair',
+          icon: Cloud,
+          color: 'text-slate-400',
+          bg: 'from-slate-500/20 to-gray-500/20',
+          glow: 'drop-shadow-[0_0_8px_rgba(226,232,240,0.8)]',
+          symbol: '⛅',
+          temp: '--°C',
+          tempValue: 20
+        });
+      }
+      setWeatherStatus('idle');
+    }
+  }, [currentWeather]);
+
+  const getLocation = useCallback(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          let city = 'Your Region';
+          let geocodeRetries = 2;
+          
+          while (geocodeRetries > 0) {
+            try {
+              const url = `/api/geocode?lat=${latitude}&lon=${longitude}`;
+              console.log(`Geocoding Attempt ${3 - geocodeRetries}: Fetching ${url}`);
+              
+              // Compatibility check for AbortSignal.timeout
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 40000);
+              
+              const res = await fetch(url, {
+                headers: {
+                  'Accept': 'application/json'
+                },
+                signal: controller.signal
+              });
+              clearTimeout(timeoutId);
+              if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error(`Geocode API responded with status: ${res.status} - ${errorText}`);
+              }
+              const data = await res.json();
+              city = data.address?.city || data.address?.town || data.address?.village || data.address?.suburb || 'Your Region';
+              setLocationName(city);
+              break; // Success
+            } catch (e: any) {
+              console.error(`Geocoding Attempt ${3 - geocodeRetries} Error:`, e.message || e);
+              geocodeRetries--;
+              if (geocodeRetries > 0) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              } else {
+                setLocationName('Your Region');
+              }
+            }
+          }
+          fetchWeather(latitude, longitude, city);
+        },
+        (error) => {
+          console.error("Geolocation Error:", error);
+          setLocationName('Global');
+          fetchWeather(-1.286389, 36.817223, 'Global'); // Default to Nairobi
+        }
+      );
+    } else {
+      setLocationName('Global');
+      fetchWeather(-1.286389, 36.817223, 'Global');
+    }
+  }, [fetchWeather]);
+
+  useEffect(() => {
+    // Initial location detection with a small delay to ensure server is ready
+    const timer = setTimeout(() => {
+      getLocation();
+    }, 1500);
+
+    // Listen for manual refresh requests
+    const handleRefresh = () => {
+      setLocationName('Detecting...');
+      getLocation();
+    };
+    window.addEventListener('refresh-weather', handleRefresh);
+
+    const interval = setInterval(getLocation, 1800000); // Update every 30 mins
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('refresh-weather', handleRefresh);
+      clearInterval(interval);
+    };
+  }, [getLocation]);
 
   const CurrentWeatherIcon = currentWeather.icon;
   const ForecastWeatherIcon = forecastWeather.icon;
+
+  const handleWeatherCorrection = async () => {
+    if (!correctionInput.temp || !correctionInput.condition) return;
+    
+    setWeatherStatus('healing');
+    setWeatherHealProgress(30);
+    
+    try {
+      const temp = parseInt(correctionInput.temp);
+      const cond = correctionInput.condition;
+      
+      // Find best match for condition
+      const foundIndex = weatherTypes.findIndex(t => 
+        t.type.toLowerCase().includes(cond.toLowerCase()) || 
+        cond.toLowerCase().includes(t.type.toLowerCase().split(' ')[0])
+      );
+      const typeIndex = foundIndex === -1 ? 3 : foundIndex;
+      
+      const correctedWeather = {
+        ...weatherTypes[typeIndex],
+        temp: `${temp}°C`,
+        tempValue: temp
+      };
+      
+      setWeatherHealProgress(70);
+      
+      // Smart Analysis for the correction
+      const analysisResponse = await generateContentWithRetry({
+        model: "gemini-3-flash-preview",
+        contents: `The user corrected the weather. It was reported as ${currentWeather.temp} ${currentWeather.type}, but the user says it is actually ${temp}°C and ${cond}. Provide a 1-sentence smart acknowledgment and update the system intelligence about this local discrepancy.`,
+      });
+      
+      setCurrentWeather(correctedWeather);
+      if (analysisResponse.text) {
+        setWeatherAnalysis(analysisResponse.text);
+        localStorage.setItem('weather_analysis', analysisResponse.text);
+      }
+      
+      // Save correction to Firestore for "Global Brain" learning
+      if (currentUser) {
+        await setDoc(doc(db, 'system', 'weather_corrections', 'logs', Date.now().toString()), {
+          userId: currentUser.uid,
+          reported: { temp: currentWeather.temp, type: currentWeather.type },
+          actual: { temp, type: cond },
+          location: locationName,
+          timestamp: serverTimestamp()
+        });
+      }
+      
+      setWeatherHealProgress(100);
+      setWeatherStatus('complete');
+      setIsCorrectingWeather(false);
+      setCorrectionInput({ temp: '', condition: '' });
+      
+      showNotification("Weather Corrected", { body: "System intelligence updated with your local data." });
+      
+      setTimeout(() => {
+        setWeatherStatus('idle');
+        setWeatherHealProgress(0);
+      }, 3000);
+    } catch (err) {
+      console.error("Weather Correction Error:", err);
+      setWeatherStatus('idle');
+    }
+  };
+
+  const handleCitySearch = async () => {
+    if (!citySearchQuery) return;
+    setWeatherStatus('detecting');
+    try {
+      const response = await fetch(`/api/search-city?q=${encodeURIComponent(citySearchQuery)}`);
+      if (!response.ok) throw new Error(`Search API responded with status: ${response.status}`);
+      const data = await response.json();
+      if (data && data.length > 0) {
+        const { lat, lon, display_name } = data[0];
+        const cityName = display_name.split(',')[0];
+        setLocationName(cityName);
+        fetchWeather(parseFloat(lat), parseFloat(lon), cityName);
+        setIsSearchingCity(false);
+        setCitySearchQuery('');
+      } else {
+        showNotification("City Not Found", { body: "Could not find coordinates for that location." });
+        setWeatherStatus('idle');
+      }
+    } catch (err) {
+      console.error("City Search Error:", err);
+      setWeatherStatus('idle');
+    }
+  };
 
   const coreNavItems = [
     { path: '/', icon: Home, color: 'text-blue-500', label: 'Home' },
@@ -507,10 +828,12 @@ export default function Layout() {
   ];
 
   const extraNavItems = [
+    { path: '/messages', icon: MessageCircle, color: 'text-purple-500', label: 'Messages' },
+    { path: '/contacts', icon: Users, color: 'text-orange-500', label: 'Contacts' },
     { path: '/education', icon: GraduationCap, color: 'text-blue-500', label: 'Education' },
     { path: '/events', icon: Calendar, color: 'text-indigo-600', label: 'Events' },
     { path: '/dating', icon: Heart, color: 'text-pink-500', label: 'Dating' },
-    { path: '/watch-to-earn', icon: Youtube, color: 'text-red-500', label: 'Watch to Earn' },
+    { path: '/community', icon: Users, color: 'text-indigo-500', label: 'Community' },
     { path: '/moderation', icon: ShieldAlert, color: 'text-red-500', label: 'Moderation' },
     { path: '/notifications', icon: Bell, color: 'text-orange-500', label: 'Notifications' },
     { path: '/calls', icon: Phone, color: 'text-indigo-500', label: 'Calls' },
@@ -519,8 +842,10 @@ export default function Layout() {
     { path: '/support', icon: Headphones, color: 'text-cyan-500', label: 'Support' },
   ];
 
-  if (userData?.role === 'admin') {
-    extraNavItems.unshift({ path: '/admin', icon: ShieldCheck, color: 'text-purple-600', label: 'Admin' });
+  const isDeveloper = currentUser?.email === 'edwinmuoha@gmail.com' || currentUser?.phoneNumber === '+254728011174' || userData?.role === 'admin';
+
+  if (isDeveloper) {
+    extraNavItems.unshift({ path: '/platform', icon: Lock, color: 'text-indigo-600', label: 'Platform' });
   }
 
   const navItems = [...coreNavItems, ...extraNavItems];
@@ -570,6 +895,7 @@ export default function Layout() {
     { type: 'icon', icon: HeartPulse, color: 'text-red-500', title: 'Health Checker', action: () => setActiveModal('health') },
     { type: 'icon', icon: Fingerprint, color: 'text-pink-400', title: 'Fingerprint Reader', action: () => setActiveModal('fingerprint') },
     { type: 'icon', icon: Brain, color: 'text-indigo-500', title: 'AI Assistant', action: () => window.dispatchEvent(new CustomEvent('toggle-ai-assistant')) },
+    { type: 'icon', icon: MessageCircle, color: 'text-purple-500', title: 'Messages', path: '/messages' },
     { type: 'icon', icon: Phone, color: 'text-blue-500', title: 'Calls', path: '/calls' },
   ];
 
@@ -590,238 +916,253 @@ export default function Layout() {
             <div className="w-12 h-1 bg-gray-700 rounded-full"></div>
           </div>
         )}
-        {/* Header */}
-        <header className="sticky top-0 flex items-center justify-between px-6 sm:px-8 py-4 bg-white dark:bg-gray-800 shadow-md z-[100] shrink-0 gap-4">
-          <div className="flex items-center w-12 sm:w-16">
-            <Link to="/" className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-all group" title="Restore Home Screen">
-              <Home className="w-6 h-6 text-indigo-600 group-hover:scale-110 transition-transform" />
-            </Link>
-          </div>
-          
-          <div className="flex flex-col items-center justify-center flex-1">
-            {/* Date & Time Display - More Prominent */}
-            <div 
-              onClick={toggleDateFormat}
-              className="mb-1 px-4 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 rounded-full border border-indigo-100 dark:border-indigo-800 shadow-sm cursor-pointer hover:shadow-md transition-all group flex items-center space-x-3"
-              title="Click to toggle date format"
-            >
-              <Calendar className="w-4 h-4 text-indigo-500" />
-              <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">
-                {formatDate(time, dateFormatIndex)}
-              </span>
-              <div className="w-px h-4 bg-indigo-200 dark:bg-indigo-800 mx-1"></div>
-              <Clock className="w-4 h-4 text-blue-500" />
-              <span className="text-xs font-mono font-bold text-blue-700 dark:text-blue-300">
-                {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-              </span>
-            </div>
 
-            <div 
-              className="flex items-center space-x-4 bg-yellow-100/50 dark:bg-yellow-900/20 px-5 sm:px-8 py-2 rounded-full border border-yellow-200/50 dark:border-yellow-700/30 shadow-sm transition-all hover:scale-105 cursor-help group relative" 
-              title="Gold Intelligence Unit"
-            >
-              <span className="font-black text-[10px] sm:text-xs text-yellow-700 dark:text-yellow-500 tracking-widest uppercase">Gold</span>
-              <span className="text-sm sm:text-xl font-bold drop-shadow-sm">{goldData?.symbol || '⏭️'}</span>
-              
-              {/* Brain Unit Tooltip */}
-              <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-72 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-yellow-200 dark:border-yellow-700 p-3 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-[150] text-left">
-                <div className="flex items-center justify-between mb-2 pb-1 border-b border-gray-100 dark:border-gray-700">
-                  <div className="flex items-center gap-2">
-                    <BrainCircuit className="w-3 h-3 text-yellow-600" />
-                    <span className="text-[10px] font-bold text-yellow-600 uppercase">Brain Unit Intelligence</span>
+        {/* Scrollable Content Wrapper */}
+        <div 
+          ref={mainRef}
+          className="flex-1 overflow-y-auto custom-scrollbar relative flex flex-col"
+        >
+          {/* Header - Facebook Style Scrollable */}
+          <header className="relative flex flex-col bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 z-[100] shadow-sm">
+            {/* Top Row: Logo, Search, Actions (Height: ~52px) */}
+            <div className="flex items-center justify-between px-4 py-2 gap-3 h-[52px]">
+              {/* Left: Logo */}
+              <div className="flex items-center shrink-0">
+                <Link to="/" className="flex items-center group">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-yellow-300 via-yellow-500 to-yellow-700 flex items-center justify-center shadow-[0_4px_12px_rgba(234,179,8,0.4)] border-2 border-white dark:border-gray-700 group-hover:scale-110 transition-transform overflow-hidden relative z-10">
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/gold-dust.png')] opacity-40 animate-pulse" />
+                    <span className="text-white font-black text-xl sm:text-2xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] relative z-10">P</span>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                    <span className="text-[8px] text-gray-400">Live</span>
-                  </div>
-                </div>
-
-                {/* Analysis */}
-                <p className="text-[10px] text-gray-600 dark:text-gray-300 leading-tight mb-3 italic font-medium">
-                  "{goldData?.analysis}"
-                </p>
-
-                {/* Brain Steps */}
-                <div className="space-y-1.5 mb-3 bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg border border-gray-100 dark:border-gray-700">
-                  <div className="flex items-start gap-2 text-[8px]">
-                    <span className="text-yellow-600 font-bold w-12 shrink-0">INPUT:</span>
-                    <span className="text-gray-500 dark:text-gray-400">{goldData?.brainSteps.input}</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-[8px]">
-                    <span className="text-yellow-600 font-bold w-12 shrink-0">LOGIC:</span>
-                    <span className="text-gray-500 dark:text-gray-400">{goldData?.brainSteps.logic}</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-[8px]">
-                    <span className="text-yellow-600 font-bold w-12 shrink-0">ANALYSIS:</span>
-                    <span className="text-gray-500 dark:text-gray-400">{goldData?.brainSteps.analysis}</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-[8px]">
-                    <span className="text-yellow-600 font-bold w-12 shrink-0">OUTPUT:</span>
-                    <span className="text-gray-500 dark:text-gray-400">{goldData?.brainSteps.output}</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-[8px]">
-                    <span className="text-yellow-600 font-bold w-12 shrink-0">CORRECT:</span>
-                    <span className="text-gray-500 dark:text-gray-400">{goldData?.brainSteps.errorCorrection}</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-[8px]">
-                    <span className="text-yellow-600 font-bold w-12 shrink-0">UPDATE:</span>
-                    <span className="text-gray-500 dark:text-gray-400">{goldData?.brainSteps.update}</span>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-2 text-[9px]">
-                  <div className="bg-blue-50 dark:bg-blue-900/20 p-1.5 rounded border border-blue-100 dark:border-blue-800/30">
-                    <p className="text-blue-400 uppercase font-bold mb-0.5 text-[7px]">Top Seller</p>
-                    <p className="text-blue-600 dark:text-blue-400 font-bold truncate">{goldData?.bestSeller}</p>
-                  </div>
-                  <div className="bg-green-50 dark:bg-green-900/20 p-1.5 rounded border border-green-100 dark:border-green-800/30">
-                    <p className="text-green-400 uppercase font-bold mb-0.5 text-[7px]">Top Buyer</p>
-                    <p className="text-green-600 dark:text-green-400 font-bold truncate">{goldData?.bestBuyer}</p>
-                  </div>
-                </div>
-                <div className="mt-2 flex items-center justify-between text-[8px] text-gray-400 border-t border-gray-100 dark:border-gray-700 pt-1.5">
-                  <span>Confidence: {goldData?.confidence}%</span>
-                  <span>Sync: {new Date(goldData?.lastUpdate || Date.now()).toLocaleTimeString()}</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center space-x-3 mt-1">
-              <div className="flex items-center space-x-1" title="Your Points">
-                <Gem className="w-3 h-3 text-yellow-500" />
-                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 tracking-tighter">
-                  {userData?.points?.toLocaleString() || 0}
-                </span>
-              </div>
-              <div className="flex items-center space-x-1" title="Your Cash Balance">
-                <DollarSign className="w-3 h-3 text-green-500" />
-                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 tracking-tighter">
-                  ${userData?.balance?.toLocaleString() || 0}
-                </span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <div className={cn(
-                  "w-1.5 h-1.5 rounded-full animate-pulse",
-                  isIdle ? "bg-gray-400" : "bg-green-500"
-                )}></div>
-                <span className="text-[7px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-tighter">
-                  {isIdle ? "Idle" : "Active"}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-1 sm:space-x-2">
-            <button onClick={() => setActiveModal('translate')} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Translate">
-              <Languages className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
-            </button>
-            <button onClick={() => setActiveModal('call')} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Call Support">
-              <PhoneCall className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
-            </button>
-            <button onClick={() => navigate('/calls')} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="User & Group Calls">
-              <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
-            </button>
-            <button 
-              onClick={() => window.dispatchEvent(new CustomEvent('toggle-view-mode'))} 
-              className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" 
-              title="Toggle View Mode"
-            >
-              {viewMode === 'desktop' ? <Smartphone className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" /> : <Monitor className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />}
-            </button>
-            <button 
-              onClick={() => {
-                setDateFormatIndex(0);
-                setActiveCategory("All");
-                setSearchQuery("");
-                showNotification("Header Reset", { body: "Header and filters have been restored to default." });
-              }}
-              className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" 
-              title="Reset Header & Filters"
-            >
-              <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500" />
-            </button>
-            <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1 hidden sm:block"></div>
-            <button onClick={toggleTheme} className="p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Toggle Theme">
-              {isDark ? <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600" />}
-            </button>
-            <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1 hidden sm:block"></div>
-          </div>
-        </header>
-
-        {/* Main Content Area */}
-        <div className="flex flex-1 overflow-hidden relative min-h-0">
-          
-          {/* Left Utility Bar (Weather, Clock, Health) */}
-          <div className={cn(
-            "flex-col w-12 sm:w-16 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 py-2 sm:py-4 items-center space-y-4 sm:space-y-6 overflow-y-auto shrink-0 z-10 custom-scrollbar",
-            viewMode === 'desktop' ? "hidden sm:flex" : "hidden"
-          )}>
-            <div className="flex flex-col items-center space-y-1 group relative" title={`Today: ${currentWeather.type}`}>
-              <CurrentWeatherIcon className={cn("w-5 h-5 sm:w-6 sm:h-6 transition-all", currentWeather.color, currentWeather.glow)} />
-              <span className="text-[8px] sm:text-[10px] font-bold opacity-70">Today</span>
-            </div>
-            <div className="flex flex-col items-center space-y-1 group relative" title={`Forecast: ${forecastWeather.type}`}>
-              <ForecastWeatherIcon className={cn("w-4 h-4 sm:w-5 sm:h-5 transition-all opacity-80", forecastWeather.color, forecastWeather.glow)} />
-              <span className="text-[8px] sm:text-[10px] font-bold opacity-70">Later</span>
-            </div>
-            <div className="w-6 sm:w-8 h-px bg-gray-200 dark:bg-gray-700 my-1 sm:my-2"></div>
-            <div className="flex flex-col items-center space-y-1" title="Clock" onClick={() => setActiveModal('clock')}>
-              <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500 cursor-pointer" />
-            </div>
-            <div className="flex flex-col items-center space-y-1" title="Sport Watch" onClick={() => setActiveModal('watch')}>
-              <Watch className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500 cursor-pointer" />
-            </div>
-            <div className="flex flex-col items-center space-y-1" title="Alarm" onClick={() => setActiveModal('alarm')}>
-              <BellRing className="w-5 h-5 sm:w-6 sm:h-6 text-red-500 cursor-pointer" />
-            </div>
-            <div className="flex flex-col items-center space-y-1" title="Notifications" onClick={() => navigate('/notifications')}>
-              <Bell className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500 cursor-pointer" />
-            </div>
-            <div className="flex flex-col items-center space-y-1" title="Note Pad" onClick={() => setActiveModal('notepad')}>
-              <StickyNote className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-500 cursor-pointer" />
-            </div>
-            <div className="flex flex-col items-center space-y-1 mt-auto" title="Health Checker" onClick={() => setActiveModal('health')}>
-              <HeartPulse className="w-5 h-5 sm:w-6 sm:h-6 text-rose-500 animate-pulse cursor-pointer" />
-            </div>
-            <div className="flex flex-col items-center space-y-1" title="Fingerprint Reader" onClick={() => setActiveModal('fingerprint')}>
-              <Fingerprint className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-500 cursor-pointer" />
-            </div>
-            <div className="flex flex-col items-center space-y-1" title="AI Eye: Universal Analysis" onClick={() => setActiveModal('aieye')}>
-              <Eye className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-500 cursor-pointer animate-pulse" />
-            </div>
-            <div className="flex flex-col items-center space-y-1" title="Master AI Assistant" onClick={() => window.dispatchEvent(new CustomEvent('toggle-ai-assistant'))}>
-              <BrainCircuit className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-500 cursor-pointer animate-pulse" />
-            </div>
-          </div>
-
-          {/* Desktop Sidebar Navigation */}
-          <div className={cn(
-            "flex-col w-16 sm:w-20 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 py-4 items-center space-y-4 overflow-y-auto shrink-0 z-10 custom-scrollbar",
-            viewMode === 'desktop' ? "hidden sm:flex" : "hidden"
-          )}>
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
-              return (
-                <Link 
-                  key={item.path} 
-                  to={item.path}
-                  className={cn(
-                    "flex flex-col items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-2xl transition-all duration-300 group relative",
-                    isActive ? "bg-blue-50 dark:bg-blue-900/20 shadow-inner" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                  )}
-                  title={item.label}
-                >
-                  <Icon className={cn("w-5 h-5 sm:w-6 sm:h-6", item.color, isActive ? "scale-110" : "group-hover:scale-110 transition-transform")} />
-                  {isActive && <div className="absolute right-0 top-1/4 bottom-1/4 w-1 bg-blue-500 rounded-l-full"></div>}
-                  <span className="absolute left-full ml-3 px-2 py-1 bg-gray-800 text-white text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity z-50">
-                    {item.label}
+                  <span className="text-xl sm:text-2xl font-black tracking-tighter text-indigo-600 dark:text-indigo-400 -ml-1.5 pl-2">
+                    ulse Feeds
                   </span>
                 </Link>
-              );
-            })}
-          </div>
+              </div>
 
-          <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900 p-6 pb-32 relative custom-scrollbar">
+              {/* Center: Search Bar (Facebook style) */}
+              <div className="flex-1 max-w-md relative group">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+                </div>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  placeholder="Search Pulse Feeds..."
+                  className="block w-full pl-9 pr-4 py-1.5 bg-gray-100 dark:bg-gray-800 border-transparent rounded-full text-xs focus:bg-white dark:focus:bg-gray-700 focus:ring-1 focus:ring-indigo-500 outline-none dark:text-white transition-all shadow-inner"
+                />
+              </div>
+              
+              {/* Right: Actions (Status, Points, Date, Gold Prediction, Add, Messenger, Menu) */}
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                {/* Status Indicator */}
+                <div className={cn(
+                  "flex items-center px-2 sm:px-3 py-1 rounded-full border shadow-sm transition-all",
+                  isIdle 
+                    ? "bg-orange-50 dark:bg-orange-900/30 border-orange-100 dark:border-orange-800" 
+                    : "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-100 dark:border-emerald-800"
+                )}>
+                  <div className={cn(
+                    "w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full mr-1 sm:mr-1.5 animate-pulse",
+                    isIdle ? "bg-orange-500" : "bg-emerald-500"
+                  )} />
+                  <span className={cn(
+                    "text-[8px] sm:text-[10px] font-black uppercase tracking-widest",
+                    isIdle ? "text-orange-700 dark:text-orange-300" : "text-emerald-700 dark:text-emerald-300"
+                  )}>
+                    {isIdle ? 'Idle' : 'Active'}
+                  </span>
+                </div>
+
+                {/* Points Display */}
+                <div className="flex items-center px-2 sm:px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 rounded-full border border-indigo-100 dark:border-indigo-800 shadow-sm">
+                  <Gem className="w-3.5 h-3.5 sm:w-4 h-4 text-indigo-500 mr-1 sm:mr-1.5" />
+                  <span className="text-[10px] sm:text-xs font-black text-indigo-700 dark:text-indigo-300">{userData?.points || 0}</span>
+                </div>
+
+                {/* Today's Date */}
+                <div className="flex items-center px-2 sm:px-3 py-1 bg-gray-50 dark:bg-gray-800 rounded-full border border-gray-100 dark:border-gray-700">
+                  <Calendar className="w-3.5 h-3.5 sm:w-4 h-4 text-gray-500 mr-1 sm:mr-1.5" />
+                  <span className="text-[9px] sm:text-[10px] font-bold text-gray-600 dark:text-gray-400 uppercase tracking-tight">
+                    {formatDate(time, dateFormatIndex)}
+                  </span>
+                </div>
+
+                {/* Gold Price Prediction Indicator */}
+                <div className="flex items-center px-2 sm:px-3 py-1 bg-yellow-50 dark:bg-yellow-900/30 rounded-full border border-yellow-100 dark:border-yellow-800 shadow-sm animate-pulse">
+                  <BrainCircuit className="w-3.5 h-3.5 sm:w-4 h-4 text-yellow-600 mr-1 sm:mr-1.5" />
+                  <div className="flex flex-col leading-none">
+                    <span className="text-[8px] font-black text-yellow-700 dark:text-yellow-300 uppercase">Gold Intel</span>
+                    <div className="flex items-center gap-0.5">
+                      <span className="text-[9px] font-black text-yellow-900 dark:text-yellow-100">{goldData?.direction === 'up' ? '▲' : '▼'}</span>
+                      <span className="text-[9px] font-black text-yellow-900 dark:text-yellow-100">{goldData?.confidence || 77}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Brightness Controls */}
+                <div className="hidden sm:flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-full p-1">
+                  <button 
+                    onClick={() => setBrightness(prev => Math.max(50, prev - 10))}
+                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"
+                    title="Low Brightness"
+                  >
+                    <TrendingDown className="w-3.5 h-3.5 text-gray-500" />
+                  </button>
+                  <button 
+                    onClick={() => setBrightness(prev => Math.min(150, prev + 10))}
+                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"
+                    title="High Brightness"
+                  >
+                    <TrendingUp className="w-3.5 h-3.5 text-gray-500" />
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowAddPostMenu(!showAddPostMenu)}
+                    className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
+                  >
+                    <Plus className={cn("w-5 h-5 transition-transform", showAddPostMenu && "rotate-45")} />
+                  </button>
+                  
+                  <AnimatePresence>
+                    {showAddPostMenu && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.8, y: 10 }}
+                        className="absolute top-full mt-2 right-0 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 p-3 grid grid-cols-3 gap-3 z-[110] min-w-[240px]"
+                      >
+                        {[
+                          { icon: Video, color: 'bg-red-500', label: 'Video', modal: 'create-post-video' },
+                          { icon: Radio, color: 'bg-orange-500', label: 'Live', modal: 'create-post-live' },
+                          { icon: BarChart2, color: 'bg-emerald-500', label: 'Poll', modal: 'create-post-poll' },
+                          { icon: Megaphone, color: 'bg-purple-500', label: 'Announcement', modal: 'create-post-announcement' },
+                          { icon: RefreshCw, color: 'bg-blue-400', label: 'Update', modal: 'create-post-update' },
+                          { icon: Type, color: 'bg-blue-500', label: 'Text', modal: 'create-post-text' },
+                          { icon: Smile, color: 'bg-pink-500', label: 'GIF', modal: 'create-post-gif' },
+                          { icon: Users, color: 'bg-green-500', label: 'Group', modal: 'create-group' },
+                          { icon: Brain, color: 'bg-indigo-600', label: 'Smart', modal: 'smart' }
+                        ].map((item, idx) => (
+                          <button
+                            key={idx}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (item.modal === 'smart') {
+                                const suggestions = ['poll', 'announcement', 'update', 'text', 'video'];
+                                const randomType = suggestions[Math.floor(Math.random() * suggestions.length)];
+                                setActiveModal(`create-post-${randomType}`);
+                                showNotification("Smart Suggestion", { body: `Gemini suggests you create a ${randomType} post!` });
+                              } else if (item.modal === 'create-group') {
+                                navigate('/groups?create=true');
+                                setShowAddPostMenu(false);
+                              } else {
+                                setActiveModal(item.modal);
+                              }
+                              setShowAddPostMenu(false);
+                            }}
+                            className="flex flex-col items-center gap-1 group/item"
+                          >
+                            <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center text-white shadow-sm group-hover/item:scale-110 transition-transform", item.color)}>
+                              <item.icon className="w-4 h-4" />
+                            </div>
+                            <span className="text-[7px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-tighter">{item.label}</span>
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <Link to="/messages" className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">
+                  <MessageCircle className="w-5 h-5" />
+                </Link>
+
+                <button 
+                  onClick={() => setActiveModal('moreMenu')}
+                  className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Middle Row: Navigation Tabs (Facebook Style - Scrollable) */}
+            <div className="flex items-center overflow-x-auto hide-scrollbar border-t border-gray-50 dark:border-gray-800/50 bg-white dark:bg-gray-900">
+              {bottomNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={cn(
+                      "flex-1 min-w-[70px] flex flex-col items-center py-2 relative transition-all group",
+                      isActive ? "text-indigo-600 dark:text-indigo-400" : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                    )}
+                  >
+                    <Icon className={cn("w-6 h-6", isActive && "drop-shadow-[0_0_8px_rgba(79,70,229,0.3)]")} />
+                    {isActive && (
+                      <motion.div 
+                        layoutId="activeTab"
+                        className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"
+                      />
+                    )}
+                  </Link>
+                );
+              })}
+              {/* AI Assistant Tab */}
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent('toggle-ai-assistant'))}
+                className="flex-1 min-w-[70px] flex flex-col items-center py-2 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all"
+              >
+                <Brain className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Bottom Row: Categories & Market Stats (Horizontal Scroll) */}
+            <div className="px-4 py-1.5 bg-gray-50/50 dark:bg-gray-950/50 flex items-center gap-4">
+              <div className="flex overflow-x-auto hide-scrollbar space-x-2 flex-1">
+                {CATEGORIES.map(cat => {
+                  const CategoryIcon = cat.icon;
+                  return (
+                    <button
+                      key={cat.name}
+                      onClick={() => handleCategoryClick(cat.name)}
+                      className={cn(
+                        "flex items-center space-x-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border shrink-0 shadow-sm",
+                        activeCategory === cat.name
+                          ? "bg-indigo-600 text-white border-indigo-600"
+                          : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-100 dark:border-gray-700 hover:border-indigo-300"
+                      )}
+                    >
+                      <CategoryIcon className={cn("w-2.5 h-2.5", activeCategory === cat.name ? "text-white" : cat.color)} />
+                      <span>{cat.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Market Stats: Best Seller / Buyer */}
+              <div className="flex items-center gap-3 shrink-0 border-l border-gray-200 dark:border-gray-800 pl-4">
+                <div className="flex flex-col items-end">
+                  <span className="text-[7px] font-black text-gray-400 uppercase tracking-tighter">Best Seller</span>
+                  <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 truncate max-w-[80px]">{bestSeller}</span>
+                </div>
+                <div className="flex flex-col items-end">
+                  <span className="text-[7px] font-black text-gray-400 uppercase tracking-tighter">Best Buyer</span>
+                  <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 truncate max-w-[80px]">{bestBuyer}</span>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {/* Main Content Area */}
+          <main 
+            className="flex-1 bg-gray-50 dark:bg-gray-900 p-4 sm:p-6 relative transition-all duration-300"
+            style={{ filter: `brightness(${brightness}%)` }}
+          >
             <div className="max-w-4xl mx-auto w-full h-full">
               <Outlet context={{ 
                 currentWeather, 
@@ -837,6 +1178,73 @@ export default function Layout() {
               }} />
             </div>
           </main>
+        </div>
+
+        {/* Floating Sidebars (Desktop Only) */}
+        <div className={cn(
+          "fixed left-4 top-1/2 -translate-y-1/2 w-12 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 dark:border-gray-800/50 flex flex-col items-center py-4 space-y-4 z-[90] custom-scrollbar",
+          "hidden xl:flex"
+        )}>
+          <div className="flex flex-col items-center space-y-1 group relative" title={`Today: ${currentWeather.type}`}>
+            <CurrentWeatherIcon className={cn("w-5 h-5 sm:w-6 sm:h-6 transition-all", currentWeather.color, currentWeather.glow)} />
+            <span className="text-[8px] sm:text-[10px] font-bold opacity-70">Today</span>
+          </div>
+          <div className="flex flex-col items-center space-y-1 group relative" title={`Forecast: ${forecastWeather.type}`}>
+            <ForecastWeatherIcon className={cn("w-4 h-4 sm:w-5 sm:h-5 transition-all opacity-80", forecastWeather.color, forecastWeather.glow)} />
+            <span className="text-[8px] sm:text-[10px] font-bold opacity-70">Later</span>
+          </div>
+          <div className="w-6 sm:w-8 h-px bg-gray-200 dark:bg-gray-700 my-1 sm:my-2"></div>
+          <div className="flex flex-col items-center space-y-1" title="Clock" onClick={() => setActiveModal('clock')}>
+            <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500 cursor-pointer" />
+          </div>
+          <div className="flex flex-col items-center space-y-1" title="Sport Watch" onClick={() => setActiveModal('watch')}>
+            <Watch className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500 cursor-pointer" />
+          </div>
+          <div className="flex flex-col items-center space-y-1" title="Alarm" onClick={() => setActiveModal('alarm')}>
+            <BellRing className="w-5 h-5 sm:w-6 sm:h-6 text-red-500 cursor-pointer" />
+          </div>
+          <div className="flex flex-col items-center space-y-1" title="Notifications" onClick={() => navigate('/notifications')}>
+            <Bell className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500 cursor-pointer" />
+          </div>
+          <div className="flex flex-col items-center space-y-1" title="Note Pad" onClick={() => setActiveModal('notepad')}>
+            <StickyNote className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-500 cursor-pointer" />
+          </div>
+          <div className="flex flex-col items-center space-y-1 mt-auto" title="Health Checker" onClick={() => setActiveModal('health')}>
+            <HeartPulse className="w-5 h-5 sm:w-6 sm:h-6 text-rose-500 animate-pulse cursor-pointer" />
+          </div>
+          <div className="flex flex-col items-center space-y-1" title="Fingerprint Reader" onClick={() => setActiveModal('fingerprint')}>
+            <Fingerprint className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-500 cursor-pointer" />
+          </div>
+          <div className="flex flex-col items-center space-y-1" title="AI Eye: Universal Analysis" onClick={() => setActiveModal('aieye')}>
+            <Eye className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-500 cursor-pointer animate-pulse" />
+          </div>
+        </div>
+
+        <div className={cn(
+          "fixed right-4 top-1/2 -translate-y-1/2 w-14 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 dark:border-gray-800/50 flex flex-col items-center py-4 space-y-4 z-[90] custom-scrollbar",
+          "hidden xl:flex"
+        )}>
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
+            return (
+              <Link 
+                key={item.path} 
+                to={item.path}
+                className={cn(
+                  "flex flex-col items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-2xl transition-all duration-300 group relative",
+                  isActive ? "bg-blue-50 dark:bg-blue-900/20 shadow-inner" : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                )}
+                title={item.label}
+              >
+                <Icon className={cn("w-5 h-5 sm:w-6 sm:h-6", item.color, isActive ? "scale-110" : "group-hover:scale-110 transition-transform")} />
+                {isActive && <div className="absolute right-0 top-1/4 bottom-1/4 w-1 bg-blue-500 rounded-l-full"></div>}
+                <span className="absolute left-full ml-3 px-2 py-1 bg-gray-800 text-white text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity z-50">
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
         </div>
 
         {/* Create Post Modals */}
@@ -868,93 +1276,45 @@ export default function Layout() {
         {activeModal === 'aieye' && (
           <AIEyeModal onClose={() => setActiveModal(null)} />
         )}
-      
-      {/* Bottom Smart Hub Navigation */}
-      <div className={cn(
-        "sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shrink-0 z-[100] pb-safe"
-      )}>
-        {/* Search and Categories Hub */}
-        <div className="px-6 py-3 space-y-3 border-b border-gray-100 dark:border-gray-700/50">
-          <div className="flex items-center space-x-3">
-            <div className="relative flex-1 group">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 text-gray-400 group-focus-within:text-purple-500 transition-colors" />
-              </div>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => handleSearch(e.target.value)}
-                placeholder="Search or ask AI Eye..."
-                className="block w-full pl-10 pr-12 py-2.5 border border-gray-200 dark:border-gray-700 rounded-full bg-gray-50 dark:bg-gray-900 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none dark:text-white transition-all"
-              />
-              <div className="absolute inset-y-0 right-0 flex items-center pr-2">
+
+        {/* Gold Instrument Modal */}
+        {activeModal === 'goldInstrument' && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[200] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-gradient-to-br from-yellow-400 via-yellow-500 to-yellow-600 p-1 rounded-[2.5rem] shadow-[0_0_50px_rgba(234,179,8,0.5)] max-w-md w-full"
+            >
+              <div className="bg-white dark:bg-gray-900 rounded-[2.3rem] p-8 flex flex-col items-center text-center">
+                <div className="w-20 h-20 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center mb-6 shadow-inner">
+                  <Crown className="w-10 h-10 text-yellow-600 dark:text-yellow-400" />
+                </div>
+                <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Gold Instrument</h2>
+                <p className="text-gray-500 dark:text-gray-400 text-sm mb-8">
+                  The ultimate community tool for high-value transactions and exclusive rewards.
+                </p>
+                
+                <div className="grid grid-cols-2 gap-4 w-full mb-8">
+                  <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
+                    <span className="block text-[10px] font-black text-gray-400 uppercase mb-1">Market Value</span>
+                    <span className="text-lg font-black text-yellow-600">$1,240.50</span>
+                  </div>
+                  <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
+                    <span className="block text-[10px] font-black text-gray-400 uppercase mb-1">Your Stake</span>
+                    <span className="text-lg font-black text-indigo-600">0.05 G</span>
+                  </div>
+                </div>
+
                 <button 
-                  onClick={() => setActiveModal('aieye')}
-                  className="p-1.5 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800/60 transition-all"
+                  onClick={() => setActiveModal(null)}
+                  className="w-full py-4 bg-yellow-500 hover:bg-yellow-600 text-white font-black rounded-2xl shadow-lg shadow-yellow-500/30 transition-all active:scale-95"
                 >
-                  <Eye className="h-4 w-4" />
+                  Close Instrument
                 </button>
               </div>
-            </div>
-            <button 
-              onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
-              className={cn(
-                "p-2.5 rounded-full transition-colors border",
-                showAdvancedSearch 
-                  ? "bg-purple-100 text-purple-600 border-purple-200 dark:bg-purple-900/40 dark:text-purple-400 dark:border-purple-800" 
-                  : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
-              )}
-            >
-              <Filter className="h-4 w-4" />
-            </button>
+            </motion.div>
           </div>
-
-          <div className="flex overflow-x-auto hide-scrollbar space-x-3 pb-1">
-            {CATEGORIES.map(cat => (
-              <button
-                key={cat.name}
-                onClick={() => handleCategoryClick(cat.name)}
-                className={cn(
-                  "flex items-center space-x-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all border shrink-0",
-                  activeCategory === cat.name
-                    ? "bg-purple-600 text-white border-purple-600 shadow-md"
-                    : "bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-purple-200"
-                )}
-              >
-                <cat.icon className={cn("w-3.5 h-3.5", activeCategory === cat.name ? "text-white" : cat.color)} />
-                <span>{cat.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex justify-around items-center p-3 max-w-screen-xl mx-auto border-t border-gray-50 dark:border-gray-700/50">
-          {coreNavItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
-            return (
-              <Link 
-                key={item.path} 
-                to={item.path}
-                className={cn(
-                  "flex flex-col items-center justify-center flex-1 py-1 px-2 rounded-xl transition-all duration-300 gap-1",
-                  isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                )}
-              >
-                <Icon className={cn("w-5 h-5", isActive ? "scale-110" : "")} />
-                <span className="text-[10px] font-bold uppercase tracking-tighter">{item.label}</span>
-              </Link>
-            );
-          })}
-          <button 
-            onClick={() => setActiveModal('moreMenu')}
-            className="flex flex-col items-center justify-center flex-1 py-1 px-2 rounded-xl transition-all duration-300 gap-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-          >
-            <Menu className="w-5 h-5" />
-            <span className="text-[10px] font-bold uppercase tracking-tighter">More</span>
-          </button>
-        </div>
-      </div>
+        )}
       
       {/* Modals */}
       {activeModal && !activeModal.startsWith('create-post-') && (
@@ -983,6 +1343,36 @@ export default function Layout() {
                     </div>
                   </div>
                   
+                  {weatherStatus !== 'idle' && (
+                    <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-100 dark:border-purple-800 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          <Brain className={cn("w-4 h-4 text-purple-600 dark:text-purple-400", weatherStatus === 'healing' && "animate-pulse")} />
+                          <span className="text-xs font-bold text-purple-800 dark:text-purple-300 capitalize">
+                            Smart Brain: {weatherStatus}
+                          </span>
+                        </div>
+                        {weatherStatus === 'healing' && (
+                          <span className="text-[10px] font-bold text-purple-500">{weatherHealProgress}%</span>
+                        )}
+                      </div>
+                      {weatherStatus === 'healing' && (
+                        <div className="h-1.5 w-full bg-purple-100 dark:bg-purple-900 rounded-full overflow-hidden">
+                          <motion.div 
+                            className="h-full bg-purple-600"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${weatherHealProgress}%` }}
+                          />
+                        </div>
+                      )}
+                      <p className="text-[10px] text-purple-700 dark:text-purple-400 mt-2 italic">
+                        {weatherStatus === 'detecting' ? 'Analyzing environmental data points...' : 
+                         weatherStatus === 'healing' ? 'Self-Healing: Re-routing intelligence via Google Search...' :
+                         'Intelligence sync complete. Data verified.'}
+                      </p>
+                    </div>
+                  )}
+
                   <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
                     <h5 className="text-sm font-bold text-blue-800 dark:text-blue-300 mb-2 flex items-center">
                       <Brain className="w-4 h-4 mr-2" />
@@ -1009,6 +1399,107 @@ export default function Layout() {
                       </p>
                     </div>
                   </div>
+
+                  {isSearchingCity ? (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800 animate-in zoom-in duration-200">
+                      <h5 className="text-sm font-bold text-blue-800 dark:text-blue-300 mb-3 flex items-center">
+                        <MapPin className="w-4 h-4 mr-2" />
+                        Search Your City
+                      </h5>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          placeholder="Enter city name..." 
+                          value={citySearchQuery}
+                          onChange={(e) => setCitySearchQuery(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleCitySearch()}
+                          className="flex-1 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                        <button 
+                          onClick={handleCitySearch}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors"
+                        >
+                          Go
+                        </button>
+                      </div>
+                      <button 
+                        onClick={() => setIsSearchingCity(false)}
+                        className="mt-2 w-full py-1 text-[10px] text-blue-600 dark:text-blue-400 font-bold"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : isCorrectingWeather ? (
+                    <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800 animate-in zoom-in duration-200">
+                      <h5 className="text-sm font-bold text-indigo-800 dark:text-indigo-300 mb-3 flex items-center">
+                        <Wrench className="w-4 h-4 mr-2" />
+                        Correct Weather Data
+                      </h5>
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-2">
+                          <input 
+                            type="number" 
+                            placeholder="Temp (°C)" 
+                            value={correctionInput.temp}
+                            onChange={(e) => setCorrectionInput({...correctionInput, temp: e.target.value})}
+                            className="bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                          />
+                          <select 
+                            value={correctionInput.condition}
+                            onChange={(e) => setCorrectionInput({...correctionInput, condition: e.target.value})}
+                            className="bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                          >
+                            <option value="">Condition</option>
+                            {weatherTypes.map(t => <option key={t.type} value={t.type}>{t.type}</option>)}
+                          </select>
+                        </div>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={handleWeatherCorrection}
+                            className="flex-1 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors"
+                          >
+                            Apply Correction
+                          </button>
+                          <button 
+                            onClick={() => setIsCorrectingWeather(false)}
+                            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-bold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => {
+                            setLocationName('Detecting...');
+                            getLocation();
+                          }}
+                          className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 dark:shadow-none"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          Auto Refresh
+                        </button>
+                        <button 
+                          onClick={() => setIsSearchingCity(true)}
+                          className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-200 dark:shadow-none"
+                        >
+                          <Search className="w-4 h-4" />
+                          Search City
+                        </button>
+                      </div>
+                      <button 
+                        onClick={() => setIsCorrectingWeather(true)}
+                        className="w-full py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl font-bold hover:bg-gray-50 dark:hover:bg-gray-600 transition-all flex items-center justify-center gap-2 text-xs"
+                        title="Report Inaccurate Weather"
+                      >
+                        <ShieldAlert className="w-3.5 h-3.5 text-red-500" />
+                        Report Inaccuracy / Correct Data
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
               {activeModal === 'notepad' && (
@@ -1039,43 +1530,130 @@ export default function Layout() {
                 <ClockModal activeTab={activeModal} onTabChange={setActiveModal} />
               )}
               {activeModal === 'moreMenu' && (
-                <div className="grid grid-cols-3 gap-4">
-                  {extraNavItems.map((item, idx) => {
-                    const Icon = item.icon;
-                    return (
-                      <Link 
-                        key={idx}
-                        to={item.path}
-                        onClick={() => setActiveModal(null)}
-                        className="flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors gap-2"
-                      >
-                        <Icon className={cn("w-6 h-6", item.color)} />
-                        <span className="text-xs font-bold text-center">{item.label}</span>
-                      </Link>
-                    );
-                  })}
-                  {rightLinks.map((link, idx) => {
-                    const Wrapper = link.href ? 'a' : (link.path ? Link : 'button');
-                    const props = link.href ? { href: link.href, target: "_blank", rel: "noopener noreferrer" } : { to: link.path || '' };
-                    return (
-                      <Wrapper
-                        key={`right-${idx}`}
-                        {...props as any}
-                        onClick={() => {
-                          if (link.action) link.action();
-                          if (link.path) setActiveModal(null);
-                        }}
-                        className="flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors gap-2"
-                      >
-                        {link.type === 'img' ? (
-                          <img src={link.src} alt={link.title} className={cn("w-6 h-6 object-contain", link.darkSrc ? "dark:hidden" : "")} />
-                        ) : (
-                          link.icon && <link.icon className={cn("w-6 h-6", link.color)} />
-                        )}
-                        <span className="text-xs font-bold text-center">{link.title}</span>
-                      </Wrapper>
-                    );
-                  })}
+                <div className="space-y-6 p-1">
+                  {/* User Profile Shortcut */}
+                  <Link 
+                    to="/profile" 
+                    onClick={() => setActiveModal(null)}
+                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 p-0.5">
+                      {userData?.photoURL ? (
+                        <img src={userData.photoURL} alt="Profile" className="w-full h-full rounded-full object-cover border border-white/20" referrerPolicy="no-referrer" />
+                      ) : (
+                        <div className="w-full h-full rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
+                          <User className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-bold text-sm">{userData?.displayName || 'Pulse User'}</p>
+                      <p className="text-[10px] text-gray-500">See your profile</p>
+                    </div>
+                  </Link>
+
+                  {/* Stats & Intelligence (Moved from Header) */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-2xl border border-indigo-100 dark:border-indigo-800/50 flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <Gem className="w-4 h-4 text-indigo-600" />
+                        <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">Pulse Points</span>
+                      </div>
+                      <p className="text-lg font-black text-indigo-900 dark:text-indigo-100">{userData?.points.toLocaleString() || 0}</p>
+                    </div>
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-2xl border border-yellow-100 dark:border-yellow-800/50 flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <BrainCircuit className="w-4 h-4 text-yellow-600" />
+                        <span className="text-xs font-bold text-yellow-700 dark:text-yellow-300">Gold Intel</span>
+                      </div>
+                      <div className="flex items-baseline gap-1">
+                        <p className="text-lg font-black text-yellow-900 dark:text-yellow-100">{goldData?.symbol || 'GOLD'}</p>
+                        <span className="text-[10px] font-bold text-yellow-600">{goldData?.direction === 'up' ? '▲' : '▼'} {goldData?.confidence || '--'}%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* App Settings (Theme, Refresh) */}
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={toggleTheme}
+                      className="flex-1 flex items-center justify-center gap-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      {isDark ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
+                      <span className="text-xs font-bold">{isDark ? 'Light Mode' : 'Dark Mode'}</span>
+                    </button>
+                    <button 
+                      onClick={() => { setLocationName('Detecting...'); getLocation(); }}
+                      className="flex-1 flex items-center justify-center gap-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <RefreshCw className="w-4 h-4 text-gray-500" />
+                      <span className="text-xs font-bold">Refresh Data</span>
+                    </button>
+                  </div>
+
+                  {/* Shortcuts Grid */}
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 px-1">Shortcuts</h4>
+                    <div className="grid grid-cols-3 gap-3">
+                      {extraNavItems.map((item, idx) => {
+                        const Icon = item.icon;
+                        return (
+                          <Link 
+                            key={idx}
+                            to={item.path}
+                            onClick={() => setActiveModal(null)}
+                            className="flex flex-col items-center justify-center p-3 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors gap-2 border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900"
+                          >
+                            <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center bg-white dark:bg-gray-800 shadow-sm", item.color.replace('text-', 'bg-').replace('500', '500/10'))}>
+                              <Icon className={cn("w-4 h-4", item.color)} />
+                            </div>
+                            <span className="text-[10px] font-bold text-center leading-tight">{item.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* External Links */}
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 px-1">Connect</h4>
+                    <div className="grid grid-cols-4 gap-3">
+                      {rightLinks.map((link, idx) => {
+                        const Wrapper = link.href ? 'a' : (link.path ? Link : 'button');
+                        const props = link.href ? { href: link.href, target: "_blank", rel: "noopener noreferrer" } : { to: link.path || '' };
+                        return (
+                          <Wrapper
+                            key={`right-${idx}`}
+                            {...props as any}
+                            onClick={() => {
+                              if (link.action) link.action();
+                              if (link.path) setActiveModal(null);
+                            }}
+                            className="flex flex-col items-center justify-center p-2 bg-gray-50 dark:bg-gray-900 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors gap-1.5"
+                          >
+                            {link.type === 'img' ? (
+                              <img src={link.src} alt={link.title} className={cn("w-5 h-5 object-contain", link.darkSrc ? "dark:hidden" : "")} />
+                            ) : (
+                              link.icon && (() => {
+                                const LinkIcon = link.icon;
+                                return <LinkIcon className={cn("w-5 h-5", link.color)} />;
+                              })()
+                            )}
+                            <span className="text-[8px] font-bold text-center truncate w-full">{link.title}</span>
+                          </Wrapper>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Logout */}
+                  <button 
+                    onClick={logout}
+                    className="w-full flex items-center justify-center gap-2 p-3 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 rounded-2xl hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors font-bold text-sm"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Log Out
+                  </button>
                 </div>
               )}
             </div>
@@ -1117,148 +1695,6 @@ export default function Layout() {
           background: #475569;
         }
       `}</style>
-        {/* Floating Action Button (FAB) - Positioned relative to frame */}
-        <div className="absolute bottom-48 right-6 sm:right-10 z-[110] flex flex-col items-center space-y-4">
-          <AnimatePresence>
-            {showAddPostMenu && (
-              <div className="flex flex-col items-center space-y-3 mb-2">
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.5, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.5, y: 20 }}
-                  onClick={() => {
-                    setActiveModal('create-post-video');
-                    setShowAddPostMenu(false);
-                  }}
-                  className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform group relative"
-                  title="Add Video"
-                >
-                  <Video className="w-5 h-5" />
-                  <span className="absolute right-full mr-3 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">Video</span>
-                </motion.button>
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.5, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.5, y: 20 }}
-                  transition={{ delay: 0.05 }}
-                  onClick={() => {
-                    setActiveModal('create-post-live');
-                    setShowAddPostMenu(false);
-                  }}
-                  className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform group relative"
-                  title="Go Live"
-                >
-                  <Radio className="w-5 h-5" />
-                  <span className="absolute right-full mr-3 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">Live</span>
-                </motion.button>
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.5, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.5, y: 20 }}
-                  transition={{ delay: 0.1 }}
-                  onClick={() => {
-                    setActiveModal('create-post-poll');
-                    setShowAddPostMenu(false);
-                  }}
-                  className="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform group relative"
-                  title="Create Poll"
-                >
-                  <BarChart2 className="w-5 h-5" />
-                  <span className="absolute right-full mr-3 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">Poll</span>
-                </motion.button>
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.5, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.5, y: 20 }}
-                  transition={{ delay: 0.15 }}
-                  onClick={() => {
-                    setActiveModal('create-post-announcement');
-                    setShowAddPostMenu(false);
-                  }}
-                  className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform group relative"
-                  title="Announcement"
-                >
-                  <Megaphone className="w-5 h-5" />
-                  <span className="absolute right-full mr-3 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">Announcement</span>
-                </motion.button>
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.5, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.5, y: 20 }}
-                  transition={{ delay: 0.2 }}
-                  onClick={() => {
-                    setActiveModal('create-post-update');
-                    setShowAddPostMenu(false);
-                  }}
-                  className="w-12 h-12 bg-blue-400 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform group relative"
-                  title="Update"
-                >
-                  <RefreshCw className="w-5 h-5" />
-                  <span className="absolute right-full mr-3 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">Update</span>
-                </motion.button>
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.5, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.5, y: 20 }}
-                  transition={{ delay: 0.25 }}
-                  onClick={() => {
-                    setActiveModal('create-post-text');
-                    setShowAddPostMenu(false);
-                  }}
-                  className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform group relative"
-                  title="Add Text"
-                >
-                  <Type className="w-5 h-5" />
-                  <span className="absolute right-full mr-3 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">Text</span>
-                </motion.button>
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.5, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.5, y: 20 }}
-                  transition={{ delay: 0.35 }}
-                  onClick={() => {
-                    setActiveModal('create-post-gif');
-                    setShowAddPostMenu(false);
-                  }}
-                  className="w-12 h-12 bg-pink-500 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform group relative"
-                  title="Add GIF"
-                >
-                  <Smile className="w-5 h-5" />
-                  <span className="absolute right-full mr-3 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">GIF</span>
-                </motion.button>
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.5, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.5, y: 20 }}
-                  transition={{ delay: 0.4 }}
-                  onClick={() => {
-                    // Smart Suggest logic
-                    const suggestions = ['poll', 'announcement', 'update', 'text', 'video'];
-                    const randomType = suggestions[Math.floor(Math.random() * suggestions.length)];
-                    setActiveModal(`create-post-${randomType}`);
-                    setShowAddPostMenu(false);
-                    showNotification("Smart Suggestion", { body: `Gemini suggests you create a ${randomType} post!` });
-                  }}
-                  className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-110 transition-transform group relative"
-                  title="Smart Suggest"
-                >
-                  <Brain className="w-5 h-5" />
-                  <span className="absolute right-full mr-3 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap">Smart Suggest</span>
-                </motion.button>
-              </div>
-            )}
-          </AnimatePresence>
-          <button 
-            onClick={() => setShowAddPostMenu(!showAddPostMenu)}
-            className={cn(
-              "w-14 h-14 bg-gradient-to-r from-purple-600 to-blue-500 rounded-full flex items-center justify-center text-white shadow-xl hover:shadow-2xl transition-all",
-              showAddPostMenu ? "rotate-45 scale-90" : "hover:scale-105"
-            )}
-          >
-            <Plus className="w-6 h-6" />
-          </button>
-        </div>
-
         {/* AI Assistant & Self Healing */}
         <AIAssistant />
         <SelfHealing />
