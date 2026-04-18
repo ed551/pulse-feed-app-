@@ -125,7 +125,7 @@ async function startServer() {
   console.log("NODE_ENV:", process.env.NODE_ENV);
   
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
   app.use(express.json());
 
   // Equity Bank Access Token Helper (EazzyAPI)

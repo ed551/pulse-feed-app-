@@ -1,23 +1,24 @@
-# Build Stage
-FROM node:20-slim AS builder
+# Use the official Node.js image
+FROM node:20
+
+# Create and change to the app directory
 WORKDIR /app
+
+# Copy application dependency manifests to the container image
 COPY package*.json ./
+
+# Install dependencies
 RUN npm install
+
+# Copy local code to the container image.
 COPY . .
+
+# Build the application
 RUN npm run build
 
-# Production Stage
-FROM node:20-slim
-WORKDIR /app
-COPY --from=builder /app/package*.json ./
-RUN npm install --omit=dev
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/server.ts ./
-COPY --from=builder /app/node_modules ./node_modules
-# tsx is needed to run server.ts
-RUN npm install -g tsx
-
-ENV NODE_ENV=production
+# Expose port 3000
 EXPOSE 3000
 
-CMD ["tsx", "server.ts"]
+# Start the server
+ENV NODE_ENV=production
+CMD ["npm", "start"]
