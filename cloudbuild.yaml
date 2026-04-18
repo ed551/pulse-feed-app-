@@ -1,29 +1,31 @@
 steps:
-  # Build the container image with a SAFE name
+  # Build the container image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/pulse-feeds-app:latest', '.']
+    args: ['build', '-t', 'gcr.io/consumer-rewards-app-2026/pulse-feeds-prod', '.']
 
-  # Push the container image to Container Registry
+  # Push the container image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/pulse-feeds-app:latest']
+    args: ['push', 'gcr.io/consumer-rewards-app-2026/pulse-feeds-prod']
 
-  # Deploy container image to Cloud Run
+  # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
-    - 'run'
-    - 'deploy'
-    - 'pulse-feeds'
-    - '--image'
-    - 'gcr.io/$PROJECT_ID/pulse-feeds-app:latest'
-    - '--region'
-    - 'europe-west2'
-    - '--platform'
-    - 'managed'
-    - '--allow-unauthenticated'
+      [
+        'run',
+        'deploy',
+        'pulse-feeds',
+        '--image',
+        'gcr.io/consumer-rewards-app-2026/pulse-feeds-prod',
+        '--region',
+        'europe-west2',
+        '--platform',
+        'managed',
+        '--allow-unauthenticated'
+      ]
 
 images:
-  - 'gcr.io/$PROJECT_ID/pulse-feeds-app:latest'
+  - 'gcr.io/consumer-rewards-app-2026/pulse-feeds-prod'
 
 timeout: '1200s'
 options:
