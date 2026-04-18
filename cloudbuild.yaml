@@ -1,11 +1,11 @@
 steps:
   # Build the container image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/consumer-rewards-app-2026/pulse-feeds-prod', '.']
+    args: ['build', '-t', 'gcr.io/consumer-rewards-app-2026/pulse-feeds-v1', '.']
 
   # Push the container image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/consumer-rewards-app-2026/pulse-feeds-prod']
+    args: ['push', 'gcr.io/consumer-rewards-app-2026/pulse-feeds-v1']
 
   # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -16,7 +16,7 @@ steps:
         'deploy',
         'pulse-feeds',
         '--image',
-        'gcr.io/consumer-rewards-app-2026/pulse-feeds-prod',
+        'gcr.io/consumer-rewards-app-2026/pulse-feeds-v1',
         '--region',
         'europe-west2',
         '--platform',
@@ -25,7 +25,7 @@ steps:
       ]
 
 images:
-  - 'gcr.io/consumer-rewards-app-2026/pulse-feeds-prod'
+  - 'gcr.io/consumer-rewards-app-2026/pulse-feeds-v1'
 
 timeout: '1200s'
 options:

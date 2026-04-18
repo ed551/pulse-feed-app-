@@ -1,5 +1,5 @@
 import express from "express";
-// Build Version: 1.0.2 - London Static IP Release
+// Build Version: 1.0.3 - Final Build Fix
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
