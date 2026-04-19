@@ -5,21 +5,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import axios from 'axios';
-import admin from "firebase-admin";
+import { initializeApp, getApps, getApp } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { initializeApp } from "firebase/app";
-import { 
-  getFirestore as getFirestoreClient, 
-  doc as docClient, 
-  getDoc as getDocClient, 
-  updateDoc as updateDocClient, 
-  setDoc as setDocClient, 
-  increment as incrementClient, 
-  collection as collectionClient, 
-  addDoc as addDocClient, 
-  serverTimestamp,
-  initializeFirestore
-} from "firebase/firestore";
 import fs from "fs";
 
 dotenv.config();
@@ -30,112 +17,120 @@ const __dirname = path.dirname(__filename);
 // Initialize Firebase Configuration
 const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8"));
 
-const clientApp = initializeApp(firebaseConfig);
-const clientDb = initializeFirestore(clientApp, {
-  experimentalForceLongPolling: true,
-}, firebaseConfig.firestoreDatabaseId);
-
-// Test Firestore Connectivity on startup
-async function testFirestoreConnection() {
-  try {
-    const healthRef = docClient(clientDb, "system", "health");
-    await getDocClient(healthRef);
-    console.log("✅ Firestore Connectivity: Online");
-  } catch (error: any) {
-    if (error.message?.includes("client is offline") || error.code === 'unavailable') {
-      console.error("❌ Firestore Connectivity: OFFLINE. (Check Cloud NAT and VPC Egress settings)");
-    } else {
-      console.warn("⚠️ Firestore Connectivity: Authenticated Check Failed (Permissions)", error.message);
-    }
-  }
-}
-testFirestoreConnection();
-
-const SERVER_SECRET = "pulse-feeds-server-secret-2026";
-
-console.log("Firebase Config Project ID:", firebaseConfig.projectId);
-console.log("Firebase Config Database ID:", firebaseConfig.firestoreDatabaseId);
-console.log("Environment Project ID:", process.env.GOOGLE_CLOUD_PROJECT);
-
 // Ensure project ID is set for the environment if not already
 if (!process.env.GOOGLE_CLOUD_PROJECT && firebaseConfig.projectId) {
   process.env.GOOGLE_CLOUD_PROJECT = firebaseConfig.projectId;
 }
 
-if (!admin.apps.length) {
+const SERVER_SECRET = "pulse-feeds-server-secret-2026";
+
+// Initialize Firebase Admin
+let app;
+const apps = getApps();
+if (apps.length === 0) {
   try {
-    // Try initializing without arguments first to use environment defaults
-    admin.initializeApp();
-    console.log("Firebase Admin initialized with default credentials.");
-  } catch (error) {
-    console.log("Default initialization failed, trying with config project ID...");
-    try {
-      admin.initializeApp({
-        projectId: firebaseConfig.projectId,
-      });
-      console.log("Firebase Admin initialized with config project ID.");
-    } catch (innerError) {
-      console.error("All Firebase Admin initialization attempts failed:", innerError);
+    // Try empty initialization first - best for Cloud Run (ADC)
+    app = initializeApp();
+    console.log("Firebase Admin: Initialized with default ADC credentials.");
+  } catch (error: any) {
+    console.warn("Default initialization failed, using explicit config project ID:", error.message);
+    app = initializeApp({
+      projectId: firebaseConfig.projectId,
+    });
+  }
+} else {
+  app = apps[0];
+}
+
+console.log("Firebase Dashboard Link: https://console.firebase.google.com/project/" + (app.options.projectId || firebaseConfig.projectId) + "/firestore/databases/" + (firebaseConfig.firestoreDatabaseId || "(default)") + "/data");
+
+// Initialize Firestore with the specific database ID from config
+// Named databases are mandatory for this project structure
+const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || "(default)");
+console.log("Firestore: Initialized for database:", firebaseConfig.firestoreDatabaseId || "(default)");
+
+// Test Firestore Connectivity
+async function testFirestoreConnection() {
+  try {
+    const healthRef = db.collection("system").doc("health");
+    const doc = await healthRef.get();
+    console.log("✅ Firestore Connectivity: Online (Admin SDK)", doc.exists ? "(Health Doc Found)" : "(Health Doc Missing, but connected)");
+  } catch (error: any) {
+    console.error("❌ Firestore Connectivity Error (Admin):", error.message);
+    if (error.message.includes("PERMISSION_DENIED")) {
+      console.error("   PRO-TIP: Check if the Cloud Run Service Account has 'Cloud Datastore User' role on this project/database.");
     }
   }
 }
-
-// Initialize Firestore with the specific database ID from config
-const db = getFirestore(firebaseConfig.firestoreDatabaseId || "(default)");
-console.log("Firestore initialized for database:", firebaseConfig.firestoreDatabaseId || "(default)");
+testFirestoreConnection();
 
 // IP Stability Monitor
-let currentOutboundIp = "35.214.40.75"; // NEW Permanent Whitelisted IP
+const TARGET_STATIC_IP = "35.214.40.75"; // Permanent Whitelisted IP (Co-op Bank)
+let currentOutboundIp = TARGET_STATIC_IP; 
 
 async function monitorIP() {
-  const monitorRef = docClient(clientDb, "system", "monitoring");
+  const monitorRef = db.collection("system").doc("monitoring");
   
   try {
-    const response = await axios.get('https://api.ipify.org?format=json');
-    const actualIp = response.data.ip;
-    
-    // Fetch last alerted IP from Firestore to avoid cross-instance spam
-    const monitorDoc = await getDocClient(monitorRef);
-    const lastAlertedIp = monitorDoc.exists() ? monitorDoc.data()?.lastAlertedIp : "35.214.40.75";
-
-    if (actualIp !== lastAlertedIp) {
-      console.warn(`[CRITICAL] IP DRIFT DETECTED! Expected: ${lastAlertedIp}, Actual: ${actualIp}`);
-      
-      try {
-        await addDocClient(collectionClient(clientDb, 'platform_transactions'), {
-          type: 'alert',
-          source: 'system_monitor',
-          reason: `WARNING: Server Outbound IP has shifted to ${actualIp}. Co-op Bank whitelisting may need update.`,
-          userId: 'system',
-          timestamp: serverTimestamp(),
-          serverSecret: SERVER_SECRET
-        });
-        
-        // Persist the new IP as "alerted"
-        await setDocClient(monitorRef, { 
-          lastAlertedIp: actualIp,
-          lastDetectedAt: new Date().toISOString()
-        }, { merge: true });
-
-        currentOutboundIp = actualIp; 
-      } catch (logErr) {
-        console.error("Failed to log IP drift alert:", logErr);
-      }
-    } else {
-      console.log(`[System] Outbound IP Stability Verified: ${actualIp}`);
+    let response;
+    try {
+      response = await axios.get('https://api.ipify.org?format=json', { timeout: 5000 });
+    } catch (e) {
+      console.warn("ipify.org failed, trying ifconfig.me...");
+      response = await axios.get('https://ifconfig.me/all.json', { timeout: 5000 });
     }
-  } catch (error) {
-    console.error("Failed to monitor outbound IP:", error);
+    
+    currentOutboundIp = response.data.ip || response.data.ip_addr; 
+    const actualIp = currentOutboundIp;
+    
+    // Safety check: Wrap database calls to prevent "unavailable" errors from breaking the monitor loop
+    try {
+      const monitorDoc = await monitorRef.get();
+      const lastAlertedIp = monitorDoc.exists ? monitorDoc.data()?.lastAlertedIp : null;
+
+      if (actualIp !== TARGET_STATIC_IP) {
+        if (actualIp !== lastAlertedIp) {
+          console.warn(`[CRITICAL] IP DRIFT DETECTED! Expected: ${TARGET_STATIC_IP}, Actual: ${actualIp}`);
+        
+          await db.collection('platform_transactions').add({
+            type: 'alert',
+            source: 'system_monitor',
+            reason: `WARNING: Server Outbound IP has shifted to ${actualIp}. Co-op Bank whitelisting may need update.`,
+            userId: 'system',
+            timestamp: FieldValue.serverTimestamp(),
+            serverSecret: SERVER_SECRET
+          });
+          
+          await monitorRef.set({ 
+            lastAlertedIp: actualIp,
+            lastDetectedAt: FieldValue.serverTimestamp(),
+            status: 'drifted'
+          }, { merge: true });
+        }
+      } else if (lastAlertedIp && lastAlertedIp !== TARGET_STATIC_IP) {
+        console.log(`[System] Outbound IP Stability RESTORED: ${actualIp}`);
+        await monitorRef.set({ 
+          lastAlertedIp: TARGET_STATIC_IP,
+          lastDetectedAt: FieldValue.serverTimestamp(),
+          status: 'stable'
+        }, { merge: true });
+      }
+    } catch (dbError: any) {
+      console.warn("[Monitor] Firestore currently unreachable (VPC transition check):", dbError.message);
+    }
+  } catch (error: any) {
+    console.error("[Monitor] Failed to reach internet to detect IP:", error.message);
   }
 }
 
 async function startServer() {
   console.log("Starting server...");
   // Run IP monitor in background so it doesn't block startup
-  monitorIP().catch(err => console.error("Initial IP check failed:", err));
+  // monitorIP().catch(err => console.error("Initial IP check failed:", err));
   
-  setInterval(monitorIP, 1000 * 60 * 60); // Check every hour
+  // setInterval(monitorIP, 1000 * 30); // Check every 30 seconds during debugging for instant feedback
   console.log("NODE_ENV:", process.env.NODE_ENV);
+  console.log("Monitor Interval: 30s (Debug Mode Active)");
   
   const app = express();
   app.set('trust proxy', 1);
@@ -636,13 +631,13 @@ async function startServer() {
     }
 
     try {
-      // 1. Verify the treasury has enough funds using Client SDK (with long polling)
-      const statsRefClient = docClient(clientDb, "platform", "stats");
-      const statsDoc = await getDocClient(statsRefClient);
+      // 1. Verify the treasury has enough funds using Admin SDK
+      const statsRef = db.collection("platform").doc("stats");
+      const statsDoc = await statsRef.get();
       
-      if (!statsDoc.exists()) {
+      if (!statsDoc.exists) {
         console.log("[Developer Payout] Stats doc missing, creating it...");
-        await setDocClient(statsRefClient, {
+        await statsRef.set({
           platformRevenue: 0,
           platformShare: 0,
           totalUserBalances: 0,
@@ -723,16 +718,16 @@ async function startServer() {
         }
       }
       
-      // 3. Update the treasury using Client SDK (with serverSecret logic in rules)
+      // 3. Update the treasury using Admin SDK
       try {
-        await updateDocClient(statsRefClient, {
-          platformShare: incrementClient(-amount),
+        await statsRef.update({
+          platformShare: FieldValue.increment(-amount),
           lastUpdated: new Date().toISOString(),
           serverSecret: SERVER_SECRET // Include secret for security rules bypass
         });
 
         // Log Platform Transaction (Payout)
-        await addDocClient(collectionClient(clientDb, 'platform_transactions'), {
+        await db.collection('platform_transactions').add({
           type: 'payout',
           source: 'platform_withdrawal',
           userAmount: 0,
@@ -741,7 +736,7 @@ async function startServer() {
           reason: `Platform Withdrawal to ${recipient} (${destination}) via ${method || 'payout'}`,
           userId: 'system',
           clientIp: clientIp,
-          timestamp: serverTimestamp(),
+          timestamp: FieldValue.serverTimestamp(),
           serverSecret: SERVER_SECRET // Include secret for security rules bypass
         });
       } catch (updateErr: any) {
@@ -834,8 +829,8 @@ async function startServer() {
       // Define fetchers
       const fetchOpenMeteo = async () => {
         const res = await axios.get(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true&daily=temperature_2m_max,weather_code&timezone=auto`, {
-          timeout: 5000,
-          headers: { 'Accept': 'application/json', 'User-Agent': 'PulseFeedWeatherBot/4.0' }
+          timeout: 10000,
+          headers: { 'Accept': 'application/json', 'User-Agent': 'PulseFeedWeatherBot/4.2' }
         });
         if (!res.data?.current_weather) throw new Error("Invalid Open-Meteo response");
         return { data: res.data, source: 'network_primary' };
@@ -843,16 +838,27 @@ async function startServer() {
 
       const fetchMetNorway = async () => {
         const res = await axios.get(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${latitude}&lon=${longitude}`, {
-          timeout: 5000,
-          headers: { 'User-Agent': 'PulseFeedWeatherBot/4.0 (contact: edwinmuoha@gmail.com)', 'Accept': 'application/json' }
+          timeout: 10000,
+          headers: { 'User-Agent': 'PulseFeedWeatherBot/4.2 (contact: edwinmuoha@gmail.com)', 'Accept': 'application/json' }
         });
         const timeseries = res.data?.properties?.timeseries?.[0];
         if (!timeseries) throw new Error("Invalid MET Norway response");
         
         const current = timeseries.data.instant.details;
+        const nextHour = timeseries.data.next_1_hours;
+        let weathercode = 3; // Default cloudy
+        
+        if (nextHour) {
+          const summary = nextHour.summary.symbol_code;
+          if (summary.includes('sun') || summary.includes('clear')) weathercode = 0;
+          else if (summary.includes('rain')) weathercode = 61;
+          else if (summary.includes('snow')) weathercode = 71;
+          else if (summary.includes('thunder')) weathercode = 95;
+        }
+
         const mappedData = {
-          current_weather: { temperature: current.air_temperature, weathercode: 0 },
-          daily: { temperature_2m_max: [current.air_temperature + 2, current.air_temperature + 1], weather_code: [0, 0] }
+          current_weather: { temperature: current.air_temperature, weathercode },
+          daily: { temperature_2m_max: [current.air_temperature + 2, current.air_temperature + 1], weather_code: [weathercode, weathercode] }
         };
         return { data: mappedData, source: 'network_fallback_met' };
       };
@@ -959,10 +965,10 @@ async function startServer() {
         console.log(`[Geocode] Attempt ${attempt} using Nominatim...`);
         const response = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`, {
           headers: {
-            'User-Agent': 'PulseFeeds/1.0 (contact: edwinmuoha@gmail.com)',
+            'User-Agent': 'PulseFeedsCommerceBot/2.0 (contact: edwinmuoha@gmail.com)',
             'Accept-Language': 'en'
           },
-          timeout: 10000 
+          timeout: 15000 
         });
         
         if (response.data && response.data.address) {

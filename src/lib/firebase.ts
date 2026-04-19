@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, getDocFromServer, doc } from 'firebase/firestore';
+import { initializeFirestore, getDocFromServer, doc, setLogLevel } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 // Import the Firebase configuration
@@ -14,6 +14,9 @@ export const auth = getAuth(app);
 const firestoreDatabaseId = firebaseConfig.firestoreDatabaseId;
 
 console.log('Initializing Firestore with database ID:', firestoreDatabaseId || '(default)', 'and forcing long polling.');
+
+// Silence noisy non-fatal Firestore warnings (like idle stream timeouts) in the browser
+setLogLevel('error');
 
 // Using initializeFirestore with experimentalForceLongPolling to fix "Disconnecting idle stream" errors
 // This is more stable in proxied environments like AI Studio.

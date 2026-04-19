@@ -6,7 +6,7 @@ import {
   Lock, Wallet, ArrowDownCircle, ArrowUpCircle, BarChart2, 
   PieChart, Info, AlertTriangle, CheckCircle2, Loader2, RefreshCw, PlusSquare,
   Mail, Key, Smartphone, Fingerprint, BrainCircuit, FileText, Zap,
-  Globe, Copy, ShieldAlert, Settings, Plus, Trash2, XCircle, CheckCircle
+  Copy, ShieldAlert, Settings, Plus, Trash2, XCircle, CheckCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
@@ -55,7 +55,6 @@ export default function PlatformDashboard() {
 
   const [platformTransactions, setPlatformTransactions] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [currentOutboundIp, setCurrentOutboundIp] = useState<string>("");
 
   // Moderation Logic
   const [modSettings, setModSettings] = useState<ModerationSettings>(getModerationSettings());
@@ -90,14 +89,6 @@ export default function PlatformDashboard() {
     updatedRules.splice(index, 1);
     setModSettings({ ...modSettings, customRules: updatedRules });
   };
-
-  useEffect(() => {
-    // Fetch live IP from our server (so we see the server's outbound IP, not the client's)
-    fetch('/api/system/ip')
-      .then(res => res.json())
-      .then(data => setCurrentOutboundIp(data.ip))
-      .catch(err => console.error("Failed to fetch server IP for dashboard display:", err));
-  }, []);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -600,7 +591,9 @@ export default function PlatformDashboard() {
             <Lock className="w-8 h-8 text-indigo-600" />
             Platform Control Room
           </h1>
-          <p className="text-gray-500 dark:text-gray-400">Secure developer dashboard & system management</p>
+          <div className="flex items-center gap-4">
+            <p className="text-gray-500 dark:text-gray-400 text-sm">Secure developer dashboard & system management</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button 
@@ -675,15 +668,6 @@ export default function PlatformDashboard() {
           )}
         >
           AI Moderation
-        </button>
-        <button 
-          onClick={() => setActiveTab('infrastructure')}
-          className={cn(
-            "pb-2 px-4 text-sm font-bold transition-all relative",
-            activeTab === 'infrastructure' ? "text-indigo-600 border-b-2 border-indigo-600" : "text-gray-400 hover:text-gray-600"
-          )}
-        >
-          Infrastructure
         </button>
       </div>
 
@@ -870,107 +854,8 @@ export default function PlatformDashboard() {
         </div>
       )}
 
-      {activeTab === 'infrastructure' && (
-        <div className="space-y-8 animate-in slide-in-from-left duration-300">
-          {/* Network & Infrastructure Health */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Globe className="w-5 h-5 text-blue-500" />
-                  Network Infrastructure
-                </h3>
-                <span className="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs font-medium rounded-full">
-                  Stable Outbound
-                </span>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Expected Static IP (Whitelisted)</p>
-                  <code className="bg-green-50 dark:bg-green-900/10 px-3 py-2 rounded-lg font-mono text-lg border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 block mb-3">
-                    35.214.40.75
-                  </code>
-                  
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Current Outbound IP (Live)</p>
-                  <div className="flex items-center gap-2">
-                    <code className={`bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded-lg font-mono text-lg border flex-1 overflow-x-auto whitespace-nowrap ${currentOutboundIp === '35.214.40.75' ? 'text-green-600 dark:text-green-400 border-green-200 dark:border-green-800' : 'text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800'}`}>
-                      {currentOutboundIp || "Determining..."}
-                    </code>
-                    {currentOutboundIp === '35.214.40.75' ? (
-                      <CheckCircle2 className="w-5 h-5 text-green-500" />
-                    ) : (
-                      <AlertTriangle className="w-5 h-5 text-amber-500" />
-                    )}
-                    <button 
-                      onClick={() => {
-                        navigator.clipboard.writeText(currentOutboundIp);
-                        setSuccess("IP copied to clipboard for Bank email.");
-                      }}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-400"
-                      title="Copy IP"
-                    >
-                      <Copy className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800/50">
-                  <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
-                    <strong>Static IP Note:</strong> If the IP above does not match <strong>35.214.40.75</strong>, please notify Co-op Bank (Melvin) to update the firewall whitelist.
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-green-500" />
-                  Co-op Bank Gateway
-                </h3>
-                <div className="flex items-center gap-1.5 px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-xs font-medium rounded-full">
-                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-                  Connected
-                </div>
-              </div>
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500 dark:text-gray-400">API Gateway</span>
-                  <span className="font-medium text-gray-900 dark:text-white">openapi.co-opbank.co.ke</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500 dark:text-gray-400">Default Target Acct</span>
-                  <span className="font-medium text-gray-900 dark:text-white">853390</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500 dark:text-gray-400">Port</span>
-                  <span className="font-medium text-gray-900 dark:text-white">443 (Authorized)</span>
-                </div>
-                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
-                  <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-2">Live Connectivity Logs</p>
-                  <div className="bg-gray-900 rounded-lg p-3 font-mono text-[10px] text-green-400/90 leading-tight">
-                    <div>[SYSTEM] Telnet connection to 443 OK</div>
-                    <div>[PAYOUT] Narration set: Pulse_Feeds_Withdrawal</div>
-                    <div>[SECURE] IP Payload attached: {currentOutboundIp}</div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      )}
-
-
       {/* AI Driven Data Insights (B2B) */}
+
       <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700 p-8">
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -1243,7 +1128,6 @@ export default function PlatformDashboard() {
                       <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight">{tx.reason}</p>
                       <p className="text-[10px] text-gray-500 uppercase tracking-tighter mt-1">
                         {tx.source} • {tx.timestamp?.seconds ? new Date(tx.timestamp.seconds * 1000).toLocaleString() : 'Just now'}
-                        {tx.clientIp && ` • IP: ${tx.clientIp}`}
                       </p>
                     </div>
                   </div>

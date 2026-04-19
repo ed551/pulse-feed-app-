@@ -661,21 +661,15 @@ export default function Layout() {
           
           while (geocodeRetries > 0) {
             try {
-              const url = `${window.location.origin}/api/geocode?lat=${latitude}&lon=${longitude}`;
+              const url = `/api/geocode?lat=${latitude}&lon=${longitude}`;
               console.log(`Geocoding Attempt ${3 - geocodeRetries}: Fetching ${url}`);
-              
-              // Compatibility check for AbortSignal.timeout
-              const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 35000);
               
               const res = await fetch(url, {
                 headers: {
                   'Accept': 'application/json',
                   'Cache-Control': 'no-cache'
-                },
-                signal: controller.signal
+                }
               });
-              clearTimeout(timeoutId);
               
               if (!res.ok) {
                 const errorData = await res.json().catch(() => ({}));
@@ -699,8 +693,11 @@ export default function Layout() {
         },
         (error) => {
           console.error("Geolocation Error:", error);
-          setLocationName('Global');
-          fetchWeather(-1.286389, 36.817223, 'Global'); // Default to Nairobi
+          const errorMsg = error.code === 1 ? "Permission denied" : (error.code === 2 ? "Position unavailable" : "Timeout");
+          console.warn(`Geolocation failed: ${errorMsg}. Falling back to default.`);
+          setLocationName('Pulse Global');
+          fetchWeather(-1.286389, 36.817223, 'Pulse Global'); // Default to Nairobi
+          showNotification("Location Access", { body: "We couldn't detect your precise location. Using a default region." });
         }
       );
     } else {
