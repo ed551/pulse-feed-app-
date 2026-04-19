@@ -661,23 +661,25 @@ export default function Layout() {
           
           while (geocodeRetries > 0) {
             try {
-              const url = `/api/geocode?lat=${latitude}&lon=${longitude}`;
+              const url = `${window.location.origin}/api/geocode?lat=${latitude}&lon=${longitude}`;
               console.log(`Geocoding Attempt ${3 - geocodeRetries}: Fetching ${url}`);
               
               // Compatibility check for AbortSignal.timeout
               const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 40000);
+              const timeoutId = setTimeout(() => controller.abort(), 35000);
               
               const res = await fetch(url, {
                 headers: {
-                  'Accept': 'application/json'
+                  'Accept': 'application/json',
+                  'Cache-Control': 'no-cache'
                 },
                 signal: controller.signal
               });
               clearTimeout(timeoutId);
+              
               if (!res.ok) {
-                const errorText = await res.text();
-                throw new Error(`Geocode API responded with status: ${res.status} - ${errorText}`);
+                const errorData = await res.json().catch(() => ({}));
+                throw new Error(`Geocode API responded with status: ${res.status} - ${errorData.details || errorData.error || 'Unknown error'}`);
               }
               const data = await res.json();
               city = data.address?.city || data.address?.town || data.address?.village || data.address?.suburb || 'Your Region';
@@ -834,7 +836,7 @@ export default function Layout() {
     { path: '/events', icon: Calendar, color: 'text-indigo-600', label: 'Events' },
     { path: '/dating', icon: Heart, color: 'text-pink-500', label: 'Dating' },
     { path: '/community', icon: Users, color: 'text-indigo-500', label: 'Community' },
-    { path: '/moderation', icon: ShieldAlert, color: 'text-red-500', label: 'Moderation' },
+    { path: '/platform', icon: Lock, color: 'text-indigo-600', label: 'Platform' },
     { path: '/notifications', icon: Bell, color: 'text-orange-500', label: 'Notifications' },
     { path: '/calls', icon: Phone, color: 'text-indigo-500', label: 'Calls' },
     { path: '/terms', icon: FileText, color: 'text-teal-500', label: 'Terms' },
@@ -843,10 +845,6 @@ export default function Layout() {
   ];
 
   const isDeveloper = currentUser?.email === 'edwinmuoha@gmail.com' || currentUser?.phoneNumber === '+254728011174' || userData?.role === 'admin';
-
-  if (isDeveloper) {
-    extraNavItems.unshift({ path: '/platform', icon: Lock, color: 'text-indigo-600', label: 'Platform' });
-  }
 
   const navItems = [...coreNavItems, ...extraNavItems];
 

@@ -1,18 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../lib/firebase';
-import { collection, getDocs, query, doc, onSnapshot, updateDoc, increment, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, query, doc, onSnapshot, updateDoc, increment, addDoc, serverTimestamp, getCountFromServer } from 'firebase/firestore';
 import { 
   Users, Award, DollarSign, TrendingUp, ShieldCheck, Activity, 
   Lock, Wallet, ArrowDownCircle, ArrowUpCircle, BarChart2, 
   PieChart, Info, AlertTriangle, CheckCircle2, Loader2, RefreshCw, PlusSquare,
   Mail, Key, Smartphone, Fingerprint, BrainCircuit, FileText, Zap,
-  Globe, Copy
+  Globe, Copy, ShieldAlert, Settings, Plus, Trash2, XCircle, CheckCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRevenue } from '../contexts/RevenueContext';
 import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 import { cn } from '../lib/utils';
+import { getModerationSettings, saveModerationSettings, ModerationSettings } from "../services/moderationService";
+import { admin_logic, integrity_audit_engine, global_kill_switch } from "../lib/engines";
 
 interface UserData {
   uid: string;
@@ -54,6 +56,40 @@ export default function PlatformDashboard() {
   const [platformTransactions, setPlatformTransactions] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentOutboundIp, setCurrentOutboundIp] = useState<string>("");
+
+  // Moderation Logic
+  const [modSettings, setModSettings] = useState<ModerationSettings>(getModerationSettings());
+  const [newRule, setNewRule] = useState("");
+  const [userCount, setUserCount] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<'financial' | 'moderation' | 'infrastructure'>('financial');
+
+  const reports = [
+    { id: 1, user: 'Spammer123', reason: 'Inappropriate content', status: 'pending' },
+    { id: 2, user: 'FakeBot99', reason: 'Spam links', status: 'pending' },
+    { id: 3, user: 'AngryUser', reason: 'Harassment', status: 'resolved' },
+  ];
+
+  const handleSaveModSettings = () => {
+    saveModerationSettings(modSettings);
+    setSuccess("AI Moderation Settings Saved!");
+    setTimeout(() => setSuccess(null), 3000);
+  };
+
+  const addRule = () => {
+    if (newRule.trim()) {
+      setModSettings({
+        ...modSettings,
+        customRules: [...modSettings.customRules, newRule.trim()]
+      });
+      setNewRule("");
+    }
+  };
+
+  const removeRule = (index: number) => {
+    const updatedRules = [...modSettings.customRules];
+    updatedRules.splice(index, 1);
+    setModSettings({ ...modSettings, customRules: updatedRules });
+  };
 
   useEffect(() => {
     // Fetch live IP from our server (so we see the server's outbound IP, not the client's)
@@ -561,10 +597,10 @@ export default function PlatformDashboard() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-            <ShieldCheck className="w-8 h-8 text-purple-600" />
-            Platform Dashboard
+            <Lock className="w-8 h-8 text-indigo-600" />
+            Platform Control Room
           </h1>
-          <p className="text-gray-500 dark:text-gray-400">Financial performance and system management</p>
+          <p className="text-gray-500 dark:text-gray-400">Secure developer dashboard & system management</p>
         </div>
         <div className="flex items-center gap-2">
           <button 
@@ -620,173 +656,319 @@ export default function PlatformDashboard() {
         )}
       </AnimatePresence>
 
-      {/* Network & Infrastructure Health */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm"
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-4 border-b border-gray-200 dark:border-gray-800 pb-1">
+        <button 
+          onClick={() => setActiveTab('financial')}
+          className={cn(
+            "pb-2 px-4 text-sm font-bold transition-all relative",
+            activeTab === 'financial' ? "text-indigo-600 border-b-2 border-indigo-600" : "text-gray-400 hover:text-gray-600"
+          )}
         >
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <Globe className="w-5 h-5 text-blue-500" />
-              Network Infrastructure
-            </h3>
-            <span className="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs font-medium rounded-full">
-              Stable Outbound
-            </span>
+          Financial Center
+        </button>
+        <button 
+          onClick={() => setActiveTab('moderation')}
+          className={cn(
+            "pb-2 px-4 text-sm font-bold transition-all relative",
+            activeTab === 'moderation' ? "text-indigo-600 border-b-2 border-indigo-600" : "text-gray-400 hover:text-gray-600"
+          )}
+        >
+          AI Moderation
+        </button>
+        <button 
+          onClick={() => setActiveTab('infrastructure')}
+          className={cn(
+            "pb-2 px-4 text-sm font-bold transition-all relative",
+            activeTab === 'infrastructure' ? "text-indigo-600 border-b-2 border-indigo-600" : "text-gray-400 hover:text-gray-600"
+          )}
+        >
+          Infrastructure
+        </button>
+      </div>
+
+      {activeTab === 'financial' && (
+        <div className="space-y-8 animate-in fade-in duration-300">
+          {/* Performance Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Lifetime Revenue */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                  <BarChart2 className="w-6 h-6 text-blue-600" />
+                </div>
+                <TrendingUp className="w-4 h-4 text-green-500" />
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Total Platform Revenue (Lifetime)</p>
+              <h3 className="text-3xl font-black text-gray-900 dark:text-white">{convert(stats.platformRevenue)}</h3>
+              <p className="text-xs text-gray-400 mt-2">Total revenue generated by all activities</p>
+            </motion.div>
+
+            {/* Active Users */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-xl">
+                  <Users className="w-6 h-6 text-green-600" />
+                </div>
+                <Activity className="w-4 h-4 text-green-500" />
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Active Users</p>
+              <h3 className="text-3xl font-black text-gray-900 dark:text-white">{stats.activeUsers}</h3>
+              <p className="text-xs text-gray-400 mt-2">Current users registered in the platform</p>
+            </motion.div>
+
+            {/* Platform Treasury */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="bg-gradient-to-br from-purple-600 to-indigo-700 p-6 rounded-2xl shadow-lg text-white"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-white/20 rounded-xl">
+                  <Lock className="w-6 h-6" />
+                </div>
+                <div className="px-2 py-1 bg-white/20 rounded-full text-[10px] font-bold uppercase">Treasury</div>
+              </div>
+              <p className="text-sm text-purple-100">Available Platform Balance</p>
+              <h3 className="text-3xl font-black">{convert(stats.platformShare)}</h3>
+              <p className="text-xs text-purple-200 mt-2">Withdrawable operational funds</p>
+            </motion.div>
           </div>
-          <div className="space-y-4">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Current Outbound IP (Live)</p>
-              <div className="flex items-center gap-2">
-                <code className={`bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded-lg font-mono text-lg border flex-1 overflow-x-auto whitespace-nowrap ${currentOutboundIp === '35.214.40.75' ? 'text-green-600 dark:text-green-400 border-green-200 dark:border-green-800' : 'text-blue-600 dark:text-blue-400 border-gray-200 dark:border-gray-700'}`}>
-                  {currentOutboundIp || "Determining..."}
-                </code>
-                {currentOutboundIp === '35.214.40.75' && (
-                  <CheckCircle2 className="w-5 h-5 text-green-500" />
-                )}
-                <button 
-                  onClick={() => {
-                    navigator.clipboard.writeText(currentOutboundIp);
-                    setSuccess("IP copied to clipboard for Bank email.");
-                  }}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-400"
-                  title="Copy IP"
-                >
-                  <Copy className="w-5 h-5" />
-                </button>
+
+          {/* Revenue Breakdown Section */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-800">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Unredeemed Revenue</p>
+              <p className="text-xl font-black text-gray-900 dark:text-white">{convert(stats.unredeemedRevenue)}</p>
+              <p className="text-[10px] text-gray-500 mt-1">Total user balances not yet withdrawn</p>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-800">
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Potential Revenue</p>
+              <p className="text-xl font-black text-gray-900 dark:text-white">{convert(stats.potentialRevenue)}</p>
+              <p className="text-[10px] text-gray-500 mt-1">Projected revenue from current user base</p>
+            </div>
+            <div className="bg-green-50 dark:bg-green-900/10 p-4 rounded-2xl border border-green-100 dark:border-green-900/30">
+              <p className="text-[10px] font-black uppercase tracking-widest text-green-600 mb-1">Redeemable (Treasury)</p>
+              <p className="text-xl font-black text-green-700 dark:text-green-400">{convert(stats.platformShare)}</p>
+              <p className="text-[10px] text-green-600/60 mt-1">Funds available for Platform withdrawal</p>
+            </div>
+            <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-2xl border border-orange-100 dark:border-orange-900/30">
+              <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 mb-1">Unredeemable (User Hand)</p>
+              <p className="text-xl font-black text-orange-700 dark:text-orange-400">{convert(stats.totalUserBalances)}</p>
+              <p className="text-[10px] text-orange-600/60 mt-1">Funds currently allocated to users</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'moderation' && (
+        <div className="space-y-8 animate-in slide-in-from-right duration-300">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">
+                <Settings className="w-5 h-5 mr-2 text-purple-500" />
+                AI Moderation Settings (Gemini)
+              </h2>
+              <button 
+                onClick={handleSaveModSettings}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                Save Settings
+              </button>
+            </div>
+            <div className="p-6 space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Sensitivity Level</label>
+                <div className="flex space-x-4">
+                  {['low', 'medium', 'high'].map((level) => (
+                    <label key={level} className="flex items-center space-x-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="sensitivity" 
+                        value={level} 
+                        checked={modSettings.sensitivity === level}
+                        onChange={(e) => setModSettings({...modSettings, sensitivity: e.target.value as any})}
+                        className="text-purple-600 focus:ring-purple-500"
+                      />
+                      <span className="text-gray-700 dark:text-gray-300 capitalize">{level}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Custom Rules</label>
+                <div className="space-y-2 mb-4">
+                  {modSettings.customRules.map((rule, idx) => (
+                    <div key={idx} className="flex items-center justify-between bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{rule}</span>
+                      <button onClick={() => removeRule(idx)} className="text-red-500 hover:text-red-700 p-1">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex space-x-2">
+                  <input 
+                    type="text" 
+                    value={newRule}
+                    onChange={(e) => setNewRule(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addRule()}
+                    placeholder="Add a new custom rule..."
+                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                  <button 
+                    onClick={addRule}
+                    className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg flex items-center transition-colors"
+                  >
+                    <Plus className="w-4 h-4 mr-1" /> Add
+                  </button>
+                </div>
               </div>
             </div>
-            <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800/50">
-              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
-                <strong>Static IP Note:</strong> If the IP above does not match <strong>35.214.40.75</strong>, please notify Co-op Bank (Melvin) to update the firewall whitelist.
-              </p>
-            </div>
           </div>
-        </motion.div>
 
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-green-500" />
-              Co-op Bank Gateway
-            </h3>
-            <div className="flex items-center gap-1.5 px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-xs font-medium rounded-full">
-              <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-              Connected
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="p-6 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">Reports Queue</h2>
+            </div>
+            <div className="divide-y divide-gray-100 dark:divide-gray-700">
+              {reports.map((report) => (
+                <div key={report.id} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                  <div>
+                    <div className="font-bold text-gray-900 dark:text-white text-lg mb-1">{report.user}</div>
+                    <div className="text-gray-500 dark:text-gray-400">{report.reason}</div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {report.status === 'pending' ? (
+                      <>
+                        <button className="p-2 bg-green-100 text-green-600 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50 rounded-lg transition-colors" title="Approve/Ignore">
+                          <CheckCircle className="w-5 h-5" />
+                        </button>
+                        <button className="p-2 bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 rounded-lg transition-colors" title="Ban/Delete">
+                          <XCircle className="w-5 h-5" />
+                        </button>
+                      </>
+                    ) : (
+                      <span className="px-3 py-1 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 rounded-full text-sm font-medium uppercase tracking-wider">Resolved</span>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-          <div className="space-y-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500 dark:text-gray-400">API Gateway</span>
-              <span className="font-medium text-gray-900 dark:text-white">openapi.co-opbank.co.ke</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500 dark:text-gray-400">Default Target Acct</span>
-              <span className="font-medium text-gray-900 dark:text-white">853390</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500 dark:text-gray-400">Port</span>
-              <span className="font-medium text-gray-900 dark:text-white">443 (Authorized)</span>
-            </div>
-            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
-              <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-2">Live Connectivity Logs</p>
-              <div className="bg-gray-900 rounded-lg p-3 font-mono text-[10px] text-green-400/90 leading-tight">
-                <div>[SYSTEM] Telnet connection to 443 OK</div>
-                <div>[PAYOUT] Narration set: Pulse_Feeds_Withdrawal</div>
-                <div>[SECURE] IP Payload attached: {currentOutboundIp}</div>
+        </div>
+      )}
+
+      {activeTab === 'infrastructure' && (
+        <div className="space-y-8 animate-in slide-in-from-left duration-300">
+          {/* Network & Infrastructure Health */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <Globe className="w-5 h-5 text-blue-500" />
+                  Network Infrastructure
+                </h3>
+                <span className="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs font-medium rounded-full">
+                  Stable Outbound
+                </span>
               </div>
-            </div>
-          </div>
-        </motion.div>
-      </div>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Expected Static IP (Whitelisted)</p>
+                  <code className="bg-green-50 dark:bg-green-900/10 px-3 py-2 rounded-lg font-mono text-lg border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 block mb-3">
+                    35.214.40.75
+                  </code>
+                  
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Current Outbound IP (Live)</p>
+                  <div className="flex items-center gap-2">
+                    <code className={`bg-gray-50 dark:bg-gray-900 px-3 py-2 rounded-lg font-mono text-lg border flex-1 overflow-x-auto whitespace-nowrap ${currentOutboundIp === '35.214.40.75' ? 'text-green-600 dark:text-green-400 border-green-200 dark:border-green-800' : 'text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800'}`}>
+                      {currentOutboundIp || "Determining..."}
+                    </code>
+                    {currentOutboundIp === '35.214.40.75' ? (
+                      <CheckCircle2 className="w-5 h-5 text-green-500" />
+                    ) : (
+                      <AlertTriangle className="w-5 h-5 text-amber-500" />
+                    )}
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(currentOutboundIp);
+                        setSuccess("IP copied to clipboard for Bank email.");
+                      }}
+                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-400"
+                      title="Copy IP"
+                    >
+                      <Copy className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800/50">
+                  <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                    <strong>Static IP Note:</strong> If the IP above does not match <strong>35.214.40.75</strong>, please notify Co-op Bank (Melvin) to update the firewall whitelist.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
 
-      {/* Performance Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Lifetime Revenue */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
-              <BarChart2 className="w-6 h-6 text-blue-600" />
-            </div>
-            <TrendingUp className="w-4 h-4 text-green-500" />
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-green-500" />
+                  Co-op Bank Gateway
+                </h3>
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-xs font-medium rounded-full">
+                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+                  Connected
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500 dark:text-gray-400">API Gateway</span>
+                  <span className="font-medium text-gray-900 dark:text-white">openapi.co-opbank.co.ke</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500 dark:text-gray-400">Default Target Acct</span>
+                  <span className="font-medium text-gray-900 dark:text-white">853390</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500 dark:text-gray-400">Port</span>
+                  <span className="font-medium text-gray-900 dark:text-white">443 (Authorized)</span>
+                </div>
+                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                  <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-2">Live Connectivity Logs</p>
+                  <div className="bg-gray-900 rounded-lg p-3 font-mono text-[10px] text-green-400/90 leading-tight">
+                    <div>[SYSTEM] Telnet connection to 443 OK</div>
+                    <div>[PAYOUT] Narration set: Pulse_Feeds_Withdrawal</div>
+                    <div>[SECURE] IP Payload attached: {currentOutboundIp}</div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Total Platform Revenue (Lifetime)</p>
-          <h3 className="text-3xl font-black text-gray-900 dark:text-white">{convert(stats.platformRevenue)}</h3>
-          <p className="text-xs text-gray-400 mt-2">Total revenue generated by all activities</p>
-        </motion.div>
+        </div>
+      )}
 
-        {/* Active Users */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-xl">
-              <Users className="w-6 h-6 text-green-600" />
-            </div>
-            <Activity className="w-4 h-4 text-green-500" />
-          </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Active Users</p>
-          <h3 className="text-3xl font-black text-gray-900 dark:text-white">{stats.activeUsers}</h3>
-          <p className="text-xs text-gray-400 mt-2">Current users registered in the platform</p>
-        </motion.div>
-
-        {/* Platform Treasury */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-gradient-to-br from-purple-600 to-indigo-700 p-6 rounded-2xl shadow-lg text-white"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-3 bg-white/20 rounded-xl">
-              <Lock className="w-6 h-6" />
-            </div>
-            <div className="px-2 py-1 bg-white/20 rounded-full text-[10px] font-bold uppercase">Treasury</div>
-          </div>
-          <p className="text-sm text-purple-100">Available Platform Balance</p>
-          <h3 className="text-3xl font-black">{convert(stats.platformShare)}</h3>
-          <p className="text-xs text-purple-200 mt-2">Withdrawable operational funds</p>
-        </motion.div>
-      </div>
-
-      {/* Revenue Breakdown Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-800">
-          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Unredeemed Revenue</p>
-          <p className="text-xl font-black text-gray-900 dark:text-white">{convert(stats.unredeemedRevenue)}</p>
-          <p className="text-[10px] text-gray-500 mt-1">Total user balances not yet withdrawn</p>
-        </div>
-        <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-800">
-          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Potential Revenue</p>
-          <p className="text-xl font-black text-gray-900 dark:text-white">{convert(stats.potentialRevenue)}</p>
-          <p className="text-[10px] text-gray-500 mt-1">Projected revenue from current user base</p>
-        </div>
-        <div className="bg-green-50 dark:bg-green-900/10 p-4 rounded-2xl border border-green-100 dark:border-green-900/30">
-          <p className="text-[10px] font-black uppercase tracking-widest text-green-600 mb-1">Redeemable (Treasury)</p>
-          <p className="text-xl font-black text-green-700 dark:text-green-400">{convert(stats.platformShare)}</p>
-          <p className="text-[10px] text-green-600/60 mt-1">Funds available for Platform withdrawal</p>
-        </div>
-        <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-2xl border border-orange-100 dark:border-orange-900/30">
-          <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 mb-1">Unredeemable (User Hand)</p>
-          <p className="text-xl font-black text-orange-700 dark:text-orange-400">{convert(stats.totalUserBalances)}</p>
-          <p className="text-[10px] text-orange-600/60 mt-1">Funds currently allocated to users</p>
-        </div>
-      </div>
 
       {/* AI Driven Data Insights (B2B) */}
       <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700 p-8">
@@ -1049,21 +1231,33 @@ export default function PlatformDashboard() {
                   <div className="flex items-center gap-3">
                     <div className={cn(
                       "p-2 rounded-xl",
-                      tx.type === 'revenue' ? "bg-green-100 dark:bg-green-900/30 text-green-600" : "bg-blue-100 dark:bg-blue-900/30 text-blue-600"
+                      tx.type === 'revenue' ? "bg-green-100 dark:bg-green-900/30 text-green-600" : 
+                      tx.type === 'alert' ? "bg-amber-100 dark:bg-amber-900/30 text-amber-600" :
+                      "bg-blue-100 dark:bg-blue-900/30 text-blue-600"
                     )}>
-                      {tx.type === 'revenue' ? <DollarSign className="w-4 h-4" /> : <PlusSquare className="w-4 h-4" />}
+                      {tx.type === 'revenue' ? <DollarSign className="w-4 h-4" /> : 
+                       tx.type === 'alert' ? <ShieldAlert className="w-4 h-4" /> :
+                       <PlusSquare className="w-4 h-4" />}
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-gray-900 dark:text-white">{tx.reason}</p>
-                      <p className="text-[10px] text-gray-500 uppercase tracking-tighter">
+                      <p className="text-sm font-bold text-gray-900 dark:text-white leading-tight">{tx.reason}</p>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-tighter mt-1">
                         {tx.source} • {tx.timestamp?.seconds ? new Date(tx.timestamp.seconds * 1000).toLocaleString() : 'Just now'}
                         {tx.clientIp && ` • IP: ${tx.clientIp}`}
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-black text-gray-900 dark:text-white">+{convert(tx.totalAmount || tx.platformAmount)}</p>
-                    <p className="text-[10px] text-blue-500 font-bold">Collected</p>
+                  <div className="text-right shrink-0 ml-4">
+                    {tx.type === 'alert' ? (
+                      <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-full text-[10px] font-black uppercase tracking-tighter">
+                        Warning
+                      </span>
+                    ) : (
+                      <>
+                        <p className="text-sm font-black text-gray-900 dark:text-white">+{convert(tx.totalAmount || tx.platformAmount || 0)}</p>
+                        <p className="text-[10px] text-blue-500 font-bold uppercase tracking-tighter">Collected</p>
+                      </>
+                    )}
                   </div>
                 </div>
               ))
@@ -1127,7 +1321,7 @@ export default function PlatformDashboard() {
           </table>
           {users.length > 10 && (
             <div className="p-4 text-center border-t border-gray-100 dark:border-gray-700">
-              <p className="text-xs text-gray-400 italic">Showing top 10 users. View Moderation Dashboard for full list.</p>
+              <p className="text-xs text-gray-400 italic">Showing top 10 users. View full list in user management section.</p>
             </div>
           )}
         </div>

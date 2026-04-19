@@ -22,7 +22,6 @@ const Education = lazy(() => import("./pages/Education"));
 const Events = lazy(() => import("./pages/Events"));
 const Dating = lazy(() => import("./pages/Dating"));
 const Settings = lazy(() => import("./pages/Settings"));
-const Moderation = lazy(() => import("./pages/Moderation"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const Calls = lazy(() => import("./pages/Calls"));
 const Terms = lazy(() => import("./pages/Terms"));
@@ -110,11 +109,6 @@ export default function App() {
                 <Route path="settings" element={
                   <ProtectedRoute>
                     <Settings />
-                  </ProtectedRoute>
-                } />
-                <Route path="moderation" element={
-                  <ProtectedRoute>
-                    <Moderation />
                   </ProtectedRoute>
                 } />
                 <Route path="notifications" element={

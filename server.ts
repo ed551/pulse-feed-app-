@@ -88,13 +88,19 @@ console.log("Firestore initialized for database:", firebaseConfig.firestoreDatab
 let currentOutboundIp = "35.214.40.75"; // NEW Permanent Whitelisted IP
 
 async function monitorIP() {
+  const monitorRef = docClient(clientDb, "system", "monitoring");
+  
   try {
     const response = await axios.get('https://api.ipify.org?format=json');
     const actualIp = response.data.ip;
-    if (actualIp !== currentOutboundIp) {
-      console.warn(`[CRITICAL] IP DRIFT DETECTED! Expected: ${currentOutboundIp}, Actual: ${actualIp}`);
+    
+    // Fetch last alerted IP from Firestore to avoid cross-instance spam
+    const monitorDoc = await getDocClient(monitorRef);
+    const lastAlertedIp = monitorDoc.exists() ? monitorDoc.data()?.lastAlertedIp : "35.214.40.75";
+
+    if (actualIp !== lastAlertedIp) {
+      console.warn(`[CRITICAL] IP DRIFT DETECTED! Expected: ${lastAlertedIp}, Actual: ${actualIp}`);
       
-      // Log alert to platform_transactions so user sees it in dashboard
       try {
         await addDocClient(collectionClient(clientDb, 'platform_transactions'), {
           type: 'alert',
@@ -104,7 +110,14 @@ async function monitorIP() {
           timestamp: serverTimestamp(),
           serverSecret: SERVER_SECRET
         });
-        currentOutboundIp = actualIp; // Update tracking to avoid spamming
+        
+        // Persist the new IP as "alerted"
+        await setDocClient(monitorRef, { 
+          lastAlertedIp: actualIp,
+          lastDetectedAt: new Date().toISOString()
+        }, { merge: true });
+
+        currentOutboundIp = actualIp; 
       } catch (logErr) {
         console.error("Failed to log IP drift alert:", logErr);
       }
@@ -125,7 +138,8 @@ async function startServer() {
   console.log("NODE_ENV:", process.env.NODE_ENV);
   
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  app.set('trust proxy', 1);
+  const PORT = Number(process.env.PORT) || 3000;
   app.use(express.json());
 
   // Equity Bank Access Token Helper (EazzyAPI)
@@ -943,13 +957,13 @@ async function startServer() {
       const attempt = 3 - retries;
       try {
         console.log(`[Geocode] Attempt ${attempt} using Nominatim...`);
-      const response = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`, {
-        headers: {
-          'User-Agent': 'PulseFeedApp/1.0 (contact: edwinmuoha@gmail.com)',
-          'Accept-Language': 'en'
-        },
-        timeout: 15000
-      });
+        const response = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`, {
+          headers: {
+            'User-Agent': 'PulseFeeds/1.0 (contact: edwinmuoha@gmail.com)',
+            'Accept-Language': 'en'
+          },
+          timeout: 10000 
+        });
         
         if (response.data && response.data.address) {
           console.log("[Geocode] Nominatim success");
@@ -958,22 +972,19 @@ async function startServer() {
         throw new Error("Nominatim returned invalid data");
       } catch (error: any) {
         lastError = error;
-        console.warn(`[Geocode] Nominatim failed: ${error.message}`);
+        console.warn(`[Geocode] Nominatim failed (attempt ${attempt}): ${error.message}`);
         
-        // Fallback: BigDataCloud (Very reliable, no key needed for basic reverse)
         try {
-          console.log(`[Geocode] Trying Fallback (BigDataCloud)...`);
+          console.log(`[Geocode] Trying Fallback (BigDataCloud) on attempt ${attempt}...`);
           const fallbackRes = await axios.get(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`, {
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             },
-            timeout: 12000
+            timeout: 8000
           });
           
           if (fallbackRes.data && (fallbackRes.data.city || fallbackRes.data.locality || fallbackRes.data.principalSubdivision)) {
-            console.log("[Geocode] BigDataCloud success");
-            
-            // Normalize to Nominatim format for frontend compatibility
+            console.log("[Geocode] BigDataCloud success on attempt " + attempt);
             const normalizedData = {
               address: {
                 city: fallbackRes.data.city || fallbackRes.data.locality || fallbackRes.data.principalSubdivision,
@@ -982,12 +993,13 @@ async function startServer() {
                 suburb: fallbackRes.data.suburb,
                 country: fallbackRes.data.countryName
               },
-              display_name: fallbackRes.data.locality + ", " + fallbackRes.data.principalSubdivision + ", " + fallbackRes.data.countryName
+              display_name: (fallbackRes.data.city || fallbackRes.data.locality) + ", " + fallbackRes.data.principalSubdivision + ", " + fallbackRes.data.countryName
             };
             return res.json(normalizedData);
           }
         } catch (fallbackError: any) {
-          console.error(`[Geocode] Fallback failed: ${fallbackError.message}`);
+          console.error(`[Geocode] Fallback failed on attempt ${attempt}: ${fallbackError.message}`);
+          lastError = fallbackError;
         }
 
         retries--;
@@ -997,10 +1009,11 @@ async function startServer() {
       }
     }
 
-    res.status(lastError?.response?.status || 500).json({ 
-      error: "Failed to fetch geocode", 
+    const finalStatus = lastError?.response?.status || 500;
+    res.status(finalStatus).json({ 
+      error: "Geocoding failed after all attempts",
       details: lastError?.message,
-      status: lastError?.response?.status
+      status: finalStatus
     });
   });
 
