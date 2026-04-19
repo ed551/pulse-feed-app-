@@ -1,5 +1,5 @@
 import express from "express";
-// Build Version: 1.0.4 - London Static IP Final Override
+// Build Version: 1.0.5 - Trigger Purge Edition
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
