@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, getDocFromServer, doc } from 'firebase/firestore';
+import { initializeFirestore, getDocFromServer, doc } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 // Import the Firebase configuration
@@ -13,10 +13,15 @@ export const auth = getAuth(app);
 // Initialize Firestore
 const firestoreDatabaseId = firebaseConfig.firestoreDatabaseId;
 
-console.log('Initializing Firestore with database ID:', firestoreDatabaseId || '(default)');
+console.log('Initializing Firestore with database ID:', firestoreDatabaseId || '(default)', 'and forcing long polling.');
 
-// Use standard getFirestore for better stability
-export const db = getFirestore(app, (firestoreDatabaseId && firestoreDatabaseId !== '(default)') ? firestoreDatabaseId : undefined);
+// Using initializeFirestore with experimentalForceLongPolling to fix "Disconnecting idle stream" errors
+// This is more stable in proxied environments like AI Studio.
+const dbInstance = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+}, (firestoreDatabaseId && firestoreDatabaseId !== '(default)') ? firestoreDatabaseId : undefined);
+
+export const db = dbInstance;
 
 // Initialize Storage
 export const storage = getStorage(app);
