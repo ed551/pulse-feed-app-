@@ -101,9 +101,9 @@ export default function Layout() {
   const bottomNavItems = [
     { path: '/', icon: Home, label: 'Home' },
     { path: '/groups', icon: Users, label: 'Groups' },
-    { path: '/videos', icon: Video, label: 'Videos' },
+    { path: '/membership', icon: Crown, label: 'Elite' },
     { path: '/rewards', icon: Gem, label: 'Rewards' },
-    { path: '/notifications', icon: Bell, label: 'Notifications' },
+    { path: '/notifications', icon: Bell, label: 'Alerts' },
     { path: '/profile', icon: User, label: 'Profile' },
   ];
 
@@ -114,6 +114,7 @@ export default function Layout() {
     { name: 'Rewards', icon: Gem, color: 'text-yellow-500' },
     { name: 'Indoor Games', icon: Gamepad2, color: 'text-pink-500' },
     { name: 'Outdoor Games', icon: Map, color: 'text-emerald-500' },
+    { name: 'Elite Plan', icon: Crown, color: 'text-yellow-500' },
     { name: 'Toggle Frame', icon: Smartphone, color: 'text-purple-500' },
     { name: 'Terms', icon: FileText, color: 'text-teal-500' },
     { name: 'Ads', icon: DollarSign, color: 'text-green-500' }
@@ -130,6 +131,10 @@ export default function Layout() {
     }
     if (categoryName === 'Ads') {
       navigate('/ads');
+      return;
+    }
+    if (categoryName === 'Elite Plan') {
+      navigate('/membership');
       return;
     }
     if (categoryName === 'Toggle Frame') {
@@ -403,7 +408,7 @@ export default function Layout() {
   const [correctionInput, setCorrectionInput] = useState({ temp: '', condition: '' });
   
   const [brightness, setBrightness] = useState(100);
-  const [bestSeller, setBestSeller] = useState("Edwin Muoha");
+  const [bestSeller, setBestSeller] = useState("the owner");
   const [bestBuyer, setBestBuyer] = useState("Community");
 
   const dateFormats = ['US', 'UK', 'ISO', 'Full'];
@@ -454,7 +459,7 @@ export default function Layout() {
     
     setWeatherStatus('detecting');
     try {
-      const url = `${window.location.origin}/api/weather?lat=${lat}&lon=${lon}`;
+      const url = `/api/weather?lat=${lat}&lon=${lon}`;
       console.log(`Weather: Fetching ${url} for ${city}...`);
       const response = await fetch(url);
       const contentType = response.headers.get("content-type");
@@ -465,14 +470,19 @@ export default function Layout() {
           if (contentType && contentType.includes("application/json")) {
             const errorData = await response.json();
             if (errorData.details) errorMsg += ` (${errorData.details})`;
+          } else {
+            const text = await response.text();
+            console.error("Weather API error response body:", text.substring(0, 100));
           }
         } catch (e) {
-          // Ignore JSON parse error for the error response itself
+          // Ignore parse errors
         }
         throw new Error(errorMsg);
       }
 
       if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("Weather API non-JSON response body:", text.substring(0, 100));
         throw new Error("Weather API returned an invalid response format (HTML instead of JSON)");
       }
 
@@ -672,8 +682,23 @@ export default function Layout() {
               });
               
               if (!res.ok) {
-                const errorData = await res.json().catch(() => ({}));
-                throw new Error(`Geocode API responded with status: ${res.status} - ${errorData.details || errorData.error || 'Unknown error'}`);
+                const contentType = res.headers.get("content-type");
+                let errorDetails = "Unknown error";
+                if (contentType && contentType.includes("application/json")) {
+                  const errorData = await res.json().catch(() => ({}));
+                  errorDetails = errorData.details || errorData.error || 'Unknown error';
+                } else {
+                  const text = await res.text().catch(() => "");
+                  console.error("Geocode API error response body:", text.substring(0, 100));
+                  errorDetails = "Received non-JSON response (likely HTML fallback)";
+                }
+                throw new Error(`Geocode API responded with status: ${res.status} - ${errorDetails}`);
+              }
+              const contentType = res.headers.get("content-type");
+              if (!contentType || !contentType.includes("application/json")) {
+                const text = await res.text().catch(() => "");
+                console.error("Geocode API non-JSON response body:", text.substring(0, 100));
+                throw new Error("Geocode API returned HTML instead of JSON");
               }
               const data = await res.json();
               city = data.address?.city || data.address?.town || data.address?.village || data.address?.suburb || 'Your Region';
@@ -707,10 +732,10 @@ export default function Layout() {
   }, [fetchWeather]);
 
   useEffect(() => {
-    // Initial location detection with a small delay to ensure server is ready
+    // Initial location detection with a delay to ensure server is ready
     const timer = setTimeout(() => {
       getLocation();
-    }, 1500);
+    }, 3000); // Increased to 3s to be safer against slow boot
 
     // Listen for manual refresh requests
     const handleRefresh = () => {
@@ -1171,6 +1196,24 @@ export default function Layout() {
                 setActiveCategory,
                 showAdvancedSearch
               }} />
+
+              {/* Global App Disclaimer */}
+              <div className="mt-20 pt-12 border-t border-gray-100 dark:border-gray-800/50 pb-20">
+                <div className="flex flex-col items-center text-center space-y-4">
+                  <div className="flex items-center gap-3 opacity-30 grayscale saturate-0 mb-4">
+                    <ShieldCheck className="w-5 h-5" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.4em]">Pulse Infrastructure Alpha</span>
+                  </div>
+                  <p className="text-[9px] font-bold text-gray-400 dark:text-gray-600 uppercase tracking-widest leading-loose max-w-xl mx-auto">
+                    Pulse Feeds is a multi-functional social and professional ecosystem developed by the owner. All financial features, educational insights, and community detectors are provided for enhancement and research purposes. Use of this platform constitutes acceptance of the community ethics charter.
+                  </p>
+                  <div className="flex items-center gap-8 pt-4">
+                    <Link to="/terms" className="text-[8px] font-black text-gray-400 hover:text-indigo-500 uppercase tracking-tighter transition-colors">Legal Terms</Link>
+                    <Link to="/privacy" className="text-[8px] font-black text-gray-400 hover:text-indigo-500 uppercase tracking-tighter transition-colors">Privacy Shield</Link>
+                    <Link to="/support" className="text-[8px] font-black text-gray-400 hover:text-indigo-500 uppercase tracking-tighter transition-colors">Developer Support</Link>
+                  </div>
+                </div>
+              </div>
             </div>
           </main>
         </div>

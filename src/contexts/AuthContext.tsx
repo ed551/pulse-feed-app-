@@ -45,6 +45,11 @@ interface UserData {
   education?: string;
   status?: string;
   sports?: string[];
+  enrolledCourses?: string[];
+  completedModules?: string[];
+  customCourses?: any[];
+  membershipLevel?: 'bronze' | 'silver' | 'gold';
+  membershipStatus?: 'active' | 'expired' | 'canceled';
 }
 
 interface AuthContextType {
@@ -113,6 +118,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 points: 1250,
                 balance: 0,
                 adRevenue: 0,
+                enrolledCourses: [],
+                completedModules: [],
                 createdAt: serverTimestamp()
               };
               

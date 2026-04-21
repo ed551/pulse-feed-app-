@@ -18,10 +18,10 @@ console.log('Initializing Firestore with database ID:', firestoreDatabaseId || '
 // Silence noisy non-fatal Firestore warnings (like idle stream timeouts) in the browser
 setLogLevel('error');
 
-// Using initializeFirestore with experimentalForceLongPolling to fix "Disconnecting idle stream" errors
-// This is more stable in proxied environments like AI Studio.
+// Using initializeFirestore with auto-detect long polling 
+// to fix "Disconnecting idle stream" errors that occur in proxied/iframe environments.
 const dbInstance = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
+  experimentalAutoDetectLongPolling: true,
 }, (firestoreDatabaseId && firestoreDatabaseId !== '(default)') ? firestoreDatabaseId : undefined);
 
 export const db = dbInstance;

@@ -363,6 +363,19 @@ export default function Profile() {
               <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center">
                 <Activity className="w-3 h-3 mr-1" /> Active
               </span>
+              {userData?.membershipLevel === 'gold' ? (
+                <span className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest flex items-center shadow-sm border border-yellow-200 dark:border-yellow-700">
+                  <Crown className="w-3 h-3 mr-1" /> Gold Member
+                </span>
+              ) : userData?.membershipLevel === 'silver' ? (
+                <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest flex items-center border border-blue-200 dark:border-blue-700">
+                  <Star className="w-3 h-3 mr-1 text-blue-500" /> Silver Member
+                </span>
+              ) : (
+                <span className="bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest flex items-center border border-orange-200 dark:border-orange-700">
+                  <Shield className="w-3 h-3 mr-1 text-orange-500" /> Bronze Member
+                </span>
+              )}
             </div>
           </div>
           

@@ -312,6 +312,9 @@ export default function Community() {
         points: increment(-skill.price)
       });
 
+      // 100% Platform revenue for marketplace transactions
+      await addRevenue(0, cost, `Booked Skill: ${skill.skill} with ${skill.userName}`, 'community');
+
       await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), {
         amount: -skill.price,
         monetaryValue: -cost,

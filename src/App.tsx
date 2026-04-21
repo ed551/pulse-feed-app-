@@ -29,6 +29,7 @@ const Privacy = lazy(() => import("./pages/Privacy"));
 const Support = lazy(() => import("./pages/Support"));
 const AdsDashboard = lazy(() => import("./pages/AdsDashboard"));
 const GeminiLab = lazy(() => import("./pages/GeminiLab"));
+const Membership = lazy(() => import("./pages/Membership"));
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -132,6 +133,11 @@ export default function App() {
                 <Route path="lab" element={
                   <ProtectedRoute>
                     <GeminiLab />
+                  </ProtectedRoute>
+                } />
+                <Route path="membership" element={
+                  <ProtectedRoute>
+                    <Membership />
                   </ProtectedRoute>
                 } />
               </Route>

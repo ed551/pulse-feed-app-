@@ -72,20 +72,65 @@ export default function Rewards() {
 
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phoneNumber || !amount) return;
+    if (!amount) return;
     setIsLoading(true);
     setError(null);
     try {
       const numAmount = parseFloat(amount);
       if (numAmount < 100) throw new Error("Minimum withdrawal is KES 100");
-      if (numAmount > (points * (rates['KES'] || 130) / 100)) throw new Error("Insufficient balance");
+      
+      const kesBalance = (points * (rates['KES'] || 135) / 100);
+      if (numAmount > kesBalance) throw new Error("Insufficient balance");
 
-      const result = await mpesa_handler.stk_push(phoneNumber, numAmount);
-      if (result.success) {
-        setSuccess("Payout request sent successfully!");
+      let endpoint = '/api/payout/mpesa';
+      let body: any = { amount: numAmount };
+
+      if (localMethod === 'mpesa') {
+        if (!phoneNumber) throw new Error("Phone number is required");
+        body.phoneNumber = phoneNumber;
+      } else if (localMethod === 'bank') {
+        if (!bankDetails.accountNumber) throw new Error("Bank account number is required");
+        endpoint = '/api/payout/bank';
+        body.bankDetails = bankDetails;
+      } else if (localMethod === 'paybill') {
+        if (!paybillDetails.businessNumber || !paybillDetails.accountNumber) throw new Error("Paybill details are required");
+        endpoint = '/api/payout/paybill';
+        body.paybillDetails = paybillDetails;
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      const result = await response.json();
+      
+      if (result.success || result.ResponseCode === "0") {
+        setSuccess(result.message || "Payout request initiated successfully!");
         setAmount("");
+        
+        // Log transaction to Firestore
+        if (currentUser) {
+          const txRef = collection(db, 'users', currentUser.uid, 'transactions');
+          await addDoc(txRef, {
+            amount: numAmount,
+            type: localMethod,
+            status: result.success ? 'success' : 'pending',
+            timestamp: serverTimestamp(),
+            reference: result.transactionId || result.CheckoutRequestID || "N/A",
+            details: result.message || "Transaction processed"
+          });
+
+          // Deduct points (this should ideally be done on server-side, but we'll do it here for simulation)
+          const userRef = doc(db, 'users', currentUser.uid);
+          const pointsToDeduct = (numAmount / (rates['KES'] || 135)) * 100;
+          await updateDoc(userRef, {
+            points: increment(-Math.floor(pointsToDeduct))
+          });
+        }
       } else {
-        throw new Error((result as any).error || "Payout failed");
+        throw new Error(result.error || "Payout failed. Please verify your details or check back later.");
       }
     } catch (err: any) {
       setError(err.message);
@@ -275,13 +320,11 @@ export default function Rewards() {
                 <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm">
                   Pulse Feeds operates on a transparent, multi-tiered revenue distribution model designed to reward community participation while sustaining platform innovation.
                   <br/><br/>
-                  <strong>1. User Engagement:</strong> For general platform activity, including social interactions, active time, and ad engagement, users receive 50% of generated revenue as Pulse Points. The remaining 50% is retained by the platform for hosting, AI processing, and maintenance.
+                  <strong>1. User Engagement:</strong> For general platform activity, including social interactions, active time, ad engagement, and module completion, revenue is shared 50/50 between the user and the platform treasury.
                   <br/><br/>
-                  <strong>2. Education Hub:</strong> For course enrollments and AI training, an 80/20 distribution applies (80% Platform, 20% User). This supports the high cost of AI research and curriculum synthesis.
+                  <strong>2. Platform Payments:</strong> To ensure the long-term sustainability of our high-performance AI infrastructure, all direct payments—including Course Enrollments, AI Training fees, Certificate purchases, Event tickets, and Marketplace transactions—belong 100% to the platform treasury.
                   <br/><br/>
-                  <strong>3. Paid Features:</strong> Revenue from Event tickets, Sponsorships, and Community Insights is 100% Platform revenue to ensure long-term sustainability.
-                  <br/><br/>
-                  <strong>Withdrawal Schedule:</strong> All withdrawals are processed <strong>monthly</strong>. Once you initiate a payout, it will be queued for the next monthly batch.
+                  <strong>3. Withdrawals:</strong> All community earnings are processed <strong>monthly</strong>. Once you initiate a payout, it will be queued for the next monthly batch.
                   <br/><br/>
                   <strong>Tax Compliance:</strong> The platform operates via a global Merchant of Record (MoR). This means your local and international taxes (e.g., VAT, WHT) are automatically calculated, withheld, and legally remitted directly to your country's tax authority (like KRA, IRS, or HMRC) on your behalf.
                 </p>

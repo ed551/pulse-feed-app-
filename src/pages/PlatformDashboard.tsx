@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { db } from '../lib/firebase';
 import { collection, getDocs, query, doc, onSnapshot, updateDoc, increment, addDoc, serverTimestamp, getCountFromServer } from 'firebase/firestore';
 import { 
-  Users, Award, DollarSign, TrendingUp, ShieldCheck, Activity, 
+  Users, User, Award, DollarSign, TrendingUp, ShieldCheck, Activity, 
   Lock, Wallet, ArrowDownCircle, ArrowUpCircle, BarChart2, 
   PieChart, Info, AlertTriangle, CheckCircle2, Loader2, RefreshCw, PlusSquare,
   Mail, Key, Smartphone, Fingerprint, BrainCircuit, FileText, Zap,
@@ -437,7 +437,7 @@ export default function PlatformDashboard() {
                       type="email"
                       value={emailInput}
                       onChange={(e) => setEmailInput(e.target.value)}
-                      placeholder="edwinmuoha@gmail.com"
+                      placeholder="admin@pulsefeeds.com"
                       className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:border-blue-500 outline-none transition-all font-bold"
                       required
                     />
@@ -710,23 +710,49 @@ export default function PlatformDashboard() {
               <p className="text-xs text-gray-400 mt-2">Current users registered in the platform</p>
             </motion.div>
 
-            {/* Platform Treasury */}
+            {/* Platform Treasury / Developer Earnings */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="bg-gradient-to-br from-purple-600 to-indigo-700 p-6 rounded-2xl shadow-lg text-white"
+              className="bg-gradient-to-br from-purple-600 to-indigo-700 p-6 rounded-2xl shadow-xl text-white relative overflow-hidden group"
             >
+              <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-white/20 rounded-xl">
-                  <Lock className="w-6 h-6" />
+                  <Award className="w-6 h-6" />
                 </div>
-                <div className="px-2 py-1 bg-white/20 rounded-full text-[10px] font-bold uppercase">Treasury</div>
+                <div className="px-2 py-1 bg-white/20 rounded-full text-[10px] font-bold uppercase tracking-widest">Developer Share</div>
               </div>
-              <p className="text-sm text-purple-100">Available Platform Balance</p>
-              <h3 className="text-3xl font-black">{convert(stats.platformShare)}</h3>
-              <p className="text-xs text-purple-200 mt-2">Withdrawable operational funds</p>
+              <p className="text-sm text-purple-100 font-medium tracking-wide">Platform Treasury (100% Payments)</p>
+              <h3 className="text-4xl font-black mt-1">{convert(stats.platformShare)}</h3>
+              <p className="text-[10px] text-purple-200 mt-2 font-bold uppercase tracking-widest">Global Payout & Operations Pool</p>
             </motion.div>
+          </div>
+
+          {/* User Earnings Monitor (For Developer Testing) */}
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-indigo-100 dark:border-indigo-900/30 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-5">
+              <User className="w-24 h-24" />
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-1">Developer Self-Earning Check</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 max-w-xl">
+                  Verify your earnings from normal platform exploration. Engagement rewards (Ad views, module completion, tasks) are shared 50/50 with you as a user.
+                </p>
+              </div>
+              <div className="flex items-center gap-6 pr-4">
+                <div className="text-right">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Your User Balance</p>
+                  <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{convert(userData?.balance || 0)}</p>
+                </div>
+                <div className="text-right border-l border-gray-100 dark:border-gray-800 pl-6">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Your User Points</p>
+                  <p className="text-2xl font-black text-orange-500">{(userData?.points || 0).toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Revenue Breakdown Section */}
@@ -741,15 +767,15 @@ export default function PlatformDashboard() {
               <p className="text-xl font-black text-gray-900 dark:text-white">{convert(stats.potentialRevenue)}</p>
               <p className="text-[10px] text-gray-500 mt-1">Projected revenue from current user base</p>
             </div>
-            <div className="bg-green-50 dark:bg-green-900/10 p-4 rounded-2xl border border-green-100 dark:border-green-900/30">
-              <p className="text-[10px] font-black uppercase tracking-widest text-green-600 mb-1">Redeemable (Treasury)</p>
-              <p className="text-xl font-black text-green-700 dark:text-green-400">{convert(stats.platformShare)}</p>
-              <p className="text-[10px] text-green-600/60 mt-1">Funds available for Platform withdrawal</p>
+            <div className="bg-green-50 dark:bg-green-900/10 p-5 rounded-3xl border border-green-100 dark:border-green-900/30">
+              <p className="text-[10px] font-black uppercase tracking-widest text-green-600 mb-1">Platform Earning (100% Payments)</p>
+              <p className="text-2xl font-black text-green-700 dark:text-green-400">{convert(stats.platformShare)}</p>
+              <p className="text-[10px] text-green-600/60 mt-1 font-bold">Total Platform Dividends</p>
             </div>
-            <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-2xl border border-orange-100 dark:border-orange-900/30">
-              <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 mb-1">Unredeemable (User Hand)</p>
-              <p className="text-xl font-black text-orange-700 dark:text-orange-400">{convert(stats.totalUserBalances)}</p>
-              <p className="text-[10px] text-orange-600/60 mt-1">Funds currently allocated to users</p>
+            <div className="bg-orange-50 dark:bg-orange-900/10 p-5 rounded-3xl border border-orange-100 dark:border-orange-900/30">
+              <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 mb-1">Community Earning (Engagement Pool)</p>
+              <p className="text-2xl font-black text-orange-700 dark:text-orange-400">{convert(stats.totalUserBalances)}</p>
+              <p className="text-[10px] text-orange-600/60 mt-1 font-bold">Total Engagement Payout Obligations</p>
             </div>
           </div>
         </div>

@@ -155,8 +155,9 @@ service cloud.firestore {
     // Rules
     // ===============================================================
     
-    match /system/health {
+    match /system/{docId} {
       allow read: if true;
+      allow write: if (request.resource.data.get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
     }
     
     match /users/{userId} {

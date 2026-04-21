@@ -6,7 +6,7 @@ import {
   Mail, Map, Youtube, Image, Languages, ExternalLink, Eye, Camera, Award, Sparkles, Volume2, VolumeX,
   Home as HomeIcon, Flag, BarChart2, Megaphone, RefreshCw, Radio, Video, Type, Smile,
   PlusCircle, MinusCircle, Bookmark, EyeOff, Bell, Link, XCircle, AlertCircle, Copy, Crown,
-  ThumbsUp, Pencil, Trash2
+  ThumbsUp, Pencil, Trash2, GraduationCap, ArrowUpRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { multimedia_stream_engine, content_governor, revenue_logic } from "../lib/engines";
@@ -422,6 +422,75 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Profit Hub - ACTIVE EARNING CENTER */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mx-6 p-6 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden"
+      >
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white opacity-10 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-32 h-32 bg-pink-400 opacity-20 rounded-full blur-2xl"></div>
+        
+        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex-1 text-center md:text-left">
+            <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
+              <div className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-widest text-indigo-100 flex items-center">
+                <DollarSign className="w-3 h-3 mr-1" /> Active Profit Hub
+              </div>
+              <div className="px-3 py-1 bg-green-400/20 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-widest text-green-200 flex items-center">
+                <TrendingUp className="w-3 h-3 mr-1" /> Live
+              </div>
+              <button 
+                onClick={() => navigate('/membership')}
+                className="px-3 py-1 bg-yellow-400/20 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-widest text-yellow-200 flex items-center hover:bg-yellow-400/40 transition-all"
+              >
+                <Crown className="w-3 h-3 mr-1" /> Upgrade
+              </button>
+            </div>
+            <h2 className="text-3xl font-black tracking-tight mb-2">Make Money Every Minute</h2>
+            <p className="text-indigo-100 text-sm max-w-md">Engage with community content, follow AI courses, and watch ads to grow your balance. Payments processed monthly.</p>
+          </div>
+
+          <div className="flex items-center gap-4 bg-white/10 backdrop-blur-xl p-4 rounded-3xl border border-white/20">
+            <div className="text-center px-4 border-r border-white/10">
+              <div className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-1">Total Earned</div>
+              <div className="text-2xl font-black">$42.45</div>
+            </div>
+            <div className="text-center px-4">
+              <div className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-1">Daily Cap</div>
+              <div className="text-2xl font-black">84%</div>
+            </div>
+            <button 
+              onClick={() => navigate('/rewards')}
+              className="bg-white text-indigo-600 p-3 rounded-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-lg"
+            >
+              <ArrowUpRight className="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
+          {[
+            { label: 'Watch Ads', icon: PlayCircle, path: '/ads', color: 'bg-indigo-400/30' },
+            { label: 'Complete Task', icon: CheckCircle2, path: '/rewards', color: 'bg-purple-400/30' },
+            { label: 'Study AI', icon: GraduationCap, path: '/education', color: 'bg-pink-400/30' },
+            { label: 'Daily Bonus', icon: Gem, path: '/rewards', color: 'bg-white/20' }
+          ].map((item, i) => (
+            <button 
+              key={i}
+              onClick={() => navigate(item.path)}
+              className={cn(
+                "flex items-center justify-center gap-2 py-3 px-4 rounded-2xl backdrop-blur-md border border-white/10 hover:bg-white hover:text-indigo-600 transition-all group",
+                item.color
+              )}
+            >
+              <item.icon className="w-4 h-4" />
+              <span className="text-xs font-bold">{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </motion.div>
 
       <YouTubeSection />
 

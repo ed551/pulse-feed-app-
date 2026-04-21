@@ -15,19 +15,18 @@ export default function AdsDashboard() {
     // Simulate ad watching
     await new Promise(resolve => setTimeout(resolve, 3000));
     
-    // Ad revenue: $0.10 per view (example)
-    // Distribution 50/50
-    const totalRevenue = 0.10;
+    // High-Yield Ad: $1.00 for premium engagement (simulated)
+    const totalRevenue = 1.00;
     const userShare = totalRevenue * 0.5;
     const platformShare = totalRevenue * 0.5;
     
-    await addRevenue(userShare, platformShare, "Ad Engagement Reward", "ad");
+    await addRevenue(userShare, platformShare, "High-Yield Ad Engagement", "ad");
     
     setIsWatching(false);
     window.dispatchEvent(new CustomEvent('show-notification', { 
       detail: { 
-        title: "Ad Reward Received!", 
-        body: `You earned $${userShare.toFixed(2)} from watching an ad. Thank you for supporting the platform!` 
+        title: "High-Yield Reward!", 
+        body: `BOOM! You earned $${userShare.toFixed(2)} from this premium ad session!` 
       } 
     }));
   };
