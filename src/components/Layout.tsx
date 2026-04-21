@@ -408,8 +408,8 @@ export default function Layout() {
   const [correctionInput, setCorrectionInput] = useState({ temp: '', condition: '' });
   
   const [brightness, setBrightness] = useState(100);
-  const [bestSeller, setBestSeller] = useState("the owner");
-  const [bestBuyer, setBestBuyer] = useState("Community");
+  const [bestSeller, setBestSeller] = useState("APMEX");
+  const [bestBuyer, setBestBuyer] = useState("JM Bullion");
 
   const dateFormats = ['US', 'UK', 'ISO', 'Full'];
   const [dateFormatIndex, setDateFormatIndex] = useState(0);
@@ -1165,14 +1165,14 @@ export default function Layout() {
               </div>
 
               {/* Market Stats: Best Seller / Buyer */}
-              <div className="flex items-center gap-3 shrink-0 border-l border-gray-200 dark:border-gray-800 pl-4">
-                <div className="flex flex-col items-end">
-                  <span className="text-[7px] font-black text-gray-400 uppercase tracking-tighter">Best Seller</span>
-                  <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 truncate max-w-[80px]">{bestSeller}</span>
+              <div className="flex items-center gap-2 shrink-0 border-l border-gray-200 dark:border-gray-800 pl-4 py-1">
+                <div className="flex flex-col items-center bg-emerald-100 dark:bg-emerald-500/20 px-3 py-1 rounded-xl border-2 border-emerald-500/30 shadow-md">
+                  <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-tighter leading-none mb-0.5">BEST GOLD SELLER</span>
+                  <span className="text-[14px] font-black text-emerald-900 dark:text-emerald-100 truncate max-w-[110px] leading-none">{bestSeller}</span>
                 </div>
-                <div className="flex flex-col items-end">
-                  <span className="text-[7px] font-black text-gray-400 uppercase tracking-tighter">Best Buyer</span>
-                  <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 truncate max-w-[80px]">{bestBuyer}</span>
+                <div className="flex flex-col items-center bg-blue-100 dark:bg-blue-500/20 px-3 py-1 rounded-xl border-2 border-blue-500/30 shadow-md">
+                  <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-tighter leading-none mb-0.5">BEST GOLD BUYER</span>
+                  <span className="text-[14px] font-black text-blue-900 dark:text-blue-100 truncate max-w-[110px] leading-none">{bestBuyer}</span>
                 </div>
               </div>
             </div>

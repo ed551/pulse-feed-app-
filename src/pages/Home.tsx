@@ -448,6 +448,28 @@ export default function Home() {
                 <Crown className="w-3 h-3 mr-1" /> Upgrade
               </button>
             </div>
+            
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-4 animate-in fade-in slide-in-from-left duration-500">
+              <div className="px-4 py-2 bg-black/20 backdrop-blur-lg rounded-2xl border border-white/10 flex items-center gap-3 shadow-xl">
+                <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                  <TrendingUp className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <div className="text-[10px] font-black text-emerald-200 uppercase tracking-widest leading-none mb-1">BEST ONLINE GOLD SELLER</div>
+                  <div className="text-sm font-black text-white leading-none">APMEX</div>
+                </div>
+              </div>
+              <div className="px-4 py-2 bg-black/20 backdrop-blur-lg rounded-2xl border border-white/10 flex items-center gap-3 shadow-xl">
+                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shadow-lg shadow-blue-500/30">
+                  <DollarSign className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <div className="text-[10px] font-black text-blue-200 uppercase tracking-widest leading-none mb-1">BEST ONLINE GOLD BUYER</div>
+                  <div className="text-sm font-black text-white leading-none">JM Bullion</div>
+                </div>
+              </div>
+            </div>
+
             <h2 className="text-3xl font-black tracking-tight mb-2">Make Money Every Minute</h2>
             <p className="text-indigo-100 text-sm max-w-md">Engage with community content, follow AI courses, and watch ads to grow your balance. Payments processed monthly.</p>
           </div>
