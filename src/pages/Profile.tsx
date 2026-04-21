@@ -363,18 +363,31 @@ export default function Profile() {
               <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center">
                 <Activity className="w-3 h-3 mr-1" /> Active
               </span>
-              {userData?.membershipLevel === 'gold' ? (
-                <span className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest flex items-center shadow-sm border border-yellow-200 dark:border-yellow-700">
-                  <Crown className="w-3 h-3 mr-1" /> Gold Member
-                </span>
-              ) : userData?.membershipLevel === 'silver' ? (
-                <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest flex items-center border border-blue-200 dark:border-blue-700">
-                  <Star className="w-3 h-3 mr-1 text-blue-500" /> Silver Member
-                </span>
-              ) : (
-                <span className="bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest flex items-center border border-orange-200 dark:border-orange-700">
-                  <Shield className="w-3 h-3 mr-1 text-orange-500" /> Bronze Member
-                </span>
+              <button 
+                onClick={() => navigate('/membership')}
+                className="group flex items-center"
+              >
+                {userData?.membershipLevel === 'gold' ? (
+                  <span className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest flex items-center shadow-sm border border-yellow-200 dark:border-yellow-700 group-hover:bg-yellow-200 dark:group-hover:bg-yellow-900/60 transition-colors">
+                    <Crown className="w-3 h-3 mr-1" /> Gold Member
+                  </span>
+                ) : userData?.membershipLevel === 'silver' ? (
+                  <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest flex items-center border border-blue-200 dark:border-blue-700 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/60 transition-colors">
+                    <Star className="w-3 h-3 mr-1 text-blue-500" /> Silver Member
+                  </span>
+                ) : (
+                  <span className="bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest flex items-center border border-orange-200 dark:border-orange-700 group-hover:bg-orange-200 dark:group-hover:bg-orange-900/60 transition-colors">
+                    <Shield className="w-3 h-3 mr-1 text-orange-500" /> Bronze Member
+                  </span>
+                )}
+              </button>
+              {userData?.membershipLevel !== 'gold' && (
+                <button 
+                  onClick={() => navigate('/membership')}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest flex items-center shadow-md shadow-indigo-200 dark:shadow-indigo-900/20 active:scale-95 transition-all"
+                >
+                  <Sparkles className="w-3 h-3 mr-1" /> Upgrade
+                </button>
               )}
             </div>
           </div>
@@ -793,6 +806,21 @@ export default function Profile() {
             <li><button onClick={() => navigate('/settings')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-700 dark:text-gray-300 font-medium flex items-center justify-between">
               <span>Security & Fingerprint</span>
               <Fingerprint className="w-4 h-4 text-gray-400" />
+            </button></li>
+          </ul>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center">
+            <Crown className="w-5 h-5 mr-2 text-yellow-500" /> Subscription
+          </h2>
+          <ul className="space-y-3">
+            <li><button onClick={() => navigate('/membership')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors text-gray-700 dark:text-gray-300 font-bold flex items-center justify-between">
+              <span>Membership & Elite Plan</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded uppercase tracking-widest">{userData?.membershipLevel || 'Bronze'}</span>
+                <Sparkles className="w-4 h-4 text-indigo-500" />
+              </div>
             </button></li>
           </ul>
         </div>

@@ -264,7 +264,8 @@ async function monitorIP() {
             lastAlertedIp: actualIp,
             lastDetectedAt: FieldValue.serverTimestamp(),
             status: 'drifted',
-            certified: false
+            certified: false,
+            serverSecret: SERVER_SECRET
           }, { merge: true });
         }
       } else {
@@ -285,7 +286,8 @@ async function monitorIP() {
             lastDetectedAt: FieldValue.serverTimestamp(),
             status: 'stable',
             certified: true,
-            purchaseConfirmed: true
+            purchaseConfirmed: true,
+            serverSecret: SERVER_SECRET
           }, { merge: true });
         }
       }
