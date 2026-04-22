@@ -98,7 +98,7 @@ export default function Layout() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
 
-  const bottomNavItems = [
+  const headerNavItems = [
     { path: '/', icon: Home, label: 'Home' },
     { path: '/groups', icon: Users, label: 'Groups' },
     { path: '/rewards', icon: Gem, label: 'Rewards' },
@@ -1111,9 +1111,9 @@ export default function Layout() {
               </div>
             </div>
 
-            {/* Middle Row: Navigation Tabs (Header Tabs) */}
-            <div className="flex items-center overflow-x-auto hide-scrollbar border-t border-gray-50 dark:border-gray-800/50 bg-white dark:bg-gray-900">
-              {bottomNavItems.map((item) => {
+            {/* Top Navigation Tabs (STRICTLY HEADER ONLY) */}
+            <div className="flex items-center overflow-x-auto hide-scrollbar border-t border-gray-50 dark:border-gray-800/50 bg-white dark:bg-gray-900 border-b">
+              {headerNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;
                 return (
@@ -1126,6 +1126,7 @@ export default function Layout() {
                     )}
                   >
                     <Icon className={cn("w-6 h-6 transition-all", isActive ? "scale-110 drop-shadow-[0_0_8px_rgba(79,70,229,0.3)]" : "group-hover:scale-110")} />
+                    <span className={cn("text-[9px] font-black uppercase tracking-tighter mt-0.5", isActive ? "opacity-100" : "opacity-60")}>{item.label}</span>
                     {isActive && (
                       <motion.div 
                         layoutId="activeTabHeader"
@@ -1140,7 +1141,8 @@ export default function Layout() {
                 onClick={() => window.dispatchEvent(new CustomEvent('toggle-ai-assistant'))}
                 className="flex-1 min-w-[60px] sm:min-w-[70px] flex flex-col items-center py-2 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all group"
               >
-                <Brain className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                <Brain className="w-6 h-6 group-hover:scale-110 transition-transform text-purple-500" />
+                <span className="text-[9px] font-black uppercase tracking-tighter mt-0.5 opacity-60">AI</span>
               </button>
             </div>
 
@@ -1687,14 +1689,37 @@ export default function Layout() {
                     </div>
                   </div>
 
-                  {/* Logout */}
-                  <button 
-                    onClick={logout}
-                    className="w-full flex items-center justify-center gap-2 p-3 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 rounded-2xl hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors font-bold text-sm"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    Log Out
-                  </button>
+                  {/* Logout & Version Info */}
+                  <div className="space-y-4">
+                    <button 
+                      onClick={logout}
+                      className="w-full flex items-center justify-center gap-2 p-3 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 rounded-2xl hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors font-bold text-sm"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Log Out
+                    </button>
+                    
+                    <div className="text-center">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pulse Feeds v2.1.0-RESTORATION</p>
+                      <button 
+                        onClick={() => {
+                          if ('serviceWorker' in navigator) {
+                            navigator.serviceWorker.getRegistrations().then(registrations => {
+                              for (let registration of registrations) {
+                                registration.unregister();
+                              }
+                              window.location.reload();
+                            });
+                          } else {
+                            window.location.reload();
+                          }
+                        }}
+                        className="text-[8px] font-bold text-indigo-500 mt-1 uppercase underline"
+                      >
+                        Force Clear Cache & Sync
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
