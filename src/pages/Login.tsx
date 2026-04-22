@@ -48,19 +48,26 @@ export default function Login() {
       let displayError = err.message || 'Failed to authenticate';
       
       // Handle stringified JSON error objects
-      if (displayError.startsWith('{') && displayError.endsWith('}')) {
+      const trimmedError = displayError.trim();
+      if (trimmedError.startsWith('{') && trimmedError.endsWith('}')) {
         try {
-          const parsed = JSON.parse(displayError);
+          const parsed = JSON.parse(trimmedError);
           displayError = parsed.error || displayError;
         } catch (e) {
-          // Fallback to original if parsing fails
+          // Fallback
         }
       }
 
-      // Specific handling for unauthorized-domain
-      if (displayError.includes('unauthorized-domain')) {
+      // Specific handling for unauthorized-domain (case insensitive and partial match)
+      if (displayError.toLowerCase().includes('unauthorized-domain') || displayError.toLowerCase().includes('unauthorized domain')) {
         const currentDomain = window.location.hostname;
-        displayError = `Authentication Error: This domain (${currentDomain}) is not authorized in your Firebase Console. Please go to Firebase Console > Authentication > Settings > Authorized Domains and add "${currentDomain}" to the list.`;
+        displayError = `🔒 SECURITY ERROR: The domain "${currentDomain}" is not authorized. 
+
+To fix this:
+1. Go to your Firebase Console
+2. Open Authentication > Settings > Authorized Domains
+3. Click "Add domain" and paste: ${currentDomain}
+4. Refresh this page and try again.`;
       }
 
       setError(displayError);
@@ -82,18 +89,25 @@ export default function Login() {
       let displayError = err.message || 'Failed to sign in';
       
       // Handle stringified JSON error objects
-      if (displayError.startsWith('{') && displayError.endsWith('}')) {
+      const trimmedError = displayError.trim();
+      if (trimmedError.startsWith('{') && trimmedError.endsWith('}')) {
         try {
-          const parsed = JSON.parse(displayError);
+          const parsed = JSON.parse(trimmedError);
           displayError = parsed.error || displayError;
         } catch (e) {
-          // Fallback to original
+          // Fallback
         }
       }
 
-      if (displayError.includes('unauthorized-domain')) {
+      if (displayError.toLowerCase().includes('unauthorized-domain') || displayError.toLowerCase().includes('unauthorized domain')) {
         const currentDomain = window.location.hostname;
-        displayError = `Authentication Error: This domain (${currentDomain}) is not authorized in your Firebase Console. Under Authentication > Settings > Authorized Domains, please add: ${currentDomain}`;
+        displayError = `🔒 SECURITY ERROR: The domain "${currentDomain}" is not authorized. 
+
+To fix this:
+1. Go to your Firebase Console
+2. Open Authentication > Settings > Authorized Domains
+3. Click "Add domain" and paste: ${currentDomain}
+4. Refresh this page and try again.`;
       }
 
       setError(displayError);

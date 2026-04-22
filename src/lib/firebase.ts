@@ -58,6 +58,16 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  
+  // If it's an Auth error, we want to know, but maybe not hide it in a Firestore JSON if we can help it
+  if (errorMessage.includes('auth/unauthorized-domain')) {
+    const domain = window.location.hostname;
+    const personalizedError = `Authentication Error: The domain "${domain}" is not authorized in your Firebase Project. Please add it to "Authorized Domains" in the Firebase Console.`;
+    console.error(personalizedError);
+    throw new Error(personalizedError);
+  }
+
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
