@@ -13,6 +13,12 @@ RUN npm install
 # Copy local code to the container image.
 COPY . .
 
+# Build-time environment variables for Vite
+ARG VITE_GOOGLE_MAPS_API_KEY
+ARG VITE_GOOGLE_MAPS_MAP_ID
+ENV VITE_GOOGLE_MAPS_API_KEY=$VITE_GOOGLE_MAPS_API_KEY
+ENV VITE_GOOGLE_MAPS_MAP_ID=$VITE_GOOGLE_MAPS_MAP_ID
+
 # Build the application
 RUN npm run build
 

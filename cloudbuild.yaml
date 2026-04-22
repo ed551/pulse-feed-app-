@@ -1,7 +1,13 @@
 steps:
   # Build the container image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/consumer-rewards-app-2026/pulse-feeds-final', '.']
+    args: [
+      'build', 
+      '-t', 'gcr.io/consumer-rewards-app-2026/pulse-feeds-final', 
+      '--build-arg', 'VITE_GOOGLE_MAPS_API_KEY=${_VITE_GOOGLE_MAPS_API_KEY}',
+      '--build-arg', 'VITE_GOOGLE_MAPS_MAP_ID=${_VITE_GOOGLE_MAPS_MAP_ID}',
+      '.'
+    ]
 
   # Push the container image
   - name: 'gcr.io/cloud-builders/docker'

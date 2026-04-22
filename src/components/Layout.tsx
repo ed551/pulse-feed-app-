@@ -1703,20 +1703,41 @@ export default function Layout() {
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pulse Feeds v2.1.0-RESTORATION</p>
                       <button 
                         onClick={() => {
-                          if ('serviceWorker' in navigator) {
-                            navigator.serviceWorker.getRegistrations().then(registrations => {
-                              for (let registration of registrations) {
-                                registration.unregister();
+                          if (confirm('This will wipe local cache, storage, and database to force-sync the latest version from GitHub. Continue?')) {
+                            const clearAll = async () => {
+                              // Clear Service Workers
+                              if ('serviceWorker' in navigator) {
+                                const registrations = await navigator.serviceWorker.getRegistrations();
+                                for (let registration of registrations) {
+                                  await registration.unregister();
+                                }
                               }
+                              // Clear Cache Storage
+                              if ('caches' in window) {
+                                const cacheNames = await caches.keys();
+                                for (let name of cacheNames) {
+                                  await caches.delete(name);
+                                }
+                              }
+                              // Clear IndexedDB
+                              if ('indexedDB' in window) {
+                                const dbs = await indexedDB.databases();
+                                for (let db of dbs) {
+                                  if (db.name) indexedDB.deleteDatabase(db.name);
+                                }
+                              }
+                              // Clear Storage
+                              localStorage.clear();
+                              sessionStorage.clear();
+                              
                               window.location.reload();
-                            });
-                          } else {
-                            window.location.reload();
+                            };
+                            clearAll();
                           }
                         }}
-                        className="text-[8px] font-bold text-indigo-500 mt-1 uppercase underline"
+                        className="text-[8px] font-bold text-indigo-500 mt-1 uppercase underline hover:text-indigo-600 transition-colors"
                       >
-                        Force Clear Cache & Sync
+                        ⚡ Aggressive Sync & Clear Cache
                       </button>
                     </div>
                   </div>
