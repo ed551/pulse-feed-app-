@@ -57,6 +57,16 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
       
       await updateDoc(userRef, updateData);
 
+      // User-specific Points Ledger (Audit Trail)
+      await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
+        amount: pointsToAdd,
+        balanceAfter: (userData?.points || 0) + pointsToAdd,
+        type: 'accrual',
+        source: source,
+        reason,
+        timestamp: serverTimestamp()
+      }).catch(err => console.error("Error logging points ledger:", err));
+
       // Update Platform Stats (Platform Share & Total User Balances)
       await updateDoc(statsRef, {
         platformRevenue: increment(userAmount + platformAmount),
@@ -198,6 +208,16 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
             balance: increment(userValue),
             activeTimeRevenue: increment(userValue)
           });
+
+          // User-specific Points Ledger (Audit Trail for Active Time)
+          await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
+            amount: userPoints,
+            balanceAfter: (userData?.points || 0) + userPoints,
+            type: 'accrual',
+            source: 'active_time',
+            reason: 'Activity Reward',
+            timestamp: serverTimestamp()
+          }).catch(() => {});
 
           await updateDoc(statsRef, {
             platformRevenue: increment(totalValue),

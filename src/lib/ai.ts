@@ -1,7 +1,7 @@
 import { GoogleGenAI, GenerateContentParameters, GenerateContentResponse, ThinkingLevel } from "@google/genai";
 
 const apiKey = process.env.GEMINI_API_KEY;
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+export const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 const MAX_RETRIES = 3;
 const INITIAL_DELAY = 3000; // 3 seconds
@@ -26,7 +26,8 @@ export async function generateContentWithRetry(params: GenerateContentParameters
   await currentQueue;
   
   // Enable High Thinking for Gemini 3 series models if not specified
-  if (params.model?.startsWith('gemini-3') && !params.config?.thinkingConfig) {
+  // EXCEPTION: Do not enable for TTS models as they don't support thinking
+  if (params.model?.startsWith('gemini-3') && !params.model.includes('tts') && !params.config?.thinkingConfig) {
     params.config = {
       ...params.config,
       thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }

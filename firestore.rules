@@ -59,6 +59,7 @@ service cloud.firestore {
              (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500)) &&
              (!('bio' in data) || (data.bio is string && data.bio.size() <= 500)) &&
              (!('points' in data) || (data.points is number)) &&
+             (!('isPointsRecovered' in data) || (data.isPointsRecovered is bool)) &&
              (!('balance' in data) || (data.balance is number)) &&
              (!('adRevenue' in data) || (data.adRevenue is number)) &&
              (!('educationRevenue' in data) || (data.educationRevenue is number)) &&
@@ -157,7 +158,8 @@ service cloud.firestore {
     
     match /system/{docId} {
       allow read: if true;
-      allow write: if (request.resource.data.get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if (request.resource.data.get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
     }
     
     match /users/{userId} {

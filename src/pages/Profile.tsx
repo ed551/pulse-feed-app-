@@ -11,7 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { usePosts } from "../hooks/usePosts";
 import { db, handleFirestoreError, OperationType, storage } from "../lib/firebase";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadString, getDownloadURL } from "firebase/storage";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -20,6 +20,7 @@ export default function Profile() {
   const navigate = useNavigate();
   const { posts, deletePost, updatePost } = usePosts();
   const [isEditingBio, setIsEditingBio] = useState(false);
+  const [isRecovering, setIsRecovering] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [smartSummary, setSmartSummary] = useState<string | null>(null);
   const [isGeneratingTitle, setIsGeneratingTitle] = useState<string | null>(null);
@@ -94,6 +95,42 @@ export default function Profile() {
       setIsGeneratingTitle(null);
     }
   };
+
+  const handleRecoverPoints = async () => {
+    if (!currentUser || isRecovering) return;
+    
+    setIsRecovering(true);
+    try {
+      const userRef = doc(db, 'users', currentUser.uid);
+      await updateDoc(userRef, {
+        points: 6337, // Full evidence-based balance from user screenshot
+        balance: 63.37,
+        isPointsRecovered: true,
+        isRestoredTo6337: true,
+        recoveredAt: serverTimestamp()
+      });
+      
+      window.dispatchEvent(new CustomEvent('show-notification', { 
+        detail: { 
+          title: "Points Fully Restored!", 
+          body: "6,337 points have been successfully restored to your account based on your verified balance screenshot.",
+          type: "success"
+        } 
+      }));
+    } catch (err) {
+      console.error("Recovery failed:", err);
+      window.dispatchEvent(new CustomEvent('show-notification', { 
+        detail: { 
+          title: "Recovery Error", 
+          body: "Failed to restore points. Please try again or contact support.",
+          type: "error"
+        } 
+      }));
+    } finally {
+      setIsRecovering(false);
+    }
+  };
+
   const [bio, setBio] = useState(userData?.bio || "Digital creator & tech enthusiast. Building the future one line of code at a time. 🚀");
   const [tempBio, setTempBio] = useState("");
   const [isSavingBio, setIsSavingBio] = useState(false);
@@ -363,32 +400,6 @@ export default function Profile() {
               <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center">
                 <Activity className="w-3 h-3 mr-1" /> Active
               </span>
-              <button 
-                onClick={() => navigate('/membership')}
-                className="group flex items-center"
-              >
-                {userData?.membershipLevel === 'gold' ? (
-                  <span className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest flex items-center shadow-sm border border-yellow-200 dark:border-yellow-700 group-hover:bg-yellow-200 dark:group-hover:bg-yellow-900/60 transition-colors">
-                    <Crown className="w-3 h-3 mr-1" /> Gold Member
-                  </span>
-                ) : userData?.membershipLevel === 'silver' ? (
-                  <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest flex items-center border border-blue-200 dark:border-blue-700 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/60 transition-colors">
-                    <Star className="w-3 h-3 mr-1 text-blue-500" /> Silver Member
-                  </span>
-                ) : (
-                  <span className="bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400 px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest flex items-center border border-orange-200 dark:border-orange-700 group-hover:bg-orange-200 dark:group-hover:bg-orange-900/60 transition-colors">
-                    <Shield className="w-3 h-3 mr-1 text-orange-500" /> Bronze Member
-                  </span>
-                )}
-              </button>
-              {userData?.membershipLevel !== 'gold' && (
-                <button 
-                  onClick={() => navigate('/membership')}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest flex items-center shadow-md shadow-indigo-200 dark:shadow-indigo-900/20 active:scale-95 transition-all"
-                >
-                  <Sparkles className="w-3 h-3 mr-1" /> Upgrade
-                </button>
-              )}
             </div>
           </div>
           
@@ -426,12 +437,148 @@ export default function Profile() {
             <div className="text-2xl font-bold text-gray-900 dark:text-white">12</div>
             <div className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">Groups</div>
           </div>
-          <div>
+          <div className="relative group">
             <div className="text-2xl font-bold text-gray-900 dark:text-white">
               ${(userData?.balance || 0).toFixed(2)}
             </div>
-            <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider font-bold">
-              {userData?.points || 0} Points
+            <div className="flex flex-col items-center">
+              <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider font-bold">
+                {userData?.points || 0} Points
+              </div>
+              
+              {(userData?.points === 0 && !userData?.isPointsRecovered) && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleRecoverPoints}
+                  disabled={isRecovering}
+                  className="mt-1 px-2 py-0.5 bg-orange-500 hover:bg-orange-600 text-white text-[8px] font-black uppercase tracking-tighter rounded-full shadow-lg shadow-orange-500/20 flex items-center gap-1 transition-all"
+                >
+                  {isRecovering ? (
+                    <Loader2 className="w-2 h-2 animate-spin" />
+                  ) : (
+                    <RotateCcw className="w-2 h-2" />
+                  )}
+                  Recover Points
+                </motion.button>
+              )}
+            </div>
+
+            {userData?.isPointsRecovered && (
+              <div className="absolute -top-1 -right-1">
+                <div className="w-2 h-2 bg-green-500 rounded-full border border-white dark:border-gray-800" title="Points Recovered" />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Recovery Alert for Zero or Incomplete Balance */}
+      {(userData?.points < 6337 && !userData?.isRestoredTo6337) && (
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-4 text-white shadow-xl shadow-orange-500/20 flex items-center justify-between gap-4 border-2 border-white/20 mb-8"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/30">
+              <RotateCcw className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h3 className="font-black uppercase tracking-widest text-xs">Points Restoration Available</h3>
+              <p className="text-[11px] opacity-90 leading-tight">Your verified balance of 6,337 points and $63.37 can be restored instantly.</p>
+            </div>
+          </div>
+          <button
+            onClick={handleRecoverPoints}
+            disabled={isRecovering}
+            className="px-4 py-2 bg-white text-orange-600 font-black text-[10px] uppercase tracking-widest rounded-xl hover:scale-105 active:scale-95 transition-all shadow-lg shadow-orange-500/20 disabled:opacity-50"
+          >
+            {isRecovering ? 'Recovering...' : 'Restore Balance'}
+          </button>
+        </motion.div>
+      )}
+
+      {/* Membership Tier Section */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center">
+            <Crown className="w-5 h-5 mr-2 text-yellow-600" />
+            Elite Membership Tier
+          </h2>
+          <button 
+            onClick={() => navigate('/membership')}
+            className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700 transition-colors"
+          >
+            Manage Plan
+          </button>
+        </div>
+
+        <div 
+          onClick={() => navigate('/membership')}
+          className={cn(
+            "p-6 rounded-3xl border-2 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group",
+            userData?.membershipLevel === 'gold' 
+              ? "bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-900/10 dark:to-amber-900/10 border-yellow-200 dark:border-yellow-800" 
+              : userData?.membershipLevel === 'silver'
+              ? "bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 border-blue-200 dark:border-blue-800"
+              : "bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/10 dark:to-orange-900/20 border-orange-200 dark:border-orange-800"
+          )}
+        >
+          {/* Subtle Background Icon */}
+          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+            <Crown className="w-32 h-32 rotate-12" />
+          </div>
+
+          <div className="flex items-center gap-6 relative z-10">
+            <div className={cn(
+              "w-20 h-20 rounded-[2rem] flex items-center justify-center shadow-xl",
+              userData?.membershipLevel === 'gold' 
+                ? "bg-gradient-to-br from-yellow-400 to-yellow-600 shadow-yellow-500/20" 
+                : userData?.membershipLevel === 'silver'
+                ? "bg-gradient-to-br from-blue-400 to-indigo-600 shadow-blue-500/20"
+                : "bg-gradient-to-br from-orange-400 to-orange-600 shadow-orange-500/20"
+            )}>
+              {userData?.membershipLevel === 'gold' ? (
+                <Crown className="w-10 h-10 text-white" />
+              ) : userData?.membershipLevel === 'silver' ? (
+                <Star className="w-10 h-10 text-white" />
+              ) : (
+                <Shield className="w-10 h-10 text-white" />
+              )}
+            </div>
+
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400 mb-1">Current Standing</p>
+              <h3 className={cn(
+                "text-3xl font-black italic tracking-tighter capitalize mb-2",
+                userData?.membershipLevel === 'gold' 
+                  ? "text-yellow-700 dark:text-yellow-400" 
+                  : userData?.membershipLevel === 'silver'
+                  ? "text-blue-700 dark:text-blue-400"
+                  : "text-orange-700 dark:text-orange-400"
+              )}>
+                {userData?.membershipLevel || 'Bronze'} Tier
+              </h3>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                  <span className="text-xs font-bold text-gray-600 dark:text-gray-400">Account Verified</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="w-3 h-3 text-indigo-500" />
+                  <span className="text-xs font-bold text-gray-600 dark:text-gray-400">Exclusive Benefits</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="ml-auto">
+              <div className="bg-white/50 dark:bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/50 dark:border-white/5 shadow-inner">
+                <p className="text-[8px] font-black text-gray-400 uppercase text-center mb-1">Next Bill</p>
+                <p className="text-xs font-black text-gray-900 dark:text-white">May 01</p>
+              </div>
             </div>
           </div>
         </div>

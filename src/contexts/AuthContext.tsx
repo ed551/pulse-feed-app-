@@ -48,6 +48,9 @@ interface UserData {
   enrolledCourses?: string[];
   completedModules?: string[];
   customCourses?: any[];
+  isPointsRecovered?: boolean;
+  isRestoredTo6337?: boolean;
+  recoveredAt?: any;
   membershipLevel?: 'bronze' | 'silver' | 'gold';
   membershipStatus?: 'active' | 'expired' | 'canceled';
 }
@@ -116,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 photoURL: user.photoURL,
                 role: 'user',
                 points: 1250,
-                balance: 0,
+                balance: 12.5,
                 adRevenue: 0,
                 enrolledCourses: [],
                 completedModules: [],
@@ -181,10 +184,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: user.email,
           displayName: user.displayName,
           photoURL: user.photoURL,
-          role: 'user', // Default role
-          points: 0,
-          balance: 0,
-          adRevenue: 0
         }, { merge: true });
       }
     } catch (error) {

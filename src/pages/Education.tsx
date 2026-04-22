@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   GraduationCap, Award, BookOpen, Clock, Users, PlayCircle, CheckCircle2, DollarSign, 
   ExternalLink, User, Sparkles, BrainCircuit, Zap, Loader2, Brain, Search, Shield, 
-  Star, ShieldCheck, Share2, Monitor, ShieldAlert, X, TrendingUp 
+  Star, ShieldCheck, Share2, Monitor, ShieldAlert, X, TrendingUp, Languages, Globe,
+  Volume2, VolumeX, Headphones
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useRevenue } from '../contexts/RevenueContext';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { generateContentWithRetry } from '../lib/ai';
+import { ai, generateContentWithRetry } from '../lib/ai';
+import { Modality } from "@google/genai";
 
 const CATEGORIES = [
   { id: 'all', name: 'All Courses', icon: BookOpen },
@@ -18,6 +20,21 @@ const CATEGORIES = [
   { id: 'corporate', name: 'Corporate Training', icon: Shield },
   { id: 'masterclass', name: 'Expert Masterclasses', icon: Star },
   { id: 'personal', name: 'Personal Growth', icon: Zap },
+];
+
+const LANGUAGES = [
+  { code: 'en', name: 'English', flag: '🇺🇸' },
+  { code: 'es', name: 'Spanish', flag: '🇪🇸' },
+  { code: 'fr', name: 'French', flag: '🇫🇷' },
+  { code: 'de', name: 'German', flag: '🇩🇪' },
+  { code: 'zh', name: 'Chinese', flag: '🇨🇳' },
+  { code: 'hi', name: 'Hindi', flag: '🇮🇳' },
+  { code: 'sw', name: 'Swahili', flag: '🇰🇪' },
+];
+
+const VOICES = [
+  { id: 'male', name: 'Male (Charon)', model: 'Charon', gender: 'male' },
+  { id: 'female', name: 'Female (Kore)', model: 'Kore', gender: 'female' },
 ];
 
 const COURSES = [
@@ -333,6 +350,171 @@ export default function Education() {
   const [currentExamIndex, setCurrentExamIndex] = useState(0);
   const [examAnswers, setExamAnswers] = useState<string[]>([]);
   const [examResult, setExamResult] = useState<{ score: number, passed: boolean } | null>(null);
+
+  const [selectedLanguage, setSelectedLanguage] = useState(LANGUAGES[0]);
+  const [moduleTranslations, setModuleTranslations] = useState<Record<string, string>>({});
+  const [isTranslating, setIsTranslating] = useState<string | null>(null);
+  const [showTranslateDropdown, setShowTranslateDropdown] = useState<string | null>(null);
+
+  const [isPlayingAudio, setIsPlayingAudio] = useState<string | null>(null);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState<string | null>(null);
+  const [selectedVoice, setSelectedVoice] = useState(VOICES[0]);
+  const [showVoiceDropdown, setShowVoiceDropdown] = useState<string | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioBufferSourceRef = useRef<AudioBufferSourceNode | null>(null);
+
+  useEffect(() => {
+    return () => {
+      stopAudio();
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(() => {});
+      }
+    };
+  }, []);
+
+  const stopAudio = () => {
+    if (audioBufferSourceRef.current) {
+      try {
+        audioBufferSourceRef.current.stop();
+      } catch (e) {}
+      audioBufferSourceRef.current = null;
+    }
+    setIsPlayingAudio(null);
+  };
+
+  const handlePlayAudio = async (courseTitle: string, moduleTitle: string) => {
+    if (isPlayingAudio === moduleTitle) {
+      stopAudio();
+      return;
+    }
+
+    setIsGeneratingAudio(moduleTitle);
+    try {
+      const scriptPrompt = `You are a world-class Pulse Global educational narrator. 
+      Course: "${courseTitle}"
+      Module: "${moduleTitle}"
+      
+      Provide a highly engaging, concise (approx 120 words) "Audio Lesson Summary" for this specific module. 
+      Focus on the most critical executive take-away that will help the student in their professional career. 
+      Tone: Authoritative, encouraging, and clear. 
+      Do not include labels like [Narrator] or [Script], just provide the spoken text.`;
+      
+      const scriptResponse = await generateContentWithRetry({
+        model: "gemini-3-flash-preview",
+        contents: scriptPrompt
+      });
+      
+      const script = scriptResponse.text || `Welcome to your lesson on ${moduleTitle}. This session explores the core foundations within ${courseTitle}.`;
+
+      if (!ai) return;
+      
+      const ttsResponse = await generateContentWithRetry({
+        model: "gemini-3.1-flash-tts-preview",
+        contents: [{ parts: [{ text: `Read with extreme professional clarity and authority: ${script}` }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: selectedVoice.model as any }, 
+            },
+          },
+        },
+      });
+
+      const base64Audio = ttsResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        await playPcmAudio(base64Audio, moduleTitle);
+      }
+    } catch (error) {
+      console.error("Audio Generation Error:", error);
+      setIsGeneratingAudio(null);
+    }
+  };
+
+  const playPcmAudio = async (base64Data: string, moduleTitle: string) => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+
+      const binaryString = atob(base64Data);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      // Gemini TTS usually returns 16-bit LPCM
+      const int16Data = new Int16Array(bytes.buffer);
+      const float32Data = new Float32Array(int16Data.length);
+      for (let i = 0; i < int16Data.length; i++) {
+        float32Data[i] = int16Data[i] / 32768.0;
+      }
+      
+      const audioBuffer = audioContextRef.current.createBuffer(1, float32Data.length, 24000);
+      audioBuffer.getChannelData(0).set(float32Data);
+      
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContextRef.current.destination);
+      
+      source.onended = () => {
+        setIsPlayingAudio(null);
+        audioBufferSourceRef.current = null;
+      };
+      
+      stopAudio();
+      audioBufferSourceRef.current = source;
+      source.start();
+      setIsPlayingAudio(moduleTitle);
+      setIsGeneratingAudio(null);
+    } catch (error) {
+      console.error("Audio Playback Error:", error);
+      setIsGeneratingAudio(null);
+    }
+  };
+
+  const handleTranslateVideo = async (courseTitle: string, moduleTitle: string, targetLang: typeof LANGUAGES[0]) => {
+    const transKey = `${courseTitle}-${moduleTitle}-${targetLang.code}`;
+    setSelectedLanguage(targetLang);
+    setShowTranslateDropdown(null);
+    
+    if (moduleTranslations[transKey]) return;
+
+    setIsTranslating(moduleTitle);
+    try {
+      const prompt = `You are a world-class educational translator for the Pulse Global Education Platform. 
+      Course: "${courseTitle}"
+      Module: "${moduleTitle}"
+      Target Language: ${targetLang.name} (${targetLang.code})
+
+      As the Lead AI Translator:
+      1. Provide a comprehensive, professional summary of this specific video module in ${targetLang.name}.
+      2. Translate the module's key learning outcomes.
+      3. Provide a brief 100-word "Video Script Summary" as if it were a voiceover script translated into ${targetLang.name}.
+      4. Include 3 expert tips related to this topic in ${targetLang.name}.
+
+      Use highly professional, industry-specific terminology in ${targetLang.name}. Format with clear headers and professional structure.`;
+
+      const response = await generateContentWithRetry({
+        model: "gemini-3-flash-preview",
+        contents: prompt
+      });
+
+      setModuleTranslations(prev => ({
+        ...prev,
+        [transKey]: response.text || 'Translation failed.'
+      }));
+    } catch (error) {
+      console.error("Translation Error:", error);
+    } finally {
+      setIsTranslating(null);
+    }
+  };
 
   const handleDeepDive = async (courseTitle: string, moduleTitle: string) => {
     setDeepDiveModule(moduleTitle);
@@ -1149,7 +1331,108 @@ export default function Education() {
                               <div>
                                 <div className="font-bold text-gray-900 dark:text-white text-xs sm:text-sm">Module {idx + 1}</div>
                                 <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{module}</div>
-                                <div className="text-[9px] sm:text-[10px] text-gray-400 mt-1 sm:mt-2 font-medium">Video Content • Quiz • Professional Project</div>
+                                <div className="text-[9px] sm:text-[10px] text-gray-400 mt-1 sm:mt-2 font-medium flex flex-wrap items-center gap-x-3 gap-y-1">
+                                  <span>Video Content • Quiz • Professional Project</span>
+                                  {enrolledCourses.includes(selectedCourse.id) && (
+                                    <div className="relative">
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); setShowTranslateDropdown(showTranslateDropdown === module ? null : module); }}
+                                        className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:underline py-0.5 transition-all"
+                                      >
+                                        <Languages className="w-3 h-3" />
+                                        Translate Video
+                                      </button>
+                                      
+                                      <AnimatePresence>
+                                        {showTranslateDropdown === module && (
+                                          <motion.div 
+                                            initial={{ opacity: 0, y: 5 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: 5 }}
+                                            className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] z-[100] p-1.5 min-w-[140px]"
+                                          >
+                                            {LANGUAGES.map(lang => (
+                                              <button
+                                                key={lang.code}
+                                                onClick={(e) => { e.stopPropagation(); handleTranslateVideo(selectedCourse.title, module, lang); }}
+                                                className="w-full text-left px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg text-[10px] font-bold transition-all flex items-center justify-between group"
+                                              >
+                                                <span className="flex items-center gap-2">
+                                                  <span className="text-xs group-hover:scale-125 transition-transform">{lang.flag}</span>
+                                                  <span className="text-gray-700 dark:text-gray-300">{lang.name}</span>
+                                                </span>
+                                                {selectedLanguage.code === lang.code && <CheckCircle2 className="w-3 h-3 text-green-500" />}
+                                              </button>
+                                            ))}
+                                          </motion.div>
+                                        )}
+                                      </AnimatePresence>
+                                    </div>
+                                  )}
+                                  {enrolledCourses.includes(selectedCourse.id) && (
+                                    <div className="flex items-center gap-3">
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); handlePlayAudio(selectedCourse.title, module); }}
+                                        className={cn(
+                                          "flex items-center gap-1 py-0.5 transition-all text-blue-600 dark:text-blue-400 hover:underline",
+                                          isPlayingAudio === module && "text-red-500 dark:text-red-400"
+                                        )}
+                                      >
+                                        {isGeneratingAudio === module ? (
+                                          <Loader2 className="w-3 h-3 animate-spin" />
+                                        ) : isPlayingAudio === module ? (
+                                          <VolumeX className="w-3 h-3" />
+                                        ) : (
+                                          <Volume2 className="w-3 h-3" />
+                                        )}
+                                        {isGeneratingAudio === module ? 'Synthesizing...' : isPlayingAudio === module ? 'Stop Audio' : 'Listen to Lesson'}
+                                      </button>
+
+                                      <div className="relative">
+                                        <button 
+                                          onClick={(e) => { e.stopPropagation(); setShowVoiceDropdown(showVoiceDropdown === module ? null : module); }}
+                                          className="flex items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-indigo-600 transition-all py-0.5 text-[9px] uppercase tracking-tighter font-bold"
+                                        >
+                                          <Headphones className="w-2.5 h-2.5" />
+                                          {selectedVoice.gender === 'male' ? 'Male Voice' : 'Female Voice'}
+                                        </button>
+
+                                        <AnimatePresence>
+                                          {showVoiceDropdown === module && (
+                                            <motion.div 
+                                              initial={{ opacity: 0, y: 5 }}
+                                              animate={{ opacity: 1, y: 0 }}
+                                              exit={{ opacity: 0, y: 5 }}
+                                              className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] z-[100] p-1 min-w-[120px]"
+                                            >
+                                              {VOICES.map(voice => (
+                                                <button
+                                                  key={voice.id}
+                                                  onClick={(e) => { 
+                                                    e.stopPropagation(); 
+                                                    setSelectedVoice(voice); 
+                                                    setShowVoiceDropdown(null); 
+                                                    if (isPlayingAudio === module) stopAudio(); 
+                                                  }}
+                                                  className="w-full text-left px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg text-[9px] font-bold transition-all flex items-center justify-between group"
+                                                >
+                                                  <span className="flex items-center gap-2">
+                                                    <div className={cn(
+                                                      "w-1.5 h-1.5 rounded-full",
+                                                      voice.gender === 'male' ? "bg-blue-400" : "bg-pink-400"
+                                                    )} />
+                                                    <span className="text-gray-700 dark:text-gray-300 uppercase tracking-tighter">{voice.name}</span>
+                                                  </span>
+                                                  {selectedVoice.id === voice.id && <CheckCircle2 className="w-2.5 h-2.5 text-green-500" />}
+                                                </button>
+                                              ))}
+                                            </motion.div>
+                                          )}
+                                        </AnimatePresence>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             {enrolledCourses.includes(selectedCourse.id) && (
@@ -1172,6 +1455,44 @@ export default function Education() {
                               </div>
                             )}
                           </div>
+                          
+                          {/* AI Translation Expanded Content */}
+                          {moduleTranslations[`${selectedCourse.title}-${module}-${selectedLanguage.code}`] && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              className="mt-2 p-4 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100 dark:border-indigo-800/30"
+                            >
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
+                                  <Languages className="w-4 h-4" />
+                                  Video Intel Translation ({selectedLanguage.name})
+                                </div>
+                                <button 
+                                  onClick={() => {
+                                    const newTrans = { ...moduleTranslations };
+                                    delete newTrans[`${selectedCourse.title}-${module}-${selectedLanguage.code}`];
+                                    setModuleTranslations(newTrans);
+                                  }}
+                                  className="text-[9px] font-bold text-gray-400 hover:text-red-500 transition-colors"
+                                >
+                                  Close Intel
+                                </button>
+                              </div>
+                              <div className="text-[11px] sm:text-xs text-gray-600 dark:text-gray-300 prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap leading-relaxed">
+                                {moduleTranslations[`${selectedCourse.title}-${module}-${selectedLanguage.code}`]}
+                              </div>
+                            </motion.div>
+                          )}
+
+                          {isTranslating === module && (
+                            <div className="mt-2 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl flex items-center justify-center gap-3 border border-indigo-100 dark:border-indigo-800 border-dashed animate-pulse">
+                              <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+                              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600">
+                                Generating AI {selectedLanguage.name} Translation...
+                              </span>
+                            </div>
+                          )}
                           
                           {/* Deep Dive Expanded Content */}
                           {deepDiveModule === module && (
