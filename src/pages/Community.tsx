@@ -4,7 +4,7 @@ import {
   Loader2, MessageSquare, Share2, Info, Sparkles, Heart, Award, Zap,
   MapPin, Camera, Shield, Search, Filter, Plus, Megaphone, Handshake,
   Lightbulb, Wrench, GraduationCap, ChevronRight, Star, ArrowUpCircle,
-  BrainCircuit, X, Send, PieChart
+  BrainCircuit, X, Send, PieChart, Navigation
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow, Marker } from '@vis.gl/react-google-maps';
@@ -115,6 +115,8 @@ export default function Community() {
   const [activeView, setActiveView] = useState<'map' | 'bounties' | 'marketplace' | 'insights'>('map');
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [mapCenter, setMapCenter] = useState({ lat: -1.286389, lng: 36.817223 });
+  const [zoom, setZoom] = useState(13);
+  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [newReportLatLng, setNewReportLatLng] = useState<{lat: number, lng: number} | null>(null);
 
   // Validate Map ID - Advanced Markers require a valid Map ID.
@@ -142,16 +144,31 @@ export default function Community() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setMapCenter({
+          const pos = {
             lat: position.coords.latitude,
             lng: position.coords.longitude
-          });
+          };
+          setMapCenter(pos);
+          setUserLocation(pos);
+          // When explicitly locating, also zoom in more to feel "precise"
+          setZoom(15);
         },
         (error) => {
           console.error("Error getting location:", error);
-          alert("Could not get your location. Please ensure site permissions are granted.");
+          let message = "Could not get your location.";
+          if (error.code === 1) message = "Location permission denied. Please enable location access in your browser settings.";
+          if (error.code === 2) message = "Location unavailable. Please check your GPS/Network.";
+          if (error.code === 3) message = "Location request timed out. Please try again.";
+          alert(message);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
         }
       );
+    } else {
+      alert("Your browser does not support geolocation.");
     }
   };
 
@@ -258,6 +275,7 @@ export default function Community() {
       { id: 's3', userName: 'Kev O.', skill: 'Tech Support', description: 'Fixing slow laptops and software issues.', price: 450, rating: 4.7, category: 'Services' }
     ]);
 
+    locateUser();
     setLoading(false);
     return () => {
       unsubscribeReports();
@@ -643,14 +661,28 @@ export default function Community() {
           </button>
         </div>
 
-          <div className="h-[400px] w-full rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-700 shadow-xl relative z-0 group bg-gray-50 dark:bg-gray-900/50 flex items-center justify-center">
+          <div className="h-[400px] w-full rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-700 shadow-xl relative z-0 group bg-gray-50 dark:bg-gray-900/50">
+            {/* My Location Floating Button (Google Maps Style) */}
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                locateUser();
+              }}
+              className="absolute bottom-36 right-4 z-[10] p-4 bg-white dark:bg-gray-800 text-blue-600 rounded-full shadow-2xl hover:bg-gray-50 transition-all border border-gray-200 dark:border-gray-700 group/locate"
+              title="Center on my location"
+            >
+              <Navigation className="w-6 h-6 fill-blue-600/10 group-hover/locate:scale-110 transition-transform" />
+            </button>
+
             {hasMapsApiKey ? (
               <APIProvider apiKey={GOOGLE_MAPS_API_KEY || ''}>
                 <Map
                   key={`map-host-${useFallbackMarkers ? 'fallback' : 'advanced'}`}
                   defaultCenter={mapCenter}
+                  center={mapCenter}
                   onCenterChanged={(ev) => setMapCenter(ev.detail.center)}
-                  zoom={13}
+                  zoom={zoom}
+                  onZoomChanged={(ev) => setZoom(ev.detail.zoom)}
                   gestureHandling={'greedy'}
                   disableDefaultUI={false}
                   mapId={!useFallbackMarkers && isAdvancedMapAvailable ? GOOGLE_MAPS_ID : null}
@@ -665,6 +697,21 @@ export default function Community() {
                     console.error("Advanced Marker failure detected. Triggering safe fallback remount.");
                     setUseFallbackMarkers(true);
                   }}>
+                    {userLocation && (
+                      !useFallbackMarkers && isAdvancedMapAvailable ? (
+                        <AdvancedMarker position={userLocation} zIndex={100}>
+                          <div className="relative flex items-center justify-center">
+                            <div className="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-[0_0_10px_rgba(37,99,235,0.5)] z-20" />
+                            <div className="absolute w-8 h-8 bg-blue-400/30 rounded-full animate-ping z-10" />
+                          </div>
+                        </AdvancedMarker>
+                      ) : (
+                        <Marker 
+                          position={userLocation}
+                          title="You are here"
+                        />
+                      )
+                    )}
                     {!useFallbackMarkers && isAdvancedMapAvailable ? (
                       reports.map((report) => (
                         <AdvancedMarker
