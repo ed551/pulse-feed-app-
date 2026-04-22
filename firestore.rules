@@ -90,13 +90,22 @@ service cloud.firestore {
     }
 
     function isValidTransaction(data) {
-      return data.keys().hasAll(['amount', 'status', 'timestamp', 'reference', 'type', 'revenueSource']) &&
+      return data.keys().hasAll(['amount', 'type', 'status', 'timestamp', 'reference']) &&
              data.amount is number &&
-             data.status in ['pending', 'success', 'failed'] &&
-             data.timestamp is string && isValidDateString(data.timestamp) &&
-             data.reference is string && data.reference.size() <= 100 &&
-             data.type in ['mpesa', 'international'] &&
-             data.revenueSource in ['ad', 'education'];
+             data.type is string &&
+             data.status is string &&
+             (data.timestamp is timestamp || data.timestamp is string) &&
+             data.reference is string;
+    }
+
+    function isValidPointsLedger(data) {
+      return data.keys().hasAll(['amount', 'balanceAfter', 'type', 'source', 'reason', 'timestamp']) &&
+             data.amount is number &&
+             data.balanceAfter is number &&
+             data.type in ['accrual', 'deduction', 'restore', 'adjustment'] &&
+             data.source is string &&
+             data.reason is string &&
+             (data.timestamp is timestamp || data.timestamp is string);
     }
 
     function isValidInsight(data) {
@@ -170,6 +179,12 @@ service cloud.firestore {
       match /transactions/{transactionId} {
         allow read: if isOwner(userId) || isAdmin();
         allow create: if isOwner(userId) && isValidTransaction(request.resource.data);
+        allow update, delete: if isAdmin();
+      }
+
+      match /points_ledger/{ledgerId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && isValidPointsLedger(request.resource.data);
         allow update, delete: if isAdmin();
       }
     }

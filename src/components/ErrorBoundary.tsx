@@ -7,21 +7,24 @@ interface Props {
 
 interface State {
   hasError: boolean;
+  error: Error | null;
   recoveryStep: number;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
+    error: null,
     recoveryStep: 0
   };
 
-  public static getDerivedStateFromError(_: Error): State {
-    return { hasError: true, recoveryStep: 0 };
+  public static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error, recoveryStep: 0 };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Uncaught error intercepted by Auto-Healer:', error, errorInfo);
+    // Log the error to your analytics or cloud logging here
     this.startAutoRecovery();
   }
 
@@ -67,6 +70,11 @@ export class ErrorBoundary extends Component<Props, State> {
                   ? "The self-healing engine has intercepted a fatal crash. Please stand by while the system repairs itself." 
                   : "All systems nominal. Rebooting interface..."}
               </p>
+              {this.state.error && (
+                <div className="mt-4 p-2 bg-red-900/10 rounded border border-red-900/20 text-[10px] text-red-500/80 font-mono break-all max-h-20 overflow-y-auto">
+                  {this.state.error.message}
+                </div>
+              )}
             </div>
 
             <div className="space-y-3 text-xs sm:text-sm text-left bg-gray-950 p-4 rounded-xl font-mono border border-gray-800 shadow-inner relative z-10">

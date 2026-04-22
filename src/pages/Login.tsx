@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LogIn, ShieldAlert, Fingerprint } from 'lucide-react';
+import { LogIn, ShieldAlert, Fingerprint, AlertCircle, ExternalLink, MoreHorizontal, Share2 } from 'lucide-react';
 import { isBiometricsSupported, authenticateBiometric } from '../lib/biometrics';
 
 export default function Login() {
-  const { loginWithGoogle } = useAuth();
+  const { loginWithGoogle, isFacebookApp } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState('');
@@ -23,11 +23,16 @@ export default function Login() {
       setError('');
       setLoading(true);
       await loginWithGoogle();
-      navigate(from, { replace: true });
+      // Only navigate if we're not in a redirect flow (since redirect won't return here immediately)
+      if (!isFacebookApp) {
+        navigate(from, { replace: true });
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to sign in');
     } finally {
-      setLoading(false);
+      if (!isFacebookApp) {
+        setLoading(false);
+      }
     }
   };
 
@@ -63,6 +68,18 @@ export default function Login() {
         {error && (
           <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 rounded-md">
             <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+          </div>
+        )}
+
+        {isFacebookApp && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 p-4 rounded-md flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-amber-800 dark:text-amber-300">Facebook/Instagram Detected</p>
+              <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                In-app browsers often block modern login flows. If "Sign in with Google" fails, please click the <MoreHorizontal className="inline w-3 h-3 mx-0.5 align-middle" /> or <Share2 className="inline w-3 h-3 mx-0.5 align-middle" /> icon and select <strong>"Open in Browser"</strong> (Chrome/Safari).
+              </p>
+            </div>
           </div>
         )}
 

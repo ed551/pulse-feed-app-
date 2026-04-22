@@ -4,6 +4,8 @@ import {
   onAuthStateChanged, 
   GoogleAuthProvider, 
   signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
   signOut 
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
@@ -61,6 +63,7 @@ interface AuthContextType {
   loading: boolean;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
+  isFacebookApp: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -78,6 +81,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [isFacebookApp, setIsFacebookApp] = useState(false);
+
+  useEffect(() => {
+    const ua = navigator.userAgent || navigator.vendor || (window as any).opera;
+    const isFB = /FBAN|FBAV/i.test(ua) || /Instagram/i.test(ua);
+    setIsFacebookApp(isFB);
+    if (isFB) {
+      console.warn('Facebook/Instagram In-App Browser detected. Switching to compatible login modes.');
+    }
+  }, []);
+
   useEffect(() => {
     let unsubscribeUser: (() => void) | undefined;
 
@@ -92,9 +106,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
     }, 8000);
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       try {
         console.log('Auth state changed:', user ? `User ${user.uid}` : 'No user');
+        
+        // Handle redirect result for in-app browsers
+        if (!user && isFacebookApp) {
+          const result = await getRedirectResult(auth);
+          if (result?.user) {
+            console.log("Recovered user from redirect result");
+            // Auth state changed will fire again with the user
+            return;
+          }
+        }
+
         setCurrentUser(user);
         
         // Clean up previous user listener if it exists
@@ -170,21 +195,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loginWithGoogle = async () => {
     try {
       const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
+      if (isFacebookApp) {
+        await signInWithRedirect(auth, provider);
+      } else {
+        const result = await signInWithPopup(auth, provider);
+        const user = result.user;
 
-      if (user) {
-        // Sync user data to Firestore
-        const userRef = doc(db, 'users', user.uid);
-        // We use merge: true to update profile info without overwriting existing data
-        // We DO NOT include createdAt here because it's immutable in security rules
-        // and is handled by the initial document creation logic in onSnapshot
-        await setDoc(userRef, {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-        }, { merge: true });
+        if (user) {
+          const userRef = doc(db, 'users', user.uid);
+          await setDoc(userRef, {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+          }, { merge: true });
+        }
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'users');
@@ -200,7 +225,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userData,
     loading,
     loginWithGoogle,
-    logout
+    logout,
+    isFacebookApp
   };
 
   return (

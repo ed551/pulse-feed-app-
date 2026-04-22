@@ -6,7 +6,7 @@ import {
   Fingerprint, HeartPulse, MapPin, Phone, MessageCircle, Gamepad2, Globe, BrainCircuit,
   Languages, Ticket, Snowflake, Calendar, Smartphone, Monitor, PhoneCall, Wrench,
   Calculator, LayoutGrid, Power, RefreshCw, ArrowUpCircle, ArrowDownCircle, XCircle, RotateCcw, Edit3, DollarSign, LogOut, Wallet, X, Send, Search, CheckCircle2, Plus, ShieldCheck, Zap,
-  Volume2, VolumeX, Share2, Brain, TrendingUp, TrendingDown, Minus, Menu, GraduationCap, Eye, Loader2, Video, Type, Radio, Megaphone, BarChart2, Smile, Crown, Filter, Sparkles, Camera, Heart, Youtube, Layers, Map
+  Volume2, VolumeX, Share2, Brain, TrendingUp, TrendingDown, Minus, Menu, GraduationCap, Eye, Loader2, Video, Type, Radio, Megaphone, BarChart2, Smile, Crown, Filter, Sparkles, Camera, Heart, Youtube, Layers, Map, AlertTriangle, ExternalLink
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { GoogleGenAI, Modality } from "@google/genai";
@@ -47,7 +47,7 @@ const weatherTypes = [
 ];
 
 export default function Layout() {
-  const { currentUser, userData, logout } = useAuth();
+  const { currentUser, userData, logout, isFacebookApp } = useAuth();
   const { isIdle, totalEarnedToday } = useRevenue();
   const navigate = useNavigate();
   const [isDark, setIsDark] = useState(() => {
@@ -129,10 +129,6 @@ export default function Layout() {
     }
     if (categoryName === 'Ads') {
       navigate('/ads');
-      return;
-    }
-    if (categoryName === 'Elite Plan') {
-      navigate('/membership');
       return;
     }
     if (categoryName === 'Toggle Frame') {
@@ -932,6 +928,15 @@ export default function Layout() {
         {viewMode === 'mobile' && window.innerWidth >= 1024 && !(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) && (
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-gray-800 rounded-b-2xl z-50 flex items-center justify-center">
             <div className="w-12 h-1 bg-gray-700 rounded-full"></div>
+          </div>
+        )}
+
+        {/* Facebook App Compatibility Banner */}
+        {isFacebookApp && (
+          <div className="bg-gradient-to-r from-red-600 to-indigo-600 text-white px-4 py-2 text-[10px] sm:text-xs font-black text-center flex items-center justify-center gap-3 z-[200] shadow-lg">
+            <AlertTriangle className="w-4 h-4 animate-pulse flex-shrink-0" />
+            <span className="uppercase tracking-widest">In-App Browser Warning: For the best experience and secure login, please open in Chrome or Safari.</span>
+            <ExternalLink className="w-4 h-4 flex-shrink-0" />
           </div>
         )}
 
