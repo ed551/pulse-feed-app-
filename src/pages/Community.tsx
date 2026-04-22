@@ -7,8 +7,7 @@ import {
   BrainCircuit, X, Send, PieChart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import L from 'leaflet';
+import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow, Marker } from '@vis.gl/react-google-maps';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useRevenue } from '../contexts/RevenueContext';
@@ -17,13 +16,7 @@ import { collection, query, onSnapshot, doc, updateDoc, increment, addDoc, serve
 import { generateContentWithRetry } from '../lib/ai';
 
 // Fix for default marker icons in Leaflet with React
-// @ts-ignore
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
+// Removed as we are switching to Google Maps
 
 interface CommunityTask {
   id: string;
@@ -82,6 +75,28 @@ interface CommunityEvent {
   attendees: number;
 }
 
+// Error Boundary to catch Advanced Marker crashes (common if Map ID is unauthorized)
+class MarkerErrorBoundary extends React.Component<{
+    children: React.ReactNode;
+    fallback: () => void;
+}, {hasError: boolean}> {
+    constructor(props: any) {
+        super(props);
+        this.state = { hasError: false };
+    }
+    static getDerivedStateFromError() {
+        return { hasError: true };
+    }
+    componentDidCatch(error: any) {
+        console.error("Advanced Marker failure detected. Falling back to standard markers.", error);
+        this.props.fallback();
+    }
+    render() {
+        if (this.state.hasError) return null;
+        return this.props.children;
+    }
+}
+
 export default function Community() {
   const { currentUser, userData } = useAuth();
   const { totalEarnedToday, addRevenue } = useRevenue();
@@ -98,6 +113,47 @@ export default function Community() {
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
 
   const [activeView, setActiveView] = useState<'map' | 'bounties' | 'marketplace' | 'insights'>('map');
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const [mapCenter, setMapCenter] = useState({ lat: -1.286389, lng: 36.817223 });
+  const [newReportLatLng, setNewReportLatLng] = useState<{lat: number, lng: number} | null>(null);
+
+  // Validate Map ID - Advanced Markers require a valid Map ID.
+  // If the ID is missing, a placeholder, or too short, we fall back to standard Markers to prevent ApiTargetBlockedMapError crashes.
+  const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const GOOGLE_MAPS_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID;
+  const [useFallbackMarkers, setUseFallbackMarkers] = useState(false);
+
+  const isAdvancedMapAvailable = React.useMemo(() => {
+    if (useFallbackMarkers) return false;
+    // Check if the Map ID looks like a real UUID/Hash (Advanced Markers require a real Map ID)
+    const isValidMapId = !!GOOGLE_MAPS_ID && 
+           GOOGLE_MAPS_ID.length > 5 && 
+           !GOOGLE_MAPS_ID.includes('YOUR_') && 
+           !GOOGLE_MAPS_ID.includes('PLACEHOLDER');
+    
+    return isValidMapId;
+  }, [GOOGLE_MAPS_ID, useFallbackMarkers]);
+
+  const hasMapsApiKey = !!GOOGLE_MAPS_API_KEY && 
+                        GOOGLE_MAPS_API_KEY.length > 5 && 
+                        !GOOGLE_MAPS_API_KEY.includes('YOUR_');
+
+  const locateUser = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setMapCenter({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.error("Error getting location:", error);
+          alert("Could not get your location. Please ensure site permissions are granted.");
+        }
+      );
+    }
+  };
 
   const buyInsight = async (insightTitle: string, price: number) => {
     if (!currentUser || !userData) return;
@@ -255,12 +311,13 @@ export default function Community() {
         reporterUid: currentUser.uid,
         timestamp: serverTimestamp(),
         upvotes: 0,
-        lat: -1.286389 + (Math.random() - 0.5) * 0.1,
-        lng: 36.817223 + (Math.random() - 0.5) * 0.1,
+        lat: newReportLatLng?.lat || -1.286389 + (Math.random() - 0.5) * 0.1,
+        lng: newReportLatLng?.lng || 36.817223 + (Math.random() - 0.5) * 0.1,
         aiAnalysis: aiResponse.text || 'Awaiting further assessment.'
       });
 
       setShowReportModal(false);
+      setNewReportLatLng(null);
       setNewReport({ title: '', description: '', location: '' });
       alert("Problem reported successfully! Our AI has analyzed your report and tagged it for investigation.");
       
@@ -586,41 +643,127 @@ export default function Community() {
           </button>
         </div>
 
-          <div className="h-[400px] w-full rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-700 shadow-xl relative z-0">
-          <MapContainer 
-            center={[-1.286389, 36.817223]} 
-            zoom={13} 
-            style={{ height: '100%', width: '100%' }}
-            scrollWheelZoom={false}
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            {reports.map((report) => (
-              <Marker 
-                key={report.id} 
-                position={[report.lat || -1.286389 + (Math.random() - 0.5) * 0.05, report.lng || 36.817223 + (Math.random() - 0.5) * 0.05]}
-              >
-                <Popup>
-                  <div className="p-1 min-w-[150px]">
-                    <h3 className="font-bold text-sm text-gray-900">{report.title}</h3>
-                    <p className="text-[10px] text-gray-500 mb-2 line-clamp-2">{report.description}</p>
-                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
-                      <span className={cn(
-                        "text-[8px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest",
-                        report.status === 'Resolved' ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
-                      )}>
-                        {report.status}
-                      </span>
-                      <span className="text-[8px] font-bold text-gray-400">{report.location}</span>
-                    </div>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
-          </MapContainer>
-        </div>
+          <div className="h-[400px] w-full rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-700 shadow-xl relative z-0 group bg-gray-50 dark:bg-gray-900/50 flex items-center justify-center">
+            {hasMapsApiKey ? (
+              <APIProvider apiKey={GOOGLE_MAPS_API_KEY || ''}>
+                <Map
+                  key={`map-host-${useFallbackMarkers ? 'fallback' : 'advanced'}`}
+                  defaultCenter={mapCenter}
+                  onCenterChanged={(ev) => setMapCenter(ev.detail.center)}
+                  zoom={13}
+                  gestureHandling={'greedy'}
+                  disableDefaultUI={false}
+                  mapId={!useFallbackMarkers && isAdvancedMapAvailable ? GOOGLE_MAPS_ID : null}
+                  onClick={(ev) => {
+                    if (ev.detail.latLng) {
+                      setNewReportLatLng(ev.detail.latLng);
+                      setShowReportModal(true);
+                    }
+                  }}
+                >
+                  <MarkerErrorBoundary fallback={() => {
+                    console.error("Advanced Marker failure detected. Triggering safe fallback remount.");
+                    setUseFallbackMarkers(true);
+                  }}>
+                    {!useFallbackMarkers && isAdvancedMapAvailable ? (
+                      reports.map((report) => (
+                        <AdvancedMarker
+                          key={`adv-${report.id}`}
+                          position={{ 
+                            lat: report.lat || -1.286389, 
+                            lng: report.lng || 36.817223 
+                          }}
+                          onClick={() => setSelectedReportId(report.id)}
+                        >
+                          <div className="relative flex items-center justify-center">
+                            {/* Safer alternative to Pin component which crashes on invalid Map IDs */}
+                            <div className={cn(
+                              "w-5 h-5 rounded-full border-2 border-white shadow-lg transform transition-transform hover:scale-110",
+                              report.status === 'Resolved' ? "bg-emerald-500" : "bg-amber-500"
+                            )}>
+                              <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full" />
+                            </div>
+                          </div>
+                        </AdvancedMarker>
+                      ))
+                    ) : (
+                      reports.map((report) => (
+                        <Marker 
+                          key={`std-${report.id}`}
+                          position={{ 
+                            lat: report.lat || -1.286389, 
+                            lng: report.lng || 36.817223 
+                          }}
+                          onClick={() => setSelectedReportId(report.id)}
+                          title={report.title}
+                        />
+                      ))
+                    )}
+
+                    {reports.map((report) => (
+                      selectedReportId === report.id && (
+                        <InfoWindow
+                          key={`info-${report.id}`}
+                          position={{ 
+                            lat: report.lat || -1.286389, 
+                            lng: report.lng || 36.817223 
+                          }}
+                          onCloseClick={() => setSelectedReportId(null)}
+                        >
+                          <div className="p-1 min-w-[150px]">
+                            <h3 className="font-bold text-sm text-gray-900">{report.title}</h3>
+                            <p className="text-[10px] text-gray-500 mb-2 line-clamp-2">{report.description}</p>
+                            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+                              <span className={cn(
+                                "text-[8px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest",
+                                report.status === 'Resolved' ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
+                              )}>
+                                {report.status}
+                              </span>
+                              <span className="text-[8px] font-bold text-gray-400">{report.location}</span>
+                            </div>
+                          </div>
+                        </InfoWindow>
+                      )
+                    ))}
+
+                    {newReportLatLng && (
+                      !useFallbackMarkers && isAdvancedMapAvailable ? (
+                        <AdvancedMarker position={newReportLatLng}>
+                          <div className="w-6 h-6 bg-red-500 rounded-full border-2 border-white shadow-xl animate-pulse" />
+                        </AdvancedMarker>
+                      ) : (
+                        <Marker position={newReportLatLng} />
+                      )
+                    )}
+                  </MarkerErrorBoundary>
+                </Map>
+              </APIProvider>
+            ) : (
+              <div className="flex flex-col items-center gap-3 p-8 text-center">
+                <div className="w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
+                  <AlertCircle className="w-8 h-8 text-red-500" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Map Unavailable</h3>
+                  <p className="text-[10px] text-gray-500 max-w-[200px] mx-auto mt-1">Please configure your <b>VITE_GOOGLE_MAPS_API_KEY</b> in settings to enable community mapping.</p>
+                </div>
+              </div>
+            )}
+            
+            <button 
+              onClick={locateUser}
+              className="absolute bottom-4 right-4 p-3 bg-white dark:bg-gray-800 rounded-full shadow-lg text-indigo-600 hover:text-indigo-700 transition-all z-10 border border-gray-100 dark:border-gray-700"
+              title="Locate Me"
+            >
+              <MapPin className="w-5 h-5" />
+            </button>
+            
+            <div className="absolute top-4 left-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm px-3 py-2 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm z-10 pointer-events-none">
+              <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Tip</p>
+              <p className="text-[10px] text-gray-700 dark:text-gray-300 font-medium">Click anywhere on the map to report a problem at that location.</p>
+            </div>
+          </div>
         
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {reports.map(report => (
@@ -1086,9 +1229,17 @@ export default function Community() {
                         placeholder="Street name or neighborhood"
                         value={newReport.location}
                         onChange={e => setNewReport(prev => ({ ...prev, location: e.target.value }))}
-                        className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border-none rounded-xl focus:ring-2 focus:ring-red-500 transition-all text-sm"
+                        className={cn(
+                          "w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border-none rounded-xl focus:ring-2 focus:ring-red-500 transition-all text-sm",
+                          newReportLatLng && "ring-2 ring-emerald-500/50"
+                        )}
                       />
                     </div>
+                    {newReportLatLng && (
+                      <p className="text-[10px] text-emerald-600 font-bold px-1">
+                        ✓ Exact coordinates captured from map selection
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Details</label>

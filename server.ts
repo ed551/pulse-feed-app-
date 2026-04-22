@@ -1237,6 +1237,40 @@ async function startServer() {
     while (retries > 0) {
       const attempt = 3 - retries;
       try {
+        // High Performance Choice: Use Google Maps Geocoding API if key is present
+        const googleKey = process.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+        if (googleKey && googleKey.length > 5 && !googleKey.includes('YOUR_')) {
+          console.log(`[Geocode] Attempt ${attempt} using Google Maps API...`);
+          const googleRes = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${googleKey}`, {
+            timeout: 10000
+          });
+
+          if (googleRes.data && googleRes.data.status === 'OK' && googleRes.data.results.length > 0) {
+            console.log("[Geocode] Google Maps API success");
+            const firstResult = googleRes.data.results[0];
+            const addressComponents = firstResult.address_components;
+            
+            const getComp = (type: string) => {
+              const comp = addressComponents.find((c: any) => c.types.includes(type));
+              return comp ? comp.long_name : "";
+            };
+
+            const normalizedData = {
+              address: {
+                city: getComp('locality') || getComp('postal_town') || getComp('administrative_area_level_2'),
+                town: getComp('locality'),
+                village: getComp('sublocality'),
+                suburb: getComp('neighborhood') || getComp('sublocality_level_1'),
+                country: getComp('country')
+              },
+              display_name: firstResult.formatted_address
+            };
+            return res.json(normalizedData);
+          } else {
+            console.warn(`[Geocode] Google API returned status: ${googleRes.data.status}`);
+          }
+        }
+
         console.log(`[Geocode] Attempt ${attempt} using Nominatim...`);
         const response = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`, {
           headers: {

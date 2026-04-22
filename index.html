@@ -58,6 +58,13 @@
     </div>
     <script>
       window.addEventListener('error', function(e) {
+        // Ignore generic "Script error." which often occurs with cross-origin 
+        // scripts like Google Maps and doesn't necessarily mean a fatal boot failure.
+        if (e.message === 'Script error.' || e.message === 'Script error') {
+          console.warn('Recoverable script error detected:', e);
+          return;
+        }
+
         var loader = document.getElementById('boot-loader');
         var errorDisplay = document.getElementById('boot-error');
         var detail = document.getElementById('error-detail');

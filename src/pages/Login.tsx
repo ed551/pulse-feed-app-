@@ -1,22 +1,55 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { LogIn, ShieldAlert, Fingerprint, AlertCircle, ExternalLink, MoreHorizontal, Share2 } from 'lucide-react';
+import { LogIn, ShieldAlert, Fingerprint, AlertCircle, ExternalLink, MoreHorizontal, Share2, Mail, Lock, User as UserIcon, ArrowRight, UserPlus } from 'lucide-react';
 import { isBiometricsSupported, authenticateBiometric } from '../lib/biometrics';
 
 export default function Login() {
-  const { loginWithGoogle, isFacebookApp } = useAuth();
+  const { loginWithGoogle, loginWithEmail, signupWithEmail, isFacebookApp } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [biometricSupported, setBiometricSupported] = useState(false);
+  
+  // New auth states
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
 
   useEffect(() => {
     setBiometricSupported(isBiometricsSupported());
   }, []);
 
   const from = location.state?.from?.pathname || "/";
+
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setError('Please fill in all fields');
+      return;
+    }
+    if (mode === 'signup' && !name) {
+      setError('Please enter your name');
+      return;
+    }
+
+    try {
+      setError('');
+      setLoading(true);
+      if (mode === 'signup') {
+        await signupWithEmail(email, password, name);
+      } else {
+        await loginWithEmail(email, password);
+      }
+      navigate(from, { replace: true });
+    } catch (err: any) {
+      setError(err.message || 'Failed to authenticate');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGoogleLogin = async () => {
     try {
@@ -58,16 +91,33 @@ export default function Login() {
             <ShieldAlert className="h-6 w-6" />
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
-            Sign in to your account
+            {mode === 'login' ? 'Welcome Back' : 'Create Account'}
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-            Access your secure profile and rewards
+            {mode === 'login' 
+              ? 'Sign in to access your secure profile' 
+              : 'Join the community and start earning'}
           </p>
+        </div>
+
+        <div className="flex bg-gray-100 dark:bg-gray-900 p-1 rounded-xl">
+          <button
+            onClick={() => setMode('login')}
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${mode === 'login' ? 'bg-white dark:bg-gray-800 text-orange-600 shadow-sm' : 'text-gray-500'}`}
+          >
+            LOGIN
+          </button>
+          <button
+            onClick={() => setMode('signup')}
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${mode === 'signup' ? 'bg-white dark:bg-gray-800 text-orange-600 shadow-sm' : 'text-gray-500'}`}
+          >
+            SIGN UP
+          </button>
         </div>
         
         {error && (
           <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 rounded-md">
-            <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+            <p className="text-[11px] text-red-700 dark:text-red-400 leading-tight">{error}</p>
           </div>
         )}
 
@@ -83,16 +133,77 @@ export default function Login() {
           </div>
         )}
 
-        <div className="mt-8 space-y-6">
+        <form onSubmit={handleEmailAuth} className="space-y-4">
+          {mode === 'signup' && (
+            <div className="relative">
+              <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Full Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-orange-500 outline-none transition-all dark:text-white"
+                required
+              />
+            </div>
+          )}
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="email"
+              placeholder="Email Address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-orange-500 outline-none transition-all dark:text-white"
+              required
+            />
+          </div>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-orange-500 outline-none transition-all dark:text-white"
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-orange-600/20 flex items-center justify-center gap-2 group disabled:opacity-50"
+          >
+            {loading ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              <>
+                {mode === 'login' ? 'Sign In' : 'Create Account'}
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </>
+            )}
+          </button>
+        </form>
+
+        <div className="relative mt-8">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-100 dark:border-gray-700"></div>
+          </div>
+          <div className="relative flex justify-center text-[10px] uppercase tracking-widest font-black text-gray-400 bg-white dark:bg-gray-800 px-4">
+            Or continue with
+          </div>
+        </div>
+
+        <div className="space-y-4">
           <button
             onClick={handleGoogleLogin}
             disabled={loading}
-            className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-xl text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 transition-colors"
+            className="group relative w-full flex justify-center py-3 px-4 border border-gray-100 dark:border-gray-700 text-sm font-medium rounded-xl text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 transition-colors shadow-sm"
           >
             <span className="absolute left-0 inset-y-0 flex items-center pl-3">
               <LogIn className="h-5 w-5 text-orange-500 group-hover:text-orange-400" aria-hidden="true" />
             </span>
-            {loading ? 'Signing in...' : 'Sign in with Google'}
+            {loading ? 'Processing...' : 'Google Account'}
           </button>
           
           {biometricSupported && (

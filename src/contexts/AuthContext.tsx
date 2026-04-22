@@ -6,7 +6,10 @@ import {
   signInWithPopup, 
   signInWithRedirect,
   getRedirectResult,
-  signOut 
+  signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -62,6 +65,8 @@ interface AuthContextType {
   userData: UserData | null;
   loading: boolean;
   loginWithGoogle: () => Promise<void>;
+  loginWithEmail: (email: string, pass: string) => Promise<void>;
+  signupWithEmail: (email: string, pass: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   isFacebookApp: boolean;
 }
@@ -216,6 +221,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const loginWithEmail = async (email: string, pass: string) => {
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const signupWithEmail = async (email: string, pass: string, name: string) => {
+    try {
+      const result = await createUserWithEmailAndPassword(auth, email, pass);
+      if (result.user) {
+        await updateProfile(result.user, { displayName: name });
+        // The onAuthStateChanged listener will handle provisioning the Firestore document
+      }
+    } catch (error) {
+      throw error;
+    }
+  };
+
   const logout = () => {
     return signOut(auth);
   };
@@ -225,6 +250,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userData,
     loading,
     loginWithGoogle,
+    loginWithEmail,
+    signupWithEmail,
     logout,
     isFacebookApp
   };
