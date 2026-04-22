@@ -6,7 +6,7 @@ import {
   Mail, Map, Youtube, Image, Languages, ExternalLink, Eye, Camera, Award, Sparkles, Volume2, VolumeX,
   Home as HomeIcon, Flag, BarChart2, Megaphone, RefreshCw, Radio, Video, Type, Smile,
   PlusCircle, MinusCircle, Bookmark, EyeOff, Bell, Link, XCircle, AlertCircle, Copy, Crown,
-  ThumbsUp, Pencil, Trash2, GraduationCap, ArrowUpRight
+  ThumbsUp, Pencil, Trash2, GraduationCap, ArrowUpRight, ShieldAlert
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { multimedia_stream_engine, content_governor, revenue_logic } from "../lib/engines";
@@ -370,6 +370,25 @@ export default function Home() {
 
   return (
     <div className="space-y-6 pb-20">
+      {dbStatus === 'offline' && (
+        <div className="mx-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-2xl flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
+              <ShieldAlert className="w-5 h-5 text-red-600 dark:text-red-400" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-red-800 dark:text-red-300">Connection Interrupted</p>
+              <p className="text-xs text-red-600 dark:text-red-400">Cloud Firestore is currently unreachable. Some features may be limited.</p>
+            </div>
+          </div>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-3 py-1 bg-red-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-red-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
       <div className="px-6 pt-6">
         <AdUnit slotId="home-top-banner" />
       </div>
