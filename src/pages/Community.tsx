@@ -151,7 +151,7 @@ export default function Community() {
           setMapCenter(pos);
           setUserLocation(pos);
           // When explicitly locating, also zoom in more to feel "precise"
-          setZoom(15);
+          setZoom(17);
         },
         (error) => {
           console.error("Error getting location:", error);
@@ -797,14 +797,6 @@ export default function Community() {
                 </div>
               </div>
             )}
-            
-            <button 
-              onClick={locateUser}
-              className="absolute bottom-4 right-4 p-3 bg-white dark:bg-gray-800 rounded-full shadow-lg text-indigo-600 hover:text-indigo-700 transition-all z-10 border border-gray-100 dark:border-gray-700"
-              title="Locate Me"
-            >
-              <MapPin className="w-5 h-5" />
-            </button>
             
             <div className="absolute top-4 left-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm px-3 py-2 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm z-10 pointer-events-none">
               <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Tip</p>

@@ -1101,48 +1101,10 @@ export default function Layout() {
                 <Link to="/messages" className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">
                   <MessageCircle className="w-5 h-5" />
                 </Link>
-
-                <button 
-                  onClick={() => setActiveModal('moreMenu')}
-                  className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
-                >
-                  <Menu className="w-5 h-5" />
-                </button>
               </div>
             </div>
 
-            {/* Middle Row: Navigation Tabs (Facebook Style - Scrollable) */}
-            <div className="flex items-center overflow-x-auto hide-scrollbar border-t border-gray-50 dark:border-gray-800/50 bg-white dark:bg-gray-900">
-              {bottomNavItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = location.pathname === item.path;
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={cn(
-                      "flex-1 min-w-[70px] flex flex-col items-center py-2 relative transition-all group",
-                      isActive ? "text-indigo-600 dark:text-indigo-400" : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800/50"
-                    )}
-                  >
-                    <Icon className={cn("w-6 h-6", isActive && "drop-shadow-[0_0_8px_rgba(79,70,229,0.3)]")} />
-                    {isActive && (
-                      <motion.div 
-                        layoutId="activeTab"
-                        className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 dark:bg-indigo-400 rounded-t-full"
-                      />
-                    )}
-                  </Link>
-                );
-              })}
-              {/* AI Assistant Tab */}
-              <button
-                onClick={() => window.dispatchEvent(new CustomEvent('toggle-ai-assistant'))}
-                className="flex-1 min-w-[70px] flex flex-col items-center py-2 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all"
-              >
-                <Brain className="w-6 h-6" />
-              </button>
-            </div>
+            {/* Middle Row: Navigation Tabs - REMOVED (Moved to permanent bottom nav) */}
 
             {/* Bottom Row: Categories & Market Stats (Horizontal Scroll) */}
             <div className="px-4 py-1.5 bg-gray-50/50 dark:bg-gray-950/50 flex items-center gap-4">
@@ -1183,7 +1145,7 @@ export default function Layout() {
 
           {/* Main Content Area */}
           <main 
-            className="flex-1 bg-gray-50 dark:bg-gray-900 p-4 sm:p-6 relative transition-all duration-300"
+            className="flex-1 bg-gray-50 dark:bg-gray-900 p-4 sm:p-6 relative transition-all duration-300 pb-20 sm:pb-24"
             style={{ filter: `brightness(${brightness}%)` }}
           >
             <div className="max-w-4xl mx-auto w-full h-full">
@@ -1219,6 +1181,48 @@ export default function Layout() {
               </div>
             </div>
           </main>
+
+          {/* Permanent Bottom Navigation Bar */}
+          <nav className="fixed bottom-0 left-0 right-0 h-16 sm:h-20 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-t border-gray-100 dark:border-gray-800 z-[180] flex items-center px-4 sm:px-6">
+            <div className="max-w-4xl mx-auto w-full flex items-center justify-around">
+              {bottomNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={cn(
+                      "flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all relative group",
+                      isActive ? "text-indigo-600 dark:text-indigo-400 font-black" : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                    )}
+                  >
+                    <Icon className={cn("w-6 h-6 sm:w-7 sm:h-7 transition-all", isActive ? "scale-110 drop-shadow-[0_0_8px_rgba(79,70,229,0.5)]" : "group-hover:scale-110")} />
+                    <span className={cn("text-[8px] sm:text-[10px] mt-1 uppercase tracking-widest font-black transition-all", isActive ? "opacity-100" : "opacity-0 group-hover:opacity-60")}>
+                      {item.label}
+                    </span>
+                    {isActive && (
+                      <motion.div 
+                        layoutId="activeTabBottom"
+                        className="absolute -top-1 left-1 right-1 h-1 bg-indigo-600 dark:bg-indigo-400 rounded-full shadow-[0_0_12px_rgba(79,70,229,0.6)]"
+                      />
+                    )}
+                  </Link>
+                );
+              })}
+              
+              {/* Profile Shortcut for Bottom Nav (Mobile/Everywhere) */}
+              <button
+                onClick={() => setActiveModal('moreMenu')}
+                className={cn(
+                  "flex flex-col items-center justify-center w-12 h-12 rounded-2xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-all group"
+                )}
+              >
+                <Menu className="w-6 h-6 sm:w-7 sm:h-7 group-hover:scale-110 transition-transform" />
+                <span className="text-[8px] sm:text-[10px] mt-1 uppercase tracking-widest font-black opacity-0 group-hover:opacity-60">Menu</span>
+              </button>
+            </div>
+          </nav>
         </div>
 
         {/* Floating Sidebars (Desktop Only) */}

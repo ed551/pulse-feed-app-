@@ -45,7 +45,25 @@ export default function Login() {
       }
       navigate(from, { replace: true });
     } catch (err: any) {
-      setError(err.message || 'Failed to authenticate');
+      let displayError = err.message || 'Failed to authenticate';
+      
+      // Handle stringified JSON error objects
+      if (displayError.startsWith('{') && displayError.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(displayError);
+          displayError = parsed.error || displayError;
+        } catch (e) {
+          // Fallback to original if parsing fails
+        }
+      }
+
+      // Specific handling for unauthorized-domain
+      if (displayError.includes('unauthorized-domain')) {
+        const currentDomain = window.location.hostname;
+        displayError = `Authentication Error: This domain (${currentDomain}) is not authorized in your Firebase Console. Please go to Firebase Console > Authentication > Settings > Authorized Domains and add "${currentDomain}" to the list.`;
+      }
+
+      setError(displayError);
     } finally {
       setLoading(false);
     }
@@ -61,7 +79,24 @@ export default function Login() {
         navigate(from, { replace: true });
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to sign in');
+      let displayError = err.message || 'Failed to sign in';
+      
+      // Handle stringified JSON error objects
+      if (displayError.startsWith('{') && displayError.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(displayError);
+          displayError = parsed.error || displayError;
+        } catch (e) {
+          // Fallback to original
+        }
+      }
+
+      if (displayError.includes('unauthorized-domain')) {
+        const currentDomain = window.location.hostname;
+        displayError = `Authentication Error: This domain (${currentDomain}) is not authorized in your Firebase Console. Under Authentication > Settings > Authorized Domains, please add: ${currentDomain}`;
+      }
+
+      setError(displayError);
     } finally {
       if (!isFacebookApp) {
         setLoading(false);
