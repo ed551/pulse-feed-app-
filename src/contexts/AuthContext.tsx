@@ -219,18 +219,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (isFacebookApp) {
         await signInWithRedirect(auth, provider);
       } else {
-        const result = await signInWithPopup(auth, provider);
-        const user = result.user;
-
-        if (user) {
-          const userRef = doc(db, 'users', user.uid);
-          await setDoc(userRef, {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName,
-            photoURL: user.photoURL,
-          }, { merge: true });
-        }
+        await signInWithPopup(auth, provider);
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'users');

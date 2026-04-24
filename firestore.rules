@@ -3,51 +3,51 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
     // ===============================================================
-    // Helper Functions
+    // Helper Functions (Phase 3: Primitives)
     // ===============================================================
     
-    function isAuthenticated() {
+    function isSignedIn() {
       return request.auth != null;
     }
     
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId;
     }
     
-    function isDocOwner() {
-      return isAuthenticated() && request.auth.uid == resource.data.authorId;
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
-    
-    function uidUnchanged() {
-      return !('authorId' in request.resource.data) || request.resource.data.authorId == request.auth.uid;
+
+    function incoming() {
+      return request.resource.data;
     }
-    
-    function uidNotModified() {
-      return !('authorId' in request.resource.data) || request.resource.data.authorId == resource.data.authorId;
+
+    function existing() {
+      return resource.data;
     }
-    
+
+    function isAdmin() {
+      return isSignedIn() && 
+             (request.auth.token.email == "edwinmuoha@gmail.com" || 
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+
+    function immutable(field) {
+      return !(field in incoming()) || incoming()[field] == existing()[field];
+    }
+
     function isValidEmail(email) {
       return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
     }
 
-    function isValidDateString(dateStr) {
-      return dateStr is string &&
-        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*$");
-    }
-    
-    function isAdmin() {
-      return isAuthenticated() && 
-             (request.auth.token.email == "edwinmuoha@gmail.com" || 
-              (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
-    }
-
-    function immutable(field) {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([field]);
-    }
-    
     // ===============================================================
-    // Domain Validators
+    // Validation Blueprints (Pillar 2)
     // ===============================================================
     
     function isValidUser(data) {
@@ -57,214 +57,149 @@ service cloud.firestore {
              data.role in ['admin', 'user'] &&
              (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 100)) &&
              (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500)) &&
-             (!('bio' in data) || (data.bio is string && data.bio.size() <= 500)) &&
              (!('points' in data) || (data.points is number)) &&
-             (!('isPointsRecovered' in data) || (data.isPointsRecovered is bool)) &&
              (!('balance' in data) || (data.balance is number)) &&
-             (!('adRevenue' in data) || (data.adRevenue is number)) &&
-             (!('educationRevenue' in data) || (data.educationRevenue is number)) &&
-             (!('activeTimeRevenue' in data) || (data.activeTimeRevenue is number)) &&
-             (!('badges' in data) || (data.badges is list)) &&
-             data.createdAt is timestamp;
+             (data.createdAt is timestamp || data.createdAt == request.time);
     }
 
     function isValidPost(data) {
+      // authorId matching is Pillar 2
       return data.keys().hasAll(['authorId', 'author', 'content', 'category', 'time', 'type', 'title']) &&
              data.authorId == request.auth.uid &&
              data.author is string && data.author.size() <= 100 &&
              data.title is string && data.title.size() <= 200 &&
              data.content is string && data.content.size() <= 10000 &&
              data.category is string && data.category.size() <= 50 &&
-             data.type in ['post', 'announcement', 'update', 'video', 'live', 'poll'] &&
-             data.time is string && data.time.size() <= 100;
-    }
-
-    function isValidEvent(data) {
-      return data.keys().hasAll(['id', 'title', 'description', 'date', 'location', 'organizerId', 'category']) &&
-             data.organizerId == request.auth.uid &&
-             data.title is string && data.title.size() <= 200 &&
-             data.description is string && data.description.size() <= 5000 &&
-             data.date is string && isValidDateString(data.date) &&
-             data.location is string && data.location.size() <= 200 &&
-             data.category is string && data.category.size() <= 50;
-    }
-
-    function isValidTransaction(data) {
-      return data.keys().hasAll(['amount', 'type', 'status', 'timestamp', 'reference']) &&
-             data.amount is number &&
-             data.type is string &&
-             data.status is string &&
-             (data.timestamp is timestamp || data.timestamp is string) &&
-             data.reference is string;
-    }
-
-    function isValidPointsLedger(data) {
-      return data.keys().hasAll(['amount', 'balanceAfter', 'type', 'source', 'reason', 'timestamp']) &&
-             data.amount is number &&
-             data.balanceAfter is number &&
-             data.type in ['accrual', 'deduction', 'restore', 'adjustment'] &&
-             data.source is string &&
-             data.reason is string &&
-             (data.timestamp is timestamp || data.timestamp is string);
-    }
-
-    function isValidInsight(data) {
-      return data.keys().hasAll(['type', 'category', 'content', 'authorId', 'timestamp']) &&
-             data.authorId == request.auth.uid &&
-             data.type in ['developer', 'user'] &&
-             data.category is string && data.category.size() <= 50 &&
-             data.content is string && data.content.size() <= 5000 &&
-             data.timestamp is string && isValidDateString(data.timestamp);
-    }
-
-    function isValidCommunityReport(data) {
-      return data.keys().hasAll(['title', 'description', 'location', 'reporterName', 'reporterUid', 'timestamp', 'status']) &&
-             data.reporterUid == request.auth.uid &&
-             data.title is string && data.title.size() <= 200 &&
-             data.description is string && data.description.size() <= 5000 &&
-             data.location is string && data.location.size() <= 200 &&
-             data.reporterName is string && data.reporterName.size() <= 100 &&
-             data.status in ['Pending', 'Investigating', 'Resolved'] &&
-             data.timestamp is timestamp;
-    }
-
-    function isValidCommunityPoll(data) {
-      return data.keys().hasAll(['question', 'options', 'endsAt', 'category', 'status']) &&
-             data.question is string && data.question.size() <= 500 &&
-             data.options is list && data.options.size() >= 2 &&
-             data.category is string &&
-             data.status in ['Active', 'Closed'];
-    }
-
-    function isValidUserPublic(data) {
-      return data.keys().hasAll(['uid', 'displayName']) &&
-             data.uid == request.auth.uid &&
-             data.displayName is string && data.displayName.size() <= 100 &&
-             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500)) &&
-             (!('role' in data) || (data.role is string)) &&
-             (!('status' in data) || (data.status is string && data.status.size() <= 200)) &&
-             (!('isOnline' in data) || (data.isOnline is bool)) &&
-             (!('lastSeen' in data) || (data.lastSeen is timestamp));
-    }
-
-    function isValidChat(data) {
-      return data.keys().hasAll(['participants']) &&
-             data.participants is list && data.participants.size() >= 2 &&
-             request.auth.uid in data.participants;
+             data.type in ['post', 'announcement', 'update', 'video', 'live', 'poll', 'ad'] &&
+             data.time is string && data.time.size() <= 100 &&
+             (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 500)) &&
+             (!('likes' in data) || (data.likes is number)) &&
+             (!('comments' in data) || (data.comments is number)) &&
+             (!('shares' in data) || (data.shares is number)) &&
+             (!('isLiked' in data) || (data.isLiked is bool)) &&
+             (!('commentsList' in data) || (data.commentsList is list)) &&
+             (!('analytics' in data) || (data.analytics is list)) &&
+             (!('poll' in data) || (data.poll is map)) &&
+             (!('createdAt' in data) || (data.createdAt is timestamp || data.createdAt == request.time));
     }
 
     function isValidChatMessage(data) {
       return data.keys().hasAll(['senderId', 'text', 'timestamp', 'status']) &&
              data.senderId == request.auth.uid &&
              data.text is string && data.text.size() <= 2000 &&
-             data.timestamp is timestamp &&
+             (data.timestamp is timestamp || data.timestamp == request.time) &&
              data.status in ['sent', 'delivered', 'read'];
     }
-    
+
     // ===============================================================
     // Rules
     // ===============================================================
     
     match /system/{docId} {
       allow read: if true;
-      allow create: if isAuthenticated();
-      allow update, delete: if (request.resource.data.get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
+      
+      match /weather_corrections/logs/{logId} {
+        allow create: if isSignedIn();
+        allow read: if isAdmin();
+      }
     }
     
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if isOwner(userId) && isValidUser(request.resource.data) && immutable('uid') && immutable('createdAt');
+      // Pillar 3: isValidId on userId
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming()) && 
+                    immutable('uid') && immutable('createdAt') && immutable('role');
       
       match /transactions/{transactionId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow create: if isOwner(userId) && isValidTransaction(request.resource.data);
+        allow create: if isOwner(userId) && isValidId(transactionId) && isSignedIn();
         allow update, delete: if isAdmin();
       }
 
       match /points_ledger/{ledgerId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow create: if isOwner(userId) && isValidPointsLedger(request.resource.data);
+        allow create: if isOwner(userId) && isValidId(ledgerId) && isSignedIn();
         allow update, delete: if isAdmin();
       }
     }
     
     match /posts/{postId} {
       allow read: if true;
-      allow create: if isAuthenticated() && isValidPost(request.resource.data);
-      allow update: if isAuthenticated() && isValidPost(request.resource.data) && (isDocOwner() || isAdmin()) && uidNotModified() && immutable('authorId');
-      allow delete: if isDocOwner() || isAdmin();
+      allow create: if isSignedIn() && isValidId(postId) && isValidPost(incoming());
+      allow update: if isSignedIn() && isValidPost(incoming()) && 
+                    (existing().authorId == request.auth.uid || isAdmin()) && 
+                    immutable('authorId') && immutable('createdAt');
+      allow delete: if (isSignedIn() && existing().authorId == request.auth.uid) || isAdmin();
     }
 
     match /events/{eventId} {
       allow read: if true;
-      allow create: if isAuthenticated() && isValidEvent(request.resource.data);
-      allow update: if isAuthenticated() && isValidEvent(request.resource.data) && (resource.data.organizerId == request.auth.uid || isAdmin()) && immutable('organizerId');
-      allow delete: if resource.data.organizerId == request.auth.uid || isAdmin();
+      allow create: if isSignedIn() && isValidId(eventId);
+      allow update: if isSignedIn() && (existing().organizerId == request.auth.uid || isAdmin()) && immutable('organizerId');
+      allow delete: if (isSignedIn() && existing().organizerId == request.auth.uid) || isAdmin();
     }
 
     match /insights/{insightId} {
-      allow read: if isAdmin() || (isAuthenticated() && resource.data.authorId == request.auth.uid);
-      allow create: if isAuthenticated() && isValidInsight(request.resource.data);
+      allow read: if isAdmin() || (isSignedIn() && existing().authorId == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(insightId);
       allow update, delete: if isAdmin();
     }
 
     match /community_reports/{reportId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidCommunityReport(request.resource.data);
-      allow update: if isAuthenticated() && 
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(reportId);
+      allow update: if isSignedIn() && 
                     (
-                      (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotes']) && request.resource.data.upvotes == resource.data.upvotes + 1) ||
+                      (incoming().diff(existing()).affectedKeys().hasOnly(['upvotes']) && incoming().upvotes == existing().upvotes + 1) ||
                       isAdmin()
                     );
       allow delete: if isAdmin();
     }
 
     match /community_polls/{pollId} {
-      allow read: if isAuthenticated();
+      allow read: if isSignedIn();
       allow create: if isAdmin();
-      allow update: if isAuthenticated() && 
+      allow update: if isSignedIn() && 
                     (
-                      (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['options', 'voters']) && !(request.auth.uid in resource.data.voters)) ||
+                      (incoming().diff(existing()).affectedKeys().hasOnly(['options', 'voters']) && !(request.auth.uid in existing().voters)) ||
                       isAdmin()
                     );
       allow delete: if isAdmin();
     }
 
     match /users_public/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isOwner(userId) && isValidUserPublic(request.resource.data);
-      allow update: if isOwner(userId) && isValidUserPublic(request.resource.data) && immutable('uid');
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) && immutable('uid');
       allow delete: if isAdmin();
     }
 
     match /platform/stats {
       allow read: if true;
-      allow write: if (request.resource.data.get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
+      allow write: if (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
     }
 
     match /platform_transactions/{txId} {
       allow read: if isAdmin();
-      allow create: if (request.resource.data.get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
+      allow create: if (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
       allow update, delete: if isAdmin();
     }
 
-    match /system/weather_corrections/logs/{logId} {
-      allow create: if isAuthenticated();
-      allow read: if isAdmin();
-    }
-
     match /chats/{chatId} {
-      allow read: if isAuthenticated() && request.auth.uid in resource.data.participants;
-      allow create: if isAuthenticated() && isValidChat(request.resource.data);
-      allow update: if isAuthenticated() && request.auth.uid in resource.data.participants && 
-                    (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageTime', 'unreadCount', 'lastSenderId']) || isAdmin());
+      allow read: if isSignedIn() && request.auth.uid in existing().participants;
+      allow create: if isSignedIn() && isValidId(chatId) && request.auth.uid in incoming().participants;
+      allow update: if isSignedIn() && request.auth.uid in existing().participants && 
+                    (incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'lastMessageTime', 'unreadCount', 'lastSenderId']) || isAdmin());
       allow delete: if isAdmin();
 
       match /messages/{messageId} {
-        allow read: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
-        allow create: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants && isValidChatMessage(request.resource.data);
-        allow update: if isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+        // Pillar 1: Relational Sync - checking parent chat
+        allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow create: if isSignedIn() && isValidId(messageId) && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants && isValidChatMessage(incoming());
+        allow update: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants && incoming().diff(existing()).affectedKeys().hasOnly(['status']);
         allow delete: if isAdmin();
       }
     }

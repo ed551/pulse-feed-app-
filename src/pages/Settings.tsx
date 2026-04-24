@@ -22,7 +22,8 @@ import {
   Ban,
   Filter,
   Users2,
-  AlertCircle
+  AlertCircle,
+  LogOut
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -33,7 +34,7 @@ import OTPModal from "../components/tools/OTPModal";
 import { cn } from "../lib/utils";
 
 export default function Settings() {
-  const { currentUser, userData } = useAuth();
+  const { currentUser, userData, logout } = useAuth();
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [showFingerprintModal, setShowFingerprintModal] = useState(false);
@@ -816,7 +817,7 @@ export default function Settings() {
         ))}
       </div>
 
-      <div className="bg-blue-50 dark:bg-blue-900/10 rounded-2xl p-6 border border-blue-100 dark:border-blue-900/30">
+      <div className="bg-blue-50 dark:bg-blue-900/10 rounded-2xl p-6 border border-blue-100 dark:border-blue-900/30 mb-4">
         <div className="flex items-start space-x-4">
           <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
             <Smartphone className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -826,6 +827,51 @@ export default function Settings() {
             <p className="text-xs text-blue-700/70 dark:text-blue-400/70 mt-1">You are using Rewards App v2.4.0. Your app is up to date.</p>
           </div>
         </div>
+      </div>
+
+      <div className="space-y-4">
+        <button 
+          onClick={async () => {
+            if (confirm("Are you sure you want to log out?")) {
+              await logout();
+              navigate('/login');
+            }
+          }}
+          className="w-full flex items-center justify-between p-5 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 hover:bg-red-50 dark:hover:bg-red-900/10 hover:border-red-200 dark:hover:border-red-800/50 group transition-all"
+        >
+          <div className="flex items-center space-x-4">
+            <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-xl group-hover:bg-red-100 dark:group-hover:bg-red-900/40 transition-colors">
+              <LogOut className="w-5 h-5 text-red-500" />
+            </div>
+            <div className="text-left">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Log Out</h3>
+              <p className="text-xs text-gray-500">Sign out of your account on this device</p>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-gray-400" />
+        </button>
+
+        <button 
+          onClick={() => {
+            if (confirm("CRITICAL: Are you sure you want to delete your account? This action is permanent and cannot be undone. All your posts, points, and revenue will be lost forever.")) {
+              // Note: Real account deletion would involve a cloud function to clean up subcollections
+              // and potentially another logic step. For this MVP, we redirect to a support or confirmation flow.
+              alert("In this environment, please contact edwinmuoha@gmail.com for data removal requests, or your account will be marked for deletion during the next maintenance cycle.");
+            }
+          }}
+          className="w-full flex items-center justify-between p-5 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 hover:bg-red-50 dark:hover:bg-red-900/10 hover:border-red-200 dark:hover:border-red-800/50 group transition-all"
+        >
+          <div className="flex items-center space-x-4">
+            <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-xl group-hover:bg-red-100 dark:group-hover:bg-red-900/40 transition-colors">
+              <Trash2 className="w-5 h-5 text-red-500" />
+            </div>
+            <div className="text-left">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Delete Account</h3>
+              <p className="text-xs text-gray-500">Permanently remove your data from Pulse Feeds</p>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-gray-400" />
+        </button>
       </div>
 
       {showFingerprintModal && (

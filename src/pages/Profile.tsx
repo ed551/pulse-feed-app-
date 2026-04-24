@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { Settings, LogOut, Edit3, Shield, Star, Activity, Check, X, Loader2, AlertTriangle, Fingerprint, Camera, Sparkles, Upload, RotateCcw, Sliders, Award, Trophy, Zap, Users, Heart as HeartIcon, Beaker, Trash2, MessageSquare, Share2, Heart, PlusSquare, Brain, Wand2, MoreHorizontal, PlusCircle, MinusCircle, Bookmark, EyeOff, Bell, Link, XCircle, AlertCircle, Copy, ExternalLink, Pin, Tag, Globe, Archive, Crown, Lock, Mail, Smartphone } from "lucide-react";
+import { Settings, LogOut, ChevronRight, Edit3, Shield, Star, Activity, Check, X, Loader2, AlertTriangle, Fingerprint, Camera, Sparkles, Upload, RotateCcw, Sliders, Award, Trophy, Zap, Users, Heart as HeartIcon, Beaker, Trash2, MessageSquare, Share2, Heart, PlusSquare, Brain, Wand2, MoreHorizontal, PlusCircle, MinusCircle, Bookmark, EyeOff, Bell, Link, XCircle, AlertCircle, Copy, ExternalLink, Pin, Tag, Globe, Archive, Crown, Lock, Mail, Smartphone } from "lucide-react";
 import { auth_logic, user_history, wallet_engine } from "../lib/engines";
 import { moderateContent } from "../services/moderationService";
 import { generateAvatar } from "../services/imageService";
@@ -1043,17 +1043,48 @@ export default function Profile() {
           </ul>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-            <LogOut className="w-5 h-5 mr-2 text-red-500" /> Actions
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 col-span-1 md:col-span-2">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center">
+            <Lock className="w-5 h-5 mr-2 text-red-500" /> Account Management
           </h2>
-          <ul className="space-y-3">
-            <li><button onClick={async () => { if(confirm('Are you sure you want to sign out?')) { await logout(); window.location.href = '/'; } }} className="w-full text-left px-4 py-3 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/20 dark:hover:bg-red-900/40 dark:text-red-400 transition-colors font-bold">Sign Out</button></li>
-            <li><button onClick={() => navigate('/settings')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-500 dark:text-gray-400 font-medium flex items-center justify-between">
-              <span>Delete Account</span>
-              <Fingerprint className="w-4 h-4 text-gray-400" />
-            </button></li>
-          </ul>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button 
+              onClick={async () => { 
+                if(confirm('Are you sure you want to sign out of Pulse Feeds?')) { 
+                  await logout(); 
+                  navigate('/login'); 
+                } 
+              }} 
+              className="group flex items-center justify-between p-4 rounded-2xl bg-gray-50 dark:bg-gray-900/50 hover:bg-red-50 dark:hover:bg-red-900/10 border border-gray-100 dark:border-gray-700 hover:border-red-200 dark:hover:border-red-800/50 transition-all"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm text-gray-400 group-hover:text-red-500 transition-colors">
+                  <LogOut className="w-5 h-5" />
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-black text-gray-900 dark:text-white">Log Out</p>
+                  <p className="text-[10px] text-gray-500 font-medium">Exit your session</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-red-300" />
+            </button>
+
+            <button 
+              onClick={() => navigate('/settings')} 
+              className="group flex items-center justify-between p-4 rounded-2xl bg-gray-50 dark:bg-gray-900/50 hover:bg-red-50 dark:hover:bg-red-900/10 border border-gray-100 dark:border-gray-700 hover:border-red-200 dark:hover:border-red-800/50 transition-all"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm text-gray-400 group-hover:text-red-500 transition-colors">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-black text-gray-900 dark:text-white">Delete Account</p>
+                  <p className="text-[10px] text-gray-500 font-medium">Permanent removal</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-red-300" />
+            </button>
+          </div>
         </div>
       </div>
 
