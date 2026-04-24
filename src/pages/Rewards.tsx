@@ -263,13 +263,12 @@ export default function Rewards() {
     try {
       const userRef = doc(db, 'users', currentUser.uid);
       await updateDoc(userRef, {
-        points: 6337,
-        balance: 63.37,
+        points: 6462,
+        balance: 64.62,
         isPointsRecovered: true,
-        isRestoredTo6337: true,
         recoveredAt: serverTimestamp()
       });
-      setSuccess("Full balance of 6,337 points successfully restored!");
+      setSuccess("Full balance of 6,462 points successfully restored!");
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
       setError("Restoration failed. Please try again.");
@@ -399,7 +398,7 @@ export default function Rewards() {
                       className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center transition-all shadow-lg shadow-orange-500/20 active:scale-95 animate-pulse"
                     >
                       <RotateCcw className="w-3 h-3 mr-2" />
-                      {isRecovering ? 'Restoring...' : 'Restore 6,337 Pts'}
+                      {isRecovering ? 'Restoring...' : 'Restore 6,462 Pts'}
                     </button>
                   )}
                 </div>

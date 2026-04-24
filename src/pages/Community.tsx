@@ -4,7 +4,7 @@ import {
   Loader2, MessageSquare, Share2, Info, Sparkles, Heart, Award, Zap,
   MapPin, Camera, Shield, Search, Filter, Plus, Megaphone, Handshake,
   Lightbulb, Wrench, GraduationCap, ChevronRight, Star, ArrowUpCircle,
-  BrainCircuit, X, Send, PieChart, Navigation, RotateCcw
+  BrainCircuit, X, Send, PieChart, Navigation
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow, Marker } from '@vis.gl/react-google-maps';
@@ -787,35 +787,13 @@ export default function Community() {
                 </Map>
               </APIProvider>
             ) : (
-              <div className="flex flex-col items-center gap-4 p-8 text-center bg-gray-50/50 dark:bg-gray-950/50 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
-                <div className="w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center shadow-lg shadow-red-200/50">
+              <div className="flex flex-col items-center gap-3 p-8 text-center">
+                <div className="w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
                   <AlertCircle className="w-8 h-8 text-red-500" />
                 </div>
-                <div className="max-w-xs">
-                  <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Maps Integration Required</h3>
-                  <p className="text-[10px] text-gray-500 mt-2 leading-relaxed">
-                    The Pulse Map requires a valid <b>Google Maps API Key</b> to function in production.
-                  </p>
-                  <p className="mt-4 text-[9px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 p-2 rounded-lg border border-indigo-100 dark:border-indigo-800">
-                    If you are seeing this on your deployed site, ensure <b>VITE_GOOGLE_MAPS_API_KEY</b> is added to your Cloud Run or GitHub environment variables.
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => window.location.reload()}
-                    className="mt-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-gray-50 transition-all flex items-center gap-2"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    Force Reload
-                  </button>
-                  <a 
-                    href="https://console.cloud.google.com/google/maps-apis/credentials" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200/50"
-                  >
-                    Get API Key
-                  </a>
+                <div>
+                  <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Map Unavailable</h3>
+                  <p className="text-[10px] text-gray-500 max-w-[200px] mx-auto mt-1">Please configure your <b>VITE_GOOGLE_MAPS_API_KEY</b> in settings to enable community mapping.</p>
                 </div>
               </div>
             )}

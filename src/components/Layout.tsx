@@ -860,9 +860,18 @@ export default function Layout() {
     { path: '/support', icon: Headphones, color: 'text-cyan-500', label: 'Support' },
   ];
 
-  const isDeveloper = currentUser?.email === 'edwinmuoha@gmail.com' || currentUser?.phoneNumber === '+254728011174' || userData?.role === 'admin';
+  const developerEmails = ['edwinmuoha@gmail.com'];
+  const developerPhones = ['+254728011174'];
+  const isDeveloperEmail = currentUser?.email && developerEmails.includes(currentUser.email.toLowerCase());
+  const isDeveloperPhone = currentUser?.phoneNumber && developerPhones.includes(currentUser.phoneNumber);
+  const isDeveloper = isDeveloperEmail || isDeveloperPhone || userData?.role === 'admin';
 
-  const navItems = [...coreNavItems, ...extraNavItems];
+  const filteredExtraNavItems = extraNavItems.filter(item => {
+    if (item.path === '/platform') return isDeveloper;
+    return true;
+  });
+
+  const navItems = [...coreNavItems, ...filteredExtraNavItems];
 
   const rightLinks = [
     { type: 'icon', icon: Share2, color: 'text-blue-500', title: 'Share Pulse Feeds', action: handleShare },
@@ -1101,6 +1110,16 @@ export default function Layout() {
                 <Link to="/messages" className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">
                   <MessageCircle className="w-5 h-5" />
                 </Link>
+
+                {isDeveloper && (
+                  <button 
+                    onClick={() => navigate('/platform')}
+                    className="p-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200/50 flex items-center justify-center animate-pulse"
+                    title="Platform Control Center"
+                  >
+                    <Lock className="w-5 h-5" />
+                  </button>
+                )}
 
                 <button 
                   onClick={() => setActiveModal('moreMenu')}
@@ -1638,7 +1657,7 @@ export default function Layout() {
                   <div>
                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 px-1">Shortcuts</h4>
                     <div className="grid grid-cols-3 gap-3">
-                      {extraNavItems.map((item, idx) => {
+                      {filteredExtraNavItems.map((item, idx) => {
                         const Icon = item.icon;
                         return (
                           <Link 
@@ -1702,42 +1721,13 @@ export default function Layout() {
                     <div className="text-center">
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pulse Feeds v2.1.0-RESTORATION</p>
                       <button 
-                        onClick={() => {
-                          if (confirm('This will wipe local cache, storage, and database to force-sync the latest version from GitHub. Continue?')) {
-                            const clearAll = async () => {
-                              // Clear Service Workers
-                              if ('serviceWorker' in navigator) {
-                                const registrations = await navigator.serviceWorker.getRegistrations();
-                                for (let registration of registrations) {
-                                  await registration.unregister();
-                                }
-                              }
-                              // Clear Cache Storage
-                              if ('caches' in window) {
-                                const cacheNames = await caches.keys();
-                                for (let name of cacheNames) {
-                                  await caches.delete(name);
-                                }
-                              }
-                              // Clear IndexedDB
-                              if ('indexedDB' in window) {
-                                const dbs = await indexedDB.databases();
-                                for (let db of dbs) {
-                                  if (db.name) indexedDB.deleteDatabase(db.name);
-                                }
-                              }
-                              // Clear Storage
-                              localStorage.clear();
-                              sessionStorage.clear();
-                              
-                              window.location.reload();
-                            };
-                            clearAll();
-                          }
+                        onClick={async () => {
+                          const { resetFirestore } = await import('../lib/firebase');
+                          resetFirestore();
                         }}
-                        className="text-[8px] font-bold text-indigo-500 mt-1 uppercase underline hover:text-indigo-600 transition-colors"
+                        className="text-[8px] font-bold text-indigo-500 mt-1 uppercase underline"
                       >
-                        ⚡ Aggressive Sync & Clear Cache
+                        Force Clear Cache & Sync
                       </button>
                     </div>
                   </div>

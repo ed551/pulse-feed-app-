@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../lib/firebase';
-import { collection, getDocs, query, doc, onSnapshot, updateDoc, increment, addDoc, serverTimestamp, getCountFromServer } from 'firebase/firestore';
+import { collection, getDocs, query, doc, onSnapshot, updateDoc, increment, addDoc, serverTimestamp, getCountFromServer, setDoc } from 'firebase/firestore';
 import { 
   Users, User, Award, DollarSign, TrendingUp, ShieldCheck, Activity, 
   Lock, Wallet, ArrowDownCircle, ArrowUpCircle, BarChart2, 
@@ -36,6 +36,14 @@ export default function PlatformDashboard() {
   const [isDevWithdrawing, setIsDevWithdrawing] = useState(false);
   const [isLoggingRevenue, setIsLoggingRevenue] = useState(false);
   const [isDevUnlocked, setIsDevUnlocked] = useState(false);
+
+  useEffect(() => {
+    // Auto-unlock for the official developer
+    if (currentUser?.email?.toLowerCase() === 'edwinmuoha@gmail.com' || currentUser?.phoneNumber === '+254728011174') {
+      setIsDevUnlocked(true);
+    }
+  }, [currentUser]);
+
   const [verificationStep, setVerificationStep] = useState<'email' | 'phone' | 'fingerprint'>('email');
   const [emailInput, setEmailInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
@@ -126,6 +134,9 @@ export default function PlatformDashboard() {
           potentialRevenue: (prev.totalUsers || 0) * 1.5 // Mock: $1.50 potential per user
         }));
       }
+    }, (error) => {
+      console.error("Platform stats subscription error:", error);
+      setError("Failed to stream platform statistics. You may need to refresh.");
     });
 
     return () => unsubscribe();
@@ -312,6 +323,42 @@ export default function PlatformDashboard() {
       setError(err.message || "Failed to process Platform withdrawal.");
     } finally {
       setIsDevWithdrawing(false);
+    }
+  };
+
+  const handleSystemRestoration = async () => {
+    if (!confirm("Are you sure you want to perform a full system data restoration? This will set platform stats and your user balance to the developer-specified values.")) return;
+    
+    setLoading(true);
+    try {
+      const statsRef = doc(db, "platform", "stats");
+      await setDoc(statsRef, {
+        platformRevenue: 21122.57,
+        platformShare: 5088.31,
+        totalUsers: 12400,
+        totalUserBalances: 155000, // Approximate based on community size
+        lastUpdated: serverTimestamp(),
+        serverSecret: "pulse-feeds-server-secret-2026"
+      }, { merge: true });
+
+      if (currentUser) {
+        const userRef = doc(db, 'users', currentUser.uid);
+        await updateDoc(userRef, {
+          points: 6462,
+          balance: 64.62,
+          isRestored: true,
+          restoredAt: serverTimestamp()
+        });
+      }
+
+      setSuccess("System Data Restored Successfully!");
+      setTimeout(() => setSuccess(null), 5000);
+      handleRefresh();
+    } catch (err: any) {
+      console.error("Restoration Error:", err);
+      setError("Failed to restore system data: " + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1010,6 +1057,20 @@ export default function PlatformDashboard() {
                 <p className="text-xs text-purple-600/70 dark:text-purple-400/70">
                   Withdrawals are hardcoded to Co-op Bank Account 853390 (Edwin). 
                   This ensures operational funds cannot be redirected even if the dashboard is compromised.
+                </p>
+              </div>
+
+              <div className="pt-4 border-t border-purple-100 dark:border-purple-900/50 mt-4">
+                <button
+                  onClick={handleSystemRestoration}
+                  disabled={loading}
+                  className="w-full py-4 bg-orange-50 dark:bg-orange-950/20 border-2 border-orange-200 dark:border-orange-900/50 text-orange-600 dark:text-orange-400 font-black rounded-2xl hover:bg-orange-100 dark:hover:bg-orange-900/40 transition-all flex items-center justify-center gap-2"
+                >
+                  <RefreshCw className={cn("w-5 h-5", loading && "animate-spin")} />
+                  Perform System Restoration
+                </button>
+                <p className="text-[10px] text-center text-orange-500/60 font-bold mt-2 uppercase tracking-widest">
+                  Sets Stats to $21k Revenue / $5k Treasury / 6.4k Pts
                 </p>
               </div>
             </div>
