@@ -10,6 +10,20 @@
         "displayName": { "type": "string", "description": "The user's display name" },
         "photoURL": { "type": "string", "description": "The user's profile picture URL" },
         "role": { "type": "string", "description": "The user's role (e.g., admin, user)" },
+        "twoFactorEnabled": { "type": "boolean", "description": "Whether 2FA is enabled" },
+        "twoFactorType": { "type": "string", "enum": ["biometric", "email_otp", "sms_otp"], "description": "The type of 2FA" },
+        "phoneNumber": { "type": "string", "description": "The user's phone number for SMS OTP" },
+        "theme": { "type": "string", "enum": ["light", "dark", "system"], "description": "User's theme preference" },
+        "blockedUsers": { "type": "array", "items": { "type": "string" }, "description": "List of blocked user UIDs" },
+        "blockedGroups": { "type": "array", "items": { "type": "string" }, "description": "List of blocked group IDs" },
+        "contentFilters": { 
+          "type": "object", 
+          "properties": {
+            "sensitiveContent": { "type": "boolean" },
+            "spamFilter": { "type": "boolean" },
+            "directMessagePrivacy": { "type": "string", "enum": ["everyone", "following", "none"] }
+          }
+        },
         "points": { "type": "number", "description": "The user's reward points" },
         "balance": { "type": "number", "description": "The user's wallet balance" },
         "adRevenue": { "type": "number", "description": "The user's total ad revenue generated" },

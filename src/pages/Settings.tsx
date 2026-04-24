@@ -14,13 +14,22 @@ import {
   ArrowLeft,
   Check,
   Loader2,
-  Heart
+  Heart,
+  X,
+  Sun,
+  Moon,
+  Monitor,
+  Ban,
+  Filter,
+  Users2,
+  AlertCircle
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { db } from "../lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
-import FingerprintModal from "../components/FingerprintModal";
+import FingerprintModal from "../components/tools/FingerprintModal";
+import OTPModal from "../components/tools/OTPModal";
 import { cn } from "../lib/utils";
 
 export default function Settings() {
@@ -50,6 +59,17 @@ export default function Settings() {
   const [datingEducation, setDatingEducation] = useState(userData?.education || "");
   const [datingStatus, setDatingStatus] = useState(userData?.status || "Single");
   const [datingSports, setDatingSports] = useState(userData?.sports?.join(", ") || "");
+
+  // New settings states
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>((userData?.theme as 'light' | 'dark' | 'system') || "system");
+  const [contentFilters, setContentFilters] = useState(userData?.contentFilters || {
+    sensitiveContent: false,
+    spamFilter: true,
+    directMessagePrivacy: "everyone" as const,
+    photoVisibility: "everyone" as const,
+    publicProfile: true,
+    allowFollowers: true
+  });
 
   useEffect(() => {
     if (currentUser?.displayName) setDisplayName(currentUser.displayName);
@@ -132,6 +152,76 @@ export default function Settings() {
     }
   };
 
+  const handleUpdate2FA = async (type: string) => {
+    if (!currentUser) return;
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        twoFactorType: type
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleToggle2FA = async (enabled: boolean) => {
+    if (!currentUser) return;
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        twoFactorEnabled: enabled
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUpdateTheme = async (newTheme: 'light' | 'dark' | 'system') => {
+    if (!currentUser) return;
+    setTheme(newTheme);
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        theme: newTheme
+      });
+      // Apply theme immediately for preview
+      if (newTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else if (newTheme === 'light') {
+        document.documentElement.classList.remove('dark');
+      } else {
+        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.classList.toggle('dark', isDark);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUpdateFilters = async (key: string, value: any) => {
+    if (!currentUser) return;
+    const newFilters = { ...contentFilters, [key]: value };
+    setContentFilters(newFilters);
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        contentFilters: newFilters
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUnblock = async (id: string, type: 'user' | 'group') => {
+    if (!currentUser) return;
+    try {
+      const field = type === 'user' ? 'blockedUsers' : 'blockedGroups';
+      const currentList = userData?.[field] || [];
+      const newList = currentList.filter((item: string) => item !== id);
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        [field]: newList
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const sections = [
     {
       id: 'personal',
@@ -167,6 +257,38 @@ export default function Settings() {
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : saveSuccess ? <Check className="w-4 h-4 mr-2" /> : null}
             {saveSuccess ? "Saved Successfully" : "Save Changes"}
           </button>
+        </div>
+      )
+    },
+    {
+      id: 'appearance',
+      title: 'Theme & Appearance',
+      description: 'Customize how Pulse Feeds looks',
+      icon: <Sun className="w-5 h-5 text-yellow-500" />,
+      content: (
+        <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+          <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Interface Theme</label>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { id: 'light', icon: Sun, label: 'Light' },
+              { id: 'dark', icon: Moon, label: 'Dark' },
+              { id: 'system', icon: Monitor, label: 'System' }
+            ].map((t) => (
+              <button
+                key={t.id}
+                onClick={() => handleUpdateTheme(t.id as 'light' | 'dark' | 'system')}
+                className={cn(
+                  "flex flex-col items-center justify-center p-4 rounded-2xl border transition-all",
+                  theme === t.id 
+                    ? "bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-600" 
+                    : "bg-gray-50 dark:bg-gray-700/30 border-gray-100 dark:border-gray-700 hover:border-blue-200"
+                )}
+              >
+                <t.icon className="w-5 h-5 mb-2" />
+                <span className="text-xs font-medium">{t.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )
     },
@@ -338,47 +460,259 @@ export default function Settings() {
     {
       id: 'security',
       title: 'Security & Privacy',
-      description: 'Fingerprint, password, and visibility',
+      description: 'Two-factor auth, blocking, and filters',
       icon: <Shield className="w-5 h-5 text-purple-500" />,
       content: (
-        <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
-          <button 
-            onClick={() => handleSensitiveAction('security')}
-            className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
-          >
-            <div className="flex items-center space-x-3">
-              <Fingerprint className="w-5 h-5 text-purple-500" />
-              <div className="text-left">
-                <p className="text-sm font-bold text-gray-900 dark:text-white">Biometric Authentication</p>
-                <p className="text-[10px] text-gray-500">Enabled for sensitive actions</p>
-              </div>
+        <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Two-Factor Authentication</h4>
+            
+            <div className="grid grid-cols-1 gap-2">
+              {[
+                { id: 'biometric', icon: Fingerprint, label: 'Biometric Scanner', desc: 'Secure fingerprint scan', color: 'text-cyan-500' },
+                { id: 'email_otp', icon: Mail, label: 'Email Security Code', desc: '6-digit code via email', color: 'text-blue-500' },
+                { id: 'sms_otp', icon: Smartphone, label: 'SMS Security Code', desc: 'Verification via text message', color: 'text-green-500' }
+              ].map(method => (
+                <button
+                  key={method.id}
+                  onClick={() => handleUpdate2FA(method.id)}
+                  className={cn(
+                    "flex items-center justify-between p-3 rounded-xl border transition-all",
+                    userData?.twoFactorType === method.id 
+                      ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800" 
+                      : "bg-gray-50 dark:bg-gray-700/30 border-gray-100 dark:border-gray-700 hover:border-indigo-200"
+                  )}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className={cn("p-1.5 rounded-lg bg-white dark:bg-gray-800 shadow-sm", method.color)}>
+                      <method.icon className="w-4 h-4" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-bold text-gray-900 dark:text-white">{method.label}</p>
+                      <p className="text-[10px] text-gray-500">{method.desc}</p>
+                    </div>
+                  </div>
+                  {userData?.twoFactorType === method.id && (
+                    <div className="w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center">
+                      <Check className="w-3 h-3 text-white" />
+                    </div>
+                  )}
+                </button>
+              ))}
             </div>
-            <div className="w-10 h-5 bg-green-500 rounded-full relative">
-              <div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full"></div>
-            </div>
-          </button>
-          
-          <button className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
-            <div className="flex items-center space-x-3">
-              <Lock className="w-5 h-5 text-blue-500" />
-              <div className="text-left">
-                <p className="text-sm font-bold text-gray-900 dark:text-white">Change Password</p>
-                <p className="text-[10px] text-gray-500">Last changed 3 months ago</p>
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-gray-400" />
-          </button>
 
-          <button className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
-            <div className="flex items-center space-x-3">
-              <Eye className="w-5 h-5 text-green-500" />
-              <div className="text-left">
-                <p className="text-sm font-bold text-gray-900 dark:text-white">Profile Visibility</p>
-                <p className="text-[10px] text-gray-500">Currently set to Public</p>
+            <div className="p-4 bg-indigo-600/5 dark:bg-indigo-600/10 rounded-2xl border border-indigo-600/20 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">Enable 2FA Protection</p>
+                  <p className="text-[10px] text-gray-500">Identity check for sensitive actions</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => handleToggle2FA(!userData?.twoFactorEnabled)}
+                className={cn(
+                  "w-12 h-6 rounded-full relative transition-colors duration-300",
+                  userData?.twoFactorEnabled ? "bg-indigo-600" : "bg-gray-300 dark:bg-gray-600"
+                )}
+              >
+                <div className={cn(
+                  "absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300",
+                  userData?.twoFactorEnabled ? "right-1" : "left-1"
+                )} />
+              </button>
+            </div>
+          </div>
+
+          <div className="h-px bg-gray-100 dark:bg-gray-700 my-2" />
+
+          {/* Blocked Lists */}
+          <div className="space-y-4">
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Blocked Management</h4>
+            
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-100 dark:border-red-900/20">
+                <div className="flex items-center gap-3">
+                  <Ban className="w-5 h-5 text-red-500" />
+                  <div>
+                    <h5 className="text-sm font-bold text-gray-900 dark:text-white">Blocked Users</h5>
+                    <p className="text-[10px] text-gray-500">{(userData?.blockedUsers || []).length} users restricted</p>
+                  </div>
+                </div>
+                <button className="text-xs font-bold text-red-600 hover:underline">Manage</button>
+              </div>
+
+              {(userData?.blockedUsers || []).length > 0 && (
+                <div className="space-y-2 pl-2 border-l-2 border-red-100 dark:border-red-900/30">
+                  {userData?.blockedUsers?.map((uid: string) => (
+                    <div key={uid} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-gray-200" />
+                        <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300">{uid.substring(0, 8)}...</span>
+                      </div>
+                      <button onClick={() => handleUnblock(uid, 'user')} className="text-[10px] text-blue-600 hover:underline">Unblock</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between p-4 bg-orange-50 dark:bg-orange-900/10 rounded-2xl border border-orange-100 dark:border-orange-900/20">
+                <div className="flex items-center gap-3">
+                  <Users2 className="w-5 h-5 text-orange-500" />
+                  <div>
+                    <h5 className="text-sm font-bold text-gray-900 dark:text-white">Blocked Groups</h5>
+                    <p className="text-[10px] text-gray-500">{(userData?.blockedGroups || []).length} groups restricted</p>
+                  </div>
+                </div>
+                <button className="text-xs font-bold text-orange-600 hover:underline">Manage</button>
               </div>
             </div>
-            <ChevronRight className="w-4 h-4 text-gray-400" />
-          </button>
+          </div>
+
+          <div className="h-px bg-gray-100 dark:bg-gray-700 my-2" />
+
+          {/* Content Filters */}
+          <div className="space-y-4">
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Content Filters</h4>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Filter className="w-4 h-4 text-emerald-500" />
+                  <div>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">Sensitive Content</p>
+                    <p className="text-[10px] text-gray-500">Hide potentially disturbing media</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => handleUpdateFilters('sensitiveContent', !contentFilters.sensitiveContent)}
+                  className={cn(
+                    "w-10 h-5 rounded-full relative transition-colors",
+                    contentFilters.sensitiveContent ? "bg-emerald-600" : "bg-gray-300 dark:bg-gray-600"
+                  )}
+                >
+                  <div className={cn(
+                    "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
+                    contentFilters.sensitiveContent ? "right-1" : "left-1"
+                  )} />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-4 h-4 text-blue-500" />
+                  <div>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">Aggressive Spam Filter</p>
+                    <p className="text-[10px] text-gray-500">Automatically hide promotional bots</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => handleUpdateFilters('spamFilter', !contentFilters.spamFilter)}
+                  className={cn(
+                    "w-10 h-5 rounded-full relative transition-colors",
+                    contentFilters.spamFilter ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
+                  )}
+                >
+                  <div className={cn(
+                    "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
+                    contentFilters.spamFilter ? "right-1" : "left-1"
+                  )} />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold text-gray-500 uppercase">Direct Message Privacy</p>
+                <select 
+                  value={contentFilters.directMessagePrivacy}
+                  onChange={(e) => handleUpdateFilters('directMessagePrivacy', e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-3 text-xs text-gray-900 dark:text-white outline-none"
+                >
+                  <option value="everyone">Everyone</option>
+                  <option value="following">Only People I Follow</option>
+                  <option value="none">No One</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          <div className="h-px bg-gray-100 dark:bg-gray-700 my-4" />
+
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Account Privacy & Interactions</h4>
+            
+            <div className="space-y-4 bg-gray-50 dark:bg-gray-700/20 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">Public Profile Visibility</p>
+                  <p className="text-[10px] text-gray-500">Allow strangers to see your posts and media</p>
+                </div>
+                <button 
+                  onClick={() => handleUpdateFilters('publicProfile', !contentFilters.publicProfile)}
+                  className={cn(
+                    "w-10 h-5 rounded-full relative transition-colors",
+                    contentFilters.publicProfile ? "bg-indigo-600" : "bg-gray-300 dark:bg-gray-600"
+                  )}
+                >
+                  <div className={cn(
+                    "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
+                    contentFilters.publicProfile ? "right-1" : "left-1"
+                  )} />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-gray-700 dark:text-gray-300">Who can see your photos?</p>
+                <div className="flex gap-2">
+                  {['everyone', 'followers', 'none'].map((val) => (
+                    <button
+                      key={val}
+                      onClick={() => handleUpdateFilters('photoVisibility', val)}
+                      className={cn(
+                        "flex-1 py-2 text-[10px] font-bold rounded-lg border capitalize transition-all",
+                        contentFilters.photoVisibility === val 
+                          ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-100 dark:shadow-none" 
+                          : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500"
+                      )}
+                    >
+                      {val}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">Allow Followers</p>
+                  <p className="text-[10px] text-gray-500">Allow other users to follow your activity</p>
+                </div>
+                <button 
+                  onClick={() => handleUpdateFilters('allowFollowers', !contentFilters.allowFollowers)}
+                  className={cn(
+                    "w-10 h-5 rounded-full relative transition-colors",
+                    contentFilters.allowFollowers ? "bg-emerald-600" : "bg-gray-300 dark:bg-gray-600"
+                  )}
+                >
+                  <div className={cn(
+                    "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
+                    contentFilters.allowFollowers ? "right-1" : "left-1"
+                  )} />
+                </button>
+              </div>
+            </div>
+
+            <button className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
+              <div className="flex items-center space-x-4">
+                <Eye className="w-5 h-5 text-gray-400" />
+                <div className="text-left">
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">Profile Visibility</p>
+                  <p className="text-[10px] text-gray-500">Currently set to {contentFilters.publicProfile ? 'Public' : 'Private'}</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-gray-400" />
+            </button>
+          </div>
         </div>
       )
     },
@@ -494,16 +828,38 @@ export default function Settings() {
         </div>
       </div>
 
-      <FingerprintModal 
-        isOpen={showFingerprintModal}
-        onClose={() => {
-          setShowFingerprintModal(false);
-          setPendingAction(null);
-        }}
-        onSuccess={handleFingerprintSuccess}
-        title={pendingAction === 'delete' ? 'Verify to Delete' : 'Verify Identity'}
-        description={pendingAction === 'delete' ? 'Press and hold to confirm account deletion' : 'Press and hold to access sensitive settings'}
-      />
+      {showFingerprintModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-2xl max-w-sm w-full border border-gray-100 dark:border-gray-700 relative">
+            <button 
+              onClick={() => {
+                setShowFingerprintModal(false);
+                setPendingAction(null);
+              }}
+              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            {userData?.twoFactorType !== 'biometric' && userData?.twoFactorEnabled ? (
+              <OTPModal 
+                userId={currentUser?.uid || ''} 
+                email={userData?.email}
+                method={userData?.twoFactorType === 'sms_otp' ? 'sms' : 'email'}
+                onClose={() => setShowFingerprintModal(false)}
+                onSuccess={handleFingerprintSuccess}
+              />
+            ) : (
+              <FingerprintModal 
+                onClose={() => {
+                  setShowFingerprintModal(false);
+                  setPendingAction(null);
+                }}
+                onSuccess={handleFingerprintSuccess}
+              />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

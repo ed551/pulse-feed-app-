@@ -27,6 +27,7 @@ import {
 } from "firebase/firestore";
 import fs from "fs";
 import { GoogleGenAI } from "@google/genai";
+import nodemailer from 'nodemailer';
 
 dotenv.config();
 
@@ -1331,19 +1332,21 @@ async function startServer() {
         // --- BRAIN FALLBACK: Gemini Intelligence with Google Search ---
         console.log(`[Geocode] Attempting Gemini Intelligence Geocoding on attempt ${attempt}...`);
         try {
-          const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY || "");
-          const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-live-preview" });
+          const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
           
           const prompt = `Perform a reverse geocode for coordinates lat=${latitude}, lon=${longitude}. 
           Find the city, town, or major locality name. Return ONLY a valid JSON object with this structure:
           {"address": {"city": "CityName", "country": "CountryName"}, "display_name": "Full Address string"}`;
           
-          const genResult = await model.generateContent({
+          const genResult = await ai.models.generateContent({
+             model: "gemini-3-flash-preview",
              contents: [{ role: 'user', parts: [{ text: prompt }] }],
-             tools: [{ googleSearch: {} } as any]
+             config: {
+               tools: [{ googleSearch: {} } as any]
+             }
           });
           
-          const textResponse = genResult.response.text();
+          const textResponse = genResult.text || "";
           const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
             const data = JSON.parse(jsonMatch[0]);
@@ -1378,6 +1381,97 @@ async function startServer() {
 
   app.get("/api/geocode", geocodeHandler);
   app.get("/api/pulse-geo", geocodeHandler);
+  
+  // OTP Security Routes
+  app.post("/api/otp/send", async (req, res) => {
+    const { userId, email, method } = req.body;
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    try {
+      await resilientDb.collection('otps').doc(userId).set({
+        otp,
+        expiresAt: expiresAt.toISOString(),
+        userId,
+        method,
+        timestamp: FieldValue.serverTimestamp()
+      });
+
+      if (method === 'email' && email) {
+        // Since we don't have EMAIL_USER/PASS env vars in the instructions yet,
+        // we'll simulate unless they are provided.
+        if (!process.env.EMAIL_USER) {
+          console.log(`[OTP Simulation] OTP for ${email}: ${otp}`);
+          return res.json({ success: true, message: "Security code sent via email (Simulation)", devOtp: otp });
+        }
+
+        const transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS
+          }
+        });
+
+        await transporter.sendMail({
+          from: `"Pulse Feeds Security" <${process.env.EMAIL_USER}>`,
+          to: email,
+          subject: "Pulse Feeds: Security Verification Code",
+          text: `Your security code is: ${otp}. It expires in 10 minutes.`,
+          html: `<div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+            <h2 style="color: #06b6d4;">Pulse Feeds Security</h2>
+            <p>You requested a security verification code. Use the code below to verify your identity:</p>
+            <div style="font-size: 32px; font-weight: bold; padding: 10px; background: #f0fdfa; color: #0891b2; text-align: center; letter-spacing: 5px; margin: 20px 0;">
+              ${otp}
+            </div>
+            <p style="font-size: 12px; color: #666;">This code will expire in 10 minutes. If you did not request this, please secure your account.</p>
+          </div>`
+        });
+      } else if (method === 'sms') {
+         // SMS simulation
+         console.log(`[OTP SMS Simulation] OTP sent to user ${userId}: ${otp}`);
+         return res.json({ success: true, message: "Security code sent via SMS (Simulation)", devOtp: otp });
+      }
+
+      res.json({ success: true, message: `Security code sent via ${method}` });
+    } catch (error: any) {
+      console.error("OTP send error:", error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  app.post("/api/otp/verify", async (req, res) => {
+    const { userId, otp } = req.body;
+    try {
+      const otpDoc = await resilientDb.collection('otps').doc(userId).get();
+      if (!otpDoc.exists) {
+        return res.status(400).json({ success: false, error: "Verification code not found or expired" });
+      }
+
+      const data = otpDoc.data();
+      
+      // Safety check for used codes
+      if (data.used) {
+        return res.status(400).json({ success: false, error: "This security code has already been used" });
+      }
+
+      if (data.otp !== otp) {
+        return res.status(400).json({ success: false, error: "Invalid security code" });
+      }
+
+      if (new Date() > new Date(data.expiresAt)) {
+        return res.status(400).json({ success: false, error: "Security code has expired" });
+      }
+
+      // Mark as used
+      await resilientDb.collection('otps').doc(userId).update({ used: true });
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("OTP verify error:", error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
 
   // City Search Proxy
   app.get("/api/search-city", async (req, res) => {

@@ -58,6 +58,20 @@ interface UserData {
   recoveredAt?: any;
   membershipLevel?: 'bronze' | 'silver' | 'gold';
   membershipStatus?: 'active' | 'expired' | 'canceled';
+  twoFactorEnabled?: boolean;
+  twoFactorType?: 'biometric' | 'email_otp' | 'sms_otp';
+  phoneNumber?: string;
+  theme?: 'light' | 'dark' | 'system';
+  blockedUsers?: string[];
+  blockedGroups?: string[];
+  contentFilters?: {
+    sensitiveContent: boolean;
+    spamFilter: boolean;
+    directMessagePrivacy: 'everyone' | 'followed' | 'none';
+    photoVisibility: 'everyone' | 'followers' | 'none';
+    publicProfile: boolean;
+    allowFollowers: boolean;
+  };
 }
 
 interface AuthContextType {
@@ -153,7 +167,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 adRevenue: 0,
                 enrolledCourses: [],
                 completedModules: [],
-                createdAt: serverTimestamp()
+                createdAt: serverTimestamp(),
+                twoFactorEnabled: true,
+                twoFactorType: 'biometric'
               };
               
               setDoc(userRef, initialData, { merge: true }).catch(err => {

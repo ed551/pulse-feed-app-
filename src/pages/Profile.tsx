@@ -1,10 +1,9 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { Settings, LogOut, Edit3, Shield, Star, Activity, Check, X, Loader2, AlertTriangle, Fingerprint, Camera, Sparkles, Upload, RotateCcw, Sliders, Award, Trophy, Zap, Users, Heart as HeartIcon, Beaker, Trash2, MessageSquare, Share2, Heart, PlusSquare, Brain, Wand2, MoreHorizontal, PlusCircle, MinusCircle, Bookmark, EyeOff, Bell, Link, XCircle, AlertCircle, Copy, ExternalLink, Pin, Tag, Globe, Archive, Crown } from "lucide-react";
+import { Settings, LogOut, Edit3, Shield, Star, Activity, Check, X, Loader2, AlertTriangle, Fingerprint, Camera, Sparkles, Upload, RotateCcw, Sliders, Award, Trophy, Zap, Users, Heart as HeartIcon, Beaker, Trash2, MessageSquare, Share2, Heart, PlusSquare, Brain, Wand2, MoreHorizontal, PlusCircle, MinusCircle, Bookmark, EyeOff, Bell, Link, XCircle, AlertCircle, Copy, ExternalLink, Pin, Tag, Globe, Archive, Crown, Lock, Mail, Smartphone } from "lucide-react";
 import { auth_logic, user_history, wallet_engine } from "../lib/engines";
 import { moderateContent } from "../services/moderationService";
 import { generateAvatar } from "../services/imageService";
 import { generateContentWithRetry } from "../lib/ai";
-import FingerprintModal from "../components/FingerprintModal";
 import Cropper from 'react-easy-crop';
 import { cn } from "../lib/utils";
 import { useNavigate } from "react-router-dom";
@@ -581,6 +580,78 @@ export default function Profile() {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* 2FA Security Status Card */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center">
+            <Lock className="w-5 h-5 mr-2 text-indigo-600" />
+            Security Verification
+          </h2>
+          <motion.button 
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => navigate('/settings')}
+            className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 transition-colors"
+          >
+            Configure
+          </motion.button>
+        </div>
+
+        <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/30 rounded-2xl border border-gray-100 dark:border-gray-700">
+          <div className="flex items-center space-x-4">
+            <div className={cn(
+              "w-10 h-10 rounded-xl flex items-center justify-center shadow-sm",
+              userData?.twoFactorEnabled ? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400" : "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
+            )}>
+              {userData?.twoFactorType === 'sms_otp' ? <Smartphone className="w-5 h-5" /> : 
+               userData?.twoFactorType === 'email_otp' ? <Mail className="w-5 h-5" /> : 
+               <Fingerprint className="w-5 h-5" />}
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-bold text-gray-900 dark:text-white">
+                {userData?.twoFactorEnabled ? '2FA Protection Active' : '2FA Protection Disabled'}
+              </p>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                {userData?.twoFactorEnabled 
+                  ? `Using ${userData?.twoFactorType === 'sms_otp' ? 'SMS Code' : userData?.twoFactorType === 'email_otp' ? 'Email Code' : 'Biometric Scan'}`
+                  : 'Enable for identity verification'}
+              </p>
+            </div>
+          </div>
+          
+          <button 
+            onClick={async () => {
+              if (!currentUser) return;
+              try {
+                await updateDoc(doc(db, 'users', currentUser.uid), {
+                  twoFactorEnabled: !userData?.twoFactorEnabled
+                });
+                
+                // Show notification
+                window.dispatchEvent(new CustomEvent('show-notification', { 
+                  detail: { 
+                    title: userData?.twoFactorEnabled ? "Security Disabled" : "Security Enabled", 
+                    body: userData?.twoFactorEnabled ? "2FA protection has been turned off." : "Your account is now protected with 2FA.",
+                    type: userData?.twoFactorEnabled ? "error" : "success"
+                  } 
+                }));
+              } catch (e) {
+                console.error(e);
+              }
+            }}
+            className={cn(
+              "w-12 h-6 rounded-full relative transition-colors duration-300",
+              userData?.twoFactorEnabled ? "bg-indigo-600" : "bg-gray-300 dark:bg-gray-600"
+            )}
+          >
+            <div className={cn(
+              "absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300",
+              userData?.twoFactorEnabled ? "right-1" : "left-1"
+            )} />
+          </button>
         </div>
       </div>
 

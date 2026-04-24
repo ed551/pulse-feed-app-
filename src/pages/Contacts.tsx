@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { Search, UserPlus, MessageSquare, Phone, MoreVertical, User, ShieldCheck, Star, RefreshCw, Smartphone, ExternalLink } from "lucide-react";
+import { Search, UserPlus, MessageSquare, Phone, MoreVertical, User, ShieldCheck, Star, RefreshCw, Smartphone, ExternalLink, Ban, Trash2, Copy, Edit2, CheckCircle, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";
 import { useAuth } from "../contexts/AuthContext";
 import { db, handleFirestoreError, OperationType } from "../lib/firebase";
-import { collection, query, onSnapshot, orderBy } from "firebase/firestore";
+import { collection, query, onSnapshot, orderBy, doc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 
 interface Contact {
@@ -28,6 +28,7 @@ export default function Contacts() {
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [activeMenuContactId, setActiveMenuContactId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -97,6 +98,29 @@ export default function Contacts() {
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  const handleBlockContact = async (contactId: string) => {
+    if (!currentUser) return;
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        blockedUsers: arrayUnion(contactId)
+      });
+      setActiveMenuContactId(null);
+      window.dispatchEvent(new CustomEvent('show-notification', { 
+        detail: { title: "Contact Blocked", body: "User added to restricted list.", type: "error" } 
+      }));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    window.dispatchEvent(new CustomEvent('show-notification', { 
+      detail: { title: "Copied", body: "Number copied to clipboard.", type: "success" } 
+    }));
+    setActiveMenuContactId(null);
   };
 
   const allContacts = [...contacts, ...syncedContacts];
@@ -245,9 +269,65 @@ export default function Contacts() {
                       </button>
                     </>
                   )}
-                  <button className="p-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-xl transition-colors">
+                <div className="relative">
+                  <button 
+                    onClick={() => setActiveMenuContactId(activeMenuContactId === contact.id ? null : contact.id)}
+                    className="p-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-xl transition-colors"
+                  >
                     <MoreVertical className="w-5 h-5" />
                   </button>
+
+                  <AnimatePresence>
+                    {activeMenuContactId === contact.id && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-40" 
+                          onClick={() => setActiveMenuContactId(null)}
+                        />
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                          className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 z-50 py-2 overflow-hidden"
+                        >
+                          <div className="px-4 py-3 border-b border-gray-50 dark:border-gray-700">
+                            <p className="font-bold text-sm text-gray-900 dark:text-white truncate">{contact.displayName}</p>
+                            <p className="text-[10px] text-gray-500">{contact.phoneNumber || 'Pulse User'}</p>
+                          </div>
+                          
+                          <div className="py-1">
+                            <button 
+                              onClick={() => copyToClipboard(contact.phoneNumber || contact.id)}
+                              className="w-full flex items-center px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            >
+                              <Copy className="w-4 h-4 mr-3 text-gray-400" />
+                              Copy number
+                            </button>
+                            <button className="w-full flex items-center px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                              <Edit2 className="w-4 h-4 mr-3 text-gray-400" />
+                              Edit number before call
+                            </button>
+                            <button className="w-full flex items-center px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                              <CheckCircle className="w-4 h-4 mr-3 text-gray-400" />
+                              Not spam
+                            </button>
+                            <button 
+                              onClick={() => handleBlockContact(contact.id)}
+                              className="w-full flex items-center px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors"
+                            >
+                              <Ban className="w-4 h-4 mr-3 text-red-500" />
+                              Block
+                            </button>
+                            <button className="w-full flex items-center px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
+                              <Trash2 className="w-4 h-4 mr-3 text-red-500" />
+                              Delete
+                            </button>
+                          </div>
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                </div>
                 </div>
               </motion.div>
             ))}

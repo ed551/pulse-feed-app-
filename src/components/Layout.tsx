@@ -1,7 +1,7 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { 
-  Home, Users, PlusSquare, Gem, User, ShieldAlert, Bell, FileText, Lock, Headphones,
+  Home, Users, PlusSquare, Gem, User, ShieldAlert, Bell, FileText, Lock, Headphones, Settings,
   Sun, Moon, CloudRain, Cloud, CloudLightning, Clock, Watch, BellRing, StickyNote,
   Fingerprint, HeartPulse, MapPin, Phone, MessageCircle, Gamepad2, Globe, BrainCircuit,
   Languages, Ticket, Snowflake, Calendar, Smartphone, Monitor, PhoneCall, Wrench,
@@ -35,8 +35,9 @@ import GoogleAppsModal from "./tools/GoogleAppsModal";
 import CallModal from "./tools/CallModal";
 import TranslateModal from "./tools/TranslateModal";
 import ClockModal from "./tools/ClockModal";
+import OTPModal from "./tools/OTPModal";
 import { db } from "../lib/firebase";
-import { setDoc, doc, arrayUnion, serverTimestamp, getDocFromServer } from "firebase/firestore";
+import { setDoc, doc, arrayUnion, serverTimestamp, getDocFromServer, updateDoc } from "firebase/firestore";
 
 const weatherTypes = [
   { type: 'Hot / Sunny', icon: Sun, color: 'text-orange-500', bg: 'from-orange-500/20 to-yellow-500/20', glow: 'drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]', symbol: '☀️', temp: '--°C', tempValue: 25 },
@@ -51,10 +52,24 @@ export default function Layout() {
   const { isIdle, totalEarnedToday } = useRevenue();
   const navigate = useNavigate();
   const [isDark, setIsDark] = useState(() => {
+    // Check localStorage first for immediate flash prevention
     const saved = localStorage.getItem('theme');
     if (saved) return saved === 'dark';
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
+
+  // Sync with database theme preference
+  useEffect(() => {
+    if (userData?.theme) {
+      if (userData.theme === 'dark') {
+        setIsDark(true);
+      } else if (userData.theme === 'light') {
+        setIsDark(false);
+      } else {
+        setIsDark(window.matchMedia('(prefers-color-scheme: dark)').matches);
+      }
+    }
+  }, [userData?.theme]);
   const [time, setTime] = useState(new Date());
   const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>(() => {
     // Detect real mobile devices
@@ -93,6 +108,14 @@ export default function Layout() {
   const mainRef = useRef<HTMLDivElement>(null);
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [isLocked, setIsLocked] = useState(false);
+
+  // Auto-lock feature
+  useEffect(() => {
+    if (isIdle && userData?.twoFactorEnabled && currentUser) {
+      setIsLocked(true);
+    }
+  }, [isIdle, userData?.twoFactorEnabled, currentUser]);
   const [showAddPostMenu, setShowAddPostMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
@@ -188,10 +211,21 @@ export default function Layout() {
     testConnection();
   }, []);
 
-  const toggleTheme = () => {
+  const toggleTheme = async () => {
     const newTheme = !isDark;
     setIsDark(newTheme);
     localStorage.setItem('theme', newTheme ? 'dark' : 'light');
+    
+    // Also update remote if logged in
+    if (currentUser) {
+      try {
+        await updateDoc(doc(db, 'users', currentUser.uid), {
+          theme: newTheme ? 'dark' : 'light'
+        });
+      } catch (e) {
+        console.error("Failed to sync theme to cloud:", e);
+      }
+    }
   };
 
   const [systemStatus, setSystemStatus] = useState<{
@@ -884,6 +918,7 @@ export default function Layout() {
     { path: '/terms', icon: FileText, color: 'text-teal-500', label: 'Terms' },
     { path: '/privacy', icon: Lock, color: 'text-indigo-500', label: 'Privacy' },
     { path: '/support', icon: Headphones, color: 'text-cyan-500', label: 'Support' },
+    { path: '/settings', icon: Settings, color: 'text-gray-500', label: 'Settings' },
   ];
 
   const isDeveloper = currentUser?.email === 'edwinmuoha@gmail.com' || currentUser?.phoneNumber === '+254728011174' || userData?.role === 'admin';
@@ -1587,10 +1622,20 @@ export default function Layout() {
                 <GoogleAppsModal />
               )}
               {activeModal === 'fingerprint' && (
-                <FingerprintModal 
-                  onClose={() => setActiveModal(null)} 
-                  onSuccess={() => setActiveModal('health')}
-                />
+                userData?.twoFactorEnabled && userData?.twoFactorType !== 'biometric' ? (
+                  <OTPModal 
+                    userId={currentUser?.uid || ''} 
+                    email={userData?.email}
+                    method={userData.twoFactorType === 'sms_otp' ? 'sms' : 'email'}
+                    onClose={() => setActiveModal(null)}
+                    onSuccess={() => setActiveModal('health')}
+                  />
+                ) : (
+                  <FingerprintModal 
+                    onClose={() => setActiveModal(null)} 
+                    onSuccess={() => setActiveModal('health')}
+                  />
+                )
               )}
               {activeModal === 'call' && (
                 <CallModal />
@@ -1645,21 +1690,30 @@ export default function Layout() {
                     </div>
                   </div>
 
-                  {/* App Settings (Theme, Refresh) */}
-                  <div className="flex items-center gap-3">
+                  {/* App Settings (Theme, Refresh, Settings) */}
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={toggleTheme}
+                        className="flex-1 flex items-center justify-center gap-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      >
+                        {isDark ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
+                        <span className="text-xs font-bold">{isDark ? 'Light Mode' : 'Dark Mode'}</span>
+                      </button>
+                      <button 
+                        onClick={() => { setLocationName('Detecting...'); getLocation(); }}
+                        className="flex-1 flex items-center justify-center gap-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      >
+                        <RefreshCw className="w-4 h-4 text-gray-500" />
+                        <span className="text-xs font-bold">Refresh Data</span>
+                      </button>
+                    </div>
                     <button 
-                      onClick={toggleTheme}
-                      className="flex-1 flex items-center justify-center gap-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      onClick={() => { setActiveModal(null); navigate('/settings'); }}
+                      className="w-full flex items-center justify-center gap-2 p-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-2xl hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors border border-indigo-100 dark:border-indigo-800"
                     >
-                      {isDark ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
-                      <span className="text-xs font-bold">{isDark ? 'Light Mode' : 'Dark Mode'}</span>
-                    </button>
-                    <button 
-                      onClick={() => { setLocationName('Detecting...'); getLocation(); }}
-                      className="flex-1 flex items-center justify-center gap-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      <RefreshCw className="w-4 h-4 text-gray-500" />
-                      <span className="text-xs font-bold">Refresh Data</span>
+                      <Settings className="w-4 h-4" />
+                      <span className="text-xs font-bold">Account Settings & Security</span>
                     </button>
                   </div>
 
@@ -1814,6 +1868,74 @@ export default function Layout() {
         {/* AI Assistant & Self Healing */}
         <AIAssistant />
         <SelfHealing />
+
+        {/* Lock Overlay (Identity Verification Popup) */}
+        <AnimatePresence>
+          {isLocked && currentUser && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl z-[9999] flex flex-col items-center justify-center p-6"
+            >
+              <div className="w-full max-w-sm">
+                <div className="flex flex-col items-center mb-8">
+                  <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-500 rounded-[2rem] flex items-center justify-center mb-6 shadow-2xl shadow-indigo-500/20 rotate-3">
+                    <Lock className="w-10 h-10 text-white" />
+                  </div>
+                  <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tighter">Secure Lock</h2>
+                  <div className="flex items-center gap-2 mt-2 px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded-full">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">Session active but protected</span>
+                  </div>
+                </div>
+
+                <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] p-8 shadow-[0_20px_50px_rgba(0,0,0,0.1)] border border-gray-100 dark:border-gray-800 relative group overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-50" />
+                  
+                  {userData?.twoFactorEnabled && userData?.twoFactorType !== 'biometric' ? (
+                    <OTPModal 
+                      userId={currentUser?.uid || ''} 
+                      email={userData?.email}
+                      method={userData.twoFactorType === 'sms_otp' ? 'sms' : 'email'}
+                      onClose={() => {}} // Non-dismissible while locked
+                      onSuccess={() => {
+                        setIsLocked(false);
+                        showNotification("Identity Verified", { body: "Access restored. Welcome back!" });
+                      }}
+                    />
+                  ) : (
+                    <FingerprintModal 
+                      onClose={() => {}} // Non-dismissible while locked
+                      onSuccess={() => {
+                        setIsLocked(false);
+                        showNotification("Unlocked", { body: "Access restored successfully." });
+                      }}
+                    />
+                  )}
+                </div>
+
+                <div className="mt-12 flex flex-col items-center gap-6">
+                  <p className="text-xs text-gray-400 dark:text-gray-500 text-center max-w-[200px]">
+                    Your privacy is our priority. Please verify to continue your community experience.
+                  </p>
+                  
+                  <button 
+                    onClick={async () => {
+                      await logout();
+                      setIsLocked(false);
+                      navigate('/login');
+                    }}
+                    className="flex items-center gap-2 px-8 py-3 bg-red-50 dark:bg-red-900/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-2xl font-black text-xs transition-all active:scale-95"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    SWITCH ACCOUNT
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
