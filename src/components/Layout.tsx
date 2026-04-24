@@ -1690,30 +1690,21 @@ export default function Layout() {
                     </div>
                   </div>
 
-                  {/* App Settings (Theme, Refresh, Settings) */}
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-center gap-3">
-                      <button 
-                        onClick={toggleTheme}
-                        className="flex-1 flex items-center justify-center gap-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      >
-                        {isDark ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
-                        <span className="text-xs font-bold">{isDark ? 'Light Mode' : 'Dark Mode'}</span>
-                      </button>
-                      <button 
-                        onClick={() => { setLocationName('Detecting...'); getLocation(); }}
-                        className="flex-1 flex items-center justify-center gap-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      >
-                        <RefreshCw className="w-4 h-4 text-gray-500" />
-                        <span className="text-xs font-bold">Refresh Data</span>
-                      </button>
-                    </div>
+                  {/* App Settings (Theme, Refresh) */}
+                  <div className="flex items-center gap-3">
                     <button 
-                      onClick={() => { setActiveModal(null); navigate('/settings'); }}
-                      className="w-full flex items-center justify-center gap-2 p-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-2xl hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors border border-indigo-100 dark:border-indigo-800"
+                      onClick={toggleTheme}
+                      className="flex-1 flex items-center justify-center gap-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                     >
-                      <Settings className="w-4 h-4" />
-                      <span className="text-xs font-bold">Account Settings & Security</span>
+                      {isDark ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
+                      <span className="text-xs font-bold">{isDark ? 'Light Mode' : 'Dark Mode'}</span>
+                    </button>
+                    <button 
+                      onClick={() => { setLocationName('Detecting...'); getLocation(); }}
+                      className="flex-1 flex items-center justify-center gap-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <RefreshCw className="w-4 h-4 text-gray-500" />
+                      <span className="text-xs font-bold">Refresh Data</span>
                     </button>
                   </div>
 
