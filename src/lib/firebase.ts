@@ -1,13 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { 
-  initializeFirestore, 
-  getDocFromServer, 
-  doc, 
-  setLogLevel,
-  terminate,
-  clearIndexedDbPersistence
-} from 'firebase/firestore';
+import { initializeFirestore, getDocFromServer, doc, setLogLevel } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 // Import the Firebase configuration
@@ -32,21 +25,6 @@ const dbInstance = initializeFirestore(app, {
 }, (firestoreDatabaseId && firestoreDatabaseId !== '(default)') ? firestoreDatabaseId : undefined);
 
 export const db = dbInstance;
-
-/**
- * Forcefully resets the Firestore connection and clears local persistence.
- * Helpful for fixing "Could not reach backend" loops.
- */
-export async function resetFirestore() {
-  try {
-    await terminate(db);
-    await clearIndexedDbPersistence(db);
-    window.location.reload();
-  } catch (error) {
-    console.error("Failed to reset Firestore:", error);
-    window.location.reload();
-  }
-}
 
 // Initialize Storage
 export const storage = getStorage(app);

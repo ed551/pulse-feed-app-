@@ -39,28 +39,13 @@ const LoadingFallback = () => (
 
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const { currentUser, userData, loading } = useAuth();
-  
   if (loading) return <LoadingFallback />;
   
-  // Hardcoded developer list for reliability
-  const developerEmails = ['edwinmuoha@gmail.com'];
-  const developerPhones = ['+254728011174'];
+  const isDeveloper = currentUser?.email === 'edwinmuoha@gmail.com' || currentUser?.phoneNumber === '+254728011174' || userData?.role === 'admin';
   
-  const isDeveloperEmail = currentUser?.email && developerEmails.includes(currentUser.email.toLowerCase());
-  const isDeveloperPhone = currentUser?.phoneNumber && developerPhones.includes(currentUser.phoneNumber);
-  const isAdminRole = userData?.role === 'admin';
-  
-  const isAuthorized = isDeveloperEmail || isDeveloperPhone || isAdminRole;
-  
-  if (!isAuthorized) {
-    console.warn('Unauthorized access attempt to AdminRoute:', {
-      email: currentUser?.email,
-      role: userData?.role,
-      authenticated: !!currentUser
-    });
+  if (!isDeveloper) {
     return <Navigate to="/" replace />;
   }
-  
   return <>{children}</>;
 };
 

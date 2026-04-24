@@ -4,12 +4,10 @@ import {
   Loader2, MessageSquare, Share2, Info, Sparkles, Heart, Award, Zap,
   MapPin, Camera, Shield, Search, Filter, Plus, Megaphone, Handshake,
   Lightbulb, Wrench, GraduationCap, ChevronRight, Star, ArrowUpCircle,
-  BrainCircuit, X, Send, PieChart, Navigation, Globe
+  BrainCircuit, X, Send, PieChart, Navigation, RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow, Marker } from '@vis.gl/react-google-maps';
-import { MapContainer, TileLayer, Marker as LeafletMarker, Popup, useMap } from 'react-leaflet';
-import L from 'leaflet';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useRevenue } from '../contexts/RevenueContext';
@@ -18,28 +16,7 @@ import { collection, query, onSnapshot, doc, updateDoc, increment, addDoc, serve
 import { generateContentWithRetry } from '../lib/ai';
 
 // Fix for default marker icons in Leaflet with React
-const LeafletIconFix = () => {
-  useEffect(() => {
-    // @ts-ignore
-    delete L.Icon.Default.prototype._getIconUrl;
-    L.Icon.Default.mergeOptions({
-      iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-      iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-    });
-  }, []);
-  return null;
-};
-
-const LeafletEvents = ({ onClick }: { onClick: (latlng: { lat: number, lng: number }) => void }) => {
-  const map = useMap();
-  useEffect(() => {
-    map.on('click', (e) => {
-      onClick(e.latlng);
-    });
-  }, [map, onClick]);
-  return null;
-};
+// Removed as we are switching to Google Maps
 
 interface CommunityTask {
   id: string;
@@ -148,8 +125,6 @@ export default function Community() {
   const GOOGLE_MAPS_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID;
   const [useFallbackMarkers, setUseFallbackMarkers] = useState(false);
 
-  const [useLeafletFallback, setUseLeafletFallback] = useState(false);
-
   const isAdvancedMapAvailable = React.useMemo(() => {
     if (useFallbackMarkers) return false;
     // Check if the Map ID looks like a real UUID/Hash (Advanced Markers require a real Map ID)
@@ -162,7 +137,7 @@ export default function Community() {
   }, [GOOGLE_MAPS_ID, useFallbackMarkers]);
 
   const hasMapsApiKey = !!GOOGLE_MAPS_API_KEY && 
-                        GOOGLE_MAPS_API_KEY.length > 10 && 
+                        GOOGLE_MAPS_API_KEY.length > 5 && 
                         !GOOGLE_MAPS_API_KEY.includes('YOUR_');
 
   const locateUser = () => {
@@ -699,8 +674,7 @@ export default function Community() {
               <Navigation className="w-6 h-6 fill-blue-600/10 group-hover/locate:scale-110 transition-transform" />
             </button>
 
-            {/* Auto-Fallback Logic: If Google Key is missing, we use Leaflet. No giant error screen. */}
-            {(hasMapsApiKey && !useLeafletFallback) ? (
+            {hasMapsApiKey ? (
               <APIProvider apiKey={GOOGLE_MAPS_API_KEY || ''}>
                 <Map
                   key={`map-host-${useFallbackMarkers ? 'fallback' : 'advanced'}`}
@@ -813,89 +787,36 @@ export default function Community() {
                 </Map>
               </APIProvider>
             ) : (
-              <div className="h-full w-full relative">
-                <LeafletIconFix />
-                <MapContainer 
-                  center={[mapCenter.lat, mapCenter.lng]} 
-                  zoom={zoom} 
-                  className="h-full w-full"
-                  scrollWheelZoom={true}
-                  style={{ background: '#f8fafc' }}
-                >
-                  <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  />
-                  <LeafletEvents onClick={(latlng) => {
-                    setNewReportLatLng(latlng);
-                    setShowReportModal(true);
-                  }} />
-                  
-                  {userLocation && (
-                    <LeafletMarker position={[userLocation.lat, userLocation.lng]}>
-                      <Popup>You are here</Popup>
-                    </LeafletMarker>
-                  )}
-
-                  {reports.map((report) => (
-                    <LeafletMarker 
-                      key={report.id} 
-                      position={[report.lat || -1.286389, report.lng || 36.817223]}
-                      icon={L.divIcon({
-                        className: 'custom-div-icon',
-                        html: `<div class="w-5 h-5 rounded-full border-2 border-white shadow-lg ${report.status === 'Resolved' ? "bg-emerald-500" : "bg-amber-500"}"></div>`,
-                        iconSize: [20, 20],
-                        iconAnchor: [10, 10]
-                      })}
-                      eventHandlers={{
-                        click: () => setSelectedReportId(report.id)
-                      }}
-                    >
-                      <Popup>
-                        <div className="p-1 min-w-[150px]">
-                          <h3 className="font-bold text-sm text-gray-900">{report.title}</h3>
-                          <p className="text-[10px] text-gray-500 mb-2">{report.description}</p>
-                          <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
-                            <span className={cn(
-                              "text-[8px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest",
-                              report.status === 'Resolved' ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
-                            )}>
-                              {report.status}
-                            </span>
-                            <span className="text-[8px] font-bold text-gray-400">{report.location}</span>
-                          </div>
-                        </div>
-                      </Popup>
-                    </LeafletMarker>
-                  ))}
-
-                  {newReportLatLng && (
-                    <LeafletMarker position={[newReportLatLng.lat, newReportLatLng.lng]}>
-                      <Popup>Reporting location</Popup>
-                    </LeafletMarker>
-                  )}
-                </MapContainer>
-
-                {/* Subtle indicator if we are in fallback mode */}
-                {!hasMapsApiKey && (
-                  <div className="absolute top-4 right-4 z-[1000] flex flex-col items-end gap-2">
-                    <div className="bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg flex items-center gap-2 animate-pulse">
-                      <Globe className="w-3 h-3" />
-                      Open-Source Map Mode
-                    </div>
-                    <div className="bg-white/95 dark:bg-gray-800/95 p-3 rounded-2xl shadow-xl border border-amber-100 dark:border-amber-900/30 max-w-[180px] text-right">
-                      <p className="text-[9px] font-bold text-gray-600 dark:text-gray-400 leading-tight">
-                        Google Maps API key missing in build. Using OpenStreetMap fallback.
-                      </p>
-                      <button 
-                        onClick={() => window.location.reload()}
-                        className="mt-2 text-[8px] font-black text-amber-600 hover:underline uppercase tracking-widest"
-                      >
-                        Try Refresh
-                      </button>
-                    </div>
-                  </div>
-                )}
+              <div className="flex flex-col items-center gap-4 p-8 text-center bg-gray-50/50 dark:bg-gray-950/50 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-800">
+                <div className="w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center shadow-lg shadow-red-200/50">
+                  <AlertCircle className="w-8 h-8 text-red-500" />
+                </div>
+                <div className="max-w-xs">
+                  <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Maps Integration Required</h3>
+                  <p className="text-[10px] text-gray-500 mt-2 leading-relaxed">
+                    The Pulse Map requires a valid <b>Google Maps API Key</b> to function in production.
+                  </p>
+                  <p className="mt-4 text-[9px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 p-2 rounded-lg border border-indigo-100 dark:border-indigo-800">
+                    If you are seeing this on your deployed site, ensure <b>VITE_GOOGLE_MAPS_API_KEY</b> is added to your Cloud Run or GitHub environment variables.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => window.location.reload()}
+                    className="mt-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-gray-50 transition-all flex items-center gap-2"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Force Reload
+                  </button>
+                  <a 
+                    href="https://console.cloud.google.com/google/maps-apis/credentials" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200/50"
+                  >
+                    Get API Key
+                  </a>
+                </div>
               </div>
             )}
             
