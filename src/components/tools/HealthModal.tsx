@@ -11,6 +11,20 @@ export default function HealthModal() {
   const [report, setReport] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Auto-run if opened immediately after a scan (lastScanDate within 5 seconds)
+  React.useEffect(() => {
+    if (metrics.lastScanDate) {
+      const scanTime = new Date(metrics.lastScanDate).getTime();
+      const now = new Date().getTime();
+      const diff = now - scanTime;
+      
+      // If scanned within last 5 seconds and not already scanning/completed
+      if (diff < 5000 && !report && !isScanning) {
+        runDiagnostic();
+      }
+    }
+  }, [metrics.lastScanDate]);
+
   const runDiagnostic = async () => {
     setIsScanning(true);
     setError(null);

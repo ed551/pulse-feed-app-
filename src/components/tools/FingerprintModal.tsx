@@ -10,9 +10,10 @@ import { useHealth } from '../../contexts/HealthContext';
 
 interface FingerprintModalProps {
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
-export default function FingerprintModal({ onClose }: FingerprintModalProps) {
+export default function FingerprintModal({ onClose, onSuccess }: FingerprintModalProps) {
   const [fingerprintProgress, setFingerprintProgress] = useState(0);
   const [isPressing, setIsPressing] = useState(false);
   const progressInterval = useRef<NodeJS.Timeout | null>(null);
@@ -45,13 +46,28 @@ export default function FingerprintModal({ onClose }: FingerprintModalProps) {
   // Handle completion separately from the interval state updater
   useEffect(() => {
     if (fingerprintProgress === 100) {
+      // 1. Update metrics immediately so the next modal has data
+      updateMetrics({
+        heartRate: Math.floor(Math.random() * (85 - 60 + 1)) + 60, // 60-85 BPM
+        sleepScore: Math.floor(Math.random() * (100 - 75 + 1)) + 75, // 75-100 Score
+        lastScanDate: new Date().toLocaleString(),
+      });
+
+      // 2. Trigger the transition immediately for better UX
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        onClose();
+      }
+      
+      // 3. Kick off the background AI processing (Report, TTS, Insights)
       generateDeepScanAdvice();
     }
   }, [fingerprintProgress]);
 
   const generateDeepScanAdvice = async () => {
     // Prevent double invocation
-    if (fingerprintProgress !== 100 || (window as any).__isGeneratingAdvice) return;
+    if ((window as any).__isGeneratingAdvice) return;
     (window as any).__isGeneratingAdvice = true;
 
     try {
@@ -107,31 +123,12 @@ export default function FingerprintModal({ onClose }: FingerprintModalProps) {
       showNotification("Deep Scan Complete", { body: cleanAdvice });
 
       // Update Health Context with fresh simulated metrics and current timestamp
-      updateMetrics({
-        heartRate: Math.floor(Math.random() * (85 - 60 + 1)) + 60, // 60-85 BPM
-        sleepScore: Math.floor(Math.random() * (100 - 75 + 1)) + 75, // 75-100 Score
-        lastScanDate: new Date().toLocaleString(),
-      });
+      // (Already updated immediately in the useEffect above)
     } catch (err: any) {
       console.error("Deep Scan Error:", err);
-      const isAIBusy = err?.message?.includes("capacity") || err?.status === 429 || err?.status === 503;
-      const fallback = isAIBusy 
-        ? "Deep Scan partially complete. Our AI consultant is busy, but your baseline metrics are secure and updated."
-        : "Deep Scan Complete. All systems optimal. Stay focused on your goals.";
-      
-      const msg = new SpeechSynthesisUtterance(fallback);
-      window.speechSynthesis.speak(msg);
-      showNotification("Deep Scan Status", { body: fallback });
-      
-      // Still update metrics even on AI error so the user sees progress
-      updateMetrics({
-        heartRate: 72,
-        sleepScore: 88,
-        lastScanDate: new Date().toLocaleString(),
-      });
+      // Fail silently in the background since we already transitioned
     } finally {
       (window as any).__isGeneratingAdvice = false;
-      onClose();
     }
   };
 

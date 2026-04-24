@@ -663,15 +663,26 @@ export default function Layout() {
           let city = 'Your Region';
           let geocodeRetries = 2;
           
+          const posKey = `${latitude.toFixed(2)},${longitude.toFixed(2)}`;
+          const cachedRegion = localStorage.getItem(`pulse_geo_${posKey}`);
+          if (cachedRegion) {
+            console.log(`[Pulse Geo] Using cached region: ${cachedRegion}`);
+            setLocationName(cachedRegion);
+            fetchWeather(latitude, longitude, cachedRegion);
+            return;
+          }
+
           while (geocodeRetries > 0) {
             try {
-              const url = `/api/geocode?lat=${latitude}&lon=${longitude}`;
-              console.log(`Geocoding Attempt ${3 - geocodeRetries}: Fetching ${url}`);
+              // Pulse Geo: Using the new pulse-geo alias to avoid potential adblocker conflicts
+              const url = `/api/pulse-geo?lat=${latitude}&lon=${longitude}`;
+              console.log(`[Pulse Geo] Attempt ${3 - geocodeRetries}: Fetching ${url}`);
               
               const res = await fetch(url, {
                 headers: {
                   'Accept': 'application/json',
-                  'Cache-Control': 'no-cache'
+                  'Cache-Control': 'no-cache',
+                  'X-Pulse-Request': 'true'
                 }
               });
               
@@ -684,26 +695,41 @@ export default function Layout() {
                 } else {
                   const text = await res.text().catch(() => "");
                   console.error("Geocode API error response body:", text.substring(0, 100));
-                  errorDetails = "Received non-JSON response (likely HTML fallback)";
+                  errorDetails = `HTTP ${res.status}`;
                 }
+                
+                if (res.status === 403) {
+                  console.warn("[Pulse Geo] Access Forbidden (403). This usually means the server IP or API key reached a limit. Self-healing logic will be triggered.");
+                }
+                
                 throw new Error(`Geocode API responded with status: ${res.status} - ${errorDetails}`);
               }
               const contentType = res.headers.get("content-type");
               if (!contentType || !contentType.includes("application/json")) {
                 const text = await res.text().catch(() => "");
                 console.error("Geocode API non-JSON response body:", text.substring(0, 100));
-                throw new Error("Geocode API returned HTML instead of JSON");
+                throw new Error("Geocode API returned invalid format (non-JSON)");
               }
               const data = await res.json();
               city = data.address?.city || data.address?.town || data.address?.village || data.address?.suburb || 'Your Region';
+              localStorage.setItem(`pulse_geo_${posKey}`, city);
               setLocationName(city);
               break; // Success
             } catch (e: any) {
-              console.error(`Geocoding Attempt ${3 - geocodeRetries} Error:`, e.message || e);
+              const errorMessage = e.message || String(e);
+              console.error(`[Pulse Geo] Attempt ${3 - geocodeRetries} Exception:`, errorMessage);
+              
+              // Handle "Failed to fetch" specially as it often points to browser blocking or socket issues
+              if (errorMessage.includes("Failed to fetch")) {
+                console.warn("[Pulse Geo] Browser 'Failed to fetch' detected. This might be blocked by Shield/AdBlocker, or the server is still booting.");
+              }
+              
               geocodeRetries--;
               if (geocodeRetries > 0) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                // Exponential backoff
+                await new Promise(resolve => setTimeout(resolve, 2000 * (3 - geocodeRetries)));
               } else {
+                console.warn("[Pulse Geo] All geocoding retry attempts exhausted. Falling back to default region.");
                 setLocationName('Your Region');
               }
             }
@@ -1561,7 +1587,10 @@ export default function Layout() {
                 <GoogleAppsModal />
               )}
               {activeModal === 'fingerprint' && (
-                <FingerprintModal onClose={() => setActiveModal(null)} />
+                <FingerprintModal 
+                  onClose={() => setActiveModal(null)} 
+                  onSuccess={() => setActiveModal('health')}
+                />
               )}
               {activeModal === 'call' && (
                 <CallModal />
