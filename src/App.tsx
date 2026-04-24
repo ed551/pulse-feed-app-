@@ -4,6 +4,7 @@ import Layout from "./components/Layout";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { RevenueProvider } from "./contexts/RevenueContext";
+import { HealthProvider } from "./contexts/HealthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { Loader2 } from "lucide-react";
 import { Analytics } from "./components/Analytics";
@@ -54,96 +55,98 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <RevenueProvider>
-          <HashRouter>
-            <Analytics />
-            <Suspense fallback={<LoadingFallback />}>
-              <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/" element={<Layout />}>
-                <Route index element={<Home />} />
-                <Route path="groups" element={<Groups />} />
-                <Route path="platform" element={
-                  <AdminRoute>
-                    <PlatformDashboard />
-                  </AdminRoute>
-                } />
-                <Route path="education" element={
-                  <ProtectedRoute>
-                    <Education />
-                  </ProtectedRoute>
-                } />
-                <Route path="events" element={
-                  <ProtectedRoute>
-                    <Events />
-                  </ProtectedRoute>
-                } />
-                <Route path="dating" element={
-                  <ProtectedRoute>
-                    <Dating />
-                  </ProtectedRoute>
-                } />
-                <Route path="community" element={
-                  <ProtectedRoute>
-                    <Community />
-                  </ProtectedRoute>
-                } />
-                <Route path="rewards" element={
-                  <ProtectedRoute>
-                    <Rewards />
-                  </ProtectedRoute>
-                } />
-                <Route path="profile" element={
-                  <ProtectedRoute>
-                    <Profile />
-                  </ProtectedRoute>
-                } />
-                <Route path="contacts" element={
-                  <ProtectedRoute>
-                    <Contacts />
-                  </ProtectedRoute>
-                } />
-                <Route path="messages" element={
-                  <ProtectedRoute>
-                    <Messages />
-                  </ProtectedRoute>
-                } />
-                <Route path="settings" element={
-                  <ProtectedRoute>
-                    <Settings />
-                  </ProtectedRoute>
-                } />
-                <Route path="notifications" element={
-                  <ProtectedRoute>
-                    <Notifications />
-                  </ProtectedRoute>
-                } />
-                <Route path="calls" element={
-                  <ProtectedRoute>
-                    <Calls />
-                  </ProtectedRoute>
-                } />
-                <Route path="terms" element={<Terms />} />
-                <Route path="privacy" element={<Privacy />} />
-                <Route path="support" element={<Support />} />
-                <Route path="ads" element={
-                  <ProtectedRoute>
-                    <AdsDashboard />
-                  </ProtectedRoute>
-                } />
-                <Route path="lab" element={
-                  <ProtectedRoute>
-                    <GeminiLab />
-                  </ProtectedRoute>
-                } />
-                <Route path="membership" element={
-                  <ProtectedRoute>
-                    <Membership />
-                  </ProtectedRoute>
-                } />
-              </Route>
-            </Routes>
-          </Suspense>
-        </HashRouter>
+          <HealthProvider>
+            <HashRouter>
+              <Analytics />
+              <Suspense fallback={<LoadingFallback />}>
+                <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/" element={<Layout />}>
+                  <Route index element={<Home />} />
+                  <Route path="groups" element={<Groups />} />
+                  <Route path="platform" element={
+                    <AdminRoute>
+                      <PlatformDashboard />
+                    </AdminRoute>
+                  } />
+                  <Route path="education" element={
+                    <ProtectedRoute>
+                      <Education />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="events" element={
+                    <ProtectedRoute>
+                      <Events />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="dating" element={
+                    <ProtectedRoute>
+                      <Dating />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="community" element={
+                    <ProtectedRoute>
+                      <Community />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="rewards" element={
+                    <ProtectedRoute>
+                      <Rewards />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="profile" element={
+                    <ProtectedRoute>
+                      <Profile />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="contacts" element={
+                    <ProtectedRoute>
+                      <Contacts />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="messages" element={
+                    <ProtectedRoute>
+                      <Messages />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="settings" element={
+                    <ProtectedRoute>
+                      <Settings />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="notifications" element={
+                    <ProtectedRoute>
+                      <Notifications />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="calls" element={
+                    <ProtectedRoute>
+                      <Calls />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="terms" element={<Terms />} />
+                  <Route path="privacy" element={<Privacy />} />
+                  <Route path="support" element={<Support />} />
+                  <Route path="ads" element={
+                    <ProtectedRoute>
+                      <AdsDashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="lab" element={
+                    <ProtectedRoute>
+                      <GeminiLab />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="membership" element={
+                    <ProtectedRoute>
+                      <Membership />
+                    </ProtectedRoute>
+                  } />
+                </Route>
+              </Routes>
+            </Suspense>
+          </HashRouter>
+        </HealthProvider>
       </RevenueProvider>
     </AuthProvider>
   </ErrorBoundary>

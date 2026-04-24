@@ -6,6 +6,7 @@ import { Modality } from '@google/genai';
 import { useNotifications } from '../../hooks/useNotifications';
 import { saveInsight } from '../../lib/insights';
 import { cn } from '../../lib/utils';
+import { useHealth } from '../../contexts/HealthContext';
 
 interface FingerprintModalProps {
   onClose: () => void;
@@ -16,29 +17,43 @@ export default function FingerprintModal({ onClose }: FingerprintModalProps) {
   const [isPressing, setIsPressing] = useState(false);
   const progressInterval = useRef<NodeJS.Timeout | null>(null);
   const { showNotification } = useNotifications();
+  const { updateMetrics } = useHealth();
 
   useEffect(() => {
-    if (isPressing) {
+    if (isPressing && fingerprintProgress < 100) {
       progressInterval.current = setInterval(() => {
         setFingerprintProgress((prev) => {
-          if (prev >= 100) {
+          const next = prev + 2;
+          if (next >= 100) {
             if (progressInterval.current) clearInterval(progressInterval.current);
-            generateDeepScanAdvice();
             return 100;
           }
-          return prev + 2;
+          return next;
         });
       }, 30);
     } else {
       if (progressInterval.current) clearInterval(progressInterval.current);
-      setFingerprintProgress(0);
+      if (!isPressing && fingerprintProgress < 100) {
+        setFingerprintProgress(0);
+      }
     }
     return () => {
       if (progressInterval.current) clearInterval(progressInterval.current);
     };
-  }, [isPressing]);
+  }, [isPressing, fingerprintProgress]);
+
+  // Handle completion separately from the interval state updater
+  useEffect(() => {
+    if (fingerprintProgress === 100) {
+      generateDeepScanAdvice();
+    }
+  }, [fingerprintProgress]);
 
   const generateDeepScanAdvice = async () => {
+    // Prevent double invocation
+    if (fingerprintProgress !== 100 || (window as any).__isGeneratingAdvice) return;
+    (window as any).__isGeneratingAdvice = true;
+
     try {
       const prompt = `Act as a multi-domain AI consultant (Health, Security, Wealth, Life). 
       Based on a simulated deep biometric fingerprint scan, generate a comprehensive report.
@@ -90,13 +105,32 @@ export default function FingerprintModal({ onClose }: FingerprintModalProps) {
       }
       
       showNotification("Deep Scan Complete", { body: cleanAdvice });
-    } catch (err) {
+
+      // Update Health Context with fresh simulated metrics and current timestamp
+      updateMetrics({
+        heartRate: Math.floor(Math.random() * (85 - 60 + 1)) + 60, // 60-85 BPM
+        sleepScore: Math.floor(Math.random() * (100 - 75 + 1)) + 75, // 75-100 Score
+        lastScanDate: new Date().toLocaleString(),
+      });
+    } catch (err: any) {
       console.error("Deep Scan Error:", err);
-      const fallback = "Deep Scan Complete. All systems optimal. Stay focused on your goals.";
+      const isAIBusy = err?.message?.includes("capacity") || err?.status === 429 || err?.status === 503;
+      const fallback = isAIBusy 
+        ? "Deep Scan partially complete. Our AI consultant is busy, but your baseline metrics are secure and updated."
+        : "Deep Scan Complete. All systems optimal. Stay focused on your goals.";
+      
       const msg = new SpeechSynthesisUtterance(fallback);
       window.speechSynthesis.speak(msg);
-      showNotification("Deep Scan Complete", { body: fallback });
+      showNotification("Deep Scan Status", { body: fallback });
+      
+      // Still update metrics even on AI error so the user sees progress
+      updateMetrics({
+        heartRate: 72,
+        sleepScore: 88,
+        lastScanDate: new Date().toLocaleString(),
+      });
     } finally {
+      (window as any).__isGeneratingAdvice = false;
       onClose();
     }
   };

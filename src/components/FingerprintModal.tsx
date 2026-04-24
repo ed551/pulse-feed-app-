@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Fingerprint, X } from "lucide-react";
 import { cn } from "../lib/utils";
+import { useHealth } from "../contexts/HealthContext";
 
 interface FingerprintModalProps {
   isOpen: boolean;
@@ -20,6 +21,7 @@ export default function FingerprintModal({
   const [fingerprintProgress, setFingerprintProgress] = useState(0);
   const [isPressing, setIsPressing] = useState(false);
   const progressInterval = useRef<NodeJS.Timeout | null>(null);
+  const { updateMetrics } = useHealth();
 
   useEffect(() => {
     if (isOpen) {
@@ -39,6 +41,14 @@ export default function FingerprintModal({
         setFingerprintProgress((prev) => {
           if (prev >= 100) {
             clearInterval(progressInterval.current!);
+            
+            // Update Health Context
+            updateMetrics({
+              heartRate: Math.floor(Math.random() * (85 - 60 + 1)) + 60,
+              sleepScore: Math.floor(Math.random() * (100 - 75 + 1)) + 75,
+              lastScanDate: new Date().toLocaleString(),
+            });
+
             setTimeout(() => {
               onSuccessRef.current();
             }, 300);

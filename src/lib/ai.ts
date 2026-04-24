@@ -3,11 +3,11 @@ import { GoogleGenAI, GenerateContentParameters, GenerateContentResponse, Thinki
 const apiKey = process.env.GEMINI_API_KEY;
 export const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
-const MAX_RETRIES = 3;
-const INITIAL_DELAY = 3000; // 3 seconds
+const MAX_RETRIES = 5;
+const INITIAL_DELAY = 2000; // 2 seconds
 
 let requestQueue: Promise<void> = Promise.resolve();
-const MIN_REQUEST_INTERVAL = 1500; // 1.5 seconds between any AI requests in the same tab
+const MIN_REQUEST_INTERVAL = 2000; // 2 seconds between any AI requests to be safe
 
 async function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -57,7 +57,7 @@ export async function generateContentWithRetry(params: GenerateContentParameters
         }
         
         if (isQuotaExceeded) {
-          const cleanError = new Error("The AI service is currently experiencing high volume. We'll try again automatically in a moment.");
+          const cleanError = new Error(`The AI service is currently at peak capacity (Attempt ${retries}/${MAX_RETRIES}). We are retrying with increased delays to ensure your request completes.`);
           (cleanError as any).status = 429;
           (cleanError as any).originalError = error;
           throw cleanError;
