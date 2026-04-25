@@ -6,7 +6,7 @@ import { cn } from '../../lib/utils';
 interface OTPModalProps {
   userId: string;
   email?: string;
-  method: 'email' | 'sms';
+  method: 'email' | 'totp' | 'sms'; // Keep sms in type for legacy if needed, or remove it
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -16,14 +16,16 @@ export default function OTPModal({ userId, email, method, onClose, onSuccess }: 
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [timer, setTimer] = useState(60);
-  const [canResend, setCanResend] = useState(false);
+  const [timer, setTimer] = useState(method === 'totp' ? 0 : 60);
+  const [canResend, setCanResend] = useState(method === 'totp');
   const inputRefs = React.useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
-    // Initial send
-    sendOTP();
-  }, []);
+    // Initial send only for non-TOTP
+    if (method !== 'totp') {
+      sendOTP();
+    }
+  }, [method]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -38,6 +40,7 @@ export default function OTPModal({ userId, email, method, onClose, onSuccess }: 
   }, [timer]);
 
   const sendOTP = async () => {
+    if (method === 'totp') return;
     setIsResending(true);
     setError(null);
     try {
@@ -115,14 +118,20 @@ export default function OTPModal({ userId, email, method, onClose, onSuccess }: 
   return (
     <div className="flex flex-col items-center justify-center space-y-6 animate-in fade-in slide-in-from-bottom-4 py-4 max-w-sm mx-auto text-center">
       <div className="w-16 h-16 bg-cyan-100 dark:bg-cyan-900/30 rounded-full flex items-center justify-center text-cyan-600 dark:text-cyan-400">
-        {method === 'email' ? <Mail className="w-8 h-8" /> : <Smartphone className="w-8 h-8" />}
+        {method === 'totp' ? <ShieldCheck className="w-8 h-8" /> : (method === 'email' ? <Mail className="w-8 h-8" /> : <Smartphone className="w-8 h-8" />)}
       </div>
 
       <div>
         <h4 className="font-bold text-xl">Verification Required</h4>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-          We sent a 6-digit verification code to your {method === 'email' ? 'email' : 'phone'}
-          {email && <span className="block font-medium text-gray-700 dark:text-gray-300">{email}</span>}
+          {method === 'totp' ? (
+            "Enter the 6-digit code from your Authenticator app"
+          ) : (
+            <>
+              We sent a 6-digit verification code to your {method === 'email' ? 'email' : 'phone'}
+              {email && <span className="block font-medium text-gray-700 dark:text-gray-300">{email}</span>}
+            </>
+          )}
         </p>
       </div>
 
@@ -160,17 +169,19 @@ export default function OTPModal({ userId, email, method, onClose, onSuccess }: 
         )}
       </AnimatePresence>
 
-      <button
-        onClick={sendOTP}
-        disabled={!canResend || isResending}
-        className={cn(
-          "flex items-center gap-2 text-sm transition-colors",
-          canResend ? "text-cyan-600 hover:text-cyan-700 font-medium cursor-pointer" : "text-gray-400 cursor-not-allowed"
-        )}
-      >
-        <RefreshCcw className={cn("w-4 h-4", isResending && "animate-spin")} />
-        {canResend ? "Resend Code" : `Resend in ${timer}s`}
-      </button>
+      {method !== 'totp' && (
+        <button
+          onClick={sendOTP}
+          disabled={!canResend || isResending}
+          className={cn(
+            "flex items-center gap-2 text-sm transition-colors",
+            canResend ? "text-cyan-600 hover:text-cyan-700 font-medium cursor-pointer" : "text-gray-400 cursor-not-allowed"
+          )}
+        >
+          <RefreshCcw className={cn("w-4 h-4", isResending && "animate-spin")} />
+          {canResend ? "Resend Code" : `Resend in ${timer}s`}
+        </button>
+      )}
 
       {isLoading && (
         <div className="flex items-center gap-2 text-cyan-600 animate-pulse text-sm font-medium">

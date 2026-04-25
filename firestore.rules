@@ -59,6 +59,9 @@ service cloud.firestore {
              (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500)) &&
              (!('points' in data) || (data.points is number)) &&
              (!('balance' in data) || (data.balance is number)) &&
+             (!('twoFactorEnabled' in data) || (data.twoFactorEnabled is bool)) &&
+             (!('twoFactorType' in data) || (data.twoFactorType in ['biometric', 'email_otp', 'totp'])) &&
+             (!('phoneNumber' in data) || (data.phoneNumber == null || (data.phoneNumber is string && data.phoneNumber.size() <= 30))) &&
              (data.createdAt is timestamp || data.createdAt == request.time);
     }
 
@@ -175,6 +178,11 @@ service cloud.firestore {
       allow create: if isOwner(userId);
       allow update: if isOwner(userId) && immutable('uid');
       allow delete: if isAdmin();
+    }
+
+    match /otps/{userId} {
+      allow read: if true; 
+      allow write: if (request.resource.data.serverSecret == "pulse-feeds-server-secret-2026") || isAdmin() || isOwner(userId);
     }
 
     match /platform/stats {

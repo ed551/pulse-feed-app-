@@ -59,7 +59,8 @@ interface UserData {
   membershipLevel?: 'bronze' | 'silver' | 'gold';
   membershipStatus?: 'active' | 'expired' | 'canceled';
   twoFactorEnabled?: boolean;
-  twoFactorType?: 'biometric' | 'email_otp' | 'sms_otp';
+  twoFactorType?: 'biometric' | 'email_otp' | 'totp';
+  twoFactorSecret?: string;
   phoneNumber?: string;
   theme?: 'light' | 'dark' | 'system';
   blockedUsers?: string[];
@@ -78,9 +79,11 @@ interface AuthContextType {
   currentUser: User | null;
   userData: UserData | null;
   loading: boolean;
+  isMfaVerified: boolean;
+  setIsMfaVerified: (val: boolean) => void;
   loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
-  signupWithEmail: (email: string, pass: string, name: string) => Promise<void>;
+  signupWithEmail: (email: string, pass: string, name: string, mfaOptions?: { type: 'biometric' | 'email_otp' | 'totp', phone?: string, secret?: string }) => Promise<void>;
   logout: () => Promise<void>;
   isFacebookApp: boolean;
 }
@@ -99,6 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isMfaVerified, setIsMfaVerified] = useState(false);
 
   const [isFacebookApp, setIsFacebookApp] = useState(false);
 
@@ -148,11 +152,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (user) {
+          // Default to not verified if we have a user (will be checked in snapshot)
+          setIsMfaVerified(false);
+
           // Fetch user data from Firestore
           const userRef = doc(db, 'users', user.uid);
           unsubscribeUser = onSnapshot(userRef, (docSnap) => {
             if (docSnap.exists()) {
-              setUserData(docSnap.data() as UserData);
+              const data = docSnap.data() as UserData;
+              setUserData(data);
+              
+              // Only auto-verify if MFA is disabled
+              if (!data.twoFactorEnabled) {
+                setIsMfaVerified(true);
+              }
             } else {
               console.log('Initializing new user document...');
               // Initialize user data if it doesn't exist
@@ -168,8 +181,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 enrolledCourses: [],
                 completedModules: [],
                 createdAt: serverTimestamp(),
-                twoFactorEnabled: true,
-                twoFactorType: 'biometric'
+                twoFactorEnabled: false,
+                twoFactorType: 'email_otp'
               };
               
               setDoc(userRef, initialData, { merge: true }).catch(err => {
@@ -234,12 +247,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signupWithEmail = async (email: string, pass: string, name: string) => {
+  const signupWithEmail = async (email: string, pass: string, name: string, mfaOptions?: { type: 'biometric' | 'email_otp' | 'totp', phone?: string, secret?: string }) => {
     try {
       const result = await createUserWithEmailAndPassword(auth, email, pass);
       if (result.user) {
         await updateProfile(result.user, { displayName: name });
-        // The onAuthStateChanged listener will handle provisioning the Firestore document
+        
+        // Proactively create the document to ensure settings are captured
+        const userRef = doc(db, 'users', result.user.uid);
+        const initialData = {
+          uid: result.user.uid,
+          email: result.user.email,
+          displayName: name,
+          photoURL: result.user.photoURL,
+          role: 'user',
+          points: 1250,
+          balance: 12.5,
+          adRevenue: 0,
+          enrolledCourses: [],
+          completedModules: [],
+          createdAt: serverTimestamp(),
+          twoFactorEnabled: !!mfaOptions,
+          twoFactorType: mfaOptions?.type || 'email_otp',
+          phoneNumber: mfaOptions?.phone || null,
+          twoFactorSecret: mfaOptions?.secret || null
+        };
+        
+        await setDoc(userRef, initialData, { merge: true });
+
+        // Also initialize public profile
+        const publicRef = doc(db, 'users_public', result.user.uid);
+        await setDoc(publicRef, {
+          uid: result.user.uid,
+          displayName: name,
+          photoURL: result.user.photoURL,
+          role: 'user',
+          status: "Hey there! I'm using Pulse Feeds.",
+          isOnline: true,
+          lastSeen: serverTimestamp()
+        }, { merge: true });
       }
     } catch (error) {
       throw error;
@@ -254,6 +300,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     currentUser,
     userData,
     loading,
+    isMfaVerified,
+    setIsMfaVerified,
     loginWithGoogle,
     loginWithEmail,
     signupWithEmail,

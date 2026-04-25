@@ -23,8 +23,11 @@ import {
   Filter,
   Users2,
   AlertCircle,
-  LogOut
+  LogOut,
+  ShieldCheck,
+  Copy
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { db } from "../lib/firebase";
@@ -156,9 +159,19 @@ export default function Settings() {
   const handleUpdate2FA = async (type: string) => {
     if (!currentUser) return;
     try {
-      await updateDoc(doc(db, 'users', currentUser.uid), {
-        twoFactorType: type
-      });
+      const updates: any = { twoFactorType: type };
+      
+      // If switching to TOTP and no secret exists, generate one
+      if (type === 'totp' && !userData?.twoFactorSecret) {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ234567';
+        let secret = '';
+        for (let i = 0; i < 16; i++) {
+          secret += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        updates.twoFactorSecret = secret;
+      }
+
+      await updateDoc(doc(db, 'users', currentUser.uid), updates);
     } catch (e) {
       console.error(e);
     }
@@ -472,33 +485,71 @@ export default function Settings() {
               {[
                 { id: 'biometric', icon: Fingerprint, label: 'Biometric Scanner', desc: 'Secure fingerprint scan', color: 'text-cyan-500' },
                 { id: 'email_otp', icon: Mail, label: 'Email Security Code', desc: '6-digit code via email', color: 'text-blue-500' },
-                { id: 'sms_otp', icon: Smartphone, label: 'SMS Security Code', desc: 'Verification via text message', color: 'text-green-500' }
+                { id: 'totp', icon: Shield, label: 'Google Authenticator', desc: 'App-based security code', color: 'text-orange-500' }
               ].map(method => (
-                <button
-                  key={method.id}
-                  onClick={() => handleUpdate2FA(method.id)}
-                  className={cn(
-                    "flex items-center justify-between p-3 rounded-xl border transition-all",
-                    userData?.twoFactorType === method.id 
-                      ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800" 
-                      : "bg-gray-50 dark:bg-gray-700/30 border-gray-100 dark:border-gray-700 hover:border-indigo-200"
+                <div key={method.id} className="space-y-2">
+                  <button
+                    onClick={() => handleUpdate2FA(method.id)}
+                    className={cn(
+                      "w-full flex items-center justify-between p-3 rounded-xl border transition-all",
+                      userData?.twoFactorType === method.id 
+                        ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800" 
+                        : "bg-gray-50 dark:bg-gray-700/30 border-gray-100 dark:border-gray-700 hover:border-indigo-200"
+                    )}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className={cn("p-1.5 rounded-lg bg-white dark:bg-gray-800 shadow-sm", method.color)}>
+                        <method.icon className="w-4 h-4" />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-sm font-bold text-gray-900 dark:text-white">{method.label}</p>
+                        <p className="text-[10px] text-gray-500">{method.desc}</p>
+                      </div>
+                    </div>
+                    {userData?.twoFactorType === method.id && (
+                      <div className="w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center">
+                        <Check className="w-3 h-3 text-white" />
+                      </div>
+                    )}
+                  </button>
+
+                  {userData?.twoFactorType === 'totp' && method.id === 'totp' && userData?.twoFactorSecret && (
+                    <div className="p-4 bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-900/20 rounded-xl mx-2 animate-in fade-in slide-in-from-top-1">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="p-3 bg-white rounded-2xl shadow-sm border border-orange-100">
+                          <QRCodeSVG 
+                            value={`otpauth://totp/PulseFeeds:${userData.email}?secret=${userData.twoFactorSecret}&issuer=PulseFeeds`}
+                            size={140}
+                            level="H"
+                            includeMargin={true}
+                          />
+                        </div>
+                        <div className="text-center space-y-1">
+                          <p className="text-[10px] font-bold text-orange-800 dark:text-orange-300 uppercase tracking-wider">Scan QR Code</p>
+                          <p className="text-[9px] text-gray-500 max-w-[180px]">Scan with Google Authenticator to add account automatically.</p>
+                        </div>
+                        
+                        <div className="w-full space-y-1 mt-1">
+                          <p className="text-[10px] font-bold text-orange-800 dark:text-orange-300 uppercase tracking-wider">Manual Entry Key</p>
+                          <div className="flex items-center justify-between bg-white dark:bg-gray-900 p-2 rounded-lg border border-orange-200 dark:border-orange-800 w-full">
+                            <code className="text-[10px] font-mono font-bold text-orange-600 dark:text-orange-500 tracking-tighter">
+                              {userData.twoFactorSecret}
+                            </code>
+                            <button 
+                              onClick={() => {
+                                navigator.clipboard.writeText(userData.twoFactorSecret || '');
+                                // No toast library imported so using alert/console or assuming it might be there
+                              }}
+                              className="text-[9px] font-black text-gray-400 hover:text-orange-600 transition-colors uppercase"
+                            >
+                              Copy
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   )}
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className={cn("p-1.5 rounded-lg bg-white dark:bg-gray-800 shadow-sm", method.color)}>
-                      <method.icon className="w-4 h-4" />
-                    </div>
-                    <div className="text-left">
-                      <p className="text-sm font-bold text-gray-900 dark:text-white">{method.label}</p>
-                      <p className="text-[10px] text-gray-500">{method.desc}</p>
-                    </div>
-                  </div>
-                  {userData?.twoFactorType === method.id && (
-                    <div className="w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center">
-                      <Check className="w-3 h-3 text-white" />
-                    </div>
-                  )}
-                </button>
+                </div>
               ))}
             </div>
 
@@ -744,25 +795,6 @@ export default function Settings() {
           </div>
         </div>
       )
-    },
-    {
-      id: 'danger',
-      title: 'Danger Zone',
-      description: 'Irreversible account actions',
-      icon: <Trash2 className="w-5 h-5 text-red-500" />,
-      content: (
-        <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-          <div className="p-4 bg-red-50 dark:bg-red-900/10 rounded-xl border border-red-100 dark:border-red-900/30">
-            <p className="text-xs text-red-600 dark:text-red-400 mb-4">Deleting your account will permanently remove all your data, rewards, and posts. This action cannot be undone.</p>
-            <button 
-              onClick={() => handleSensitiveAction('delete')}
-              className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold transition-all flex items-center justify-center"
-            >
-              <Trash2 className="w-4 h-4 mr-2" /> Delete My Account
-            </button>
-          </div>
-        </div>
-      )
     }
   ];
 
@@ -890,7 +922,7 @@ export default function Settings() {
               <OTPModal 
                 userId={currentUser?.uid || ''} 
                 email={userData?.email}
-                method={userData?.twoFactorType === 'sms_otp' ? 'sms' : 'email'}
+                method={userData?.twoFactorType === 'totp' ? 'totp' : 'email'}
                 onClose={() => setShowFingerprintModal(false)}
                 onSuccess={handleFingerprintSuccess}
               />

@@ -916,7 +916,6 @@ export default function Layout() {
     { path: '/notifications', icon: Bell, color: 'text-orange-500', label: 'Notifications' },
     { path: '/calls', icon: Phone, color: 'text-indigo-500', label: 'Calls' },
     { path: '/terms', icon: FileText, color: 'text-teal-500', label: 'Terms' },
-    { path: '/privacy', icon: Lock, color: 'text-indigo-500', label: 'Privacy' },
     { path: '/support', icon: Headphones, color: 'text-cyan-500', label: 'Support' },
     { path: '/settings', icon: Settings, color: 'text-gray-500', label: 'Settings' },
   ];
@@ -1626,7 +1625,7 @@ export default function Layout() {
                   <OTPModal 
                     userId={currentUser?.uid || ''} 
                     email={userData?.email}
-                    method={userData.twoFactorType === 'sms_otp' ? 'sms' : 'email'}
+                    method={userData.twoFactorType === 'totp' ? 'totp' : 'email'}
                     onClose={() => setActiveModal(null)}
                     onSuccess={() => setActiveModal('health')}
                   />
@@ -1888,7 +1887,7 @@ export default function Layout() {
                     <OTPModal 
                       userId={currentUser?.uid || ''} 
                       email={userData?.email}
-                      method={userData.twoFactorType === 'sms_otp' ? 'sms' : 'email'}
+                      method={userData.twoFactorType === 'totp' ? 'totp' : 'email'}
                       onClose={() => {}} // Non-dismissible while locked
                       onSuccess={() => {
                         setIsLocked(false);
