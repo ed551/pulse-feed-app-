@@ -53,7 +53,7 @@ export default function Login() {
       // Generate a random base32-like secret for simulation
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ234567';
       let secret = '';
-      for (let i = 0; i < 16; i++) {
+      for (let i = 0; i < 32; i++) {
         secret += chars.charAt(Math.floor(Math.random() * chars.length));
       }
       setTotpSecret(secret);

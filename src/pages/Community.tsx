@@ -7,7 +7,7 @@ import {
   BrainCircuit, X, Send, PieChart, Navigation, RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow, Marker } from '@vis.gl/react-google-maps';
+import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow, Marker, MapControl, ControlPosition } from '@vis.gl/react-google-maps';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useRevenue } from '../contexts/RevenueContext';
@@ -124,6 +124,46 @@ export default function Community() {
   const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
   const GOOGLE_MAPS_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID;
   const [useFallbackMarkers, setUseFallbackMarkers] = useState(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Custom Map Styles
+  const mapStyles = [
+    {
+      "featureType": "all",
+      "elementType": "labels.text.fill",
+      "stylers": [{ "color": "#7c93a3" }, { "lightness": "-10" }]
+    },
+    {
+      "featureType": "administrative.country",
+      "elementType": "geometry",
+      "stylers": [{ "visibility": "simplified" }, { "hue": "#ff0000" }]
+    },
+    {
+      "featureType": "landscape",
+      "elementType": "geometry.fill",
+      "stylers": [{ "color": "#f5f5f5" }]
+    },
+    {
+        "featureType": "water",
+        "elementType": "geometry",
+        "stylers": [{ "color": "#c9c9c9" }]
+    },
+    {
+        "featureType": "water",
+        "elementType": "labels.text.fill",
+        "stylers": [{ "color": "#9e9e9e" }]
+    }
+  ];
+
+  // Robust check for API key
+  const hasMapsApiKey = React.useMemo(() => {
+    return !!GOOGLE_MAPS_API_KEY && 
+           GOOGLE_MAPS_API_KEY.length > 10 && 
+           !GOOGLE_MAPS_API_KEY.includes('YOUR_') &&
+           !GOOGLE_MAPS_API_KEY.includes('PLACEHOLDER');
+  }, [GOOGLE_MAPS_API_KEY]);
 
   const isAdvancedMapAvailable = React.useMemo(() => {
     if (useFallbackMarkers) return false;
@@ -135,10 +175,6 @@ export default function Community() {
     
     return isValidMapId;
   }, [GOOGLE_MAPS_ID, useFallbackMarkers]);
-
-  const hasMapsApiKey = !!GOOGLE_MAPS_API_KEY && 
-                        GOOGLE_MAPS_API_KEY.length > 5 && 
-                        !GOOGLE_MAPS_API_KEY.includes('YOUR_');
 
   const locateUser = () => {
     if (navigator.geolocation) {
@@ -675,7 +711,14 @@ export default function Community() {
             </button>
 
             {hasMapsApiKey ? (
-              <APIProvider apiKey={GOOGLE_MAPS_API_KEY || ''}>
+              <APIProvider 
+                apiKey={GOOGLE_MAPS_API_KEY || ''} 
+                onLoad={() => setMapLoaded(true)}
+                onError={(err) => {
+                  console.error("Google Maps Load Error:", err);
+                  setMapLoaded(false);
+                }}
+              >
                 <Map
                   key={`map-host-${useFallbackMarkers ? 'fallback' : 'advanced'}`}
                   defaultCenter={mapCenter}
@@ -684,8 +727,10 @@ export default function Community() {
                   zoom={zoom}
                   onZoomChanged={(ev) => setZoom(ev.detail.zoom)}
                   gestureHandling={'greedy'}
-                  disableDefaultUI={false}
+                  disableDefaultUI={true}
                   mapId={!useFallbackMarkers && isAdvancedMapAvailable ? GOOGLE_MAPS_ID : null}
+                  className="w-full h-full"
+                  styles={mapStyles}
                   onClick={(ev) => {
                     if (ev.detail.latLng) {
                       setNewReportLatLng(ev.detail.latLng);
@@ -693,6 +738,27 @@ export default function Community() {
                     }
                   }}
                 >
+                  <MapControl position={ControlPosition.TOP_LEFT}>
+                    <div className="m-4 flex items-center gap-2 p-2 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 min-w-[200px] pointer-events-auto">
+                      <Search className="w-4 h-4 text-gray-400 ml-2" />
+                      <input 
+                        type="text" 
+                        placeholder="Search location..." 
+                        className="bg-transparent border-none focus:ring-0 text-xs w-full text-gray-900 dark:text-white"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const val = (e.target as HTMLInputElement).value;
+                            if (val) {
+                              // Use Google Geocoding API if possible, or just log
+                              console.log("Searching for:", val);
+                              // We simulate a search zoom for now if we don't have full Geocoding logic
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </MapControl>
+
                   <MarkerErrorBoundary fallback={() => {
                     console.error("Advanced Marker failure detected. Triggering safe fallback remount.");
                     setUseFallbackMarkers(true);

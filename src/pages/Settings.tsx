@@ -165,7 +165,7 @@ export default function Settings() {
       if (type === 'totp' && !userData?.twoFactorSecret) {
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ234567';
         let secret = '';
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < 32; i++) {
           secret += chars.charAt(Math.floor(Math.random() * chars.length));
         }
         updates.twoFactorSecret = secret;

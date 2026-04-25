@@ -388,7 +388,8 @@ async function startServer() {
   
   const app = express();
   app.set('trust proxy', 1);
-  const PORT = Number(process.env.PORT) || 3000;
+  // Security Enforcement: AI Studio requires port 3000
+  const PORT = 3000;
   app.use(express.json());
 
   // Equity Bank Access Token Helper (EazzyAPI)
@@ -1531,6 +1532,8 @@ async function startServer() {
       if (providedSecret) {
         if (!authenticator || typeof authenticator.verify !== 'function') {
           console.error("[OTP Verify] Authenticator service unavailable");
+        } else if (providedSecret.length < 16) {
+          console.warn("[OTP Verify] Provided secret is too short for otplib (min 16 bytes)");
         } else {
           try {
             const isValid = authenticator.verify({
@@ -1558,12 +1561,16 @@ async function startServer() {
         if (userDoc.exists && userDoc.data()?.twoFactorType === 'totp' && userDoc.data()?.twoFactorSecret) {
           const secret = userDoc.data().twoFactorSecret;
           if (authenticator && typeof authenticator.verify === 'function') {
-            const isValid = authenticator.verify({
-              token: otp,
-              secret: secret,
-              window: 1
-            });
-            if (isValid) return res.json({ success: true });
+            if (secret && secret.length >= 16) {
+              const isValid = authenticator.verify({
+                token: otp,
+                secret: secret,
+                window: 1
+              });
+              if (isValid) return res.json({ success: true });
+            } else {
+              console.warn("[OTP Verify] DB secret is too short for otplib");
+            }
           }
         }
       } catch (dbErr) {
