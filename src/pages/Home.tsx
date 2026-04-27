@@ -26,9 +26,11 @@ import {
 import { generateContentWithRetry } from "../lib/ai";
 import { Modality } from "@google/genai";
 import { saveInsight } from "../lib/insights";
+import { useTranslation } from "../lib/i18n";
 
 export default function Home() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { 
     currentWeather, 
     forecastWeather, 
@@ -455,7 +457,7 @@ export default function Home() {
           <div className="flex-1 text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
               <div className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-widest text-indigo-100 flex items-center">
-                <DollarSign className="w-3 h-3 mr-1" /> Active Profit Hub
+                <DollarSign className="w-3 h-3 mr-1" /> {t('active_profit_hub')}
               </div>
               <div className="px-3 py-1 bg-green-400/20 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-widest text-green-200 flex items-center">
                 <TrendingUp className="w-3 h-3 mr-1" /> Live
@@ -474,7 +476,7 @@ export default function Home() {
                   <TrendingUp className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <div className="text-[10px] font-black text-emerald-200 uppercase tracking-widest leading-none mb-1">BEST ONLINE GOLD SELLER</div>
+                  <div className="text-[10px] font-black text-emerald-200 uppercase tracking-widest leading-none mb-1">{t('best_gold_seller')}</div>
                   <div className="text-sm font-black text-white leading-none">APMEX</div>
                 </div>
               </div>
@@ -483,23 +485,23 @@ export default function Home() {
                   <DollarSign className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <div className="text-[10px] font-black text-blue-200 uppercase tracking-widest leading-none mb-1">BEST ONLINE GOLD BUYER</div>
+                  <div className="text-[10px] font-black text-blue-200 uppercase tracking-widest leading-none mb-1">{t('best_gold_buyer')}</div>
                   <div className="text-sm font-black text-white leading-none">JM Bullion</div>
                 </div>
               </div>
             </div>
 
-            <h2 className="text-3xl font-black tracking-tight mb-2">Make Money Every Minute</h2>
-            <p className="text-indigo-100 text-sm max-w-md">Engage with community content, follow AI courses, and watch ads to grow your balance. Payments processed monthly.</p>
+            <h2 className="text-3xl font-black tracking-tight mb-2">{t('make_money_msg')}</h2>
+            <p className="text-indigo-100 text-sm max-w-md">{t('make_money_desc')}</p>
           </div>
 
           <div className="flex items-center gap-4 bg-white/10 backdrop-blur-xl p-4 rounded-3xl border border-white/20">
             <div className="text-center px-4 border-r border-white/10">
-              <div className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-1">Total Earned</div>
+              <div className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-1">{t('total_earned')}</div>
               <div className="text-2xl font-black">$42.45</div>
             </div>
             <div className="text-center px-4">
-              <div className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-1">Daily Cap</div>
+              <div className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-1">{t('daily_cap')}</div>
               <div className="text-2xl font-black">84%</div>
             </div>
             <button 
@@ -513,10 +515,10 @@ export default function Home() {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
           {[
-            { label: 'Watch Ads', icon: PlayCircle, path: '/ads', color: 'bg-indigo-400/30' },
-            { label: 'Complete Task', icon: CheckCircle2, path: '/rewards', color: 'bg-purple-400/30' },
-            { label: 'Study AI', icon: GraduationCap, path: '/education', color: 'bg-pink-400/30' },
-            { label: 'Daily Bonus', icon: Gem, path: '/rewards', color: 'bg-white/20' }
+            { label: t('watch_ads'), icon: PlayCircle, path: '/ads', color: 'bg-indigo-400/30' },
+            { label: t('complete_task'), icon: CheckCircle2, path: '/rewards', color: 'bg-purple-400/30' },
+            { label: t('study_ai'), icon: GraduationCap, path: '/education', color: 'bg-pink-400/30' },
+            { label: t('daily_bonus'), icon: Gem, path: '/rewards', color: 'bg-white/20' }
           ].map((item, i) => (
             <button 
               key={i}
@@ -534,6 +536,27 @@ export default function Home() {
       </motion.div>
 
       <YouTubeSection />
+
+      {/* Community Groups CTA */}
+      <div className="mx-6 p-6 bg-white dark:bg-gray-800 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-6 overflow-hidden relative">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/5 rounded-full -mr-16 -mt-16 blur-2xl" />
+        <div className="flex items-center gap-4 relative z-10">
+          <div className="w-16 h-16 rounded-[1.5rem] bg-green-100 dark:bg-green-900/30 flex items-center justify-center shadow-inner">
+            <Globe className="w-8 h-8 text-green-600 dark:text-green-400" />
+          </div>
+          <div>
+            <h3 className="text-xl font-black text-gray-900 dark:text-white leading-tight">Elite Community Groups</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Join thousands of members across active hubs.</p>
+          </div>
+        </div>
+        <button 
+          onClick={() => navigate('/groups')}
+          className="w-full sm:w-auto px-8 py-3 bg-green-600 hover:bg-green-700 text-white font-black rounded-2xl shadow-lg shadow-green-600/20 transition-all flex items-center justify-center gap-2 relative z-10"
+        >
+          <PlusCircle className="w-5 h-5" />
+          DISCOVER GROUPS
+        </button>
+      </div>
 
       {showAdvancedSearch && (
         <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 mb-4 animate-in fade-in slide-in-from-top-2">

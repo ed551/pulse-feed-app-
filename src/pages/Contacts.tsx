@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, UserPlus, MessageSquare, Phone, MoreVertical, User, ShieldCheck, Star, RefreshCw, Smartphone, ExternalLink, Ban, Trash2, Copy, Edit2, CheckCircle, X } from "lucide-react";
+import { Search, UserPlus, MessageSquare, Phone, MoreVertical, User, ShieldCheck, Star, RefreshCw, Smartphone, ExternalLink, Ban, Trash2, Copy, Edit2, CheckCircle, X, Users } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";
 import { useAuth } from "../contexts/AuthContext";
@@ -338,9 +338,16 @@ export default function Contacts() {
               <User className="w-10 h-10 text-gray-400" />
             </div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">No contacts found</h3>
-            <p className="text-gray-500 dark:text-gray-400 max-w-xs">
+            <p className="text-gray-500 dark:text-gray-400 max-w-xs mb-6">
               {searchQuery ? `No results for "${searchQuery}"` : "Start connecting with people in your community!"}
             </p>
+            <button 
+              onClick={() => navigate('/groups')}
+              className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20"
+            >
+              <Users className="w-5 h-5" />
+              Discover Community Groups
+            </button>
           </div>
         )}
       </div>

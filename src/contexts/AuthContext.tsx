@@ -62,6 +62,12 @@ interface UserData {
   twoFactorType?: 'biometric' | 'email_otp' | 'totp';
   twoFactorSecret?: string;
   phoneNumber?: string;
+  language?: string;
+  timezone?: string;
+  timeFormat?: string;
+  dateFormat?: string;
+  isSportsWatchPrecise?: boolean;
+  alarms?: { id: string, time: string, active: boolean }[];
   theme?: 'light' | 'dark' | 'system';
   blockedUsers?: string[];
   blockedGroups?: string[];

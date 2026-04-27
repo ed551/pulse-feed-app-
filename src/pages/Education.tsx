@@ -370,6 +370,18 @@ export default function Education() {
   const audioIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
+    const saved = localStorage.getItem('pulse_audio_session');
+    if (saved) {
+      try {
+        const { module, time, voiceId } = JSON.parse(saved);
+        setAudioCurrentTime(time);
+        audioOffsetRef.current = time;
+        const voice = VOICES.find(v => v.id === voiceId);
+        if (voice) setSelectedVoice(voice);
+        console.log(`Restored audio session: ${module} at ${time}s`);
+      } catch (e) {}
+    }
+
     return () => {
       stopAudio();
       if (audioContextRef.current) {
@@ -378,7 +390,39 @@ export default function Education() {
     };
   }, []);
 
+  // Throttled persistence
+  useEffect(() => {
+    if (isPlayingAudio && Math.floor(audioCurrentTime) % 5 === 0) {
+      const session = {
+        module: isPlayingAudio,
+        time: audioCurrentTime,
+        voiceId: selectedVoice.id
+      };
+      localStorage.setItem('pulse_audio_session', JSON.stringify(session));
+    }
+  }, [audioCurrentTime, isPlayingAudio, selectedVoice.id]);
+
   const [audioSpeed, setAudioSpeed] = useState(1.0);
+  const audioCacheRef = useRef<Record<string, AudioBuffer>>({});
+  const wakeLockRef = useRef<any>(null);
+
+  const requestWakeLock = async () => {
+    if ('wakeLock' in navigator) {
+      try {
+        wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+      } catch (err) {
+        console.log("Wake Lock disabled or disallowed by policy");
+      }
+    }
+  };
+
+  const releaseWakeLock = () => {
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release().then(() => {
+        wakeLockRef.current = null;
+      });
+    }
+  };
 
   const stopAudio = () => {
     if (audioBufferSourceRef.current) {
@@ -392,6 +436,7 @@ export default function Education() {
       audioIntervalRef.current = null;
     }
     setIsPlayingAudio(null);
+    releaseWakeLock();
   };
 
   const handleSeek = (direction: 'forward' | 'backward', moduleTitle: string) => {
@@ -432,6 +477,7 @@ export default function Education() {
     audioStartTimeRef.current = audioContextRef.current.currentTime;
     audioOffsetRef.current = offset;
     setIsPlayingAudio(moduleTitle);
+    requestWakeLock();
 
     if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
     audioIntervalRef.current = window.setInterval(() => {
@@ -443,6 +489,7 @@ export default function Education() {
 
         if (currentPos >= currentBufferRef.current.duration) {
           stopAudio();
+          releaseWakeLock();
         }
       }
     }, 100);
@@ -464,6 +511,14 @@ export default function Education() {
   const handlePlayAudio = async (courseTitle: string, moduleTitle: string, customText?: string) => {
     if (isPlayingAudio === moduleTitle) {
       stopAudio();
+      return;
+    }
+
+    const cacheKey = `${courseTitle}-${moduleTitle}-${selectedVoice.id}`;
+    if (audioCacheRef.current[cacheKey]) {
+      currentBufferRef.current = audioCacheRef.current[cacheKey];
+      setAudioTotalDuration(currentBufferRef.current.duration);
+      startBufferSource(0, moduleTitle);
       return;
     }
 
@@ -508,7 +563,7 @@ export default function Education() {
 
       const base64Audio = ttsResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
-        await playPcmAudio(base64Audio, moduleTitle);
+        await playPcmAudio(base64Audio, moduleTitle, cacheKey);
       }
     } catch (error) {
       console.error("Audio Generation Error:", error);
@@ -516,7 +571,7 @@ export default function Education() {
     }
   };
 
-  const playPcmAudio = async (base64Data: string, moduleTitle: string) => {
+  const playPcmAudio = async (base64Data: string, moduleTitle: string, cacheKey?: string) => {
     try {
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -543,6 +598,9 @@ export default function Education() {
       audioBuffer.getChannelData(0).set(float32Data);
       
       currentBufferRef.current = audioBuffer;
+      if (cacheKey) {
+        audioCacheRef.current[cacheKey] = audioBuffer;
+      }
       setAudioTotalDuration(audioBuffer.duration);
       setIsGeneratingAudio(null);
       startBufferSource(0, moduleTitle);
@@ -1462,6 +1520,14 @@ export default function Education() {
                                             <SkipBack className="w-2.5 h-2.5 text-indigo-600 dark:text-indigo-400" />
                                           </button>
                                           
+                                          <button 
+                                            onClick={(e) => { e.stopPropagation(); handleSeek('backward', module); }}
+                                            className="p-1 hover:bg-indigo-100 dark:hover:bg-indigo-800 rounded-full transition-colors"
+                                            title="Backward 10s"
+                                          >
+                                            <SkipBack className="w-2.5 h-2.5 text-indigo-600 dark:text-indigo-400" />
+                                          </button>
+
                                           <button 
                                             onClick={(e) => { e.stopPropagation(); stopAudio(); }}
                                             className="p-1.5 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-800 rounded-full transition-colors group"

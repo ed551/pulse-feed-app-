@@ -1871,6 +1871,176 @@ async function startServer() {
     }
   });
 
+  // Co-op Bank Integration Endpoints (Simulated for Banking Verification)
+  app.post("/api/bank/coop/disbursement", async (req, res) => {
+    const { userId, amount, accountNumber, reference, type } = req.body;
+    
+    // Simulate a slight network delay for realism
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    try {
+      console.log(`[Co-op Bank Simulation] Processing ${type || 'IFT'} payout of ${amount} to ${accountNumber}`);
+      
+      const transactionId = `${type === 'pesalink' ? 'PSL' : 'IFT'}-${Date.now()}`;
+      
+      // Standard Co-op Bank Success Response Structure for Technical Verification
+      res.json({
+        MessageReference: reference || `PULSE-IFT-${Date.now()}`,
+        ResponseCode: "200",
+        ResponseMessage: "Success",
+        ResultCode: "0",
+        ResultDesc: "Internal Funds Transfer request successfully processed.",
+        TransactionID: transactionId,
+        Timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      res.status(500).json({ 
+        MessageReference: reference,
+        ResponseCode: "500",
+        ResponseDescription: error.message 
+      });
+    }
+  });
+
+  app.post("/api/bank/coop/callback", async (req, res) => {
+    const { TransactionReference, Status, Reason } = req.body;
+    console.log(`[Co-op Bank Callback] Ref: ${TransactionReference}, Status: ${Status}`);
+    
+    // Logic to update transaction based on bank callback
+    res.json({ ResultCode: "0", ResultDesc: "Success" });
+  });
+
+  // Centralized Revenue Logging Endpoint
+  app.post("/api/revenue/log", async (req, res) => {
+    const { userId, totalAmount, source, reason } = req.body;
+    
+    if (!userId || totalAmount === undefined || !source) {
+      return res.status(400).json({ error: "userId, totalAmount, and source are required" });
+    }
+
+    try {
+      console.log(`[Revenue Log] Request: userId=${userId}, amount=${totalAmount}, source=${source}`);
+      
+      let userAmount = 0;
+      let platformAmount = 0;
+
+      // Apply Revenue Split Rules
+      switch (source) {
+        case 'ad':
+        case 'active_time':
+        case 'community':
+        case 'dating':
+        case 'events':
+          // User Activity: 50% Platform / 50% User
+          userAmount = totalAmount * 0.5;
+          platformAmount = totalAmount * 0.5;
+          break;
+        case 'education':
+          // Education: 80% Platform / 20% User
+          userAmount = totalAmount * 0.2;
+          platformAmount = totalAmount * 0.8;
+          break;
+        case 'payment':
+        case 'app_creation':
+          // Payments/App Creation: 100% Platform
+          userAmount = 0;
+          platformAmount = totalAmount;
+          break;
+        default:
+          // Default to 100% Platform if unknown source
+          userAmount = 0;
+          platformAmount = totalAmount;
+      }
+
+      const pointsToAdd = Math.floor(userAmount * 100);
+      const timestamp = FieldValue.serverTimestamp();
+
+      // Update User Data (if user earns)
+      if (userAmount > 0 && userId !== 'system') {
+        const userRef = resilientDb.collection('users').doc(userId);
+        const updateData: any = {
+          points: FieldValue.increment(pointsToAdd),
+          balance: FieldValue.increment(userAmount)
+        };
+
+        // Track specific revenue source
+        if (source === 'ad') updateData.adRevenue = FieldValue.increment(userAmount);
+        if (source === 'education') updateData.educationRevenue = FieldValue.increment(userAmount);
+        if (source === 'active_time') updateData.activeTimeRevenue = FieldValue.increment(userAmount);
+        if (source === 'dating') updateData.datingRevenue = FieldValue.increment(userAmount);
+        if (source === 'community') updateData.communityRevenue = FieldValue.increment(userAmount);
+        if (source === 'events') updateData.eventsRevenue = FieldValue.increment(userAmount);
+
+        await userRef.update(updateData);
+
+        // Log Points Ledger
+        await resilientDb.collection('users').doc(userId).collection('points_ledger').add({
+          amount: pointsToAdd,
+          type: 'accrual',
+          source: source,
+          reason,
+          timestamp
+        });
+
+        // Log User Transaction
+        await resilientDb.collection('users').doc(userId).collection('transactions').add({
+          amount: userAmount,
+          currency: 'USD',
+          type: 'earning',
+          source: source,
+          status: 'success',
+          timestamp,
+          reference: `SRV-REV-${Date.now()}`,
+          details: reason,
+          pointsAdded: pointsToAdd
+        });
+      }
+
+      // Update Platform Stats
+      const statsRef = resilientDb.collection('platform').doc('stats');
+      await statsRef.update({
+        platformRevenue: FieldValue.increment(totalAmount),
+        platformShare: FieldValue.increment(platformAmount),
+        totalUserBalances: FieldValue.increment(userAmount),
+        lastUpdated: timestamp
+      }).catch(async (err) => {
+        if (err.message.includes('NOT_FOUND') || err.message.includes('no document')) {
+          await statsRef.set({
+            platformRevenue: totalAmount,
+            platformShare: platformAmount,
+            totalUserBalances: userAmount,
+            lastUpdated: timestamp,
+            createdAt: timestamp
+          });
+        }
+      });
+
+      // Log Platform Transaction
+      await resilientDb.collection('platform_transactions').add({
+        type: source === 'payment' || source === 'app_creation' ? 'platform_revenue' : 'revenue',
+        source,
+        userAmount,
+        platformAmount,
+        totalAmount,
+        reason,
+        userId,
+        timestamp,
+        serverSecret: SERVER_SECRET
+      });
+
+      res.json({ 
+        success: true, 
+        userAmount, 
+        platformAmount, 
+        pointsAdded: pointsToAdd,
+        split: source === 'education' ? '80/20' : (source === 'payment' ? '100% Platform' : '50/50')
+      });
+    } catch (error: any) {
+      console.error("[Revenue Log] Error:", error);
+      res.status(500).json({ error: error.message || "Failed to log revenue" });
+    }
+  });
+
   // URL Shortener Proxy (Mock)
   app.get("/api/shorten", (req, res) => {
     const { url } = req.query;

@@ -36,6 +36,29 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const addRevenue = async (userAmount: number, platformAmount: number, reason: string, source: 'ad' | 'education' | 'active_time' | 'dating' | 'community' | 'events') => {
     if (!currentUser) return;
     try {
+      // 1. Try to log via Server API for authoritative split logic and safety
+      const totalAmount = userAmount + platformAmount;
+      const response = await fetch('/api/revenue/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.uid,
+          totalAmount,
+          source,
+          reason
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`[API Revenue] Success: User Earned $${result.userAmount}, Platform Earned $${result.platformAmount}`);
+        setTotalEarnedToday(prev => prev + result.pointsAdded);
+        return;
+      }
+
+      console.warn("[API Revenue] Server log failed, falling back to client-side direct Firestore update.");
+
+      // 2. Fallback to direct Firestore if API fails
       const userRef = doc(db, 'users', currentUser.uid);
       const statsRef = doc(db, 'platform', 'stats');
 

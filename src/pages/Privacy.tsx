@@ -306,7 +306,7 @@ export default function Privacy() {
           Financial transparency and compliance are paramount:
         </p>
         <ul>
-          <li><strong>Wallet Activity:</strong> Every Pulse Point earned is logged with a detailed timestamp and source identifier.</li>
+          <li><strong>Wallet Activity:</strong> Every Pulse Point earned is logged with a detailed timestamp and source identifier. We maintain a transparent ledger of revenue splits (50/50 for general activity, 80/20 for education) to ensure users can verify their Salary accruals against platform metrics.</li>
           <li><strong>KYC (Know Your Customer):</strong> For large withdrawals, we may require identity verification to comply with anti-money laundering (AML) laws.</li>
         </ul>
 

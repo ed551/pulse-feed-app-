@@ -23,13 +23,19 @@ import {
   Filter,
   Users2,
   AlertCircle,
+  Languages,
   LogOut,
   ShieldCheck,
-  Copy
+  Copy,
+  Clock,
+  Timer,
+  Calendar,
+  Globe
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useTranslation } from "../lib/i18n";
 import { db } from "../lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import FingerprintModal from "../components/tools/FingerprintModal";
@@ -38,6 +44,7 @@ import { cn } from "../lib/utils";
 
 export default function Settings() {
   const { currentUser, userData, logout } = useAuth();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [showFingerprintModal, setShowFingerprintModal] = useState(false);
@@ -63,6 +70,11 @@ export default function Settings() {
   const [datingEducation, setDatingEducation] = useState(userData?.education || "");
   const [datingStatus, setDatingStatus] = useState(userData?.status || "Single");
   const [datingSports, setDatingSports] = useState(userData?.sports?.join(", ") || "");
+  const [language, setLanguage] = useState(userData?.language || "en");
+  const [timezone, setTimezone] = useState(userData?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const [timeFormat, setTimeFormat] = useState(userData?.timeFormat || "24h");
+  const [dateFormat, setDateFormat] = useState(userData?.dateFormat || "DD/MM/YYYY");
+  const [isSportsWatchPrecise, setIsSportsWatchPrecise] = useState(userData?.isSportsWatchPrecise ?? true);
 
   // New settings states
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>((userData?.theme as 'light' | 'dark' | 'system') || "system");
@@ -93,6 +105,11 @@ export default function Settings() {
       setDatingEducation(userData.education || "");
       setDatingStatus(userData.status || "Single");
       setDatingSports(userData.sports?.join(", ") || "");
+      setLanguage(userData.language || "en");
+      setTimezone(userData.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
+      setTimeFormat(userData.timeFormat || "24h");
+      setDateFormat(userData.dateFormat || "DD/MM/YYYY");
+      setIsSportsWatchPrecise(userData.isSportsWatchPrecise ?? true);
     }
   }, [currentUser, userData]);
 
@@ -222,6 +239,23 @@ export default function Settings() {
     }
   };
 
+  const handleUpdateLocale = async (key: 'language' | 'timezone' | 'timeFormat' | 'dateFormat' | 'isSportsWatchPrecise', value: any) => {
+    if (!currentUser) return;
+    if (key === 'language') setLanguage(value);
+    if (key === 'timezone') setTimezone(value);
+    if (key === 'timeFormat') setTimeFormat(value as string);
+    if (key === 'dateFormat') setDateFormat(value as string);
+    if (key === 'isSportsWatchPrecise') setIsSportsWatchPrecise(value as boolean);
+    
+    try {
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        [key]: value
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleUnblock = async (id: string, type: 'user' | 'group') => {
     if (!currentUser) return;
     try {
@@ -239,13 +273,13 @@ export default function Settings() {
   const sections = [
     {
       id: 'personal',
-      title: 'Personal Information',
-      description: 'Manage your name, email, and basic info',
+      title: t('personal_info'),
+      description: t('personal_info_desc'),
       icon: <UserCircle className="w-5 h-5 text-blue-500" />,
       content: (
         <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
           <div className="space-y-2">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Display Name</label>
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('display_name')}</label>
             <input 
               type="text" 
               value={displayName}
@@ -254,14 +288,14 @@ export default function Settings() {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Email Address</label>
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('email_address')}</label>
             <input 
               type="email" 
               value={email}
               disabled
               className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-sm text-gray-500 dark:text-gray-400 cursor-not-allowed"
             />
-            <p className="text-[10px] text-gray-400">Email cannot be changed directly for security reasons.</p>
+            <p className="text-[10px] text-gray-400">{t('email_security_desc')}</p>
           </div>
           <button 
             onClick={handleSaveProfile}
@@ -269,54 +303,184 @@ export default function Settings() {
             className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-all flex items-center justify-center disabled:opacity-50"
           >
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : saveSuccess ? <Check className="w-4 h-4 mr-2" /> : null}
-            {saveSuccess ? "Saved Successfully" : "Save Changes"}
+            {saveSuccess ? t('saved_successfully') : t('save_changes')}
           </button>
         </div>
       )
     },
     {
       id: 'appearance',
-      title: 'Theme & Appearance',
-      description: 'Customize how Pulse Feeds looks',
+      title: t('theme_appearance'),
+      description: t('theme_appearance_desc'),
       icon: <Sun className="w-5 h-5 text-yellow-500" />,
       content: (
-        <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-          <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Interface Theme</label>
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { id: 'light', icon: Sun, label: 'Light' },
-              { id: 'dark', icon: Moon, label: 'Dark' },
-              { id: 'system', icon: Monitor, label: 'System' }
-            ].map((t) => (
+        <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="space-y-4">
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('interface_theme')}</label>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { id: 'light', icon: Sun, label: t('light') },
+                { id: 'dark', icon: Moon, label: t('dark') },
+                { id: 'system', icon: Monitor, label: t('system') }
+              ].map((t_item) => (
+                <button
+                  key={t_item.id}
+                  onClick={() => handleUpdateTheme(t_item.id as 'light' | 'dark' | 'system')}
+                  className={cn(
+                    "flex flex-col items-center justify-center p-4 rounded-2xl border transition-all",
+                    theme === t_item.id 
+                      ? "bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-600" 
+                      : "bg-gray-50 dark:bg-gray-700/30 border-gray-100 dark:border-gray-700 hover:border-blue-200"
+                  )}
+                >
+                  <t_item.icon className="w-5 h-5 mb-2" />
+                  <span className="text-xs font-medium">{t_item.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'device-locale',
+      title: t('device_global_config'),
+      description: t('device_global_config_desc'),
+      icon: <Globe className="w-5 h-5 text-emerald-500" />,
+      content: (
+        <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="space-y-4">
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('language_region')}</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest flex items-center gap-2">
+                  <Languages className="w-3 h-3" />
+                  {t('app_language')}
+                </p>
+                <select 
+                  value={language}
+                  onChange={(e) => handleUpdateLocale('language', e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-3 text-sm text-gray-900 dark:text-white outline-none"
+                >
+                  <option value="en">English (Global)</option>
+                  <option value="sw">Swahili</option>
+                  <option value="fr">French</option>
+                  <option value="es">Spanish</option>
+                  <option value="zh">Chinese</option>
+                  <option value="ar">Arabic</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest flex items-center gap-2">
+                  <Globe className="w-3 h-3" />
+                  {t('time_zone')}
+                </p>
+                <select 
+                  value={timezone}
+                  onChange={(e) => handleUpdateLocale('timezone', e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-3 text-sm text-gray-900 dark:text-white outline-none"
+                >
+                  <option value="Africa/Nairobi">{t('eat_nairobi')}</option>
+                  <option value="UTC">{t('utc_global')}</option>
+                  <option value="Europe/London">{t('gmt_london')}</option>
+                  <option value="America/New_York">{t('est_new_york')}</option>
+                  <option value="Asia/Tokyo">{t('jst_tokyo')}</option>
+                  <option value="Asia/Dubai">{t('gst_dubai')}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('clock_watch_settings')}</label>
+            <div className="grid grid-cols-2 gap-3">
               <button
-                key={t.id}
-                onClick={() => handleUpdateTheme(t.id as 'light' | 'dark' | 'system')}
+                onClick={() => handleUpdateLocale('timeFormat', timeFormat === '12h' ? '24h' : '12h')}
                 className={cn(
-                  "flex flex-col items-center justify-center p-4 rounded-2xl border transition-all",
-                  theme === t.id 
-                    ? "bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-600" 
-                    : "bg-gray-50 dark:bg-gray-700/30 border-gray-100 dark:border-gray-700 hover:border-blue-200"
+                  "flex items-center justify-between p-3 rounded-xl border transition-all",
+                  "bg-gray-50 dark:bg-gray-700/30 border-gray-100 dark:border-gray-700 hover:border-emerald-200"
                 )}
               >
-                <t.icon className="w-5 h-5 mb-2" />
-                <span className="text-xs font-medium">{t.label}</span>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-emerald-500" />
+                  <span className="text-xs font-bold">{timeFormat.toUpperCase()} {t('time_format')}</span>
+                </div>
+                <div className={cn("w-2 h-2 rounded-full", timeFormat === '24h' ? "bg-emerald-500" : "bg-gray-300")} />
               </button>
-            ))}
+
+              <button
+                onClick={() => handleUpdateLocale('dateFormat', dateFormat === 'DD/MM/YYYY' ? 'MM/DD/YYYY' : 'DD/MM/YYYY')}
+                className={cn(
+                  "flex items-center justify-between p-3 rounded-xl border transition-all",
+                  "bg-gray-50 dark:bg-gray-700/30 border-gray-100 dark:border-gray-700 hover:border-emerald-200"
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-orange-500" />
+                  <span className="text-xs font-bold">{t('date_style')}</span>
+                </div>
+                <span className="text-[9px] font-black opacity-50">{dateFormat}</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-orange-500/10 rounded-xl flex items-center justify-center text-orange-500">
+                  <Timer className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">{t('sports_watch_precision')}</p>
+                  <p className="text-[10px] text-gray-500">Enable millisecond precision for athletics</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => handleUpdateLocale('isSportsWatchPrecise', !isSportsWatchPrecise)}
+                className={cn(
+                  "w-10 h-5 rounded-full relative transition-colors",
+                  isSportsWatchPrecise ? "bg-orange-500" : "bg-gray-300 dark:bg-gray-600"
+                )}
+              >
+                <div className={cn(
+                  "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
+                  isSportsWatchPrecise ? "right-1" : "left-1"
+                )} />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">{t('active_alarms')}</p>
+                  <p className="text-[10px] text-gray-500">Check and manage your wake-up calls</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => navigate('/')} // Redirect to dashboard to access clock tool
+                className="px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-lg text-[10px] font-bold"
+              >
+                {t('open_clock')}
+              </button>
+            </div>
           </div>
         </div>
       )
     },
     {
       id: 'dating',
-      title: 'Dating Profile',
-      description: 'Manage your dating hub parameters',
+      title: t('dating_profile'),
+      description: t('dating_profile_desc'),
       icon: <Heart className="w-5 h-5 text-pink-500" />,
       content: (
         <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
           <div className="flex items-center justify-between p-3 bg-pink-50 dark:bg-pink-900/10 rounded-xl border border-pink-100 dark:border-pink-900/30 mb-4">
             <div>
-              <p className="text-sm font-bold text-pink-900 dark:text-pink-300">Dating Hub Active</p>
-              <p className="text-[10px] text-pink-700/70 dark:text-pink-400/70">Show your profile in the Dating Hub</p>
+              <p className="text-sm font-bold text-pink-900 dark:text-pink-300">{t('dating_hub_active')}</p>
+              <p className="text-[10px] text-pink-700/70 dark:text-pink-400/70">{t('dating_hub_desc')}</p>
             </div>
             <button 
               onClick={() => setIsDatingActive(!isDatingActive)}
@@ -334,7 +498,7 @@ export default function Settings() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Tribe</label>
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('tribe')}</label>
               <input 
                 type="text" 
                 value={datingTribe}
@@ -344,7 +508,7 @@ export default function Settings() {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Radius (km)</label>
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('radius_km')}</label>
               <input 
                 type="number" 
                 value={datingRadius}
@@ -353,7 +517,7 @@ export default function Settings() {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Age</label>
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('age')}</label>
               <input 
                 type="number" 
                 value={datingAge}
@@ -362,19 +526,19 @@ export default function Settings() {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Sex</label>
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('sex')}</label>
               <select 
                 value={datingGender}
                 onChange={(e) => setDatingGender(e.target.value)}
                 className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
               >
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
+                <option value="Male">{t('male')}</option>
+                <option value="Female">{t('female')}</option>
+                <option value="Other">{t('other')}</option>
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Location</label>
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('location')}</label>
               <input 
                 type="text" 
                 value={datingLocation}
@@ -384,7 +548,7 @@ export default function Settings() {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Favourite Job</label>
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('favourite_job')}</label>
               <input 
                 type="text" 
                 value={datingJob}
@@ -394,7 +558,7 @@ export default function Settings() {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Religion</label>
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('religion')}</label>
               <input 
                 type="text" 
                 value={datingReligion}
@@ -404,7 +568,7 @@ export default function Settings() {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Education</label>
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('education')}</label>
               <input 
                 type="text" 
                 value={datingEducation}
@@ -414,23 +578,23 @@ export default function Settings() {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Status</label>
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('status')}</label>
               <select 
                 value={datingStatus}
                 onChange={(e) => setDatingStatus(e.target.value)}
                 className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
               >
-                <option value="Single">Single</option>
-                <option value="Married">Married</option>
-                <option value="Divorced">Divorced</option>
-                <option value="Widower">Widower</option>
-                <option value="Widowee">Widowee</option>
+                <option value="Single">{t('single')}</option>
+                <option value="Married">{t('married')}</option>
+                <option value="Divorced">{t('divorced')}</option>
+                <option value="Widower">{t('widower')}</option>
+                <option value="Widowee">{t('widowee')}</option>
               </select>
             </div>
           </div>
 
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Hobbies (comma separated)</label>
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('hobbies_comma')}</label>
             <input 
               type="text" 
               value={datingHobbies}
@@ -440,7 +604,7 @@ export default function Settings() {
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Foods (comma separated)</label>
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('foods_comma')}</label>
             <input 
               type="text" 
               value={datingFoods}
@@ -450,7 +614,7 @@ export default function Settings() {
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Sports (comma separated)</label>
+            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('sports_comma')}</label>
             <input 
               type="text" 
               value={datingSports}
@@ -466,26 +630,26 @@ export default function Settings() {
             className="w-full py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-sm font-bold transition-all flex items-center justify-center disabled:opacity-50"
           >
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : saveSuccess ? <Check className="w-4 h-4 mr-2" /> : null}
-            {saveSuccess ? "Saved Successfully" : "Save Dating Profile"}
+            {saveSuccess ? t('saved_successfully') : t('save_dating_profile')}
           </button>
         </div>
       )
     },
     {
       id: 'security',
-      title: 'Security & Privacy',
-      description: 'Two-factor auth, blocking, and filters',
+      title: t('security_privacy'),
+      description: t('security_privacy_desc'),
       icon: <Shield className="w-5 h-5 text-purple-500" />,
       content: (
         <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
           <div className="space-y-3">
-            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Two-Factor Authentication</h4>
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('two_factor_auth')}</h4>
             
             <div className="grid grid-cols-1 gap-2">
               {[
-                { id: 'biometric', icon: Fingerprint, label: 'Biometric Scanner', desc: 'Secure fingerprint scan', color: 'text-cyan-500' },
-                { id: 'email_otp', icon: Mail, label: 'Email Security Code', desc: '6-digit code via email', color: 'text-blue-500' },
-                { id: 'totp', icon: Shield, label: 'Google Authenticator', desc: 'App-based security code', color: 'text-orange-500' }
+                { id: 'biometric', icon: Fingerprint, label: t('biometric_scanner'), desc: t('biometric_desc'), color: 'text-cyan-500' },
+                { id: 'email_otp', icon: Mail, label: t('email_otp'), desc: t('email_otp_desc'), color: 'text-blue-500' },
+                { id: 'totp', icon: Shield, label: t('google_auth'), desc: t('totp_desc'), color: 'text-orange-500' }
               ].map(method => (
                 <div key={method.id} className="space-y-2">
                   <button
@@ -525,12 +689,12 @@ export default function Settings() {
                           />
                         </div>
                         <div className="text-center space-y-1">
-                          <p className="text-[10px] font-bold text-orange-800 dark:text-orange-300 uppercase tracking-wider">Scan QR Code</p>
-                          <p className="text-[9px] text-gray-500 max-w-[180px]">Scan with Google Authenticator to add account automatically.</p>
+                          <p className="text-[10px] font-bold text-orange-800 dark:text-orange-300 uppercase tracking-wider">{t('scan_qr')}</p>
+                          <p className="text-[9px] text-gray-500 max-w-[180px]">{t('scan_qr_desc')}</p>
                         </div>
                         
                         <div className="w-full space-y-1 mt-1">
-                          <p className="text-[10px] font-bold text-orange-800 dark:text-orange-300 uppercase tracking-wider">Manual Entry Key</p>
+                          <p className="text-[10px] font-bold text-orange-800 dark:text-orange-300 uppercase tracking-wider">{t('manual_entry')}</p>
                           <div className="flex items-center justify-between bg-white dark:bg-gray-900 p-2 rounded-lg border border-orange-200 dark:border-orange-800 w-full">
                             <code className="text-[10px] font-mono font-bold text-orange-600 dark:text-orange-500 tracking-tighter">
                               {userData.twoFactorSecret}
@@ -559,8 +723,8 @@ export default function Settings() {
                   <Lock className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">Enable 2FA Protection</p>
-                  <p className="text-[10px] text-gray-500">Identity check for sensitive actions</p>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">{t('enable_2fa')}</p>
+                  <p className="text-[10px] text-gray-500">{t('identity_check_desc')}</p>
                 </div>
               </div>
               <button 
@@ -582,18 +746,18 @@ export default function Settings() {
 
           {/* Blocked Lists */}
           <div className="space-y-4">
-            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Blocked Management</h4>
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('blocked_management')}</h4>
             
             <div className="space-y-3">
               <div className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-100 dark:border-red-900/20">
                 <div className="flex items-center gap-3">
                   <Ban className="w-5 h-5 text-red-500" />
                   <div>
-                    <h5 className="text-sm font-bold text-gray-900 dark:text-white">Blocked Users</h5>
-                    <p className="text-[10px] text-gray-500">{(userData?.blockedUsers || []).length} users restricted</p>
+                    <h5 className="text-sm font-bold text-gray-900 dark:text-white">{t('blocked_users')}</h5>
+                    <p className="text-[10px] text-gray-500">{(userData?.blockedUsers || []).length} {t('users_restricted')}</p>
                   </div>
                 </div>
-                <button className="text-xs font-bold text-red-600 hover:underline">Manage</button>
+                <button className="text-xs font-bold text-red-600 hover:underline">{t('manage_blocked')}</button>
               </div>
 
               {(userData?.blockedUsers || []).length > 0 && (
@@ -604,7 +768,7 @@ export default function Settings() {
                         <div className="w-6 h-6 rounded-full bg-gray-200" />
                         <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300">{uid.substring(0, 8)}...</span>
                       </div>
-                      <button onClick={() => handleUnblock(uid, 'user')} className="text-[10px] text-blue-600 hover:underline">Unblock</button>
+                      <button onClick={() => handleUnblock(uid, 'user')} className="text-[10px] text-blue-600 hover:underline">{t('unblock')}</button>
                     </div>
                   ))}
                 </div>
@@ -614,11 +778,11 @@ export default function Settings() {
                 <div className="flex items-center gap-3">
                   <Users2 className="w-5 h-5 text-orange-500" />
                   <div>
-                    <h5 className="text-sm font-bold text-gray-900 dark:text-white">Blocked Groups</h5>
-                    <p className="text-[10px] text-gray-500">{(userData?.blockedGroups || []).length} groups restricted</p>
+                    <h5 className="text-sm font-bold text-gray-900 dark:text-white">{t('blocked_groups')}</h5>
+                    <p className="text-[10px] text-gray-500">{(userData?.blockedGroups || []).length} {t('groups_restricted')}</p>
                   </div>
                 </div>
-                <button className="text-xs font-bold text-orange-600 hover:underline">Manage</button>
+                <button className="text-xs font-bold text-orange-600 hover:underline">{t('manage_blocked')}</button>
               </div>
             </div>
           </div>
@@ -627,15 +791,15 @@ export default function Settings() {
 
           {/* Content Filters */}
           <div className="space-y-4">
-            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Content Filters</h4>
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('content_filters')}</h4>
             
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Filter className="w-4 h-4 text-emerald-500" />
                   <div>
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">Sensitive Content</p>
-                    <p className="text-[10px] text-gray-500">Hide potentially disturbing media</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">{t('sensitive_content')}</p>
+                    <p className="text-[10px] text-gray-500">{t('sensitive_content_desc')}</p>
                   </div>
                 </div>
                 <button 
@@ -656,8 +820,8 @@ export default function Settings() {
                 <div className="flex items-center gap-3">
                   <AlertCircle className="w-4 h-4 text-blue-500" />
                   <div>
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">Aggressive Spam Filter</p>
-                    <p className="text-[10px] text-gray-500">Automatically hide promotional bots</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">{t('spam_filter')}</p>
+                    <p className="text-[10px] text-gray-500">{t('spam_filter_desc')}</p>
                   </div>
                 </div>
                 <button 
@@ -675,15 +839,15 @@ export default function Settings() {
               </div>
 
               <div className="space-y-2">
-                <p className="text-[10px] font-bold text-gray-500 uppercase">Direct Message Privacy</p>
+                <p className="text-[10px] font-bold text-gray-500 uppercase">{t('dm_privacy')}</p>
                 <select 
                   value={contentFilters.directMessagePrivacy}
                   onChange={(e) => handleUpdateFilters('directMessagePrivacy', e.target.value)}
                   className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-3 text-xs text-gray-900 dark:text-white outline-none"
                 >
-                  <option value="everyone">Everyone</option>
-                  <option value="following">Only People I Follow</option>
-                  <option value="none">No One</option>
+                  <option value="everyone">{t('everyone')}</option>
+                  <option value="following">{t('only_people_i_follow')}</option>
+                  <option value="none">{t('none')}</option>
                 </select>
               </div>
             </div>
@@ -692,13 +856,13 @@ export default function Settings() {
           <div className="h-px bg-gray-100 dark:bg-gray-700 my-4" />
 
           <div className="space-y-3">
-            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Account Privacy & Interactions</h4>
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('account_privacy_interactions')}</h4>
             
             <div className="space-y-4 bg-gray-50 dark:bg-gray-700/20 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">Public Profile Visibility</p>
-                  <p className="text-[10px] text-gray-500">Allow strangers to see your posts and media</p>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">{t('profile_visibility')}</p>
+                  <p className="text-[10px] text-gray-500">{t('profile_visibility_desc')}</p>
                 </div>
                 <button 
                   onClick={() => handleUpdateFilters('publicProfile', !contentFilters.publicProfile)}
@@ -715,7 +879,7 @@ export default function Settings() {
               </div>
 
               <div className="space-y-2">
-                <p className="text-xs font-bold text-gray-700 dark:text-gray-300">Who can see your photos?</p>
+                <p className="text-xs font-bold text-gray-700 dark:text-gray-300">{t('who_see_photos')}</p>
                 <div className="flex gap-2">
                   {['everyone', 'followers', 'none'].map((val) => (
                     <button
@@ -728,7 +892,7 @@ export default function Settings() {
                           : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500"
                       )}
                     >
-                      {val}
+                      {t(val)}
                     </button>
                   ))}
                 </div>
@@ -736,8 +900,8 @@ export default function Settings() {
 
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">Allow Followers</p>
-                  <p className="text-[10px] text-gray-500">Allow other users to follow your activity</p>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">{t('allow_followers')}</p>
+                  <p className="text-[10px] text-gray-500">{t('allow_followers_desc')}</p>
                 </div>
                 <button 
                   onClick={() => handleUpdateFilters('allowFollowers', !contentFilters.allowFollowers)}
@@ -758,8 +922,8 @@ export default function Settings() {
               <div className="flex items-center space-x-4">
                 <Eye className="w-5 h-5 text-gray-400" />
                 <div className="text-left">
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">Profile Visibility</p>
-                  <p className="text-[10px] text-gray-500">Currently set to {contentFilters.publicProfile ? 'Public' : 'Private'}</p>
+                  <p className="text-sm font-bold text-gray-900 dark:text-white">{t('profile_visibility')}</p>
+                  <p className="text-[10px] text-gray-500">{t('currently_set_to')} {contentFilters.publicProfile ? t('public') : t('private')}</p>
                 </div>
               </div>
               <ChevronRight className="w-4 h-4 text-gray-400" />
@@ -770,15 +934,15 @@ export default function Settings() {
     },
     {
       id: 'notifications',
-      title: 'Notifications',
-      description: 'Push, email, and in-app alerts',
+      title: t('notifications'),
+      description: t('notifications_desc'),
       icon: <Bell className="w-5 h-5 text-orange-500" />,
       content: (
         <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-bold text-gray-900 dark:text-white">Push Notifications</p>
-              <p className="text-[10px] text-gray-500">Alerts for new rewards and posts</p>
+              <p className="text-sm font-bold text-gray-900 dark:text-white">{t('push_notifications')}</p>
+              <p className="text-[10px] text-gray-500">{t('push_notifications_desc')}</p>
             </div>
             <div className="w-10 h-5 bg-blue-600 rounded-full relative cursor-pointer">
               <div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full"></div>
@@ -786,8 +950,8 @@ export default function Settings() {
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-bold text-gray-900 dark:text-white">Email Marketing</p>
-              <p className="text-[10px] text-gray-500">Weekly updates and special offers</p>
+              <p className="text-sm font-bold text-gray-900 dark:text-white">{t('email_marketing')}</p>
+              <p className="text-[10px] text-gray-500">{t('email_marketing_desc')}</p>
             </div>
             <div className="w-10 h-5 bg-gray-300 dark:bg-gray-600 rounded-full relative cursor-pointer">
               <div className="absolute left-1 top-1 w-3 h-3 bg-white rounded-full"></div>
@@ -807,7 +971,7 @@ export default function Settings() {
         >
           <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
         </button>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Settings</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('settings')}</h1>
       </div>
 
       <div className="space-y-4">
@@ -855,8 +1019,8 @@ export default function Settings() {
             <Smartphone className="w-5 h-5 text-blue-600 dark:text-blue-400" />
           </div>
           <div>
-            <h4 className="text-sm font-bold text-blue-900 dark:text-blue-300">App Version</h4>
-            <p className="text-xs text-blue-700/70 dark:text-blue-400/70 mt-1">You are using Rewards App v2.4.0. Your app is up to date.</p>
+            <h4 className="text-sm font-bold text-blue-900 dark:text-blue-300">{t('app_version')}</h4>
+            <p className="text-xs text-blue-700/70 dark:text-blue-400/70 mt-1">{t('app_version_desc')}</p>
           </div>
         </div>
       </div>
@@ -864,7 +1028,7 @@ export default function Settings() {
       <div className="space-y-4">
         <button 
           onClick={async () => {
-            if (confirm("Are you sure you want to log out?")) {
+            if (confirm(t('confirm_logout'))) {
               await logout();
               navigate('/login');
             }
@@ -876,8 +1040,8 @@ export default function Settings() {
               <LogOut className="w-5 h-5 text-red-500" />
             </div>
             <div className="text-left">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Log Out</h3>
-              <p className="text-xs text-gray-500">Sign out of your account on this device</p>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">{t('log_out')}</h3>
+              <p className="text-xs text-gray-500">{t('log_out_desc')}</p>
             </div>
           </div>
           <ChevronRight className="w-5 h-5 text-gray-400" />
@@ -885,10 +1049,10 @@ export default function Settings() {
 
         <button 
           onClick={() => {
-            if (confirm("CRITICAL: Are you sure you want to delete your account? This action is permanent and cannot be undone. All your posts, points, and revenue will be lost forever.")) {
+            if (confirm(t('confirm_delete'))) {
               // Note: Real account deletion would involve a cloud function to clean up subcollections
               // and potentially another logic step. For this MVP, we redirect to a support or confirmation flow.
-              alert("In this environment, please contact edwinmuoha@gmail.com for data removal requests, or your account will be marked for deletion during the next maintenance cycle.");
+              alert(t('delete_disclaimer'));
             }
           }}
           className="w-full flex items-center justify-between p-5 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 hover:bg-red-50 dark:hover:bg-red-900/10 hover:border-red-200 dark:hover:border-red-800/50 group transition-all"
@@ -898,8 +1062,8 @@ export default function Settings() {
               <Trash2 className="w-5 h-5 text-red-500" />
             </div>
             <div className="text-left">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Delete Account</h3>
-              <p className="text-xs text-gray-500">Permanently remove your data from Pulse Feeds</p>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">{t('delete_account')}</h3>
+              <p className="text-xs text-gray-500">{t('delete_account_desc')}</p>
             </div>
           </div>
           <ChevronRight className="w-5 h-5 text-gray-400" />

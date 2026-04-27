@@ -8,6 +8,7 @@ import Cropper from 'react-easy-crop';
 import { cn } from "../lib/utils";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useTranslation } from "../lib/i18n";
 import { usePosts } from "../hooks/usePosts";
 import { db, handleFirestoreError, OperationType, storage } from "../lib/firebase";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
@@ -17,6 +18,7 @@ import { motion, AnimatePresence } from "motion/react";
 // Profile Page - Manages user profile, bio, avatars, and posts
 export default function Profile() {
   const { currentUser, userData, logout } = useAuth();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { posts, deletePost, updatePost } = usePosts();
   const [isEditingBio, setIsEditingBio] = useState(false);
@@ -112,8 +114,8 @@ export default function Profile() {
       
       window.dispatchEvent(new CustomEvent('show-notification', { 
         detail: { 
-          title: "Points Fully Restored!", 
-          body: "6,337 points have been successfully restored to your account based on your verified balance screenshot.",
+          title: t('points_restored'), 
+          body: t('points_restored_desc'),
           type: "success"
         } 
       }));
@@ -121,8 +123,8 @@ export default function Profile() {
       console.error("Recovery failed:", err);
       window.dispatchEvent(new CustomEvent('show-notification', { 
         detail: { 
-          title: "Recovery Error", 
-          body: "Failed to restore points. Please try again or contact support.",
+          title: t('recovery_error'), 
+          body: t('recovery_error_desc'),
           type: "error"
         } 
       }));
@@ -274,7 +276,7 @@ export default function Profile() {
       const moderationResult = await moderateContent(tempBio, 'profile');
 
       if (!moderationResult.isApproved) {
-        setBioError(`Bio flagged: ${moderationResult.reason}`);
+        setBioError(t('content_flagged'));
         setIsSavingBio(false);
         return;
       }
@@ -289,7 +291,7 @@ export default function Profile() {
       setIsEditingBio(false);
       setIsSavingBio(false);
     } catch (err) {
-      setBioError("Failed to moderate bio. Please try again.");
+      setBioError(t('save_failed'));
       setIsSavingBio(false);
     }
   };
@@ -300,14 +302,14 @@ export default function Profile() {
   };
 
   const achievements = [
-    { id: 'top-contributor', name: "Top Contributor", icon: <Trophy className="w-5 h-5 text-yellow-500" />, description: "Top 1% of active posters this month", color: "bg-yellow-50 dark:bg-yellow-900/20", borderColor: "border-yellow-100 dark:border-yellow-800/30" },
-    { id: 'community-helper', name: "Community Helper", icon: <Heart className="w-5 h-5 text-pink-500" />, description: "Answered 50+ support questions", color: "bg-pink-50 dark:bg-pink-900/20", borderColor: "border-pink-100 dark:border-pink-800/30" },
-    { id: 'early-adopter', name: "Early Adopter", icon: <Zap className="w-5 h-5 text-blue-500" />, description: "Joined during the beta phase", color: "bg-blue-50 dark:bg-blue-900/20", borderColor: "border-blue-100 dark:border-blue-800/30" },
+    { id: 'top-contributor', name: t('top_contributor'), icon: <Trophy className="w-5 h-5 text-yellow-500" />, description: t('top_contributor_desc'), color: "bg-yellow-50 dark:bg-yellow-900/20", borderColor: "border-yellow-100 dark:border-yellow-800/30" },
+    { id: 'community-helper', name: t('community_helper'), icon: <Heart className="w-5 h-5 text-pink-500" />, description: t('community_helper_desc'), color: "bg-pink-50 dark:bg-pink-900/20", borderColor: "border-pink-100 dark:border-pink-800/30" },
+    { id: 'early-adopter', name: t('early_adopter'), icon: <Zap className="w-5 h-5 text-blue-500" />, description: t('early_adopter_desc'), color: "bg-blue-50 dark:bg-blue-900/20", borderColor: "border-blue-100 dark:border-blue-800/30" },
     ...((userData?.badges || []).map((badge: any, index: number) => ({
       id: `ai-badge-${index}`,
       name: badge.name,
       icon: <Award className="w-5 h-5 text-purple-500" />,
-      description: badge.description || "Awarded for real-world problem detection.",
+      description: badge.description || t('problem_detection_desc'),
       color: "bg-purple-50 dark:bg-purple-900/20",
       borderColor: "border-purple-100 dark:border-purple-800/30"
     })))
@@ -346,7 +348,7 @@ export default function Profile() {
           <div className="flex-1 text-center sm:text-left">
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-1">{currentUser?.displayName || "User Name"}</h1>
             <p className="text-gray-500 dark:text-gray-400 font-medium mb-3">
-              {currentUser?.email ? `@${currentUser.email.split('@')[0]}` : "@username"} • Joined March 2026
+              {currentUser?.email ? `@${currentUser.email.split('@')[0]}` : "@username"} • {t('joined')} March 2026
             </p>
             
             <div className="mb-4 max-w-md">
@@ -357,7 +359,7 @@ export default function Profile() {
                     onChange={(e) => setTempBio(e.target.value)}
                     className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg p-2 text-sm text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
                     rows={3}
-                    placeholder="Write something about yourself..."
+                    placeholder={t('write_about_yourself')}
                   />
                   {bioError && (
                     <div className="p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded flex items-start space-x-2 text-red-600 dark:text-red-400 text-xs">
@@ -398,7 +400,7 @@ export default function Profile() {
 
             <div className="flex flex-wrap justify-center sm:justify-start gap-2">
               <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center">
-                <Activity className="w-3 h-3 mr-1" /> Active
+                <Activity className="w-3 h-3 mr-1" /> {t('active_status')}
               </span>
             </div>
           </div>
@@ -424,11 +426,11 @@ export default function Profile() {
         <div className="mt-8 pt-8 border-t border-gray-100 dark:border-gray-700 grid grid-cols-3 gap-4 text-center">
           <div>
             <div className="text-2xl font-bold text-gray-900 dark:text-white">{userPostsCount}</div>
-            <div className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">Posts</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">{t('posts')}</div>
           </div>
           <div>
             <div className="text-2xl font-bold text-gray-900 dark:text-white">12</div>
-            <div className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">Groups</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">{t('groups_label')}</div>
           </div>
           <div className="relative group">
             <div className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -436,7 +438,7 @@ export default function Profile() {
             </div>
             <div className="flex flex-col items-center">
               <div className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider font-bold">
-                {userData?.points || 0} Points
+                {userData?.points || 0} {t('points_label')}
               </div>
               
               {(userData?.points === 0 && !userData?.isPointsRecovered) && (
@@ -454,7 +456,7 @@ export default function Profile() {
                   ) : (
                     <RotateCcw className="w-2 h-2" />
                   )}
-                  Recover Points
+                  {t('restore_balance')}
                 </motion.button>
               )}
             </div>
@@ -480,8 +482,8 @@ export default function Profile() {
               <RotateCcw className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h3 className="font-black uppercase tracking-widest text-xs">Points Restoration Available</h3>
-              <p className="text-[11px] opacity-90 leading-tight">Your verified balance of 6,337 points and $63.37 can be restored instantly.</p>
+              <h3 className="font-black uppercase tracking-widest text-xs">{t('points_restoration_available')}</h3>
+              <p className="text-[11px] opacity-90 leading-tight">{t('points_restoration_desc')}</p>
             </div>
           </div>
           <button
@@ -489,7 +491,7 @@ export default function Profile() {
             disabled={isRecovering}
             className="px-4 py-2 bg-white text-orange-600 font-black text-[10px] uppercase tracking-widest rounded-xl hover:scale-105 active:scale-95 transition-all shadow-lg shadow-orange-500/20 disabled:opacity-50"
           >
-            {isRecovering ? 'Recovering...' : 'Restore Balance'}
+            {isRecovering ? t('recovering') : t('restore_balance')}
           </button>
         </motion.div>
       )}
@@ -499,13 +501,13 @@ export default function Profile() {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center">
             <Crown className="w-5 h-5 mr-2 text-yellow-600" />
-            Elite Membership Tier
+            {t('elite_membership_tier')}
           </h2>
           <button 
             onClick={() => navigate('/membership')}
             className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700 transition-colors"
           >
-            Manage Plan
+            {t('manage_plan')}
           </button>
         </div>
 
@@ -544,7 +546,7 @@ export default function Profile() {
             </div>
 
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400 mb-1">Current Standing</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400 mb-1">{t('current_standing')}</p>
               <h3 className={cn(
                 "text-3xl font-black italic tracking-tighter capitalize mb-2",
                 userData?.membershipLevel === 'gold' 
@@ -553,23 +555,23 @@ export default function Profile() {
                   ? "text-blue-700 dark:text-blue-400"
                   : "text-orange-700 dark:text-orange-400"
               )}>
-                {userData?.membershipLevel || 'Bronze'} Tier
+                {userData?.membershipLevel || 'Bronze'} {t('tier_label')}
               </h3>
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                  <span className="text-xs font-bold text-gray-600 dark:text-gray-400">Account Verified</span>
+                  <span className="text-xs font-bold text-gray-600 dark:text-gray-400">{t('account_verified')}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Sparkles className="w-3 h-3 text-indigo-500" />
-                  <span className="text-xs font-bold text-gray-600 dark:text-gray-400">Exclusive Benefits</span>
+                  <span className="text-xs font-bold text-gray-600 dark:text-gray-400">{t('exclusive_benefits')}</span>
                 </div>
               </div>
             </div>
             
             <div className="ml-auto">
               <div className="bg-white/50 dark:bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/50 dark:border-white/5 shadow-inner">
-                <p className="text-[8px] font-black text-gray-400 uppercase text-center mb-1">Next Bill</p>
+                <p className="text-[8px] font-black text-gray-400 uppercase text-center mb-1">{t('next_bill')}</p>
                 <p className="text-xs font-black text-gray-900 dark:text-white">May 01</p>
               </div>
             </div>
@@ -582,9 +584,9 @@ export default function Profile() {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center">
             <Award className="w-5 h-5 mr-2 text-yellow-500" />
-            Achievements & Badges
+            {t('achievements_badges')}
           </h2>
-          <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{achievements.length} Earned</span>
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{achievements.length} {t('earned_label')}</span>
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -612,7 +614,7 @@ export default function Profile() {
               <div className="w-8 h-8 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto text-gray-400 group-hover:text-purple-500 transition-colors">
                 <Star className="w-4 h-4" />
               </div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">View All Locked</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t('view_all_locked')}</p>
             </div>
           </div>
         </div>
@@ -623,9 +625,9 @@ export default function Profile() {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center">
             <PlusSquare className="w-5 h-5 mr-2 text-blue-500" />
-            {currentUser?.displayName || 'My'} Posts
+            {currentUser?.displayName || t('my')} {t('posts')}
             <span className="ml-2 px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-[8px] font-black uppercase tracking-tighter rounded flex items-center">
-              <Brain className="w-2 h-2 mr-0.5" /> AI Managed
+              <Brain className="w-2 h-2 mr-0.5" /> {t('ai_managed')}
             </span>
           </h2>
           <div className="flex items-center space-x-2">
@@ -633,11 +635,11 @@ export default function Profile() {
               onClick={handleGenerateSummary}
               disabled={isGeneratingSummary || userPostsCount === 0}
               className="p-2 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-xl hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-all disabled:opacity-50"
-              title="Generate AI Summary"
+              title={t('generate_ai_summary')}
             >
               {isGeneratingSummary ? <Loader2 className="w-4 h-4 animate-spin" /> : <Brain className="w-4 h-4" />}
             </button>
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{userPostsCount} Posts</span>
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{userPostsCount} {t('posts')}</span>
           </div>
         </div>
 
@@ -660,7 +662,7 @@ export default function Profile() {
                   <Sparkles className="w-4 h-4 text-purple-500" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider mb-1">AI Personality Insight</h4>
+                  <h4 className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider mb-1">{t('ai_personality_insight')}</h4>
                   <p className="text-sm text-gray-700 dark:text-gray-300 italic leading-relaxed">"{smartSummary}"</p>
                 </div>
               </div>
@@ -690,14 +692,14 @@ export default function Profile() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center space-x-2">
                         <h3 className="font-bold text-gray-900 dark:text-white truncate">
-                          {post.title || currentUser?.displayName || "Untitled Post"}
+                          {post.title || currentUser?.displayName || t('untitled_post')}
                         </h3>
                         {!post.title && (
                           <button
                             onClick={() => handleGenerateSmartTitle(post.id, post.content)}
                             disabled={isGeneratingTitle === post.id}
                             className="p-1 text-purple-400 hover:text-purple-600 transition-colors"
-                            title="Generate Smart Title"
+                            title={t('generate_smart_title')}
                           >
                             {isGeneratingTitle === post.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
                           </button>
@@ -731,7 +733,7 @@ export default function Profile() {
                                 <div className="w-12 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto my-3 sm:hidden" />
                                 <div className="p-2 sm:p-2 space-y-1 pb-8 sm:pb-2">
                                   <div className="px-4 py-2 sm:hidden">
-                                    <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-widest text-xs">Post Options</h3>
+                                    <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-widest text-xs">{t('post_options')}</h3>
                                   </div>
                                   
                                   <button 
@@ -739,7 +741,7 @@ export default function Profile() {
                                     className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
                                   >
                                     <Pin className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
-                                    <span className="font-bold">Pin post</span>
+                                    <span className="font-bold">{t('pin_post')}</span>
                                   </button>
 
                                   <button 
@@ -747,7 +749,7 @@ export default function Profile() {
                                     className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
                                   >
                                     <Bell className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
-                                    <span className="font-bold">Turn off notifications for this post</span>
+                                    <span className="font-bold">{t('turn_off_notifications')}</span>
                                   </button>
 
                                   <button 
@@ -755,7 +757,7 @@ export default function Profile() {
                                     className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
                                   >
                                     <Bookmark className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
-                                    <span className="font-bold">Save post</span>
+                                    <span className="font-bold">{t('save_post_action')}</span>
                                   </button>
 
                                   <button 
@@ -779,7 +781,7 @@ export default function Profile() {
                                     className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
                                   >
                                     <Share2 className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
-                                    <span className="font-bold">Share</span>
+                                    <span className="font-bold">{t('share')}</span>
                                   </button>
 
                                   <button 
@@ -787,7 +789,7 @@ export default function Profile() {
                                     className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
                                   >
                                     <Tag className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
-                                    <span className="font-bold">Tag photo</span>
+                                    <span className="font-bold">{t('tag_photo')}</span>
                                   </button>
 
                                   <button 
@@ -795,7 +797,7 @@ export default function Profile() {
                                     className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
                                   >
                                     <Globe className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
-                                    <span className="font-bold">Edit Privacy</span>
+                                    <span className="font-bold">{t('edit_privacy')}</span>
                                   </button>
 
                                   <button 
@@ -806,7 +808,7 @@ export default function Profile() {
                                     className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
                                   >
                                     <Edit3 className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
-                                    <span className="font-bold">Edit Post</span>
+                                    <span className="font-bold">{t('edit_post')}</span>
                                   </button>
 
                                   <button 
@@ -814,12 +816,12 @@ export default function Profile() {
                                     className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
                                   >
                                     <Archive className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
-                                    <span className="font-bold">Move to archive</span>
+                                    <span className="font-bold">{t('move_to_archive')}</span>
                                   </button>
 
                                   <button 
                                     onClick={async () => {
-                                      if (confirm("Move this post to recycle bin? Items in your bin are deleted after 30 days.")) {
+                                      if (confirm(t('confirm_delete_post'))) {
                                         await deletePost(post.id);
                                       }
                                       setActiveMenuPostId(null);
@@ -828,8 +830,8 @@ export default function Profile() {
                                   >
                                     <Trash2 className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
                                     <div>
-                                      <div className="font-bold">Move to recycle bin</div>
-                                      <div className="text-[10px] text-gray-500">Items in your bin are deleted after 30 days.</div>
+                                      <div className="font-bold">{t('move_to_recycle_bin')}</div>
+                                      <div className="text-[10px] text-gray-500">{t('recycle_bin_desc')}</div>
                                     </div>
                                   </button>
 
@@ -842,7 +844,7 @@ export default function Profile() {
                                     className="w-full flex items-center gap-3 px-4 sm:px-3 py-3 sm:py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-2xl sm:rounded-xl transition-colors text-left"
                                   >
                                     <Link className="w-5 h-5 sm:w-4 sm:h-4 text-gray-500" />
-                                    <span className="font-bold">Copy link</span>
+                                    <span className="font-bold">{t('copy_link')}</span>
                                   </button>
                                 </div>
                               </motion.div>
@@ -859,13 +861,13 @@ export default function Profile() {
                         type="text"
                         value={editTitle}
                         onChange={(e) => setEditTitle(e.target.value)}
-                        placeholder="Post Title"
+                        placeholder={t('post_title_placeholder')}
                         className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                       />
                       <textarea 
                         value={editContent}
                         onChange={(e) => setEditContent(e.target.value)}
-                        placeholder="Post Content"
+                        placeholder={t('post_content_placeholder')}
                         rows={3}
                         className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none"
                       />
@@ -874,7 +876,7 @@ export default function Profile() {
                           onClick={handleCancelPostEdit}
                           className="px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                         >
-                          Cancel
+                          {t('cancel')}
                         </button>
                         <button 
                           onClick={() => handleSavePostEdit(post.id)}
@@ -882,7 +884,7 @@ export default function Profile() {
                           className="px-3 py-1.5 text-xs font-bold bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 flex items-center gap-1"
                         >
                           {isSavingPost ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                          Save Changes
+                          {t('save_changes')}
                         </button>
                       </div>
                     </div>
@@ -920,12 +922,12 @@ export default function Profile() {
           {userPostsCount === 0 && (
             <div className="text-center py-12 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-2xl">
               <PlusSquare className="w-12 h-12 text-gray-200 dark:text-gray-700 mx-auto mb-3" />
-              <p className="text-gray-500 dark:text-gray-400 font-medium">You haven't posted anything yet.</p>
+              <p className="text-gray-500 dark:text-gray-400 font-medium">{t('no_posts_yet')}</p>
               <button 
                 onClick={() => navigate('/')}
                 className="mt-4 text-blue-500 font-bold text-sm hover:underline"
               >
-                Create your first post
+                {t('create_first_post')}
               </button>
             </div>
           )}
@@ -935,16 +937,16 @@ export default function Profile() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-            <Shield className="w-5 h-5 mr-2 text-indigo-500" /> Account Settings
+            <Shield className="w-5 h-5 mr-2 text-indigo-500" /> {t('account_settings')}
           </h2>
           <ul className="space-y-3">
-            <li><button onClick={() => navigate('/settings')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-700 dark:text-gray-300 font-medium">Personal Information</button></li>
+            <li><button onClick={() => navigate('/settings')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-700 dark:text-gray-300 font-medium">{t('personal_info')}</button></li>
             <li><button onClick={() => navigate('/settings')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-700 dark:text-gray-300 font-medium flex items-center justify-between">
-              <span>Privacy Preferences</span>
+              <span>{t('privacy_preferences')}</span>
               <Fingerprint className="w-4 h-4 text-gray-400" />
             </button></li>
             <li><button onClick={() => navigate('/settings')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-gray-700 dark:text-gray-300 font-medium flex items-center justify-between">
-              <span>Security & Fingerprint</span>
+              <span>{t('security_fingerprint')}</span>
               <Fingerprint className="w-4 h-4 text-gray-400" />
             </button></li>
           </ul>
@@ -952,11 +954,11 @@ export default function Profile() {
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-            <Crown className="w-5 h-5 mr-2 text-yellow-500" /> Subscription
+            <Crown className="w-5 h-5 mr-2 text-yellow-500" /> {t('subscription_label')}
           </h2>
           <ul className="space-y-3">
             <li><button onClick={() => navigate('/membership')} className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors text-gray-700 dark:text-gray-300 font-bold flex items-center justify-between">
-              <span>Membership & Elite Plan</span>
+              <span>{t('membership_elite_plan')}</span>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded uppercase tracking-widest">{userData?.membershipLevel || 'Bronze'}</span>
                 <Sparkles className="w-4 h-4 text-indigo-500" />
@@ -967,12 +969,12 @@ export default function Profile() {
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 col-span-1 md:col-span-2">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center">
-            <Lock className="w-5 h-5 mr-2 text-red-500" /> Account Management
+            <Lock className="w-5 h-5 mr-2 text-red-500" /> {t('account_management')}
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <button 
               onClick={async () => { 
-                if(confirm('Are you sure you want to sign out of Pulse Feeds?')) { 
+                if(confirm(t('confirm_logout'))) { 
                   await logout(); 
                   navigate('/login'); 
                 } 
@@ -984,8 +986,8 @@ export default function Profile() {
                   <LogOut className="w-5 h-5" />
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-black text-gray-900 dark:text-white">Log Out</p>
-                  <p className="text-[10px] text-gray-500 font-medium">Exit your session</p>
+                  <p className="text-sm font-black text-gray-900 dark:text-white">{t('log_out')}</p>
+                  <p className="text-[10px] text-gray-500 font-medium">{t('exit_session')}</p>
                 </div>
               </div>
               <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-red-300" />
@@ -1000,8 +1002,8 @@ export default function Profile() {
                   <Trash2 className="w-5 h-5" />
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-black text-gray-900 dark:text-white">Delete Account</p>
-                  <p className="text-[10px] text-gray-500 font-medium">Permanent removal</p>
+                  <p className="text-sm font-black text-gray-900 dark:text-white">{t('delete_account')}</p>
+                  <p className="text-[10px] text-gray-500 font-medium">{t('permanent_removal')}</p>
                 </div>
               </div>
               <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-red-300" />
@@ -1017,7 +1019,7 @@ export default function Profile() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">
                 <Camera className="w-5 h-5 mr-2 text-purple-500" />
-                Update Avatar
+                {t('update_avatar')}
               </h2>
               <button 
                 onClick={() => setShowAvatarModal(false)}
@@ -1046,7 +1048,7 @@ export default function Profile() {
                   
                   <div className="space-y-4">
                     <div className="flex items-center space-x-4">
-                      <span className="text-xs font-bold text-gray-500 w-12">Zoom</span>
+                      <span className="text-xs font-bold text-gray-500 w-12">{t('zoom')}</span>
                       <input
                         type="range"
                         value={zoom}
@@ -1061,7 +1063,7 @@ export default function Profile() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center">
-                          <Sliders className="w-3 h-3 mr-1" /> Brightness
+                          <Sliders className="w-3 h-3 mr-1" /> {t('brightness')}
                         </label>
                         <input
                           type="range"
@@ -1074,7 +1076,7 @@ export default function Profile() {
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center">
-                          <Sliders className="w-3 h-3 mr-1" /> Contrast
+                          <Sliders className="w-3 h-3 mr-1" /> {t('contrast')}
                         </label>
                         <input
                           type="range"
@@ -1089,7 +1091,7 @@ export default function Profile() {
 
                     <div className="space-y-2">
                       <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center">
-                        <Sparkles className="w-3 h-3 mr-1" /> Filters
+                        <Sparkles className="w-3 h-3 mr-1" /> {t('filters')}
                       </label>
                       <div className="flex flex-wrap gap-2">
                         {['none', 'grayscale(1)', 'sepia(1)', 'invert(1)', 'hue-rotate(90deg)', 'brightness(1.5)', 'contrast(1.5)'].map((f) => (
@@ -1103,7 +1105,7 @@ export default function Profile() {
                                 : "bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"
                             )}
                           >
-                            {f === 'none' ? 'Original' : f.split('(')[0]}
+                            {f === 'none' ? t('original') : f.split('(')[0]}
                           </button>
                         ))}
                       </div>
@@ -1114,13 +1116,13 @@ export default function Profile() {
                         onClick={() => setEditingImage(null)}
                         className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-bold hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center"
                       >
-                        <RotateCcw className="w-4 h-4 mr-2" /> Reset
+                        <RotateCcw className="w-4 h-4 mr-2" /> {t('reset')}
                       </button>
                       <button 
                         onClick={getCroppedImg}
                         className="flex-1 py-2.5 bg-gradient-to-r from-purple-600 to-blue-500 hover:from-purple-700 hover:to-blue-600 text-white rounded-xl text-sm font-bold transition-all flex items-center justify-center shadow-md"
                       >
-                        <Check className="w-4 h-4 mr-2" /> Save Avatar
+                        <Check className="w-4 h-4 mr-2" /> {t('save_avatar')}
                       </button>
                     </div>
                   </div>
@@ -1130,35 +1132,35 @@ export default function Profile() {
                   {/* Upload Option */}
                   <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-200 dark:border-gray-700">
                     <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2 flex items-center">
-                      <Upload className="w-4 h-4 mr-2 text-blue-500" /> Upload from Device
+                      <Upload className="w-4 h-4 mr-2 text-blue-500" /> {t('upload_from_device')}
                     </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Choose an image file from your computer or phone.</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">{t('upload_device_desc')}</p>
                     <button 
                       onClick={() => fileInputRef.current?.click()}
                       className="w-full py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
-                      Select File
+                      {t('select_file')}
                     </button>
                   </div>
 
                   <div className="relative flex items-center py-2">
                     <div className="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
-                    <span className="flex-shrink-0 mx-4 text-gray-400 text-xs font-medium uppercase tracking-wider">OR</span>
+                    <span className="flex-shrink-0 mx-4 text-gray-400 text-xs font-medium uppercase tracking-wider">{t('or')}</span>
                     <div className="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
                   </div>
 
                   {/* Generate Option */}
                   <div className="p-4 bg-purple-50 dark:bg-purple-900/10 rounded-2xl border border-purple-100 dark:border-purple-900/30">
                     <h3 className="text-sm font-bold text-purple-900 dark:text-purple-300 mb-2 flex items-center">
-                      <Sparkles className="w-4 h-4 mr-2 text-purple-500" /> Generate with AI
+                      <Sparkles className="w-4 h-4 mr-2 text-purple-500" /> {t('generate_with_ai')}
                     </h3>
-                    <p className="text-xs text-purple-700/70 dark:text-purple-400/70 mb-4">Describe the avatar you want, and our AI will create it for you.</p>
+                    <p className="text-xs text-purple-700/70 dark:text-purple-400/70 mb-4">{t('generate_ai_desc')}</p>
                     
                     <div className="space-y-3">
                       <textarea
                         value={aiPrompt}
                         onChange={(e) => setAiPrompt(e.target.value)}
-                        placeholder="E.g., A futuristic robot cat with neon glasses..."
+                        placeholder={t('generate_avatar_placeholder')}
                         className="w-full bg-white dark:bg-gray-900 border border-purple-200 dark:border-purple-800/50 rounded-xl p-3 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none resize-none"
                         rows={3}
                       />
@@ -1177,11 +1179,11 @@ export default function Profile() {
                       >
                         {isGeneratingAvatar ? (
                           <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t('generating')}
                           </>
                         ) : (
                           <>
-                            <Sparkles className="w-4 h-4 mr-2" /> Generate Avatar
+                            <Sparkles className="w-4 h-4 mr-2" /> {t('generate_with_ai')}
                           </>
                         )}
                       </button>

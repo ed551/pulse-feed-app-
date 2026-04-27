@@ -27,6 +27,7 @@ const Notifications = lazy(() => import("./pages/Notifications"));
 const Calls = lazy(() => import("./pages/Calls"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Privacy = lazy(() => import("./pages/Privacy"));
+const BankIntegration = lazy(() => import("./pages/BankIntegration"));
 const Support = lazy(() => import("./pages/Support"));
 const AdsDashboard = lazy(() => import("./pages/AdsDashboard"));
 const GeminiLab = lazy(() => import("./pages/GeminiLab"));
@@ -50,6 +51,49 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+function WakeLockHandler() {
+  React.useEffect(() => {
+    let wakeLock: any = null;
+    
+    const requestWakeLock = async () => {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+          console.log("Master Wake Lock Active");
+        } catch (err) {
+          console.log("Wake Lock request failed");
+        }
+      }
+    };
+
+    const handleVisibilityChange = async () => {
+      if (wakeLock !== null && document.visibilityState === 'visible') {
+        await requestWakeLock();
+      }
+    };
+
+    // Use interaction to trigger wake lock to bypass browser restrictions
+    const handleInteraction = () => {
+      requestWakeLock();
+      document.removeEventListener('click', handleInteraction);
+      document.removeEventListener('touchstart', handleInteraction);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('click', handleInteraction);
+    document.addEventListener('touchstart', handleInteraction);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('click', handleInteraction);
+      document.removeEventListener('touchstart', handleInteraction);
+      if (wakeLock) wakeLock.release().catch(() => {});
+    };
+  }, []);
+
+  return null;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -57,6 +101,7 @@ export default function App() {
         <RevenueProvider>
           <HealthProvider>
             <HashRouter>
+              <WakeLockHandler />
               <Analytics />
               <Suspense fallback={<LoadingFallback />}>
                 <Routes>
@@ -126,6 +171,7 @@ export default function App() {
                   } />
                   <Route path="terms" element={<Terms />} />
                   <Route path="privacy" element={<Privacy />} />
+                  <Route path="bank-integration" element={<BankIntegration />} />
                   <Route path="support" element={<Support />} />
                   <Route path="ads" element={
                     <ProtectedRoute>

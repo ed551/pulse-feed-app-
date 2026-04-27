@@ -18,10 +18,10 @@ console.log('Initializing Firestore with database ID:', firestoreDatabaseId || '
 // Silence noisy non-fatal Firestore warnings (like idle stream timeouts) in the browser
 setLogLevel('error');
 
-// Using initializeFirestore with forced long polling 
+// Using initializeFirestore with auto-detect long polling 
 // to fix "Could not reach Cloud Firestore backend" errors in restricted IAB/Proxied environments.
 const dbInstance = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
+  experimentalAutoDetectLongPolling: true,
 }, (firestoreDatabaseId && firestoreDatabaseId !== '(default)') ? firestoreDatabaseId : undefined);
 
 export const db = dbInstance;

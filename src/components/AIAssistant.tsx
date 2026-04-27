@@ -255,7 +255,8 @@ export default function AIAssistant() {
         model: "gemini-3-flash-preview",
         contents: `${context}\n\nUser: ${input}`,
         config: {
-          systemInstruction
+          systemInstruction,
+          tools: [{ googleSearchRetrieval: {} }] as any
         }
       });
 
@@ -467,22 +468,27 @@ export default function AIAssistant() {
                     <button 
                       onClick={handleSend}
                       disabled={!input.trim() || isLoading}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-indigo-600 text-white rounded-lg disabled:opacity-50 transition-all"
+                      className={cn(
+                        "absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-all flex items-center gap-2",
+                        input.trim() && !isLoading ? "bg-indigo-600 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-400"
+                      )}
                     >
-                      <Send className="w-4 h-4" />
+                      {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      <Send className="w-3.5 h-3.5" />
                     </button>
                   </div>
                   <div className="flex items-center justify-between mt-2">
                     <div className="flex items-center gap-3">
-                      <p className="text-[9px] text-gray-400">
-                        High Thinking Enabled
-                      </p>
+                      <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 rounded-full border border-blue-100 dark:border-blue-900/50">
+                        <img src="https://cdn.simpleicons.org/google/4285F4" className="w-2.5 h-2.5 opacity-80" alt="Google" />
+                        <span className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Master Search Ready</span>
+                      </div>
                       <button 
                         onClick={() => setIsOpen(false)}
                         className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 transition-colors"
                       >
                         <X className="w-3 h-3" />
-                        Dismiss Chat
+                        Dismiss
                       </button>
                     </div>
                     <div className="flex items-center gap-1 text-[9px] text-indigo-500 font-medium">

@@ -4,7 +4,7 @@ import {
   Home, Users, PlusSquare, Gem, User, ShieldAlert, Bell, FileText, Lock, Headphones, Settings,
   Sun, Moon, CloudRain, Cloud, CloudLightning, Clock, Watch, BellRing, StickyNote,
   Fingerprint, HeartPulse, MapPin, Phone, MessageCircle, Gamepad2, Globe, BrainCircuit,
-  Languages, Ticket, Snowflake, Calendar, Smartphone, Monitor, PhoneCall, Wrench,
+  Languages, Ticket, Snowflake, Calendar, Smartphone, Monitor, PhoneCall, Wrench, Building2,
   Calculator, LayoutGrid, Power, RefreshCw, ArrowUpCircle, ArrowDownCircle, XCircle, RotateCcw, Edit3, DollarSign, LogOut, Wallet, X, Send, Search, CheckCircle2, Plus, ShieldCheck, Zap,
   Volume2, VolumeX, Share2, Brain, TrendingUp, TrendingDown, Minus, Menu, GraduationCap, Eye, Loader2, Video, Type, Radio, Megaphone, BarChart2, Smile, Crown, Filter, Sparkles, Camera, Heart, Youtube, Layers, Map, AlertTriangle, ExternalLink
 } from "lucide-react";
@@ -22,6 +22,7 @@ import { goldBrain, GoldPrediction } from "../lib/goldEngine";
 import { useAuth } from "../contexts/AuthContext";
 import { useRevenue } from "../contexts/RevenueContext";
 import { useNotifications } from "../hooks/useNotifications";
+import { useTranslation } from "../lib/i18n";
 import AIAssistant from "./AIAssistant";
 import SelfHealing from "./SelfHealing";
 import CreatePostModal from "./CreatePostModal";
@@ -39,16 +40,17 @@ import OTPModal from "./tools/OTPModal";
 import { db } from "../lib/firebase";
 import { setDoc, doc, arrayUnion, serverTimestamp, getDocFromServer, updateDoc } from "firebase/firestore";
 
-const weatherTypes = [
-  { type: 'Hot / Sunny', icon: Sun, color: 'text-orange-500', bg: 'from-orange-500/20 to-yellow-500/20', glow: 'drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]', symbol: '☀️', temp: '--°C', tempValue: 25 },
-  { type: 'Cold / Chilly', icon: Snowflake, color: 'text-cyan-300', bg: 'from-cyan-500/20 to-blue-500/20', glow: 'drop-shadow-[0_0_8px_rgba(103,232,249,0.8)]', symbol: '❄️', temp: '--°C', tempValue: 5 },
-  { type: 'Rainy', icon: CloudRain, color: 'text-teal-700', bg: 'from-teal-500/20 to-emerald-500/20', glow: 'drop-shadow-[0_0_8px_rgba(15,118,110,0.8)]', symbol: '🌧️', temp: '--°C', tempValue: 15 },
-  { type: 'Cloudy / Fair', icon: Cloud, color: 'text-slate-400', bg: 'from-slate-500/20 to-gray-500/20', glow: 'drop-shadow-[0_0_8px_rgba(226,232,240,0.8)]', symbol: '⛅', temp: '--°C', tempValue: 20 },
-  { type: 'Stormy', icon: CloudLightning, color: 'text-purple-500', bg: 'from-purple-500/20 to-indigo-500/20', glow: 'drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]', symbol: '⛈️', temp: '--°C', tempValue: 18 }
-];
-
 export default function Layout() {
   const { currentUser, userData, logout, isFacebookApp } = useAuth();
+  const { t } = useTranslation();
+
+  const weatherTypes = [
+    { type: t('weather_sunny'), icon: Sun, color: 'text-orange-500', bg: 'from-orange-500/20 to-yellow-500/20', glow: 'drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]', symbol: '☀️', temp: '--°C', tempValue: 25 },
+    { type: t('weather_cold'), icon: Snowflake, color: 'text-cyan-300', bg: 'from-cyan-500/20 to-blue-500/20', glow: 'drop-shadow-[0_0_8px_rgba(103,232,249,0.8)]', symbol: '❄️', temp: '--°C', tempValue: 5 },
+    { type: t('weather_rainy'), icon: CloudRain, color: 'text-teal-700', bg: 'from-teal-500/20 to-emerald-500/20', glow: 'drop-shadow-[0_0_8px_rgba(15,118,110,0.8)]', symbol: '🌧️', temp: '--°C', tempValue: 15 },
+    { type: t('weather_cloudy'), icon: Cloud, color: 'text-slate-400', bg: 'from-slate-500/20 to-gray-500/20', glow: 'drop-shadow-[0_0_8px_rgba(226,232,240,0.8)]', symbol: '⛅', temp: '--°C', tempValue: 20 },
+    { type: t('weather_stormy'), icon: CloudLightning, color: 'text-purple-500', bg: 'from-purple-500/20 to-indigo-500/20', glow: 'drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]', symbol: '⛈️', temp: '--°C', tempValue: 18 }
+  ];
   const { isIdle, totalEarnedToday } = useRevenue();
   const navigate = useNavigate();
   const [isDark, setIsDark] = useState(() => {
@@ -122,32 +124,42 @@ export default function Layout() {
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
 
   const headerNavItems = [
-    { path: '/', icon: Home, label: 'Home' },
-    { path: '/groups', icon: Users, label: 'Groups' },
-    { path: '/rewards', icon: Gem, label: 'Rewards' },
-    { path: '/notifications', icon: Bell, label: 'Alerts' },
-    { path: '/profile', icon: User, label: 'Profile' },
+    { path: '/', icon: Home, label: t('home') },
+    { path: '/groups', icon: Users, label: t('groups') },
+    { path: '/rewards', icon: Gem, label: t('rewards') },
+    { path: '/notifications', icon: Bell, label: t('alerts') },
+    { path: '/profile', icon: User, label: t('profile') },
   ];
 
   const CATEGORIES = [
-    { name: 'All', icon: Home, color: 'text-purple-500' },
-    { name: 'Google Apps', icon: LayoutGrid, color: 'text-blue-500' },
-    { name: 'Browsers', icon: Globe, color: 'text-orange-500' },
-    { name: 'Rewards', icon: Gem, color: 'text-yellow-500' },
-    { name: 'Indoor Games', icon: Gamepad2, color: 'text-pink-500' },
-    { name: 'Outdoor Games', icon: Map, color: 'text-emerald-500' },
-    { name: 'Toggle Frame', icon: Smartphone, color: 'text-purple-500' },
-    { name: 'Terms', icon: FileText, color: 'text-teal-500' },
-    { name: 'Ads', icon: DollarSign, color: 'text-green-500' }
+    { name: 'All', icon: Home, color: 'text-purple-500', label: t('all') },
+    { name: 'Google Apps', icon: LayoutGrid, color: 'text-blue-500', label: t('google_apps') },
+    { name: 'Browsers', icon: Globe, color: 'text-orange-500', label: t('browsers') },
+    { name: 'Rewards', icon: Gem, color: 'text-yellow-500', label: t('rewards') },
+    { name: 'Indoor Games', icon: Gamepad2, color: 'text-pink-500', label: t('indoor_games') },
+    { name: 'Outdoor Games', icon: Map, color: 'text-emerald-500', label: t('outdoor_games') },
+    { name: 'Toggle Frame', icon: Smartphone, color: 'text-purple-500', label: t('toggle_frame') },
+    { name: 'Coop Bank API', icon: Building2, color: 'text-indigo-500', label: t('coop_bank') },
+    { name: 'Terms', icon: FileText, color: 'text-teal-500', label: t('terms') },
+    { name: 'Privacy', icon: ShieldCheck, color: 'text-indigo-500', label: t('privacy') },
+    { name: 'Ads', icon: DollarSign, color: 'text-green-500', label: t('ads') }
   ];
 
   const handleCategoryClick = (categoryName: string) => {
+    if (categoryName === 'Coop Bank API') {
+      navigate('/bank-integration');
+      return;
+    }
     if (categoryName === 'Rewards') {
       navigate('/rewards');
       return;
     }
     if (categoryName === 'Terms') {
       navigate('/terms');
+      return;
+    }
+    if (categoryName === 'Privacy') {
+      navigate('/privacy');
       return;
     }
     if (categoryName === 'Ads') {
@@ -157,7 +169,7 @@ export default function Layout() {
     if (categoryName === 'Toggle Frame') {
       const isRealMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       if (isRealMobile || window.innerWidth < 1024) {
-        showNotification('Frame mode is only available on desktop browsers.');
+        showNotification(t('frame_desktop_only'));
         return;
       }
       window.dispatchEvent(new CustomEvent('toggle-view-mode'));
@@ -887,25 +899,25 @@ export default function Layout() {
   };
 
   const coreNavItems = [
-    { path: '/', icon: Home, color: 'text-blue-500', label: 'Home' },
-    { path: '/groups', icon: Users, color: 'text-green-500', label: 'Groups' },
-    { path: '/rewards', icon: Gem, color: 'text-yellow-500', label: 'Rewards' },
-    { path: '/profile', icon: User, color: 'text-purple-500', label: 'Profile' },
+    { path: '/', icon: Home, color: 'text-blue-500', label: t('discover') },
+    { path: '/groups', icon: Users, color: 'text-green-500', label: t('community') },
+    { path: '/rewards', icon: Gem, color: 'text-yellow-500', label: t('rewards') },
+    { path: '/profile', icon: User, color: 'text-purple-500', label: t('profile') },
   ];
 
   const extraNavItems = [
-    { path: '/messages', icon: MessageCircle, color: 'text-purple-500', label: 'Messages' },
-    { path: '/contacts', icon: Users, color: 'text-orange-500', label: 'Contacts' },
-    { path: '/education', icon: GraduationCap, color: 'text-blue-500', label: 'Education' },
-    { path: '/events', icon: Calendar, color: 'text-indigo-600', label: 'Events' },
-    { path: '/dating', icon: Heart, color: 'text-pink-500', label: 'Dating' },
-    { path: '/community', icon: Users, color: 'text-indigo-500', label: 'Community' },
-    { path: '/platform', icon: Lock, color: 'text-indigo-600', label: 'Platform' },
-    { path: '/notifications', icon: Bell, color: 'text-orange-500', label: 'Notifications' },
-    { path: '/calls', icon: Phone, color: 'text-indigo-500', label: 'Calls' },
-    { path: '/terms', icon: FileText, color: 'text-teal-500', label: 'Terms' },
-    { path: '/support', icon: Headphones, color: 'text-cyan-500', label: 'Support' },
-    { path: '/settings', icon: Settings, color: 'text-gray-500', label: 'Settings' },
+    { path: '/messages', icon: MessageCircle, color: 'text-purple-500', label: t('messages') },
+    { path: '/contacts', icon: Users, color: 'text-orange-500', label: t('contacts') },
+    { path: '/education', icon: GraduationCap, color: 'text-blue-500', label: t('education') },
+    { path: '/events', icon: Calendar, color: 'text-indigo-600', label: t('events') },
+    { path: '/dating', icon: Heart, color: 'text-pink-500', label: t('dating') },
+    { path: '/community', icon: Users, color: 'text-indigo-500', label: t('community_hub') },
+    { path: '/platform', icon: Lock, color: 'text-indigo-600', label: t('platform') },
+    { path: '/notifications', icon: Bell, color: 'text-orange-500', label: t('notifications') },
+    { path: '/calls', icon: Phone, color: 'text-indigo-500', label: t('calls') },
+    { path: '/terms', icon: FileText, color: 'text-teal-500', label: t('terms') },
+    { path: '/support', icon: Headphones, color: 'text-cyan-500', label: t('support') },
+    { path: '/settings', icon: Settings, color: 'text-gray-500', label: t('settings') },
   ];
 
   const isDeveloper = currentUser?.email === 'edwinmuoha@gmail.com' || currentUser?.phoneNumber === '+254728011174' || userData?.role === 'admin';
@@ -1106,15 +1118,15 @@ export default function Layout() {
                         className="absolute top-full mt-2 right-0 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 p-3 grid grid-cols-3 gap-3 z-[110] min-w-[240px]"
                       >
                         {[
-                          { icon: Video, color: 'bg-red-500', label: 'Video', modal: 'create-post-video' },
-                          { icon: Radio, color: 'bg-orange-500', label: 'Live', modal: 'create-post-live' },
-                          { icon: BarChart2, color: 'bg-emerald-500', label: 'Poll', modal: 'create-post-poll' },
-                          { icon: Megaphone, color: 'bg-purple-500', label: 'Announcement', modal: 'create-post-announcement' },
-                          { icon: RefreshCw, color: 'bg-blue-400', label: 'Update', modal: 'create-post-update' },
-                          { icon: Type, color: 'bg-blue-500', label: 'Text', modal: 'create-post-text' },
-                          { icon: Smile, color: 'bg-pink-500', label: 'GIF', modal: 'create-post-gif' },
-                          { icon: Users, color: 'bg-green-500', label: 'Group', modal: 'create-group' },
-                          { icon: Brain, color: 'bg-indigo-600', label: 'Smart', modal: 'smart' }
+                          { icon: Video, color: 'bg-red-500', label: t('video'), modal: 'create-post-video' },
+                          { icon: Radio, color: 'bg-orange-500', label: t('live'), modal: 'create-post-live' },
+                          { icon: BarChart2, color: 'bg-emerald-500', label: t('poll'), modal: 'create-post-poll' },
+                          { icon: Megaphone, color: 'bg-purple-500', label: t('announcement'), modal: 'create-post-announcement' },
+                          { icon: RefreshCw, color: 'bg-blue-400', label: t('update'), modal: 'create-post-update' },
+                          { icon: Type, color: 'bg-blue-500', label: t('text'), modal: 'create-post-text' },
+                          { icon: Smile, color: 'bg-pink-500', label: t('gif'), modal: 'create-post-gif' },
+                          { icon: Users, color: 'bg-green-500', label: t('group'), modal: 'create-group' },
+                          { icon: Brain, color: 'bg-indigo-600', label: t('smart'), modal: 'smart' }
                         ].map((item, idx) => (
                           <button
                             key={idx}
@@ -1124,7 +1136,7 @@ export default function Layout() {
                                 const suggestions = ['poll', 'announcement', 'update', 'text', 'video'];
                                 const randomType = suggestions[Math.floor(Math.random() * suggestions.length)];
                                 setActiveModal(`create-post-${randomType}`);
-                                showNotification("Smart Suggestion", { body: `Gemini suggests you create a ${randomType} post!` });
+                                showNotification(t('smart_suggestion'), { body: t('gemini_suggests').replace('{{type}}', t(randomType)) });
                               } else if (item.modal === 'create-group') {
                                 navigate('/groups?create=true');
                                 setShowAddPostMenu(false);
@@ -1190,7 +1202,7 @@ export default function Layout() {
                 className="flex-1 min-w-[60px] sm:min-w-[70px] flex flex-col items-center py-2 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all group"
               >
                 <Brain className="w-6 h-6 group-hover:scale-110 transition-transform text-purple-500" />
-                <span className="text-[9px] font-black uppercase tracking-tighter mt-0.5 opacity-60">AI</span>
+                <span className="text-[9px] font-black uppercase tracking-tighter mt-0.5 opacity-60">{t('ai_assistant')}</span>
               </button>
             </div>
 
@@ -1211,7 +1223,7 @@ export default function Layout() {
                       )}
                     >
                       <CategoryIcon className={cn("w-2.5 h-2.5", activeCategory === cat.name ? "text-white" : cat.color)} />
-                      <span>{cat.name}</span>
+                      <span>{cat.label || cat.name}</span>
                     </button>
                   );
                 })}
@@ -1220,11 +1232,11 @@ export default function Layout() {
               {/* Market Stats: Best Seller / Buyer */}
               <div className="flex items-center gap-2 shrink-0 border-l border-gray-200 dark:border-gray-800 pl-4 py-1">
                 <div className="flex flex-col items-center bg-emerald-100 dark:bg-emerald-500/20 px-3 py-1 rounded-xl border-2 border-emerald-500/30 shadow-md">
-                  <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-tighter leading-none mb-0.5">BEST ONLINE GOLD SELLER</span>
+                  <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-tighter leading-none mb-0.5">{t('best_seller')}</span>
                   <span className="text-[14px] font-black text-emerald-900 dark:text-emerald-100 truncate max-w-[110px] leading-none">{bestSeller}</span>
                 </div>
                 <div className="flex flex-col items-center bg-blue-100 dark:bg-blue-500/20 px-3 py-1 rounded-xl border-2 border-blue-500/30 shadow-md">
-                  <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-tighter leading-none mb-0.5">BEST ONLINE GOLD BUYER</span>
+                  <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-tighter leading-none mb-0.5">{t('best_buyer')}</span>
                   <span className="text-[14px] font-black text-blue-900 dark:text-blue-100 truncate max-w-[110px] leading-none">{bestBuyer}</span>
                 </div>
               </div>
@@ -1255,15 +1267,15 @@ export default function Layout() {
                 <div className="flex flex-col items-center text-center space-y-4">
                   <div className="flex items-center gap-3 opacity-30 grayscale saturate-0 mb-4">
                     <ShieldCheck className="w-5 h-5" />
-                    <span className="text-[10px] font-black uppercase tracking-[0.4em]">Pulse Infrastructure Alpha</span>
+                    <span className="text-[10px] font-black uppercase tracking-[0.4em]">{t('disclaimer_shield')}</span>
                   </div>
                   <p className="text-[9px] font-bold text-gray-400 dark:text-gray-600 uppercase tracking-widest leading-loose max-w-xl mx-auto">
-                    Pulse Feeds is a multi-functional social and professional ecosystem developed by the owner. All financial features, educational insights, and community detectors are provided for enhancement and research purposes. Use of this platform constitutes acceptance of the community ethics charter.
+                    {t('disclaimer_text')}
                   </p>
                   <div className="flex items-center gap-8 pt-4">
-                    <Link to="/terms" className="text-[8px] font-black text-gray-400 hover:text-indigo-500 uppercase tracking-tighter transition-colors">Legal Terms</Link>
-                    <Link to="/privacy" className="text-[8px] font-black text-gray-400 hover:text-indigo-500 uppercase tracking-tighter transition-colors">Privacy Shield</Link>
-                    <Link to="/support" className="text-[8px] font-black text-gray-400 hover:text-indigo-500 uppercase tracking-tighter transition-colors">Developer Support</Link>
+                    <Link to="/terms" className="text-[8px] font-black text-gray-400 hover:text-indigo-500 uppercase tracking-tighter transition-colors">{t('legal_terms')}</Link>
+                    <Link to="/privacy" className="text-[8px] font-black text-gray-400 hover:text-indigo-500 uppercase tracking-tighter transition-colors">{t('privacy_shield')}</Link>
+                    <Link to="/support" className="text-[8px] font-black text-gray-400 hover:text-indigo-500 uppercase tracking-tighter transition-colors">{t('developer_support')}</Link>
                   </div>
                 </div>
               </div>
@@ -1278,11 +1290,11 @@ export default function Layout() {
         )}>
           <div className="flex flex-col items-center space-y-1 group relative" title={`Today: ${currentWeather.type}`}>
             <CurrentWeatherIcon className={cn("w-5 h-5 sm:w-6 sm:h-6 transition-all", currentWeather.color, currentWeather.glow)} />
-            <span className="text-[8px] sm:text-[10px] font-bold opacity-70">Today</span>
+            <span className="text-[8px] sm:text-[10px] font-bold opacity-70">{t('today')}</span>
           </div>
           <div className="flex flex-col items-center space-y-1 group relative" title={`Forecast: ${forecastWeather.type}`}>
             <ForecastWeatherIcon className={cn("w-4 h-4 sm:w-5 sm:h-5 transition-all opacity-80", forecastWeather.color, forecastWeather.glow)} />
-            <span className="text-[8px] sm:text-[10px] font-bold opacity-70">Later</span>
+            <span className="text-[8px] sm:text-[10px] font-bold opacity-70">{t('later')}</span>
           </div>
           <div className="w-6 sm:w-8 h-px bg-gray-200 dark:bg-gray-700 my-1 sm:my-2"></div>
           <div className="flex flex-col items-center space-y-1" title="Clock" onClick={() => setActiveModal('clock')}>
