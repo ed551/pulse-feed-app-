@@ -79,6 +79,7 @@ const TIERS = [
 
 export default function Membership() {
   const { currentUser, userData } = useAuth();
+  const isDeveloper = currentUser?.email === 'edwinmuoha@gmail.com';
   const navigate = useNavigate();
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
 

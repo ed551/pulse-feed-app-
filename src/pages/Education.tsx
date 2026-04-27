@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   GraduationCap, Award, BookOpen, Clock, Users, PlayCircle, CheckCircle2, DollarSign, 
   ExternalLink, User, Sparkles, BrainCircuit, Zap, Loader2, Brain, Search, Shield, 
   Star, ShieldCheck, Share2, Monitor, ShieldAlert, X, TrendingUp, Languages, Globe,
-  Volume2, VolumeX, Headphones
+  Volume2, VolumeX, Headphones, SkipBack, SkipForward, Pause
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -362,6 +362,12 @@ export default function Education() {
   const [showVoiceDropdown, setShowVoiceDropdown] = useState<string | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioBufferSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const audioStartTimeRef = useRef<number>(0);
+  const audioOffsetRef = useRef<number>(0);
+  const currentBufferRef = useRef<AudioBuffer | null>(null);
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+  const [audioTotalDuration, setAudioTotalDuration] = useState(0);
+  const audioIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
@@ -372,6 +378,8 @@ export default function Education() {
     };
   }, []);
 
+  const [audioSpeed, setAudioSpeed] = useState(1.0);
+
   const stopAudio = () => {
     if (audioBufferSourceRef.current) {
       try {
@@ -379,10 +387,81 @@ export default function Education() {
       } catch (e) {}
       audioBufferSourceRef.current = null;
     }
+    if (audioIntervalRef.current) {
+      clearInterval(audioIntervalRef.current);
+      audioIntervalRef.current = null;
+    }
     setIsPlayingAudio(null);
   };
 
-  const handlePlayAudio = async (courseTitle: string, moduleTitle: string) => {
+  const handleSeek = (direction: 'forward' | 'backward', moduleTitle: string) => {
+    if (!currentBufferRef.current || !audioContextRef.current || isPlayingAudio !== moduleTitle) return;
+    
+    const elapsed = (audioContextRef.current.currentTime - audioStartTimeRef.current) * audioSpeed;
+    let newOffset = audioOffsetRef.current + elapsed;
+    
+    if (direction === 'forward') {
+      newOffset += 10;
+    } else {
+      newOffset -= 10;
+    }
+    
+    if (newOffset < 0) newOffset = 0;
+    if (newOffset >= currentBufferRef.current.duration) {
+      stopAudio();
+      return;
+    }
+    
+    startBufferSource(newOffset, moduleTitle, audioSpeed);
+  };
+
+  const startBufferSource = (offset: number, moduleTitle: string, speed: number = 1.0) => {
+    if (!audioContextRef.current || !currentBufferRef.current) return;
+
+    if (audioBufferSourceRef.current) {
+      try { audioBufferSourceRef.current.stop(); } catch(e) {}
+    }
+
+    const source = audioContextRef.current.createBufferSource();
+    source.buffer = currentBufferRef.current;
+    source.playbackRate.value = speed;
+    source.connect(audioContextRef.current.destination);
+    
+    source.start(0, offset);
+    audioBufferSourceRef.current = source;
+    audioStartTimeRef.current = audioContextRef.current.currentTime;
+    audioOffsetRef.current = offset;
+    setIsPlayingAudio(moduleTitle);
+
+    if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
+    audioIntervalRef.current = window.setInterval(() => {
+      if (audioContextRef.current && currentBufferRef.current) {
+        const now = audioContextRef.current.currentTime;
+        const elapsed = (now - audioStartTimeRef.current) * speed;
+        const currentPos = audioOffsetRef.current + elapsed;
+        setAudioCurrentTime(currentPos);
+
+        if (currentPos >= currentBufferRef.current.duration) {
+          stopAudio();
+        }
+      }
+    }, 100);
+  };
+
+  const toggleAudioSpeed = () => {
+    const speeds = [1.0, 1.25, 1.5, 2.0];
+    const currentIndex = speeds.indexOf(audioSpeed);
+    const nextSpeed = speeds[(currentIndex + 1) % speeds.length];
+    setAudioSpeed(nextSpeed);
+    
+    if (isPlayingAudio && currentBufferRef.current) {
+      const elapsed = (audioContextRef.current!.currentTime - audioStartTimeRef.current) * audioSpeed;
+      const currentPos = audioOffsetRef.current + elapsed;
+      startBufferSource(currentPos, isPlayingAudio, nextSpeed);
+    }
+  };
+
+  const handlePlayAudio = async (courseTitle: string, moduleTitle: string, customText?: string) => {
     if (isPlayingAudio === moduleTitle) {
       stopAudio();
       return;
@@ -390,27 +469,33 @@ export default function Education() {
 
     setIsGeneratingAudio(moduleTitle);
     try {
-      const scriptPrompt = `You are a world-class Pulse Global educational narrator. 
-      Course: "${courseTitle}"
-      Module: "${moduleTitle}"
-      
-      Provide a highly engaging, concise (approx 120 words) "Audio Lesson Summary" for this specific module. 
-      Focus on the most critical executive take-away that will help the student in their professional career. 
-      Tone: Authoritative, encouraging, and clear. 
-      Do not include labels like [Narrator] or [Script], just provide the spoken text.`;
-      
-      const scriptResponse = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
-        contents: scriptPrompt
-      });
-      
-      const script = scriptResponse.text || `Welcome to your lesson on ${moduleTitle}. This session explores the core foundations within ${courseTitle}.`;
-
       if (!ai) return;
+
+      const masterScriptPrompt = `You are the Lead Master Narrator for Pulse Global Education. 
+      Course: "${courseTitle}"
+      Module Focus: "${moduleTitle}"
       
+      Task: Deliver the absolute, definitive "Master Class" audio lecture for this module.
+      THIS IS NOT A SUMMARY. THIS IS THE FULL LECTURE.
+      
+      Structure your master lecture:
+      1. INTRO: Professional welcome.
+      2. THE CORE technical standards and frameworks.
+      3. EXECUTIVE STRATEGIES used by top 1% leaders.
+      4. THE AI REVOLUTION in this specific domain.
+      5. TACTICAL DEPLOYMENT instructions.
+      6. MASTER WISDOM: failure modes to avoid.
+      7. CLOSING motivation.
+
+      Tone: High-stakes, authoritative, yet inspiring.
+      Delivery: Fast-paced, high-energy, direct.
+      Language: Professional and technical.
+      
+      Do not include labels or scripts. Read the content at an accelerated, executive pace.`;
+
       const ttsResponse = await generateContentWithRetry({
         model: "gemini-3.1-flash-tts-preview",
-        contents: [{ parts: [{ text: `Read with extreme professional clarity and authority: ${script}` }] }],
+        contents: [{ parts: [{ text: customText ? `Read this intelligence brief with extreme professional clarity and authority at an executive pace: ${customText}` : masterScriptPrompt }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -448,7 +533,6 @@ export default function Education() {
         bytes[i] = binaryString.charCodeAt(i);
       }
       
-      // Gemini TTS usually returns 16-bit LPCM
       const int16Data = new Int16Array(bytes.buffer);
       const float32Data = new Float32Array(int16Data.length);
       for (let i = 0; i < int16Data.length; i++) {
@@ -458,20 +542,10 @@ export default function Education() {
       const audioBuffer = audioContextRef.current.createBuffer(1, float32Data.length, 24000);
       audioBuffer.getChannelData(0).set(float32Data);
       
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContextRef.current.destination);
-      
-      source.onended = () => {
-        setIsPlayingAudio(null);
-        audioBufferSourceRef.current = null;
-      };
-      
-      stopAudio();
-      audioBufferSourceRef.current = source;
-      source.start();
-      setIsPlayingAudio(moduleTitle);
+      currentBufferRef.current = audioBuffer;
+      setAudioTotalDuration(audioBuffer.duration);
       setIsGeneratingAudio(null);
+      startBufferSource(0, moduleTitle);
     } catch (error) {
       console.error("Audio Playback Error:", error);
       setIsGeneratingAudio(null);
@@ -534,7 +608,7 @@ export default function Education() {
 
       for (let i = 0; i < researchSteps.length; i++) {
         setDeepDiveContent(prev => prev + `\n\n> [SYSTEM_SCAN]: ${researchSteps[i]}`);
-        await new Promise(resolve => setTimeout(resolve, 600));
+        await new Promise(resolve => setTimeout(resolve, 250));
       }
 
       setDeepDiveContent('');
@@ -571,7 +645,7 @@ export default function Education() {
       }
 
       const response = await generateContentWithRetry({
-        model: "gemini-3.1-pro-preview",
+        model: "gemini-3-flash-preview",
         contents: prompt
       });
 
@@ -758,17 +832,19 @@ export default function Education() {
     }
   };
 
-  const filteredCourses = [...customCourses, ...COURSES].filter(c => 
-    activeCategory === 'all' || c.category === activeCategory
-  );
+  const filteredCourses = useMemo(() => {
+    return [...customCourses, ...COURSES].filter(c => 
+      activeCategory === 'all' || c.category === activeCategory
+    );
+  }, [customCourses, activeCategory]);
 
   const handleEnroll = async (course: typeof COURSES[0]) => {
     if (!userData?.uid) return;
     setIsEnrolling(true);
     
     try {
-      // Simulate payment processing
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Simulate fast execution
+      await new Promise(resolve => setTimeout(resolve, 300));
       
       const userRef = doc(db, 'users', userData.uid);
       await updateDoc(userRef, {
@@ -822,12 +898,12 @@ export default function Education() {
       // Step 1: Research Phase
       setAiTrainingProgress(10);
       setTrainingStatus('Conducting Global Educational Research...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       // Step 2: Logic Analysis Phase
       setAiTrainingProgress(30);
       setTrainingStatus('Analyzing Logical Structures & Learning Paths...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Step 3: Synthesis with Gemini
       setTrainingStatus('Synthesizing Expert Curriculum...');
@@ -839,7 +915,7 @@ export default function Education() {
       Return a JSON object with:
       - title: A powerful, professional course title
       - description: A compelling 2-sentence summary that highlights the value proposition
-      - modules: An array of 5 comprehensive module titles that follow a logical progression from beginner to mastery
+      - modules: An array of 6 comprehensive module titles that follow a logical progression from beginner to mastery
       - learningObjectives: An array of 3 key takeaways
       - badgeName: A prestigious badge name (e.g., "Certified [Topic] Strategist")
       - badgeDescription: A professional certification description`;
@@ -861,7 +937,7 @@ export default function Education() {
         setAiTrainingProgress(i);
         if (i === 70) setTrainingStatus('Finalizing Certification Standards...');
         if (i === 90) setTrainingStatus('Generating Verified Badge...');
-        await new Promise(resolve => setTimeout(resolve, 800));
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
 
       // Step 4: Add to Custom Courses
@@ -1371,22 +1447,66 @@ export default function Education() {
                                   )}
                                   {enrolledCourses.includes(selectedCourse.id) && (
                                     <div className="flex items-center gap-3">
-                                      <button 
-                                        onClick={(e) => { e.stopPropagation(); handlePlayAudio(selectedCourse.title, module); }}
-                                        className={cn(
-                                          "flex items-center gap-1 py-0.5 transition-all text-blue-600 dark:text-blue-400 hover:underline",
-                                          isPlayingAudio === module && "text-red-500 dark:text-red-400"
-                                        )}
-                                      >
-                                        {isGeneratingAudio === module ? (
+                                      {isGeneratingAudio === module ? (
+                                        <div className="flex items-center gap-2 py-0.5 text-blue-600 animate-pulse">
                                           <Loader2 className="w-3 h-3 animate-spin" />
-                                        ) : isPlayingAudio === module ? (
-                                          <VolumeX className="w-3 h-3" />
-                                        ) : (
-                                          <Volume2 className="w-3 h-3" />
-                                        )}
-                                        {isGeneratingAudio === module ? 'Synthesizing...' : isPlayingAudio === module ? 'Stop Audio' : 'Listen to Lesson'}
-                                      </button>
+                                          <span className="text-[9px] uppercase font-bold tracking-tighter">Synthesizing Intelligence...</span>
+                                        </div>
+                                      ) : isPlayingAudio === module ? (
+                                        <div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1 rounded-full border border-indigo-100 dark:border-indigo-800 transition-all shadow-sm">
+                                          <button 
+                                            onClick={(e) => { e.stopPropagation(); handleSeek('backward', module); }}
+                                            className="p-1 hover:bg-indigo-100 dark:hover:bg-indigo-800 rounded-full transition-colors"
+                                            title="Backward 10s"
+                                          >
+                                            <SkipBack className="w-2.5 h-2.5 text-indigo-600 dark:text-indigo-400" />
+                                          </button>
+                                          
+                                          <button 
+                                            onClick={(e) => { e.stopPropagation(); stopAudio(); }}
+                                            className="p-1.5 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-800 rounded-full transition-colors group"
+                                            title="Stop Audio"
+                                          >
+                                            <VolumeX className="w-2.5 h-2.5 text-red-600 dark:text-red-400 group-hover:scale-110" />
+                                          </button>
+
+                                          <button 
+                                            onClick={(e) => { e.stopPropagation(); handleSeek('forward', module); }}
+                                            className="p-1 hover:bg-indigo-100 dark:hover:bg-indigo-800 rounded-full transition-colors"
+                                            title="Forward 10s"
+                                          >
+                                            <SkipForward className="w-2.5 h-2.5 text-indigo-600 dark:text-indigo-400" />
+                                          </button>
+
+                                          <button 
+                                            onClick={(e) => { e.stopPropagation(); toggleAudioSpeed(); }}
+                                            className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-800 rounded text-[8px] font-black text-indigo-600 dark:text-indigo-400 hover:bg-indigo-200 transition-colors"
+                                            title="Toggle Speed"
+                                          >
+                                            {audioSpeed}x
+                                          </button>
+
+                                          <div className="flex flex-col ml-1 min-w-[50px]">
+                                            <div className="h-1 bg-indigo-200 dark:bg-indigo-800 rounded-full overflow-hidden w-12 sm:w-16">
+                                              <div 
+                                                className="h-full bg-indigo-600 dark:bg-indigo-400 transition-all duration-300" 
+                                                style={{ width: `${(audioCurrentTime / audioTotalDuration) * 100}%` }}
+                                              />
+                                            </div>
+                                            <div className="text-[7px] font-bold text-indigo-600 dark:text-indigo-400 mt-0.5 tabular-nums">
+                                              {Math.floor(audioCurrentTime)}s / {Math.floor(audioTotalDuration)}s
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <button 
+                                          onClick={(e) => { e.stopPropagation(); handlePlayAudio(selectedCourse.title, module); }}
+                                          className="flex items-center gap-1.5 py-0.5 transition-all text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-2 rounded-lg font-bold text-[10px] uppercase tracking-tighter"
+                                        >
+                                          <Headphones className="w-3 h-3" />
+                                          Pulse Audio
+                                        </button>
+                                      )}
 
                                       <div className="relative">
                                         <button 
@@ -1524,15 +1644,80 @@ export default function Education() {
                                 <div className="prose prose-sm dark:prose-invert max-w-none text-gray-600 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
                                   {deepDiveContent}
                                   
-                                  <div className="mt-8 pt-6 border-t border-blue-200 dark:border-blue-800 flex items-center justify-between">
-                                    <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-widest">
-                                      <ShieldCheck className="w-4 h-4" />
-                                      AI Authenticated Content
+                                  <div className="mt-8 pt-6 border-t border-blue-200 dark:border-blue-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                    <div className="flex items-center gap-4">
+                                      <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-widest">
+                                        <ShieldCheck className="w-4 h-4" />
+                                        AI Authenticated Content
+                                      </div>
+                                      
+                                      {isGeneratingAudio === module ? (
+                                        <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/10 rounded-lg text-blue-600 animate-pulse">
+                                          <Loader2 className="w-3 h-3 animate-spin" />
+                                          <span className="text-[10px] font-black uppercase tracking-widest">Synthesizing...</span>
+                                        </div>
+                                      ) : isPlayingAudio === module ? (
+                                        <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-2 rounded-xl border border-indigo-100 dark:border-indigo-800 shadow-sm animate-in zoom-in-95">
+                                          <button 
+                                            onClick={(e) => { e.stopPropagation(); handleSeek('backward', module); }}
+                                            className="p-1.5 hover:bg-white dark:hover:bg-gray-800 rounded-lg transition-all text-indigo-600 shadow-sm border border-indigo-100 dark:border-indigo-700"
+                                          >
+                                            <SkipBack className="w-3 h-3" />
+                                          </button>
+                                          
+                                          <button 
+                                            onClick={(e) => { e.stopPropagation(); stopAudio(); }}
+                                            className="p-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-all shadow-md shadow-red-500/20"
+                                          >
+                                            <VolumeX className="w-4 h-4" />
+                                          </button>
+
+                                          <button 
+                                            onClick={(e) => { e.stopPropagation(); handleSeek('forward', module); }}
+                                            className="p-1.5 hover:bg-white dark:hover:bg-gray-800 rounded-lg transition-all text-indigo-600 shadow-sm border border-indigo-100 dark:border-indigo-700"
+                                          >
+                                            <SkipForward className="w-3 h-3" />
+                                          </button>
+
+                                          <button 
+                                            onClick={(e) => { e.stopPropagation(); toggleAudioSpeed(); }}
+                                            className="px-2 py-1 bg-white dark:bg-gray-800 rounded-lg text-[9px] font-black text-indigo-600 shadow-sm border border-indigo-100 dark:border-indigo-700 hover:bg-indigo-50 transition-all"
+                                            title="Toggle Speed"
+                                          >
+                                            {audioSpeed}x
+                                          </button>
+
+                                          <div className="flex flex-col ml-1 min-w-[70px]">
+                                            <div className="h-1.5 bg-indigo-100 dark:bg-indigo-800 rounded-full overflow-hidden w-20 sm:w-32">
+                                              <div 
+                                                className="h-full bg-indigo-600 transition-all duration-300" 
+                                                style={{ width: `${(audioCurrentTime / audioTotalDuration) * 100}%` }}
+                                              />
+                                            </div>
+                                            <div className="flex justify-between mt-1 items-center">
+                                              <span className="text-[8px] font-black text-indigo-600 uppercase tracking-tighter">
+                                                Intelligence Flowing
+                                              </span>
+                                              <span className="text-[8px] font-black text-indigo-600 tabular-nums">
+                                                {Math.floor(audioCurrentTime)}s / {Math.floor(audioTotalDuration)}s
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <button 
+                                          onClick={() => handlePlayAudio(selectedCourse.title, module, deepDiveContent)}
+                                          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-indigo-700 transition-all shadow-md shadow-indigo-500/20"
+                                        >
+                                          <Brain className="w-4 h-4" />
+                                          Intelligence Download
+                                        </button>
+                                      )}
                                     </div>
                                     <button 
                                       onClick={() => handleCompleteModule(selectedCourse.id, selectedCourse.title, module)}
                                       disabled={isModuleDone}
-                                      className="px-6 py-2 bg-green-600 text-white text-[10px] font-black rounded-lg hover:bg-green-700 transition-all shadow-md shadow-green-500/20 disabled:opacity-50"
+                                      className="w-full sm:w-auto px-6 py-2 bg-green-600 text-white text-[10px] font-black rounded-lg hover:bg-green-700 transition-all shadow-md shadow-green-500/20 disabled:opacity-50"
                                     >
                                       {isModuleDone ? 'Mastered' : 'Complete Module'}
                                     </button>

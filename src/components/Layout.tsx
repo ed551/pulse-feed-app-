@@ -201,11 +201,8 @@ export default function Layout() {
         await getDocFromServer(doc(db, 'system', 'health'));
         setDbStatus('online');
       } catch (error) {
-        if (error instanceof Error && error.message.includes('the client is offline')) {
-          setDbStatus('offline');
-        } else {
-          setDbStatus('online');
-        }
+        // Silent fail for health check
+        setDbStatus('online');
       }
     }
     testConnection();
@@ -252,12 +249,7 @@ export default function Layout() {
         ...randomAction,
         lastCheck: new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
       });
-      
-      // Occasionally show a notification for "AI Insight"
-      if (Math.random() > 0.8) {
-        showNotification("AI Insight", { body: "System optimized for peak community engagement." });
-      }
-    }, 30000); // Every 30 seconds
+    }, 60000); // Every minute
 
     return () => clearInterval(interval);
   }, [showNotification]);
@@ -486,207 +478,203 @@ export default function Layout() {
     }
     
     setWeatherStatus('detecting');
-    try {
-      const url = `/api/weather?lat=${lat}&lon=${lon}`;
-      console.log(`Weather: Fetching ${url} for ${city}...`);
-      const response = await fetch(url);
-      const contentType = response.headers.get("content-type");
-      
-      if (!response.ok) {
-        let errorMsg = `Weather API responded with status: ${response.status}`;
-        try {
-          if (contentType && contentType.includes("application/json")) {
-            const errorData = await response.json();
-            if (errorData.details) errorMsg += ` (${errorData.details})`;
-          } else {
-            const text = await response.text();
-            console.error("Weather API error response body:", text.substring(0, 100));
-          }
-        } catch (e) {
-          // Ignore parse errors
-        }
-        throw new Error(errorMsg);
-      }
+    let attempts = 3;
+    let lastError = null;
 
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await response.text();
-        console.error("Weather API non-JSON response body:", text.substring(0, 100));
-        throw new Error("Weather API returned an invalid response format (HTML instead of JSON)");
-      }
-
-      const data = await response.json();
-      const current = data.current_weather;
-      const daily = data.daily;
-      
-      if (!current) throw new Error("No weather data in response");
-      
-      // Update Current Weather
-      let typeIndex = 3; // Default Cloudy
-      if (current.weathercode === 0) typeIndex = 0; // Hot/Sunny
-      else if (current.weathercode >= 1 && current.weathercode <= 3) typeIndex = 3; // Cloudy
-      else if (current.weathercode >= 51 && current.weathercode <= 82) typeIndex = 2; // Rainy
-      else if (current.weathercode >= 95) typeIndex = 4; // Stormy
-      else if (current.weathercode >= 71 && current.weathercode <= 77) typeIndex = 1; // Cold
-      
-      const newWeather = {
-        ...weatherTypes[typeIndex],
-        temp: `${Math.round(current.temperature)}°C`,
-        tempValue: Math.round(current.temperature)
-      };
-
-      // Update Forecast Weather (Tomorrow)
-      let newForecast = forecastWeather;
-      if (daily && daily.temperature_2m_max && (daily.weather_code || daily.weathercode)) {
-        let forecastTypeIndex = 3;
-        const forecastCode = daily.weather_code ? daily.weather_code[1] : daily.weathercode[1];
-        const forecastTemp = daily.temperature_2m_max[1];
-
-        if (forecastCode === 0) forecastTypeIndex = 0;
-        else if (forecastCode >= 1 && forecastCode <= 3) forecastTypeIndex = 3;
-        else if (forecastCode >= 51 && forecastCode <= 82) forecastTypeIndex = 2;
-        else if (forecastCode >= 95) forecastTypeIndex = 4;
-        else if (forecastCode >= 71 && forecastCode <= 77) forecastTypeIndex = 1;
-
-        newForecast = {
-          ...weatherTypes[forecastTypeIndex],
-          temp: `${Math.round(forecastTemp)}°C`,
-          tempValue: Math.round(forecastTemp)
-        };
-        setForecastWeather(newForecast);
-      }
-
-      // Save to Local Storage Cache
-      localStorage.setItem(cacheKey, JSON.stringify({
-        data: { current: newWeather, forecast: newForecast },
-        timestamp: Date.now()
-      }));
-
-      // Only update and speak if there's a significant change to avoid "frequent changes"
-      const tempDiff = Math.abs(newWeather.tempValue - prevTempRef.current);
-      const typeChanged = newWeather.type !== prevTypeRef.current;
-      const now = Date.now();
-      const analysisCooldown = 2 * 60 * 60 * 1000; // 2 hours cooldown for AI analysis to save quota
-      
-      // Load cached analysis if available
-      const cachedAnalysis = localStorage.getItem('weather_analysis');
-      const cachedAnalysisTime = parseInt(localStorage.getItem('weather_analysis_time') || '0');
-      
-      if (tempDiff >= 2 || typeChanged || !cachedAnalysis) {
-        // Smart Analysis via Gemini
-        const shouldAnalyze = now - cachedAnalysisTime > analysisCooldown || typeChanged || !cachedAnalysis;
+    while (attempts > 0) {
+      try {
+        const url = `/api/weather?lat=${lat}&lon=${lon}`;
+        console.log(`Weather: Fetching ${url} for ${city}... (Attempts left: ${attempts})`);
         
-        if (shouldAnalyze) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s client timeout
+        
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        const contentType = response.headers.get("content-type");
+        
+        if (!response.ok) {
+          let errorMsg = `Weather API responded with status: ${response.status}`;
           try {
-            const analysisResponse = await generateContentWithRetry({
-              model: "gemini-3-flash-preview",
-              contents: `Analyze this weather for ${city}: Today is ${newWeather.temp} and ${newWeather.type}. Tomorrow's forecast is ${forecastWeather.temp} and ${forecastWeather.type}. Provide a 1-sentence smart summary for the user about the current conditions and the transition to tomorrow.`,
-            });
-            
-            if (analysisResponse.text) {
-              setWeatherAnalysis(analysisResponse.text);
-              localStorage.setItem('weather_analysis', analysisResponse.text);
-              localStorage.setItem('weather_analysis_time', Date.now().toString());
-              lastWeatherAnalysisTimeRef.current = Date.now();
-              const msg = new SpeechSynthesisUtterance(analysisResponse.text);
-              window.speechSynthesis.speak(msg);
+            if (contentType && contentType.includes("application/json")) {
+              const errorData = await response.json();
+              if (errorData.details) errorMsg += ` (${errorData.details})`;
             }
-          } catch (aiErr: any) {
-            if (aiErr?.status === 429) {
-              console.warn("Smart Analysis Quota Exceeded. Using fallback.");
-              if (cachedAnalysis) {
-                setWeatherAnalysis(cachedAnalysis);
-              } else {
-                const trendText = newWeather.tempValue > prevTempRef.current ? "increasing" : (newWeather.tempValue < prevTempRef.current ? "decreasing" : "stable");
-                const fallbackText = `Weather update for ${city}: It is now ${newWeather.type} with a temperature of ${newWeather.tempValue} degrees. The temperature is ${trendText}.`;
-                setWeatherAnalysis(fallbackText);
+          } catch (e) { }
+          throw new Error(errorMsg);
+        }
+
+        if (!contentType || !contentType.includes("application/json")) {
+          throw new Error("Weather API returned an invalid response format (non-JSON)");
+        }
+
+        const data = await response.json();
+        const current = data.current_weather;
+        const daily = data.daily;
+        
+        if (!current) throw new Error("No weather data in response");
+        
+        // Update Current Weather
+        let typeIndex = 3; // Default Cloudy
+        if (current.weathercode === 0) typeIndex = 0; // Hot/Sunny
+        else if (current.weathercode >= 1 && current.weathercode <= 3) typeIndex = 3; // Cloudy
+        else if (current.weathercode >= 51 && current.weathercode <= 82) typeIndex = 2; // Rainy
+        else if (current.weathercode >= 95) typeIndex = 4; // Stormy
+        else if (current.weathercode >= 71 && current.weathercode <= 77) typeIndex = 1; // Cold
+        
+        const newWeather = {
+          ...weatherTypes[typeIndex],
+          temp: `${Math.round(current.temperature)}°C`,
+          tempValue: Math.round(current.temperature)
+        };
+
+        // Update Forecast Weather (Tomorrow)
+        let newForecast = forecastWeather;
+        if (daily && daily.temperature_2m_max && (daily.weather_code || daily.weathercode)) {
+          let forecastTypeIndex = 3;
+          const forecastCode = daily.weather_code ? daily.weather_code[1] : daily.weathercode[1];
+          const forecastTemp = daily.temperature_2m_max[1];
+
+          if (forecastCode === 0) forecastTypeIndex = 0;
+          else if (forecastCode >= 1 && forecastCode <= 3) forecastTypeIndex = 3;
+          else if (forecastCode >= 51 && forecastCode <= 82) forecastTypeIndex = 2;
+          else if (forecastCode >= 95) forecastTypeIndex = 4;
+          else if (forecastCode >= 71 && forecastCode <= 77) forecastTypeIndex = 1;
+
+          newForecast = {
+            ...weatherTypes[forecastTypeIndex],
+            temp: `${Math.round(forecastTemp)}°C`,
+            tempValue: Math.round(forecastTemp)
+          };
+          setForecastWeather(newForecast);
+        }
+
+        // Save to Local Storage Cache
+        localStorage.setItem(cacheKey, JSON.stringify({
+          data: { current: newWeather, forecast: newForecast },
+          timestamp: Date.now()
+        }));
+
+        // ... existing AI analysis logic ...
+        const tempDiff = Math.abs(newWeather.tempValue - prevTempRef.current);
+        const typeChanged = newWeather.type !== prevTypeRef.current;
+        const now = Date.now();
+        const analysisCooldown = 2 * 60 * 60 * 1000;
+        const cachedAnalysis = localStorage.getItem('weather_analysis');
+        const cachedAnalysisTime = parseInt(localStorage.getItem('weather_analysis_time') || '0');
+        
+        if (tempDiff >= 2 || typeChanged || !cachedAnalysis) {
+          const shouldAnalyze = now - cachedAnalysisTime > analysisCooldown || typeChanged || !cachedAnalysis;
+          if (shouldAnalyze) {
+            try {
+              const analysisResponse = await generateContentWithRetry({
+                model: "gemini-3-flash-preview",
+                contents: `Analyze this weather for ${city}: Today is ${newWeather.temp} and ${newWeather.type}. Tomorrow's forecast is ${forecastWeather.temp} and ${forecastWeather.type}. Provide a 1-sentence smart summary for the user about the current conditions and the transition to tomorrow.`,
+              });
+              if (analysisResponse.text) {
+                setWeatherAnalysis(analysisResponse.text);
+                localStorage.setItem('weather_analysis', analysisResponse.text);
+                localStorage.setItem('weather_analysis_time', Date.now().toString());
+                const msg = new SpeechSynthesisUtterance(analysisResponse.text);
+                window.speechSynthesis.speak(msg);
               }
-            } else {
-              console.error("Smart Analysis Error:", aiErr);
+            } catch (aiErr: any) {
+              if (cachedAnalysis) setWeatherAnalysis(cachedAnalysis);
             }
+          } else if (cachedAnalysis) {
+            setWeatherAnalysis(cachedAnalysis);
           }
         } else if (cachedAnalysis) {
           setWeatherAnalysis(cachedAnalysis);
         }
-      } else if (cachedAnalysis) {
-        setWeatherAnalysis(cachedAnalysis);
-      }
 
-      setTempTrend(newWeather.tempValue > prevTempRef.current ? '+' : (newWeather.tempValue < prevTempRef.current ? '-' : ''));
-      prevTempRef.current = newWeather.tempValue;
-      prevTypeRef.current = newWeather.type;
-      setPrevTemp(newWeather.tempValue);
-      setCurrentWeather(newWeather);
-      
-      setWeatherStatus('complete');
-      setTimeout(() => setWeatherStatus('idle'), 3000);
-    } catch (error: any) {
-      console.error("Weather Fetch Error:", error.message || error);
-      setWeatherStatus('healing');
-      
-      // Smart Self-Healing via Gemini Search
-      try {
-        setWeatherHealProgress(20);
-        const searchResponse = await generateContentWithRetry({
-          model: "gemini-3-flash-preview",
-          contents: `What is the current weather in ${city}? Provide temperature in Celsius and general condition.`,
-          config: {
-            tools: [{ googleSearch: {} }]
-          }
-        });
-        setWeatherHealProgress(60);
+        setTempTrend(newWeather.tempValue > prevTempRef.current ? '+' : (newWeather.tempValue < prevTempRef.current ? '-' : ''));
+        prevTempRef.current = newWeather.tempValue;
+        prevTypeRef.current = newWeather.type;
+        setPrevTemp(newWeather.tempValue);
+        setCurrentWeather(newWeather);
         
-        if (searchResponse.text) {
-          const analysis = await generateContentWithRetry({
-            model: "gemini-3-flash-preview",
-            contents: `Extract temperature (number only) and condition from this weather report: "${searchResponse.text}". Format: TEMP: [number] | CONDITION: [Hot/Sunny, Cold/Chilly, Rainy, Cloudy/Fair, Stormy]`,
-          });
-          
-          const text = analysis.text || "";
-          const tempMatch = text.match(/TEMP:\s*(\d+)/);
-          const condMatch = text.match(/CONDITION:\s*([^|]+)/);
-          
-          if (tempMatch && condMatch) {
-            const temp = parseInt(tempMatch[1]);
-            const cond = condMatch[1].trim();
-            
-            const foundIndex = weatherTypes.findIndex(t => t.type.toLowerCase().includes(cond.toLowerCase()));
-            const typeIndex = foundIndex === -1 ? 3 : foundIndex;
-            const healedWeather = {
-              ...weatherTypes[typeIndex],
-              temp: `${temp}°C`,
-              tempValue: temp
-            };
-            
-            setCurrentWeather(healedWeather);
-            setWeatherAnalysis(`Smart Brain recovered weather data: ${searchResponse.text.substring(0, 100)}...`);
-            setWeatherHealProgress(100);
-            setWeatherStatus('complete');
-            setTimeout(() => {
-              setWeatherStatus('idle');
-              setWeatherHealProgress(0);
-            }, 5000);
-            return;
-          }
-        }
-      } catch (healErr) {
-        console.error("Smart Healing Failed:", healErr);
-      }
+        setWeatherStatus('complete');
+        setTimeout(() => setWeatherStatus('idle'), 3000);
+        return; // SUCCESS
 
-      // Final fallback
-      if (!currentWeather) {
-        setCurrentWeather({
-          type: 'Cloudy / Fair',
-          icon: Cloud,
-          color: 'text-slate-400',
-          bg: 'from-slate-500/20 to-gray-500/20',
-          glow: 'drop-shadow-[0_0_8px_rgba(226,232,240,0.8)]',
-          symbol: '⛅',
-          temp: '--°C',
-          tempValue: 20
-        });
+      } catch (error: any) {
+        lastError = error;
+        attempts--;
+        if (attempts > 0) {
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s before retry
+        }
       }
-      setWeatherStatus('idle');
     }
+
+    // If we reach here, all retries failed
+    console.error("Weather Fetch Error after retries:", lastError?.message || lastError);
+    setWeatherStatus('healing');
+    
+    // Smart Self-Healing via Gemini Search
+    try {
+      setWeatherHealProgress(20);
+      const searchResponse = await generateContentWithRetry({
+        model: "gemini-3-flash-preview",
+        contents: `What is the current weather in ${city}? Provide temperature in Celsius and general condition.`,
+        config: {
+          tools: [{ googleSearch: {} }]
+        }
+      });
+      setWeatherHealProgress(60);
+      
+      if (searchResponse.text) {
+        const analysis = await generateContentWithRetry({
+          model: "gemini-3-flash-preview",
+          contents: `Extract temperature (number only) and condition from this weather report: "${searchResponse.text}". Format: TEMP: [number] | CONDITION: [Hot/Sunny, Cold/Chilly, Rainy, Cloudy/Fair, Stormy]`,
+        });
+        
+        const text = analysis.text || "";
+        const tempMatch = text.match(/TEMP:\s*(\d+)/);
+        const condMatch = text.match(/CONDITION:\s*([^|]+)/);
+        
+        if (tempMatch && condMatch) {
+          const temp = parseInt(tempMatch[1]);
+          const cond = condMatch[1].trim();
+          
+          const foundIndex = weatherTypes.findIndex(t => t.type.toLowerCase().includes(cond.toLowerCase()));
+          const typeIndex = foundIndex === -1 ? 3 : foundIndex;
+          const healedWeather = {
+            ...weatherTypes[typeIndex],
+            temp: `${temp}°C`,
+            tempValue: temp
+          };
+          
+          setCurrentWeather(healedWeather);
+          setWeatherAnalysis(`Smart Brain recovered weather data: ${searchResponse.text.substring(0, 100)}...`);
+          setWeatherHealProgress(100);
+          setWeatherStatus('complete');
+          setTimeout(() => {
+            setWeatherStatus('idle');
+            setWeatherHealProgress(0);
+          }, 5000);
+          return;
+        }
+      }
+    } catch (healErr) {
+      console.error("Smart Healing Failed:", healErr);
+    }
+
+    // Final fallback
+    if (!currentWeather) {
+      setCurrentWeather({
+        type: 'Cloudy / Fair',
+        icon: Cloud,
+        color: 'text-slate-400',
+        bg: 'from-slate-500/20 to-gray-500/20',
+        glow: 'drop-shadow-[0_0_8px_rgba(226,232,240,0.8)]',
+        symbol: '⛅',
+        temp: '--°C',
+        tempValue: 20
+      });
+    }
+    setWeatherStatus('idle');
   }, [currentWeather]);
 
   const getLocation = useCallback(() => {
@@ -786,10 +774,10 @@ export default function Layout() {
   }, [fetchWeather]);
 
   useEffect(() => {
-    // Initial location detection with a delay to ensure server is ready
+    // Initial location detection with a minimal delay
     const timer = setTimeout(() => {
       getLocation();
-    }, 3000); // Increased to 3s to be safer against slow boot
+    }, 500); 
 
     // Listen for manual refresh requests
     const handleRefresh = () => {

@@ -57,7 +57,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
       
       await updateDoc(userRef, updateData);
 
-      // User-specific Points Ledger (Audit Trail)
+      // User-specific Points Ledger (Full Audit Trail)
       await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
         amount: pointsToAdd,
         balanceAfter: (userData?.points || 0) + pointsToAdd,
@@ -66,6 +66,20 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
         reason,
         timestamp: serverTimestamp()
       }).catch(err => console.error("Error logging points ledger:", err));
+
+      // User-specific Transaction History (UI Audit Trail)
+      await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), {
+        amount: userAmount,
+        currency: 'USD',
+        type: 'earning',
+        source: source,
+        status: 'success',
+        timestamp: serverTimestamp(),
+        reference: `REVN-${Date.now()}-${currentUser.uid.slice(0, 4)}`,
+        details: reason,
+        pointsAdded: pointsToAdd,
+        remainingPoints: (userData?.points || 0) + pointsToAdd
+      }).catch(err => console.error("Error logging user transaction:", err));
 
       // Update Platform Stats (Platform Share & Total User Balances)
       await updateDoc(statsRef, {

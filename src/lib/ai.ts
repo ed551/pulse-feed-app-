@@ -4,10 +4,10 @@ const apiKey = process.env.GEMINI_API_KEY;
 export const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 const MAX_RETRIES = 5;
-const INITIAL_DELAY = 2000; // 2 seconds
+const INITIAL_DELAY = 1000; // 1 second
 
 let requestQueue: Promise<void> = Promise.resolve();
-const MIN_REQUEST_INTERVAL = 2000; // 2 seconds between any AI requests to be safe
+const MIN_REQUEST_INTERVAL = 400; // 400ms between AI requests for better responsiveness
 
 async function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -25,13 +25,9 @@ export async function generateContentWithRetry(params: GenerateContentParameters
   
   await currentQueue;
   
-  // Enable High Thinking for Gemini 3 series models if not specified
-  // EXCEPTION: Do not enable for TTS models as they don't support thinking
-  if (params.model?.startsWith('gemini-3') && !params.model.includes('tts') && !params.config?.thinkingConfig) {
-    params.config = {
-      ...params.config,
-      thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH }
-    };
+  // Only enable High Thinking if explicitly requested to save time
+  if (params.model?.startsWith('gemini-3') && !params.model.includes('tts') && params.config?.thinkingConfig === undefined) {
+    // thinkingLevel is withheld for standard use to keep it fast
   }
   
   try {

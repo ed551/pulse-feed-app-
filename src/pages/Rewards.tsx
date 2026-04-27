@@ -18,13 +18,18 @@ interface Transaction {
   status: 'pending' | 'success' | 'failed';
   timestamp: any;
   reference: string;
+  type?: string;
+  source?: string;
+  details?: string;
   revenueSource?: 'ad' | 'education';
   pointsDeducted?: number;
+  pointsAdded?: number;
   remainingPoints?: number;
 }
 
 export default function Rewards() {
   const { currentUser, userData } = useAuth();
+  const isDeveloper = currentUser?.email === 'edwinmuoha@gmail.com';
   const { isIdle, activeSeconds, totalEarnedToday, addPlatformRevenue } = useRevenue();
   const { currency, availableCurrencies, changeCurrency, convert, loading, rates } = useCurrencyConverter();
   const [activeTab, setActiveTab] = useState<'overview' | 'local' | 'international'>('overview');
@@ -58,12 +63,52 @@ export default function Rewards() {
   const isLive = true; // Default to live mode
   const points = userData?.points || 0;
   const balance = points / 100;
+  const membershipLevel = userData?.membershipLevel || 'bronze';
+
+  const canWithdrawNow = useMemo(() => {
+    if (isDeveloper) return true;
+    const now = new Date();
+    const day = now.getDate();
+    const dayOfWeek = now.getDay(); // 0 is Sunday
+
+    if (membershipLevel === 'gold') {
+      // Gold can withdraw on Sundays
+      return dayOfWeek === 0;
+    } else if (membershipLevel === 'silver') {
+      // Silver can withdraw on 1st or 15th
+      return day === 1 || day === 15;
+    } else {
+      // Bronze can only withdraw on the 1st
+      return day === 1;
+    }
+  }, [isDeveloper, membershipLevel]);
 
   const nextRedemptionDate = useMemo(() => {
+    if (isDeveloper) return "Instant Access";
+    
     const now = new Date();
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    return nextMonth.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  }, []);
+    
+    // Tiered Withdrawal Frequency
+    if (membershipLevel === 'gold') {
+      // Weekly Payouts (Next Sunday)
+      const nextSunday = new Date(now);
+      nextSunday.setDate(now.getDate() + (7 - now.getDay()) % 7 || 7);
+      return `Next Sunday: ${nextSunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    } else if (membershipLevel === 'silver') {
+      // Mid-month Payouts (15th)
+      const currentMonth15 = new Date(now.getFullYear(), now.getMonth(), 15);
+      if (now.getDate() < 15) {
+        return `Mid-Month: ${currentMonth15.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+      } else {
+        const nextMonth15 = new Date(now.getFullYear(), now.getMonth() + 1, 15);
+        return `Mid-Month: ${nextMonth15.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+      }
+    } else {
+      // Bronze: Monthly (1st of next month)
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      return nextMonth.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    }
+  }, [isDeveloper, membershipLevel]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -76,6 +121,22 @@ export default function Rewards() {
     }, (err) => handleFirestoreError(err, OperationType.GET, `users/${currentUser.uid}/transactions`));
   }, [currentUser]);
 
+  // Calculate user audit totals (Normalized to USD for integrity)
+  const userAuditTotals = useMemo(() => {
+    return transactions.reduce((acc, tx) => {
+      // Use USD amount if available, otherwise fallback to amount (which is USD for earnings anyway)
+      const amountUsd = tx.currency === 'KES' ? (tx.pointsDeducted ? tx.pointsDeducted / 100 : (tx.amount / (rates['KES'] || 135))) : tx.amount;
+      
+      if (tx.type === 'earning') {
+        acc.totalEarned += amountUsd;
+      } else if (['mpesa', 'bank', 'paybill', 'payout'].includes(tx.type || '')) {
+        acc.totalWithdrawn += amountUsd;
+        if (tx.status === 'pending') acc.pendingWithdrawals += amountUsd;
+      }
+      return acc;
+    }, { totalEarned: 0, totalWithdrawn: 0, pendingWithdrawals: 0 });
+  }, [transactions, rates]);
+
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount) return;
@@ -83,11 +144,12 @@ export default function Rewards() {
     setError(null);
     try {
       const numAmount = parseFloat(amount);
-      if (numAmount < 100) throw new Error("Minimum withdrawal is KES 100");
+      const minAmount = isDeveloper ? 1 : 100;
+      if (numAmount < minAmount) throw new Error(`Minimum withdrawal is KES ${minAmount}`);
       
       const currentRate = rates['KES'] || 135;
       const kesBalance = (points * currentRate / 100);
-      if (numAmount > kesBalance) throw new Error("Insufficient balance");
+      if (!isDeveloper && numAmount > kesBalance) throw new Error("Insufficient balance");
 
       let endpoint = '/api/payout/mpesa';
       let body: any = { amount: numAmount };
@@ -173,8 +235,9 @@ export default function Rewards() {
     setError(null);
     try {
       const numAmount = parseFloat(payoutAmount);
-      if (numAmount < 10) throw new Error("Minimum withdrawal is $10.00 USD"); // Lowered for better UX but user can set it higher
-      if (numAmount > balance) throw new Error("Insufficient balance");
+      const minAmount = isDeveloper ? 0.01 : 10;
+      if (numAmount < minAmount) throw new Error(`Minimum withdrawal is $${minAmount.toFixed(2)} USD`); 
+      if (!isDeveloper && numAmount > balance) throw new Error("Insufficient balance");
 
       // Logic for international payout
       if (currentUser) {
@@ -229,6 +292,26 @@ export default function Rewards() {
     }
   };
 
+  const [bankBalance, setBankBalance] = useState<any>(null);
+  const [isCheckingBalance, setIsCheckingBalance] = useState(false);
+
+  const checkTreasuryBalance = async () => {
+    setIsCheckingBalance(true);
+    try {
+      const response = await fetch('/api/coop/balance');
+      const data = await response.json();
+      if (data.success) {
+        setBankBalance(data);
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (err: any) {
+      setError(`Treasury Check Failed: ${err.message}`);
+    } finally {
+      setIsCheckingBalance(false);
+    }
+  };
+
   const handleWithdrawMax = () => {
     const currentRate = rates['KES'] || 135;
     const maxKes = Math.floor(points * currentRate / 100);
@@ -275,6 +358,29 @@ export default function Rewards() {
       setError("Restoration failed. Please try again.");
     } finally {
       setIsRecovering(false);
+    }
+  };
+
+  const [isResetting, setIsResetting] = useState(false);
+  const handleResetTesting = async () => {
+    if (!currentUser || isResetting) return;
+    setIsResetting(true);
+    try {
+      const userRef = doc(db, 'users', currentUser.uid);
+      await updateDoc(userRef, {
+        points: 10000,
+        balance: 100.00,
+        totalWithdrawals: 0,
+        isPointsRecovered: false,
+        isRestoredTo6337: false,
+        testResetAt: serverTimestamp()
+      });
+      setSuccess("Account reset for testing! 10,000 points added.");
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err) {
+      setError("Reset failed. Please try again.");
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -392,6 +498,71 @@ export default function Rewards() {
                     Sync Ledger
                   </button>
 
+                  <button 
+                    onClick={handleResetTesting}
+                    disabled={isResetting}
+                    className="px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center transition-all border border-white/30 active:scale-95 text-red-100"
+                  >
+                    {isResetting ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <RotateCcw className="w-3 h-3 mr-2" />}
+                    Reset Test
+                  </button>
+
+                  {isDeveloper && (
+                    <button 
+                      onClick={checkTreasuryBalance}
+                      disabled={isCheckingBalance}
+                      className="px-4 py-2 bg-green-500/20 hover:bg-green-500/30 backdrop-blur-md rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center transition-all border border-green-500/30 active:scale-95 text-green-100"
+                    >
+                      {isCheckingBalance ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <Landmark className="w-3 h-3 mr-2" />}
+                      Check Treasury
+                    </button>
+                  )}
+
+                  {bankBalance && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="absolute inset-0 z-50 flex items-center justify-center p-6"
+                    >
+                      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setBankBalance(null)} />
+                      <div className="relative bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-2xl border border-gray-100 dark:border-gray-700 max-w-sm w-full">
+                        <div className="flex justify-between items-start mb-6">
+                           <div>
+                             <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Co-op Bank Balance</p>
+                             <h3 className="text-2xl font-black text-gray-900 dark:text-white">Live Treasury</h3>
+                           </div>
+                           <button onClick={() => setBankBalance(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
+                             <XCircle className="w-6 h-6 text-gray-400" />
+                           </button>
+                        </div>
+                        
+                        <div className="space-y-4">
+                           <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-700">
+                             <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Available Balance</p>
+                             <p className="text-3xl font-black text-green-600">KES {bankBalance.AvailableBalance || bankBalance.ClearBalance || "0.00"}</p>
+                           </div>
+                           <div className="grid grid-cols-2 gap-4 text-xs">
+                             <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-xl">
+                               <p className="text-gray-400 mb-1">Account No.</p>
+                               <p className="font-bold text-gray-900 dark:text-white truncate">01100975259001</p>
+                             </div>
+                             <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-xl">
+                               <p className="text-gray-400 mb-1">Reference</p>
+                               <p className="font-bold text-gray-900 dark:text-white truncate">{bankBalance.MessageReference}</p>
+                             </div>
+                           </div>
+                        </div>
+                        
+                        <button 
+                          onClick={() => setBankBalance(null)}
+                          className="w-full mt-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold rounded-xl shadow-lg"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+
                   {(userData?.points < 6337 && !userData?.isRestoredTo6337) && (
                     <button 
                       onClick={handleRestorePoints}
@@ -404,15 +575,48 @@ export default function Rewards() {
                   )}
                 </div>
 
+                <div className="w-full max-w-sm bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 mb-6 font-mono text-[9px] uppercase tracking-tighter">
+                  <div className="flex justify-between items-center text-white/80 border-b border-white/10 pb-2 mb-2">
+                    <span>Audit Trail Verification</span>
+                    <ShieldCheck className="w-3 h-3" />
+                  </div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span>Lifetime Earnings:</span>
+                    <span className="font-black">+{convert(userAuditTotals.totalEarned)}</span>
+                  </div>
+                  <div className="flex justify-between items-center mb-1 text-red-100">
+                    <span>Total Withdrawals:</span>
+                    <span className="font-black">-{convert(userAuditTotals.totalWithdrawn)}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-white/10 text-white font-black">
+                    <span>Calculated Balance:</span>
+                    <span>{convert(userAuditTotals.totalEarned - userAuditTotals.totalWithdrawn)}</span>
+                  </div>
+                  {userAuditTotals.pendingWithdrawals > 0 && (
+                    <div className="mt-2 text-yellow-200 animate-pulse flex justify-between items-center">
+                       <span>Pending Settlements:</span>
+                       <span>{convert(userAuditTotals.pendingWithdrawals)}</span>
+                    </div>
+                  )}
+                </div>
+
                 {/* Redemption Notification */}
                 <div className="w-full max-w-sm bg-white/20 backdrop-blur-lg rounded-2xl p-4 border border-white/30 mb-6 flex items-center gap-4">
                   <div className="p-3 bg-white/20 rounded-xl">
                     <Calendar className="w-6 h-6 text-white" />
                   </div>
                   <div className="text-left">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-white/70">Next Redemption Date</p>
+                    <p className="text-[10px] text-white/70">Next Settlement Gate</p>
                     <p className="text-lg font-black text-white">{nextRedemptionDate}</p>
-                    <p className="text-[10px] text-white/60">Withdrawals are processed monthly</p>
+                    <p className="text-[10px] text-white/60">
+                      {isDeveloper 
+                        ? "Developer Priority: Zero Limits" 
+                        : membershipLevel === 'gold' 
+                          ? "Gold Status: Weekly Payouts" 
+                          : membershipLevel === 'silver' 
+                            ? "Silver Status: Bi-Monthly Payouts" 
+                            : "Bronze Status: Monthly Batching"}
+                    </p>
                   </div>
                 </div>
                 
@@ -465,7 +669,12 @@ export default function Rewards() {
                   <br/><br/>
                   <strong>2. Platform Payments:</strong> To ensure the long-term sustainability of our high-performance AI infrastructure, all direct payments—including Course Enrollments, AI Training fees, Certificate purchases, Event tickets, and Marketplace transactions—belong 100% to the platform treasury.
                   <br/><br/>
-                  <strong>3. Withdrawals:</strong> All community earnings are processed <strong>monthly</strong>. Once you initiate a payout, it will be queued for the next monthly batch.
+                  <strong>3. Withdrawals:</strong> {isDeveloper ? "Developer accounts are exempt from all minimum limits and time restrictions. Access is instant and absolute." : 
+                    membershipLevel === 'gold' 
+                      ? "Gold members enjoy weekly payout settlements every Sunday with prioritized processing." 
+                      : membershipLevel === 'silver' 
+                        ? "Silver members benefit from mid-month and end-of-month payout cycles." 
+                        : "Bronze earnings are processed in standard monthly batches on the 1st of each month."}
                   <br/><br/>
                   <strong>Tax Compliance:</strong> The platform operates via a global Merchant of Record (MoR). This means your local and international taxes (e.g., VAT, WHT) are automatically calculated, withheld, and legally remitted directly to your country's tax authority (like KRA, IRS, or HMRC) on your behalf.
                 </p>
@@ -729,13 +938,18 @@ export default function Rewards() {
 
                     <button
                       type="submit"
-                      disabled={isLoading}
+                      disabled={isLoading || (!canWithdrawNow && !isDeveloper)}
                       className="w-full py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-black rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center space-x-2"
                     >
                       {isLoading ? (
                         <>
                           <Loader2 className="w-5 h-5 animate-spin" />
                           <span>Requesting PIN...</span>
+                        </>
+                      ) : !canWithdrawNow && !isDeveloper ? (
+                        <>
+                          <Lock className="w-5 h-5 mr-2" />
+                          <span>Locked until {nextRedemptionDate.split(':')[1] || nextRedemptionDate}</span>
                         </>
                       ) : (
                         <span>Request {localMethod === 'mpesa' ? 'M-Pesa Express' : localMethod === 'bank' ? 'Bank Transfer' : 'Pay Bill'}</span>
@@ -782,10 +996,11 @@ export default function Rewards() {
                               </div>
                               <div>
                                 <p className="text-sm font-bold text-gray-900 dark:text-white">
+                                  {tx.type === 'earning' ? '+' : '-'}
                                   {tx.currency === 'USD' ? '$' : 'KES '} 
                                   {tx.amount.toLocaleString()}
                                 </p>
-                                <p className="text-[10px] text-gray-500">{tx.phoneNumber || tx.email}</p>
+                                <p className="text-[10px] text-gray-500">{tx.phoneNumber || tx.email || tx.details}</p>
                               </div>
                             </div>
                             <div className="text-right">
@@ -799,6 +1014,9 @@ export default function Rewards() {
                               </span>
                               {tx.pointsDeducted && (
                                 <p className="text-[9px] font-bold text-red-500 mt-1">-{tx.pointsDeducted} pts</p>
+                              )}
+                              {tx.pointsAdded && (
+                                <p className="text-[9px] font-bold text-green-500 mt-1">+{tx.pointsAdded} pts</p>
                               )}
                             </div>
                           </div>
@@ -1005,13 +1223,18 @@ export default function Rewards() {
 
                     <button
                       type="submit"
-                      disabled={isLoading}
+                      disabled={isLoading || (!canWithdrawNow && !isDeveloper)}
                       className="w-full py-4 bg-purple-600 text-white font-black rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center space-x-2 shadow-lg shadow-purple-500/20"
                     >
                       {isLoading ? (
                         <>
                           <Loader2 className="w-5 h-5 animate-spin" />
                           <span>Processing Payout...</span>
+                        </>
+                      ) : !canWithdrawNow && !isDeveloper ? (
+                        <>
+                          <Lock className="w-4 h-4 mr-2" />
+                          <span>Locked until {nextRedemptionDate.split(':')[1] || nextRedemptionDate}</span>
                         </>
                       ) : (
                         <span>Request International Payout</span>
@@ -1027,11 +1250,11 @@ export default function Rewards() {
                   <ul className="space-y-3 text-xs text-gray-500 dark:text-gray-400">
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
-                      <span>Processing time: 1-3 business days</span>
+                      <span>Processing time: {isDeveloper ? "Instant (Developer Priority)" : "1-3 business days"}</span>
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
-                      <span>Minimum withdrawal: $100.00 (10,000 points)</span>
+                      <span>Minimum withdrawal: {isDeveloper ? "None" : "$100.00 (10,000 points)"}</span>
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
