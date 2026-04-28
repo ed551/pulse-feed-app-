@@ -83,7 +83,7 @@ export default function Membership() {
   const navigate = useNavigate();
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
 
-  const currentTier = userData?.membershipLevel || 'bronze';
+  const currentTier = isDeveloper ? 'gold' : (userData?.membershipLevel || 'bronze');
 
   const handleUpgrade = async (tierId: string) => {
     if (tierId === currentTier) return;

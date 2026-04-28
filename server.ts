@@ -1924,21 +1924,38 @@ async function startServer() {
       let userAmount = 0;
       let platformAmount = 0;
 
-      // Apply Revenue Split Rules
+      // 1. Fetch user membership level for non-excluded sources
+      const userSnap = await resilientDb.collection('users').doc(userId).get();
+      const userData = userSnap.data();
+      const userMembership = userSnap.exists ? (userData?.membershipLevel || 'bronze') : 'bronze';
+      const userEmail = userData?.email;
+      const isDev = userEmail === 'edwinmuoha@gmail.com';
+      
+      // Determine Membership Split Ratio
+      let membershipRatio = 0.2; // Default Bronze
+      if (userMembership === 'gold' || isDev) membershipRatio = 0.8;
+      else if (userMembership === 'silver') membershipRatio = 0.5;
+
+      // 2. Apply Revenue Split Rules
       switch (source) {
         case 'ad':
-        case 'active_time':
-        case 'community':
-        case 'dating':
-        case 'events':
-          // User Activity: 50% Platform / 50% User
+          // Ads: Fixed 50/50 (NOT inclusive of membership benefits)
           userAmount = totalAmount * 0.5;
           platformAmount = totalAmount * 0.5;
           break;
         case 'education':
-          // Education: 80% Platform / 20% User
+          // Education: Fixed 80% Platform / 20% User (NOT inclusive of membership benefits)
           userAmount = totalAmount * 0.2;
           platformAmount = totalAmount * 0.8;
+          break;
+        case 'active_time':
+        case 'community':
+        case 'dating':
+        case 'events':
+          // Engagement: Dynamic split based on Membership Level
+          userAmount = totalAmount * membershipRatio;
+          platformAmount = totalAmount * (1 - membershipRatio);
+          console.log(`[Revenue Split] Membership=${userMembership}, Ratio=${membershipRatio}, Source=${source}`);
           break;
         case 'payment':
         case 'app_creation':

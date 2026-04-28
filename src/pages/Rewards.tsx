@@ -691,9 +691,11 @@ export default function Rewards() {
                 <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm">
                   Pulse Feeds operates on a transparent, multi-tiered revenue distribution model designed to reward community participation while sustaining platform innovation.
                   <br/><br/>
-                  <strong>1. User Engagement:</strong> For general platform activity, including social interactions, active time, ad engagement, and module completion, revenue is shared 50/50 between the user and the platform treasury.
+                  <strong>1. User Engagement:</strong> For general platform activity, including social interactions, active time, and community participation, your revenue share is determined by your <strong>Membership Level</strong> (Bronze: 20%, Silver: 50%, Gold: 80%).
                   <br/><br/>
-                  <strong>2. Platform Payments:</strong> To ensure the long-term sustainability of our high-performance AI infrastructure, all direct payments—including Course Enrollments, AI Training fees, Certificate purchases, Event tickets, and Marketplace transactions—belong 100% to the platform treasury.
+                  <strong>2. Exclusions:</strong> Membership level benefits do <strong>not</strong> apply to Ads revenue (fixed 50/50 split) or Education Hub revenue (fixed 80/20 platform-to-user split).
+                  <br/><br/>
+                  <strong>3. Platform Payments:</strong> To ensure the long-term sustainability of our high-performance AI infrastructure, all direct platform payments—including Course Enrollments, AI Training fees, Certificate purchases, Event tickets, and Marketplace transactions—belong 100% to the platform treasury.
                   <br/><br/>
                   <strong>3. Withdrawals:</strong> {isDeveloper ? "Developer accounts are exempt from all minimum limits and time restrictions. Access is instant and absolute." : 
                     membershipLevel === 'gold' 

@@ -8,7 +8,7 @@ import {
   PieChart, Info, AlertTriangle, CheckCircle2, Loader2, RefreshCw, PlusSquare,
   Mail, Key, Smartphone, Fingerprint, BrainCircuit, FileText, Zap,
   Copy, ShieldAlert, Settings, Plus, Trash2, XCircle, CheckCircle,
-  Building2, Cpu, Globe, Database
+  Building2, Cpu, Globe, Database, Crown, Shield, Star
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
@@ -63,7 +63,7 @@ export default function PlatformDashboard() {
   const [modSettings, setModSettings] = useState<ModerationSettings>(getModerationSettings());
   const [newRule, setNewRule] = useState("");
   const [userCount, setUserCount] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<'financial' | 'moderation' | 'infrastructure'>('financial');
+  const [activeTab, setActiveTab] = useState<'financial' | 'moderation' | 'infrastructure' | 'membership'>('financial');
 
   const reports = [
     { id: 1, user: 'Spammer123', reason: 'Inappropriate content', status: 'pending' },
@@ -702,7 +702,105 @@ export default function PlatformDashboard() {
         >
           System Integration
         </button>
+        <button 
+          onClick={() => setActiveTab('membership')}
+          className={cn(
+            "pb-2 px-4 text-sm font-bold transition-all relative",
+            activeTab === 'membership' ? "text-indigo-600 border-b-2 border-indigo-600" : "text-gray-400 hover:text-gray-600"
+          )}
+        >
+          Membership Control
+        </button>
       </div>
+
+      {activeTab === 'membership' && (
+        <div className="space-y-8 animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+            <h2 className="text-xl font-black text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+              <Crown className="w-6 h-6 text-yellow-500" />
+              Test Membership Levels
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">
+              Update your own membership level instantly for testing purposes. Changes will reflect in your profile and revenue calculators.
+            </p>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              {[
+                { id: 'bronze', name: 'Bronze', icon: Shield, color: 'text-orange-500', bg: 'bg-orange-100 dark:bg-orange-900/30' },
+                { id: 'silver', name: 'Silver', icon: Star, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
+                { id: 'gold', name: 'Gold', icon: Crown, color: 'text-yellow-500', bg: 'bg-yellow-100 dark:bg-yellow-900/30' }
+              ].map((tier) => (
+                <button
+                  key={tier.id}
+                  onClick={async () => {
+                    if (!currentUser) return;
+                    try {
+                      await updateDoc(doc(db, 'users', currentUser.uid), {
+                        membershipLevel: tier.id,
+                        membershipStatus: 'active',
+                        updatedAt: serverTimestamp()
+                      });
+                      setSuccess(`Membership set to ${tier.name} successfully!`);
+                    } catch (err: any) {
+                      setError(`Failed to update membership: ${err.message}`);
+                    }
+                  }}
+                  className={cn(
+                    "flex flex-col items-center p-6 rounded-[2rem] border-2 transition-all hover:scale-105 active:scale-95 group",
+                    userData?.membershipLevel === tier.id 
+                      ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/10" 
+                      : "border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700"
+                  )}
+                >
+                  <div className={cn("p-4 rounded-2xl mb-4 group-hover:rotate-12 transition-transform", tier.bg)}>
+                    <tier.icon className={cn("w-8 h-8", tier.color)} />
+                  </div>
+                  <span className="text-lg font-black text-gray-900 dark:text-white mb-1 tracking-tight">{tier.name}</span>
+                  {userData?.membershipLevel === tier.id && (
+                    <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mt-2 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> Current
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          <div className="bg-red-50 dark:bg-red-900/10 p-6 rounded-3xl border border-red-100 dark:border-red-900/20">
+             <div className="flex items-center gap-2 mb-4">
+               <ShieldAlert className="w-5 h-5 text-red-500" />
+               <h3 className="text-sm font-black text-red-600 dark:text-red-400 uppercase tracking-widest">Admin Overrides</h3>
+             </div>
+             <div className="space-y-4">
+               <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-2xl border border-red-100 dark:border-red-900/20">
+                 <div>
+                   <p className="text-sm font-bold text-gray-900 dark:text-white">Reset Revenue Tracking</p>
+                   <p className="text-xs text-gray-500">Clears your internal revenue counters for the day.</p>
+                 </div>
+                 <button 
+                   onClick={async () => {
+                     if (!currentUser) return;
+                     await updateDoc(doc(db, 'users', currentUser.uid), {
+                       adRevenue: 0,
+                       educationRevenue: 0,
+                       activeTimeRevenue: 0,
+                       datingRevenue: 0,
+                       communityRevenue: 0,
+                       eventsRevenue: 0,
+                       points: 0,
+                       balance: 0
+                     });
+                     setSuccess("Revenue metrics reset for user.");
+                   }}
+                   className="px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-xl text-xs font-bold hover:bg-red-200"
+                 >
+                   Reset User Wallet
+                 </button>
+               </div>
+             </div>
+          </div>
+        </div>
+      )}
 
       {activeTab === 'financial' && (
         <div className="space-y-8 animate-in fade-in duration-300">

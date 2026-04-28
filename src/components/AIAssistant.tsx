@@ -256,7 +256,7 @@ export default function AIAssistant() {
         contents: `${context}\n\nUser: ${input}`,
         config: {
           systemInstruction,
-          tools: [{ googleSearchRetrieval: {} }] as any
+          tools: [{ googleSearch: {} }] as any
         }
       });
 
