@@ -33,8 +33,8 @@ const LANGUAGES = [
 ];
 
 const VOICES = [
-  { id: 'male', name: 'Male (Charon)', model: 'Charon', gender: 'male' },
-  { id: 'female', name: 'Female (Kore)', model: 'Kore', gender: 'female' },
+  { id: 'male', name: 'Executive Male', model: 'Charon', gender: 'male', label: 'Male Host' },
+  { id: 'female', name: 'Executive Female', model: 'Kore', gender: 'female', label: 'Female Host' },
 ];
 
 const COURSES = [
@@ -344,6 +344,29 @@ export default function Education() {
   const [isAskingTutor, setIsAskingTutor] = useState(false);
   const [deepDiveModule, setDeepDiveModule] = useState<string | null>(null);
   const [deepDiveContent, setDeepDiveContent] = useState<string>('');
+  
+  // Persist Deep Dive Content
+  useEffect(() => {
+    const savedContent = sessionStorage.getItem('pulse_deep_dive_content');
+    const savedModule = sessionStorage.getItem('pulse_deep_dive_module');
+    if (savedContent && savedModule) {
+      setDeepDiveContent(savedContent);
+      setDeepDiveModule(savedModule);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (deepDiveContent) {
+      sessionStorage.setItem('pulse_deep_dive_content', deepDiveContent);
+    }
+    if (deepDiveModule) {
+      sessionStorage.setItem('pulse_deep_dive_module', deepDiveModule);
+    } else {
+      sessionStorage.removeItem('pulse_deep_dive_content');
+      sessionStorage.removeItem('pulse_deep_dive_module');
+    }
+  }, [deepDiveContent, deepDiveModule]);
+
   const [isDeepDiving, setIsDeepDiving] = useState(false);
   const [isTakingExam, setIsTakingExam] = useState(false);
   const [examQuestions, setExamQuestions] = useState<any[]>([]);
@@ -410,8 +433,9 @@ export default function Education() {
     if ('wakeLock' in navigator) {
       try {
         wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        console.log("Wake Lock active");
       } catch (err) {
-        console.log("Wake Lock disabled or disallowed by policy");
+        console.log("Wake Lock error:", err);
       }
     }
   };
@@ -420,9 +444,21 @@ export default function Education() {
     if (wakeLockRef.current) {
       wakeLockRef.current.release().then(() => {
         wakeLockRef.current = null;
+        console.log("Wake Lock released");
       });
     }
   };
+
+  // Re-request wake lock when page becomes visible again
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && (isPlayingAudio || isDeepDiving || deepDiveContent)) {
+        await requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isPlayingAudio, isDeepDiving, deepDiveContent]);
 
   const stopAudio = () => {
     if (audioBufferSourceRef.current) {
@@ -514,6 +550,17 @@ export default function Education() {
       return;
     }
 
+    // Initialize AudioContext immediately on user interaction to avoid "not allowed to start" errors
+    if (!audioContextRef.current) {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        audioContextRef.current = new AudioCtx();
+        if (audioContextRef.current.state === 'suspended') {
+          audioContextRef.current.resume();
+        }
+      }
+    }
+
     const cacheKey = `${courseTitle}-${moduleTitle}-${selectedVoice.id}`;
     if (audioCacheRef.current[cacheKey]) {
       currentBufferRef.current = audioCacheRef.current[cacheKey];
@@ -523,34 +570,33 @@ export default function Education() {
     }
 
     setIsGeneratingAudio(moduleTitle);
+    
+    // Proactively request wake lock for long TTS synthesis
+    await requestWakeLock();
+
     try {
       if (!ai) return;
 
-      const masterScriptPrompt = `You are the Lead Master Narrator for Pulse Global Education. 
-      Course: "${courseTitle}"
-      Module Focus: "${moduleTitle}"
+      const masterScriptPrompt = `Lead Master Narrator for Pulse Global Education. 
+      Subject: "${courseTitle} - ${moduleTitle}"
       
-      Task: Deliver the absolute, definitive "Master Class" audio lecture for this module.
-      THIS IS NOT A SUMMARY. THIS IS THE FULL LECTURE.
+      Deliver the definitive "Master Class" audio lecture.
+      NO INTRO LABELS. START IMMEDIATELY.
       
-      Structure your master lecture:
-      1. INTRO: Professional welcome.
-      2. THE CORE technical standards and frameworks.
-      3. EXECUTIVE STRATEGIES used by top 1% leaders.
-      4. THE AI REVOLUTION in this specific domain.
-      5. TACTICAL DEPLOYMENT instructions.
-      6. MASTER WISDOM: failure modes to avoid.
-      7. CLOSING motivation.
+      Structure:
+      1. THE CORE technical standards.
+      2. EXECUTIVE STRATEGIES.
+      3. AI REVOLUTION in this domain.
+      4. TACTICAL DEPLOYMENT.
+      5. MASTER WISDOM.
+      6. CLOSING.
 
-      Tone: High-stakes, authoritative, yet inspiring.
-      Delivery: Fast-paced, high-energy, direct.
-      Language: Professional and technical.
-      
-      Do not include labels or scripts. Read the content at an accelerated, executive pace.`;
+      Tone: Professional, Clear, Natural Pace.
+      Language: Professional. No small talk.`;
 
       const ttsResponse = await generateContentWithRetry({
         model: "gemini-3.1-flash-tts-preview",
-        contents: [{ parts: [{ text: customText ? `Read this intelligence brief with extreme professional clarity and authority at an executive pace: ${customText}` : masterScriptPrompt }] }],
+        contents: [{ parts: [{ text: customText ? `Read this intelligence brief at a normal, professional pace: ${customText.substring(0, 3000)}` : masterScriptPrompt }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -568,6 +614,10 @@ export default function Education() {
     } catch (error) {
       console.error("Audio Generation Error:", error);
       setIsGeneratingAudio(null);
+      // Only release if not currently playing audio
+      if (!isPlayingAudio) {
+        releaseWakeLock();
+      }
     }
   };
 
@@ -649,28 +699,27 @@ export default function Education() {
   };
 
   const handleDeepDive = async (courseTitle: string, moduleTitle: string) => {
+    if (isDeepDiving) return;
+    
+    // If we already have content for this exact module, just open it
+    if (deepDiveModule === moduleTitle && deepDiveContent) {
+      return;
+    }
+
     setDeepDiveModule(moduleTitle);
     setIsDeepDiving(true);
     setDeepDiveContent('');
+    
+    // Proactively request wake lock for long generation
+    await requestWakeLock();
+
+    // Ensure audio context is ready for later use
+    if (!audioContextRef.current) {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) audioContextRef.current = new AudioCtx();
+    }
 
     try {
-      const researchSteps = [
-        "Initializing Knowledge Ingestion Engine...",
-        "Accessing Global PMBOK 7th Ed. Data Repository...",
-        "Analyzing Agile/Nexus Framework Scaling Paradigms...",
-        "Synthesizing Executive Leadership Strategies...",
-        "Running Monte Carlo Risk Simulations...",
-        "Cross-referencing Silicon Valley Execution Frameworks...",
-        "Finalizing Master-Level Intelligence Brief..."
-      ];
-
-      for (let i = 0; i < researchSteps.length; i++) {
-        setDeepDiveContent(prev => prev + `\n\n> [SYSTEM_SCAN]: ${researchSteps[i]}`);
-        await new Promise(resolve => setTimeout(resolve, 250));
-      }
-
-      setDeepDiveContent('');
-
       let prompt = '';
       if (moduleTitle.includes('Knowledge') || moduleTitle.includes('Quantum') || moduleTitle.includes('Unified')) {
         prompt = `You are the PULSE AI MASTER BRAIN. You have been asked to provide the absolute, definitive, and exhaustive "Everything AI Knows" download for Project Management.
@@ -713,6 +762,10 @@ export default function Education() {
       setDeepDiveContent('Our knowledge engine is currently processing a high volume of data. Please try again.');
     } finally {
       setIsDeepDiving(false);
+      // Only release if not currently playing audio
+      if (!isPlayingAudio) {
+        releaseWakeLock();
+      }
     }
   };
   const handleAskTutor = async (courseTitle: string) => {
@@ -857,17 +910,17 @@ export default function Education() {
       window.dispatchEvent(new CustomEvent('show-notification', { 
         detail: { title: "Identity Verification", body: "Initiating secure ID verification process for professional certification..." } 
       }));
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 10));
       
       window.dispatchEvent(new CustomEvent('show-notification', { 
         detail: { title: "Smart Analysis", body: `Verifying completion stats for ${course.title}...` } 
       }));
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise(resolve => setTimeout(resolve, 10));
       
       window.dispatchEvent(new CustomEvent('show-notification', { 
         detail: { title: "Payment Secure", body: "Finalizing transaction via secure merchant gateway..." } 
       }));
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 10));
 
       // Education Hub Payments: 100% Developer
       const platformShare = fee;
@@ -901,8 +954,8 @@ export default function Education() {
     setIsEnrolling(true);
     
     try {
-      // Simulate fast execution
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Instant execution
+      await new Promise(resolve => setTimeout(resolve, 10));
       
       const userRef = doc(db, 'users', userData.uid);
       await updateDoc(userRef, {
@@ -956,12 +1009,12 @@ export default function Education() {
       // Step 1: Research Phase
       setAiTrainingProgress(10);
       setTrainingStatus('Conducting Global Educational Research...');
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 10));
       
       // Step 2: Logic Analysis Phase
       setAiTrainingProgress(30);
       setTrainingStatus('Analyzing Logical Structures & Learning Paths...');
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 10));
 
       // Step 3: Synthesis with Gemini
       setTrainingStatus('Synthesizing Expert Curriculum...');
@@ -991,11 +1044,10 @@ export default function Education() {
       setTrainingStatus('Updating Smart Results...');
 
       // Finalizing
-      for (let i = 60; i <= 100; i += 10) {
+      for (let i = 60; i <= 100; i += 20) {
         setAiTrainingProgress(i);
-        if (i === 70) setTrainingStatus('Finalizing Certification Standards...');
-        if (i === 90) setTrainingStatus('Generating Verified Badge...');
-        await new Promise(resolve => setTimeout(resolve, 300));
+        if (i === 80) setTrainingStatus('Finalizing Certification Standards...');
+        await new Promise(resolve => setTimeout(resolve, 10));
       }
 
       // Step 4: Add to Custom Courses
@@ -1565,57 +1617,32 @@ export default function Education() {
                                           </div>
                                         </div>
                                       ) : (
-                                        <button 
-                                          onClick={(e) => { e.stopPropagation(); handlePlayAudio(selectedCourse.title, module); }}
-                                          className="flex items-center gap-1.5 py-0.5 transition-all text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-2 rounded-lg font-bold text-[10px] uppercase tracking-tighter"
+                                        <div 
+                                          className="flex items-center gap-1.5 py-0.5 transition-all"
                                         >
-                                          <Headphones className="w-3 h-3" />
-                                          Pulse Audio
-                                        </button>
+                                           {VOICES.map(voice => (
+                                              <button 
+                                                key={voice.id}
+                                                onClick={(e) => { 
+                                                  e.stopPropagation(); 
+                                                  setSelectedVoice(voice);
+                                                  handlePlayAudio(selectedCourse.title, module); 
+                                                }}
+                                                className={cn(
+                                                  "flex items-center gap-1.5 py-1 px-2.5 rounded-full font-black text-[9px] uppercase tracking-tighter transition-all hover:scale-105 active:scale-95 shadow-sm border",
+                                                  selectedVoice.id === voice.id && isPlayingAudio === module
+                                                    ? (voice.gender === 'male' ? "bg-blue-600 border-blue-500 text-white shadow-blue-500/20" : "bg-pink-600 border-pink-500 text-white shadow-pink-500/20")
+                                                    : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-100 dark:border-gray-700"
+                                                )}
+                                              >
+                                                <User className={cn("w-2.5 h-2.5", voice.gender === 'male' ? "text-blue-400" : "text-pink-400")} />
+                                                {voice.label}
+                                              </button>
+                                           ))}
+                                        </div>
                                       )}
 
-                                      <div className="relative">
-                                        <button 
-                                          onClick={(e) => { e.stopPropagation(); setShowVoiceDropdown(showVoiceDropdown === module ? null : module); }}
-                                          className="flex items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-indigo-600 transition-all py-0.5 text-[9px] uppercase tracking-tighter font-bold"
-                                        >
-                                          <Headphones className="w-2.5 h-2.5" />
-                                          {selectedVoice.gender === 'male' ? 'Male Voice' : 'Female Voice'}
-                                        </button>
 
-                                        <AnimatePresence>
-                                          {showVoiceDropdown === module && (
-                                            <motion.div 
-                                              initial={{ opacity: 0, y: 5 }}
-                                              animate={{ opacity: 1, y: 0 }}
-                                              exit={{ opacity: 0, y: 5 }}
-                                              className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] z-[100] p-1 min-w-[120px]"
-                                            >
-                                              {VOICES.map(voice => (
-                                                <button
-                                                  key={voice.id}
-                                                  onClick={(e) => { 
-                                                    e.stopPropagation(); 
-                                                    setSelectedVoice(voice); 
-                                                    setShowVoiceDropdown(null); 
-                                                    if (isPlayingAudio === module) stopAudio(); 
-                                                  }}
-                                                  className="w-full text-left px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg text-[9px] font-bold transition-all flex items-center justify-between group"
-                                                >
-                                                  <span className="flex items-center gap-2">
-                                                    <div className={cn(
-                                                      "w-1.5 h-1.5 rounded-full",
-                                                      voice.gender === 'male' ? "bg-blue-400" : "bg-pink-400"
-                                                    )} />
-                                                    <span className="text-gray-700 dark:text-gray-300 uppercase tracking-tighter">{voice.name}</span>
-                                                  </span>
-                                                  {selectedVoice.id === voice.id && <CheckCircle2 className="w-2.5 h-2.5 text-green-500" />}
-                                                </button>
-                                              ))}
-                                            </motion.div>
-                                          )}
-                                        </AnimatePresence>
-                                      </div>
                                     </div>
                                   )}
                                 </div>
@@ -1625,10 +1652,18 @@ export default function Education() {
                               <div className="flex sm:flex-col gap-2 shrink-0">
                                 <button 
                                   onClick={() => handleDeepDive(selectedCourse.title, module)}
-                                  className="flex-1 sm:flex-none px-3 py-1.5 bg-blue-600 text-white text-[10px] font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm shadow-blue-500/20 flex items-center justify-center gap-1.5"
+                                  disabled={isDeepDiving && deepDiveModule === module}
+                                  className={cn(
+                                    "flex-1 sm:flex-none px-3 py-1.5 bg-blue-600 text-white text-[10px] font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm shadow-blue-500/20 flex items-center justify-center gap-1.5",
+                                    (isDeepDiving && deepDiveModule === module) && "opacity-70 cursor-not-allowed"
+                                  )}
                                 >
-                                  <Sparkles className="w-3 h-3" />
-                                  AI Deep Dive
+                                  {isDeepDiving && deepDiveModule === module ? (
+                                     <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                     <Sparkles className="w-3 h-3" />
+                                  )}
+                                  {isDeepDiving && deepDiveModule === module ? "Analyzing..." : "AI Deep Dive"}
                                 </button>
                                 {!isModuleDone && (
                                   <button 
@@ -1771,13 +1806,26 @@ export default function Education() {
                                           </div>
                                         </div>
                                       ) : (
-                                        <button 
-                                          onClick={() => handlePlayAudio(selectedCourse.title, module, deepDiveContent)}
-                                          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-indigo-700 transition-all shadow-md shadow-indigo-500/20"
-                                        >
-                                          <Brain className="w-4 h-4" />
-                                          Intelligence Download
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                          {VOICES.map(voice => (
+                                            <button 
+                                              key={voice.id}
+                                              onClick={() => {
+                                                setSelectedVoice(voice);
+                                                handlePlayAudio(selectedCourse.title, module, deepDiveContent);
+                                              }}
+                                              className={cn(
+                                                "flex items-center gap-2 px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all shadow-md",
+                                                selectedVoice.id === voice.id && isPlayingAudio === module
+                                                  ? (voice.gender === 'male' ? "bg-blue-600 text-white shadow-blue-500/20" : "bg-pink-600 text-white shadow-pink-500/20")
+                                                  : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 border border-gray-100 dark:border-gray-700 shadow-none"
+                                              )}
+                                            >
+                                              {voice.gender === 'male' ? <User className="w-4 h-4 text-blue-400" /> : <User className="w-4 h-4 text-pink-400" />}
+                                              {voice.label}
+                                            </button>
+                                          ))}
+                                        </div>
                                       )}
                                     </div>
                                     <button 

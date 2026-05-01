@@ -37,6 +37,7 @@ import CallModal from "./tools/CallModal";
 import TranslateModal from "./tools/TranslateModal";
 import ClockModal from "./tools/ClockModal";
 import OTPModal from "./tools/OTPModal";
+import { ConnectivityBanner } from "./ConnectivityBanner";
 import { db } from "../lib/firebase";
 import { setDoc, doc, arrayUnion, serverTimestamp, getDocFromServer, updateDoc } from "firebase/firestore";
 
@@ -984,6 +985,7 @@ export default function Layout() {
           ? "max-w-[375px] max-h-[812px] rounded-[3rem] border-[12px] border-gray-800 dark:border-gray-800 shadow-[0_0_50px_rgba(0,0,0,0.3)]" 
           : "rounded-none lg:rounded-2xl shadow-2xl"
       )}>
+        <ConnectivityBanner />
         {/* Mobile Notch Simulation */}
         {viewMode === 'mobile' && window.innerWidth >= 1024 && !(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) && (
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-gray-800 rounded-b-2xl z-50 flex items-center justify-center">

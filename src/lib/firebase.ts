@@ -18,10 +18,10 @@ console.log('Initializing Firestore with database ID:', firestoreDatabaseId || '
 // Silence noisy non-fatal Firestore warnings (like idle stream timeouts) in the browser
 setLogLevel('error');
 
-// Using initializeFirestore with auto-detect long polling 
+// Using initializeFirestore with forced long polling 
 // to fix "Could not reach Cloud Firestore backend" errors in restricted IAB/Proxied environments.
 const dbInstance = initializeFirestore(app, {
-  experimentalAutoDetectLongPolling: true,
+  experimentalForceLongPolling: true,
 }, (firestoreDatabaseId && firestoreDatabaseId !== '(default)') ? firestoreDatabaseId : undefined);
 
 export const db = dbInstance;
@@ -90,8 +90,28 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
+export type ConnectionStatus = 'initial' | 'testing' | 'connected' | 'error';
+let connectionStatus: ConnectionStatus = 'initial';
+const statusListeners = new Set<(status: ConnectionStatus) => void>();
+
+export function getConnectionStatus() {
+  return connectionStatus;
+}
+
+export function onConnectionStatusChange(callback: (status: ConnectionStatus) => void) {
+  statusListeners.add(callback);
+  callback(connectionStatus);
+  return () => { statusListeners.delete(callback); };
+}
+
+function setConnectionStatus(status: ConnectionStatus) {
+  connectionStatus = status;
+  statusListeners.forEach(listener => listener(status));
+}
+
 async function testConnection(retries = 3) {
   try {
+    setConnectionStatus('testing');
     console.log(`Testing Firebase connection (Attempt ${4 - retries}/3)...`);
     console.log("Project ID:", firebaseConfig.projectId);
     console.log("Database ID:", firestoreDatabaseId || "(default)");
@@ -101,6 +121,7 @@ async function testConnection(retries = 3) {
     const testDocRef = doc(db, '_connection_test_', 'ping');
     await getDocFromServer(testDocRef);
     console.log("Firebase connection confirmed (reached server).");
+    setConnectionStatus('connected');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorCode = (error as any)?.code;
@@ -114,12 +135,14 @@ async function testConnection(retries = 3) {
         return testConnection(retries - 1);
       }
       
+      setConnectionStatus('error');
       console.error("CRITICAL: Firestore connection failed after multiple attempts.");
       console.error(`Last Error: [${errorCode}] ${errorMessage}`);
       console.error("Troubleshooting: 1. Check if the database 'ai-studio-5dd0f0b0-4dc9-4cc3-82e8-070c94b6bcd3' exists in the Firebase console. 2. Ensure the project 'consumer-rewards-app-2026' is active.");
     } else {
       // Other errors (like 404 or permission denied) actually confirm we ARE online and reaching the server
       console.log("Firebase connection confirmed (received server response).");
+      setConnectionStatus('connected');
     }
   }
 }

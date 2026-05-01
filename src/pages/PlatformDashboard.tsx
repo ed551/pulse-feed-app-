@@ -1224,8 +1224,25 @@ export default function PlatformDashboard() {
                     value={devWithdrawAmount}
                     onChange={(e) => setDevWithdrawAmount(e.target.value)}
                     placeholder="0.00"
-                    className="w-full pl-8 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:outline-none focus:border-purple-500 transition-all font-bold"
+                    className="w-full pl-8 pr-20 py-4 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:outline-none focus:border-purple-500 transition-all font-bold"
                   />
+                  <button 
+                    onClick={() => setDevWithdrawAmount(stats.platformShare.toFixed(2))}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-200 transition-colors"
+                  >
+                    Max
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  {[0.25, 0.5, 0.75].map((percent) => (
+                    <button
+                      key={percent}
+                      onClick={() => setDevWithdrawAmount((stats.platformShare * percent).toFixed(2))}
+                      className="flex-1 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl text-[10px] font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+                    >
+                      {percent * 100}%
+                    </button>
+                  ))}
                 </div>
               </div>
 
