@@ -9,23 +9,26 @@ import { useAuth } from '../contexts/AuthContext';
 export default function HealthChecker() {
   const { currentUser } = useAuth();
   const [isScanning, setIsScanning] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [isDone, setIsDone] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const [healthNote, setHealthNote] = useState("");
 
   const wellnessNotes = [
-    "Pulse Synchronized: Your community impact signature is trending positive. Keep building.",
-    "Vitality Verified: Optimal neural load detected. You are ready for high-value social contributions.",
-    "Health Integrity: Biometric consistency is unlocking reward multipliers for your sector.",
-    "Wellness Baseline: Your daily check-in has contributed to the community wellness pool."
+    "Pulse Synchronized: Your community impact signature is trending positive. Heart rate and social engagement metrics are optimal. Keep building.",
+    "Vitality Verified: Neural load is well-balanced. Biometric consistency has unlocked a 1.5x reward multiplier for your sector transactions.",
+    "Health Integrity: Daily check-in complete. Your activity contribution has boosted the community wellness pool by 10 points. You are fit for service.",
+    "Wellness Baseline established: System checks indicate high-vibrancy baseline. Social reward readiness is at peak levels today."
   ];
 
   const speak = (text: string) => {
     if ('speechSynthesis' in window) {
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1;
-      utterance.pitch = 1;
+      utterance.rate = 0.95;
+      utterance.pitch = 1.05; // Slightly futuristic pitch
       window.speechSynthesis.speak(utterance);
     }
   };
@@ -50,7 +53,7 @@ export default function HealthChecker() {
     if (needsScan && currentUser) {
       const timer = setTimeout(() => {
         setIsVisible(true);
-        speak("Wellness protocol initiated. Accessing Biometric Cluster. Please provide biometric signature via fingerprint reader.");
+        speak("Wellness protocol initiated. Accessing Biometric Cluster. Please provide fingerprint signature for daily impact report.");
       }, 1500);
       return () => clearTimeout(timer);
     }
@@ -58,16 +61,16 @@ export default function HealthChecker() {
 
   // Auto-start scan when visible
   useEffect(() => {
-    if (isVisible && !isScanning && !isDone) {
+    if (isVisible && !isScanning && !isAnalyzing && !isDone) {
       const timer = setTimeout(() => {
         startScan();
-      }, 2000); // Give 2 seconds for the user to see the initial status before auto-scanning
+      }, 2000); 
       return () => clearTimeout(timer);
     }
-  }, [isVisible, isScanning, isDone]);
+  }, [isVisible, isScanning, isAnalyzing, isDone]);
 
   const startScan = () => {
-    if (isScanning || isDone) return;
+    if (isScanning || isAnalyzing || isDone) return;
     setIsScanning(true);
     let progress = 0;
     const interval = setInterval(() => {
@@ -75,17 +78,30 @@ export default function HealthChecker() {
       setScanProgress(progress);
       if (progress >= 100) {
         clearInterval(interval);
-        completeScan();
+        startAnalysis();
       }
-    }, 40);
+    }, 30);
+  };
+
+  const startAnalysis = () => {
+    setIsScanning(false);
+    setIsAnalyzing(true);
+    speak("Signature captured. Computing daily health and social impact vectors.");
+    
+    // Neural Analysis phase
+    setTimeout(() => {
+      completeScan();
+    }, 2500);
   };
 
   const completeScan = async () => {
-    setIsScanning(false);
+    setIsAnalyzing(false);
     setIsDone(true);
     const note = wellnessNotes[Math.floor(Math.random() * wellnessNotes.length)];
     setHealthNote(note);
-    speak("Signature Certified. " + note);
+    
+    // Read the report aloud immediately upon reveal
+    speak("Analysis Complete. View your Daily Impact Report: " + note);
     
     if (currentUser) {
       try {
@@ -95,7 +111,6 @@ export default function HealthChecker() {
           lastHealthCheck: serverTimestamp()
         });
         
-        // Log activity
         await setDoc(doc(db, 'activity', `${currentUser.uid}_${Date.now()}`), {
           userId: currentUser.uid,
           type: 'health_check',
@@ -109,9 +124,10 @@ export default function HealthChecker() {
 
     localStorage.setItem('pulse_last_health_scan_ts', Date.now().toString());
     
+    // Longer delay to allow reading/listening to the report
     setTimeout(() => {
       setIsVisible(false);
-    }, 2500);
+    }, 8000);
   };
 
   if (!isVisible) return null;
@@ -138,22 +154,22 @@ export default function HealthChecker() {
               <Activity className="w-8 h-8 text-white animate-pulse" />
             </div>
             
-            <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tighter">Fingerprint Reader</h2>
+            <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tighter">
+              {isDone ? "Impact Certified" : isAnalyzing ? "Neural Analysis" : "Fingerprint Reader"}
+            </h2>
             <p className="text-xs text-gray-500 mt-2 font-bold uppercase tracking-widest px-8">
-              Biometric Cluster: Value-Driven Community Health Signature
+              {isDone ? "Value-Driven Community Health Signature" : isAnalyzing ? "Evaluating Social Impact Vectors" : "Biometric Cluster: Input Required"}
             </p>
           </div>
 
           {/* Scanner Area */}
-          <div className="p-10 flex flex-col items-center">
-            {!isDone ? (
+          <div className="p-10 flex flex-col items-center min-h-[380px] justify-center">
+            {!isDone && !isAnalyzing ? (
               <div className="relative group cursor-pointer" onClick={!isScanning ? startScan : undefined}>
-                {/* Fingerprint Glyph Container */}
                 <div className={cn(
                   "w-32 h-32 rounded-full border-4 flex items-center justify-center transition-all duration-500 relative overflow-hidden",
                   isScanning ? "border-rose-500 bg-rose-50 dark:bg-rose-900/10 scale-110" : "border-gray-100 dark:border-gray-800 hover:border-rose-200"
                 )}>
-                  {/* Scan Line Animation */}
                   {isScanning && (
                     <motion.div 
                       initial={{ top: "-10%" }}
@@ -168,7 +184,6 @@ export default function HealthChecker() {
                     isScanning ? "text-rose-500 scale-105" : "text-gray-300 group-hover:text-rose-300"
                   )} />
 
-                  {/* Progress Ring */}
                   {isScanning && (
                     <svg className="absolute inset-0 w-full h-full -rotate-90">
                       <circle
@@ -195,23 +210,59 @@ export default function HealthChecker() {
                   </p>
                 </div>
               </div>
+            ) : isAnalyzing ? (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-center"
+              >
+                <div className="relative w-32 h-32 mx-auto mb-8">
+                  <motion.div 
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                    className="absolute inset-0 border-t-2 border-rose-500 rounded-full"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Activity className="w-12 h-12 text-rose-500 animate-pulse" />
+                  </div>
+                </div>
+                <h3 className="text-xl font-black text-gray-900 dark:text-white tracking-tighter mb-2">Neural Computing</h3>
+                <p className="text-[10px] text-rose-500 font-black uppercase tracking-widest animate-pulse">Analyzing Biometric Impact Vectors...</p>
+              </motion.div>
             ) : (
               <motion.div 
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 className="text-center"
               >
-                <div className="w-24 h-24 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <ShieldCheck className="w-12 h-12 text-emerald-600" />
+                <div className="w-24 h-24 bg-rose-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-rose-500/20">
+                  <ShieldCheck className="w-12 h-12 text-white" />
                 </div>
-                <h3 className="text-xl font-black text-gray-900 dark:text-white tracking-tighter mb-2">Signature Certified</h3>
-                <div className="flex items-center justify-center gap-2 text-emerald-600 font-black text-xs uppercase bg-emerald-50 dark:bg-emerald-900/20 py-2 px-4 rounded-full mb-4">
-                  <Sparkles className="w-3 h-3" />
-                  +10 Community Points Earned
+                <h3 className="text-xl font-black text-gray-900 dark:text-white tracking-tighter mb-2">Daily Impact Report</h3>
+                <div className="flex items-center justify-center gap-2 text-rose-600 font-black text-[10px] uppercase bg-rose-50 dark:bg-rose-900/20 py-2 px-4 rounded-full mb-6 border border-rose-100 dark:border-rose-800/50">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Health & Neural Baseline Certified
                 </div>
-                <div className="p-4 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-2xl border border-emerald-100 dark:border-emerald-800/50">
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Wellness Notes</p>
-                  <p className="text-xs font-bold text-gray-700 dark:text-gray-300 italic">"{healthNote}"</p>
+                
+                <div className="space-y-4 text-left">
+                  <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden relative">
+                    <div className="absolute top-0 right-0 p-2 opacity-10">
+                      <Activity className="w-12 h-12" />
+                    </div>
+                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-2 flex items-center gap-1">
+                      <Activity className="w-3 h-3" />
+                      Status Analysis
+                    </p>
+                    <p className="text-xs font-bold text-gray-700 dark:text-gray-200 leading-relaxed italic">"{healthNote}"</p>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl border border-emerald-100 dark:border-emerald-800/50">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-emerald-500" />
+                      <span className="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400">Social Reward</span>
+                    </div>
+                    <span className="text-xs font-black text-emerald-700 dark:text-emerald-400">+10 PTS</span>
+                  </div>
                 </div>
               </motion.div>
             )}

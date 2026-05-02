@@ -11,12 +11,31 @@ interface NewsItem {
   category: string;
   timestamp: string;
   impactLevel: 'high' | 'medium' | 'low';
+  scope: 'local' | 'international';
 }
 
 export default function NewsFeed() {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<number>(0);
+  const [location, setLocation] = useState<string | null>(null);
+
+  useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const { latitude, longitude } = position.coords;
+            // Reverse geocoding can be complex, just pass coordinates and ask Gemini to infer or use general context
+            setLocation(`${latitude}, ${longitude}`);
+          } catch (e) {
+            console.error("Location error", e);
+          }
+        },
+        () => console.log("Location access denied")
+      );
+    }
+  }, []);
 
   const fetchNews = async (force = false) => {
     const intervalStr = localStorage.getItem('pulse_news_interval') || '1h';
@@ -35,16 +54,21 @@ export default function NewsFeed() {
     setIsLoading(true);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-      const prompt = `Generate 5 highly relevant, "value-driven" community news items for a platform called Pulse Feeds. 
-      Focus on social impact, community achievements, real-world issue detection, and educational milestones.
-      Format: JSON array of objects with: id (string), title (string), summary (string), category (string), timestamp (string), impactLevel ('high'|'medium'|'low').
-      Keep summaries concise and impactful. Avoid generic corporate speak.`;
+      const prompt = `Generate 8 highly relevant news items for a platform called Pulse Feeds.
+      Include a mix of 4 International news items and 4 Local news items.
+      ${location ? `Context for Local News: User's approximate coordinates are ${location}.` : "Context for Local News: Focus on general high-vibrancy community achievements and grass-roots impact."}
+      
+      Requirements:
+      - Focus on social impact, community achievements, real-world issue detection, and educational milestones.
+      - Format: JSON array of objects with: id (string), title (string), summary (string), category (string), timestamp (string), impactLevel ('high'|'medium'|'low'), scope ('local'|'international').
+      - Keep summaries concise and impactful. Avoid generic corporate speak.
+      - Categories should be specific like 'Science', 'Environment', 'Co-op', 'Edu', 'Tech', 'Social'.`;
 
       const result = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-3-flash-preview",
         contents: [{ role: 'user', parts: [{ text: prompt }] }]
       });
-      const text = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const text = result.text || '';
       const cleanedJson = text.replace(/```json|```/g, '').trim();
       const parsed = JSON.parse(cleanedJson);
 
@@ -56,8 +80,8 @@ export default function NewsFeed() {
       console.error("News Fetch Error:", error);
       // Fallback to static if AI fails
       const fallback = [
-        { id: '1', title: 'Community Water Project Verified', summary: 'The high-impact detection engine has verified the fix for the reported water leak in Sector 4.', category: 'Impact', timestamp: '1h ago', impactLevel: 'high' },
-        { id: '2', title: 'New Education Grant Unlocked', summary: 'Pulse users completed 5,000 course modules this week, unlocking a new B2B sponsorship grant.', category: 'Education', timestamp: '3h ago', impactLevel: 'medium' }
+        { id: '1', title: 'Global Climate Summit Reaches Accord', summary: 'International leaders agree on a new framework for community-led carbon reduction projects.', category: 'Social', timestamp: '1h ago', impactLevel: 'high', scope: 'international' },
+        { id: '2', title: 'Local Co-op Program Expands', summary: 'Community-run agricultural cooperative in your region expands its reach to five new districts.', category: 'Co-op', timestamp: '3h ago', impactLevel: 'medium', scope: 'local' }
       ] as NewsItem[];
       setNews(fallback);
     } finally {
@@ -108,12 +132,13 @@ export default function NewsFeed() {
             >
               <div className="flex items-start justify-between mb-2">
                 <span className={cn(
-                  "px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest",
+                  "px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-1",
                   item.impactLevel === 'high' ? "bg-rose-100 text-rose-600" :
                   item.impactLevel === 'medium' ? "bg-amber-100 text-amber-600" :
                   "bg-blue-100 text-blue-600"
                 )}>
-                  {item.category}
+                  {item.scope === 'international' ? <Globe className="w-2 h-2" /> : <TrendingUp className="w-2 h-2" />}
+                  {item.category} • {item.scope}
                 </span>
                 <span className="text-[9px] text-gray-400 font-bold">{item.timestamp}</span>
               </div>

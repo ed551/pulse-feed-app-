@@ -358,8 +358,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await updateDoc(userRef, {
           activeSessions: arrayRemove(currentSessionId)
         });
-      } catch (err) {
-        console.error('Failed to remove session during logout:', err);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `users/${currentUser.uid}`);
       }
     }
     return signOut(auth);
