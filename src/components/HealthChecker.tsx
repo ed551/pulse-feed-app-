@@ -123,11 +123,6 @@ export default function HealthChecker() {
     }
 
     localStorage.setItem('pulse_last_health_scan_ts', Date.now().toString());
-    
-    // Longer delay to allow reading/listening to the report
-    setTimeout(() => {
-      setIsVisible(false);
-    }, 8000);
   };
 
   if (!isVisible) return null;
@@ -145,7 +140,7 @@ export default function HealthChecker() {
           <div className="p-8 text-center bg-gradient-to-b from-rose-50 to-white dark:from-rose-950/20 dark:to-gray-900 border-b border-gray-100 dark:border-gray-800">
             <button 
               onClick={() => setIsVisible(false)}
-              className="absolute top-6 right-6 p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-full"
+              className="absolute top-6 right-6 p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-full z-10 transition-colors"
             >
               <X className="w-5 h-5 text-gray-400" />
             </button>
@@ -163,7 +158,7 @@ export default function HealthChecker() {
           </div>
 
           {/* Scanner Area */}
-          <div className="p-10 flex flex-col items-center min-h-[380px] justify-center">
+          <div className="p-10 flex flex-col items-center min-h-[420px] justify-center">
             {!isDone && !isAnalyzing ? (
               <div className="relative group cursor-pointer" onClick={!isScanning ? startScan : undefined}>
                 <div className={cn(
@@ -233,7 +228,7 @@ export default function HealthChecker() {
               <motion.div 
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className="text-center"
+                className="text-center w-full"
               >
                 <div className="w-24 h-24 bg-rose-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-rose-500/20">
                   <ShieldCheck className="w-12 h-12 text-white" />
@@ -244,7 +239,7 @@ export default function HealthChecker() {
                   Health & Neural Baseline Certified
                 </div>
                 
-                <div className="space-y-4 text-left">
+                <div className="space-y-4 text-left mb-8">
                   <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden relative">
                     <div className="absolute top-0 right-0 p-2 opacity-10">
                       <Activity className="w-12 h-12" />
@@ -264,6 +259,13 @@ export default function HealthChecker() {
                     <span className="text-xs font-black text-emerald-700 dark:text-emerald-400">+10 PTS</span>
                   </div>
                 </div>
+
+                <button
+                  onClick={() => setIsVisible(false)}
+                  className="w-full py-4 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-black uppercase tracking-tighter transition-all flex items-center justify-center gap-2 shadow-lg shadow-rose-500/20"
+                >
+                  Confirm & Access Platform
+                </button>
               </motion.div>
             )}
           </div>
