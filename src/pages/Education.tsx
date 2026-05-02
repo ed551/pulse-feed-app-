@@ -3,7 +3,7 @@ import {
   GraduationCap, Award, BookOpen, Clock, Users, PlayCircle, CheckCircle2, DollarSign, 
   ExternalLink, User, Sparkles, BrainCircuit, Zap, Loader2, Brain, Search, Shield, 
   Star, ShieldCheck, Share2, Monitor, ShieldAlert, X, TrendingUp, Languages, Globe,
-  Volume2, VolumeX, Headphones, SkipBack, SkipForward, Pause
+  Volume2, VolumeX, Headphones, SkipBack, SkipForward, Pause, RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -329,6 +329,17 @@ export default function Education() {
   const { userData } = useAuth();
   const { addRevenue } = useRevenue();
   const [selectedCourse, setSelectedCourse] = useState<typeof COURSES[0] | null>(null);
+
+  const updateSelectedCourse = (course: typeof COURSES[0] | null) => {
+    setSelectedCourse(course);
+    if (course) {
+      localStorage.setItem('pulse_active_course_id', course.id);
+    } else {
+      localStorage.removeItem('pulse_active_course_id');
+      localStorage.removeItem('pulse_active_module_id');
+    }
+  };
+
   const [isEnrolling, setIsEnrolling] = useState(false);
   const [isTrainingAI, setIsTrainingAI] = useState(false);
   const enrolledCourses = userData?.enrolledCourses || [];
@@ -345,10 +356,24 @@ export default function Education() {
   const [deepDiveModule, setDeepDiveModule] = useState<string | null>(null);
   const [deepDiveContent, setDeepDiveContent] = useState<string>('');
   
+  // Persist Active Course
+  useEffect(() => {
+    const savedCourseId = localStorage.getItem('pulse_active_course_id');
+    if (savedCourseId && !selectedCourse) {
+      // Search in standard and custom courses
+      const allPossibleCourses = [...COURSES, ...customCourses];
+      const match = allPossibleCourses.find(c => c.id === savedCourseId);
+      if (match) {
+        setSelectedCourse(match);
+        console.log(`Restored active course: ${match.title}`);
+      }
+    }
+  }, [customCourses, selectedCourse]);
+
   // Persist Deep Dive Content
   useEffect(() => {
-    const savedContent = sessionStorage.getItem('pulse_deep_dive_content');
-    const savedModule = sessionStorage.getItem('pulse_deep_dive_module');
+    const savedContent = localStorage.getItem('pulse_deep_dive_content');
+    const savedModule = localStorage.getItem('pulse_deep_dive_module');
     if (savedContent && savedModule) {
       setDeepDiveContent(savedContent);
       setDeepDiveModule(savedModule);
@@ -356,16 +381,20 @@ export default function Education() {
   }, []);
 
   useEffect(() => {
-    if (deepDiveContent) {
-      sessionStorage.setItem('pulse_deep_dive_content', deepDiveContent);
-    }
-    if (deepDiveModule) {
-      sessionStorage.setItem('pulse_deep_dive_module', deepDiveModule);
-    } else {
-      sessionStorage.removeItem('pulse_deep_dive_content');
-      sessionStorage.removeItem('pulse_deep_dive_module');
+    if (deepDiveContent && deepDiveModule) {
+      localStorage.setItem('pulse_deep_dive_content', deepDiveContent);
+      localStorage.setItem('pulse_deep_dive_module', deepDiveModule);
     }
   }, [deepDiveContent, deepDiveModule]);
+
+  const handleCloseDeepDive = () => {
+    setDeepDiveModule(null);
+    setDeepDiveContent('');
+    localStorage.removeItem('pulse_deep_dive_content');
+    localStorage.removeItem('pulse_deep_dive_module');
+    localStorage.removeItem('pulse_active_module_id');
+    releaseWakeLock();
+  };
 
   const [isDeepDiving, setIsDeepDiving] = useState(false);
   const [isTakingExam, setIsTakingExam] = useState(false);
@@ -700,6 +729,9 @@ export default function Education() {
 
   const handleDeepDive = async (courseTitle: string, moduleTitle: string) => {
     if (isDeepDiving) return;
+    
+    // Track module for cross-session persistence
+    localStorage.setItem('pulse_active_module_id', moduleTitle);
     
     // If we already have content for this exact module, just open it
     if (deepDiveModule === moduleTitle && deepDiveContent) {
@@ -1114,9 +1146,25 @@ export default function Education() {
             Learn new skills, earn LinkedIn badges, and master your future.
           </p>
         </div>
-        <div className="hidden sm:flex items-center space-x-2 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-4 py-2 rounded-full font-bold text-sm">
-          <Award className="w-4 h-4 mr-2" />
-          Certified Courses
+        <div className="flex items-center space-x-2">
+          {localStorage.getItem('pulse_active_course_id') && (
+            <button 
+              onClick={() => {
+                const savedId = localStorage.getItem('pulse_active_course_id');
+                const all = [...COURSES, ...customCourses];
+                const match = all.find(c => c.id === savedId);
+                if (match) updateSelectedCourse(match);
+              }}
+              className="px-4 py-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-full font-bold text-xs hover:bg-indigo-200 transition-all flex items-center border border-indigo-200 dark:border-indigo-800"
+            >
+              <RotateCcw className="w-3 h-3 mr-2" />
+              Resume Last Session
+            </button>
+          )}
+          <div className="hidden sm:flex items-center space-x-2 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-4 py-2 rounded-full font-bold text-sm">
+            <Award className="w-4 h-4 mr-2" />
+            Certified Courses
+          </div>
         </div>
       </div>
 
@@ -1391,7 +1439,7 @@ export default function Education() {
                 {isEnrolled ? (
                   <div className="space-y-2">
                     <button 
-                      onClick={() => setSelectedCourse(course)}
+                      onClick={() => updateSelectedCourse(course)}
                       className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl flex items-center justify-center shadow-lg shadow-green-500/20 transition-all active:scale-95"
                     >
                       <PlayCircle className="w-5 h-5 mr-2" />
@@ -1408,7 +1456,7 @@ export default function Education() {
                   </div>
                 ) : (
                   <button 
-                    onClick={() => setSelectedCourse(course)}
+                    onClick={() => updateSelectedCourse(course)}
                     className="w-full py-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
                   >
                     View Course
@@ -1430,7 +1478,7 @@ export default function Education() {
                 <h2 className="text-xl sm:text-3xl font-bold text-white leading-tight">{selectedCourse.title}</h2>
               </div>
               <button 
-                onClick={() => setSelectedCourse(null)}
+                onClick={() => updateSelectedCourse(null)}
                 className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full backdrop-blur-sm transition-colors z-20"
               >
                 <X className="w-5 h-5" />
@@ -1724,7 +1772,7 @@ export default function Education() {
                             >
                               <div className="absolute top-4 right-4 flex gap-2">
                                 <button 
-                                  onClick={() => setDeepDiveModule(null)}
+                                  onClick={handleCloseDeepDive}
                                   className="p-1.5 bg-white dark:bg-gray-800 rounded-lg text-gray-400 hover:text-gray-600 transition-colors"
                                 >
                                   <ExternalLink className="w-4 h-4 rotate-180" />

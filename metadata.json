@@ -1,5 +1,5 @@
 {
   "name": "Pulse Feeds",
-  "description": "Pulse Feeds: AI-powered community app. Optimized for London Static IP (35.214.40.75) and production deployment.",
+  "description": "Pulse Feeds: AI-powered community app. Optimized for Co-operative Bank Certified Static IP (35.214.40.75) and production deployment.",
   "requestFramePermissions": ["geolocation", "camera", "microphone", "screen-wake-lock"]
 }

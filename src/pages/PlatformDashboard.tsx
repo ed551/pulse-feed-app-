@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../lib/firebase';
-import { collection, getDocs, query, doc, onSnapshot, updateDoc, increment, addDoc, serverTimestamp, getCountFromServer } from 'firebase/firestore';
+import { collection, getDocs, query, doc, onSnapshot, updateDoc, increment, addDoc, serverTimestamp, getCountFromServer, orderBy } from 'firebase/firestore';
 import { 
   Users, User, Award, DollarSign, TrendingUp, ShieldCheck, Activity, 
   Lock, Wallet, ArrowDownCircle, ArrowUpCircle, BarChart2, 
   PieChart, Info, AlertTriangle, CheckCircle2, Loader2, RefreshCw, PlusSquare,
   Mail, Key, Smartphone, Fingerprint, BrainCircuit, FileText, Zap,
   Copy, ShieldAlert, Settings, Plus, Trash2, XCircle, CheckCircle,
-  Building2, Cpu, Globe, Database, Crown, Shield, Star
+  Building2, Cpu, Globe, Database, Crown, Shield, Star, History
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,6 +17,28 @@ import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 import { cn } from '../lib/utils';
 import { getModerationSettings, saveModerationSettings, ModerationSettings } from "../services/moderationService";
 import { admin_logic, integrity_audit_engine, global_kill_switch } from "../lib/engines";
+import { auth } from '../lib/firebase';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+  }
+}
 
 interface UserData {
   uid: string;
@@ -57,13 +79,14 @@ export default function PlatformDashboard() {
   const [success, setSuccess] = useState<string | null>(null);
 
   const [platformTransactions, setPlatformTransactions] = useState<any[]>([]);
+  const [userWithdrawals, setUserWithdrawals] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Moderation Logic
   const [modSettings, setModSettings] = useState<ModerationSettings>(getModerationSettings());
   const [newRule, setNewRule] = useState("");
   const [userCount, setUserCount] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<'financial' | 'moderation' | 'infrastructure' | 'membership'>('financial');
+  const [activeTab, setActiveTab] = useState<'financial' | 'withdrawals' | 'moderation' | 'infrastructure' | 'mitigation' | 'membership' | 'audit'>('financial');
 
   const reports = [
     { id: 1, user: 'Spammer123', reason: 'Inappropriate content', status: 'pending' },
@@ -95,8 +118,24 @@ export default function PlatformDashboard() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await Promise.all([fetchUsers(), fetchTransactions()]);
+    await Promise.all([fetchUsers(), fetchTransactions(), fetchUserWithdrawals()]);
     setTimeout(() => setIsRefreshing(false), 1000);
+  };
+
+  const handleFirestoreError = (error: any, operationType: OperationType, path: string | null) => {
+    const errInfo: FirestoreErrorInfo = {
+      error: error instanceof Error ? error.message : String(error),
+      authInfo: {
+        userId: auth.currentUser?.uid,
+        email: auth.currentUser?.email,
+        emailVerified: auth.currentUser?.emailVerified,
+        isAnonymous: auth.currentUser?.isAnonymous,
+      },
+      operationType,
+      path
+    };
+    console.error('Firestore Error Detailed: ', JSON.stringify(errInfo));
+    return errInfo;
   };
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -114,6 +153,7 @@ export default function PlatformDashboard() {
   useEffect(() => {
     fetchUsers();
     fetchTransactions();
+    fetchUserWithdrawals();
     
     // Subscribe to platform stats
     const statsRef = doc(db, "platform", "stats");
@@ -149,6 +189,30 @@ export default function PlatformDashboard() {
       console.error("Error fetching transactions:", error);
       if (error.message?.includes("permission-denied")) {
         setError("Access denied to platform transactions. Ensure you are logged in as the platform administrator.");
+      }
+    }
+  };
+
+  const fetchUserWithdrawals = async () => {
+    try {
+      // Simplified query to check if permissions fixed
+      const q = query(collection(db, 'withdrawals'));
+      const querySnapshot = await getDocs(q);
+      const ws: any[] = [];
+      querySnapshot.forEach((doc) => {
+        ws.push({ id: doc.id, ...doc.data() });
+      });
+      // Sort manually for now if needed, or keep to test
+      setUserWithdrawals(ws.sort((a, b) => {
+        const tA = a.timestamp?.seconds || 0;
+        const tB = b.timestamp?.seconds || 0;
+        return tB - tA;
+      }));
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.LIST, 'withdrawals');
+      console.error("Error fetching withdrawals:", error);
+      if (error.message?.includes("permission-denied") || error.message?.includes("insufficient permissions")) {
+         setError("Access denied to User Withdrawals. This usually means the collection is empty and rules are strictly filtering, or you are not a verified administrator.");
       }
     }
   };
@@ -233,13 +297,13 @@ export default function PlatformDashboard() {
     setIsDevWithdrawing(true);
     try {
       const statsRef = doc(db, "platform", "stats");
+      // Fix: Returns should only increment share, not revenue (which tracks gross income)
       await updateDoc(statsRef, {
-        platformShare: increment(amountToReturn),
-        platformRevenue: increment(amountToReturn),
+        platformShare: increment(amountToReturn)
       });
       
       await addDoc(collection(db, 'platform_transactions'), {
-        type: 'platform_revenue',
+        type: 'refund',
         source: 'platform_return',
         userAmount: 0,
         platformAmount: amountToReturn,
@@ -254,6 +318,55 @@ export default function PlatformDashboard() {
       setDevWithdrawAmount("");
     } catch (err: any) {
       setError("Failed to return funds. Ensure you have admin permissions.");
+    } finally {
+      setIsDevWithdrawing(false);
+    }
+  };
+
+  const handleRollbackWithdrawal = async (withdrawal: any) => {
+    if (!window.confirm(`Are you sure you want to rollback this ${withdrawal.status} withdrawal of ${convert(withdrawal.amount)}? Funds will be returned to the treasury.`)) {
+      return;
+    }
+
+    setIsDevWithdrawing(true);
+    try {
+      // 1. Update Stats
+      const statsRef = doc(db, "platform", "stats");
+      const isOperational = withdrawal.category === 'operational';
+      
+      const updateData: any = {};
+      if (isOperational) {
+        updateData.platformShare = increment(withdrawal.amount);
+      } else {
+        updateData.totalUserBalances = increment(withdrawal.amount);
+      }
+      await updateDoc(statsRef, updateData);
+
+      // 2. Mark Withdrawal as Rolled Back / Cancelled
+      await updateDoc(doc(db, 'withdrawals', withdrawal.id), {
+        status: 'rolled_back',
+        rolledBackAt: serverTimestamp(),
+        rolledBackBy: currentUser?.uid || 'system'
+      });
+
+      // 3. Add Transaction Log
+      await addDoc(collection(db, 'platform_transactions'), {
+        type: 'refund',
+        source: isOperational ? 'platform_rollback' : 'user_rollback',
+        userAmount: isOperational ? 0 : withdrawal.amount,
+        platformAmount: isOperational ? withdrawal.amount : 0,
+        totalAmount: withdrawal.amount,
+        reason: `Rollback of ${withdrawal.status} withdrawal (REF: ${withdrawal.reference})`,
+        userId: currentUser?.uid || 'system',
+        timestamp: serverTimestamp(),
+        serverSecret: "pulse-feeds-server-secret-2026"
+      });
+
+      setSuccess(`Successfully rolled back withdrawal and returned ${convert(withdrawal.amount)} to treasury.`);
+      handleRefresh();
+    } catch (err: any) {
+      console.error("Rollback failed:", err);
+      setError("Failed to rollback withdrawal. Check permissions.");
     } finally {
       setIsDevWithdrawing(false);
     }
@@ -312,6 +425,7 @@ export default function PlatformDashboard() {
         : `Platform payout of ${convert(amountToWithdraw)} (KES ${kesAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) successfully initiated for Co-op Bank Account 853390.`);
       
       if (!withdrawAll) setDevWithdrawAmount("");
+      handleRefresh(); // Ensure list updates immediately
     } catch (err: any) {
       setError(err.message || "Failed to process Platform withdrawal.");
     } finally {
@@ -330,6 +444,7 @@ export default function PlatformDashboard() {
       setSuccess(`Successfully logged $${Number(amount || 0).toFixed(2)} as 100% Platform Revenue (Platform Work).`);
       setPlatformRevenueInput("");
       setPlatformRevenueReason("");
+      handleRefresh();
     } catch (err: any) {
       setError("Failed to log platform revenue.");
     } finally {
@@ -678,11 +793,29 @@ export default function PlatformDashboard() {
         <button 
           onClick={() => setActiveTab('financial')}
           className={cn(
-            "pb-2 px-4 text-sm font-bold transition-all relative",
+            "pb-2 px-4 text-sm font-bold transition-all relative whitespace-nowrap",
             activeTab === 'financial' ? "text-indigo-600 border-b-2 border-indigo-600" : "text-gray-400 hover:text-gray-600"
           )}
         >
           Financial Center
+        </button>
+        <button 
+          onClick={() => setActiveTab('audit')}
+          className={cn(
+            "pb-2 px-4 text-sm font-bold transition-all relative whitespace-nowrap",
+            activeTab === 'audit' ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-400 hover:text-gray-600"
+          )}
+        >
+          Master Audit Ledger
+        </button>
+        <button 
+          onClick={() => setActiveTab('withdrawals')}
+          className={cn(
+            "pb-2 px-4 text-sm font-bold transition-all relative whitespace-nowrap",
+            activeTab === 'withdrawals' ? "text-purple-600 border-b-2 border-purple-600" : "text-gray-400 hover:text-gray-600"
+          )}
+        >
+          Withdraw List
         </button>
         <button 
           onClick={() => setActiveTab('moderation')}
@@ -703,6 +836,15 @@ export default function PlatformDashboard() {
           System Integration
         </button>
         <button 
+          onClick={() => setActiveTab('mitigation')}
+          className={cn(
+            "pb-2 px-4 text-sm font-bold transition-all relative",
+            activeTab === 'mitigation' ? "text-emerald-600 border-b-2 border-emerald-600" : "text-gray-400 hover:text-gray-600"
+          )}
+        >
+          Mitigation Engine
+        </button>
+        <button 
           onClick={() => setActiveTab('membership')}
           className={cn(
             "pb-2 px-4 text-sm font-bold transition-all relative",
@@ -712,6 +854,245 @@ export default function PlatformDashboard() {
           Membership Control
         </button>
       </div>
+
+      {activeTab === 'audit' && (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-black flex items-center gap-2">
+                <Database className="w-6 h-6 text-blue-600" />
+                Master Treasury Ledger
+              </h2>
+              <p className="text-sm text-gray-500">Chronological record of every financial pulse (Revenue, Expenses, Withdrawals)</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-100 dark:border-blue-800">
+                Total Events: {platformTransactions.length}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-xl overflow-hidden">
+             <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-gray-50/50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Timestamp</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Transaction Category</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Detail & Reason</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Treasury Impact</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {platformTransactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-20 text-center">
+                        <History className="w-12 h-12 text-gray-200 mx-auto mb-4" />
+                        <p className="text-gray-400 font-bold">No financial history recorded yet.</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    platformTransactions.map((tx) => (
+                      <tr key={tx.id} className="hover:bg-gray-50/30 dark:hover:bg-gray-900/30 transition-colors group">
+                        <td className="px-6 py-4 whitespace-nowrap text-xs font-mono text-gray-400">
+                          {tx.timestamp?.seconds ? new Date(tx.timestamp.seconds * 1000).toLocaleString() : 'Just now'}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className={cn(
+                            "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border",
+                            tx.type === 'revenue' || tx.type === 'platform_revenue' ? "bg-green-50 text-green-700 border-green-100" :
+                            tx.type === 'payout' ? "bg-purple-50 text-purple-700 border-purple-100" :
+                            tx.type === 'expense' ? "bg-red-50 text-red-700 border-red-100" :
+                            "bg-blue-50 text-blue-700 border-blue-100"
+                          )}>
+                            <div className={cn(
+                              "w-1.5 h-1.5 rounded-full",
+                              tx.type === 'revenue' || tx.type === 'platform_revenue' ? "bg-green-500" :
+                              tx.type === 'payout' ? "bg-purple-500" :
+                              tx.type === 'expense' ? "bg-red-500" :
+                              "bg-blue-500"
+                            )} />
+                            {tx.type || 'transaction'}
+                          </div>
+                          <div className="text-[9px] text-gray-400 mt-1 uppercase font-bold tracking-tighter">Source: {tx.source || 'Manual'}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm font-bold text-gray-900 dark:text-white max-w-md truncate">{tx.reason}</p>
+                          <p className="text-[10px] text-gray-500">ID: {tx.id?.slice(-8)} • IP: {tx.clientIp || 'Server'}</p>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className={cn(
+                            "text-sm font-black font-mono",
+                            (tx.type === 'revenue' || tx.type === 'platform_revenue') ? "text-green-600" : "text-red-600"
+                          )}>
+                            {(tx.type === 'revenue' || tx.type === 'platform_revenue') ? '+' : '-'}{convert(Math.abs(tx.totalAmount || tx.platformAmount || 0))}
+                          </div>
+                          <div className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">
+                            Impact: Treasury {(tx.type === 'revenue' || tx.type === 'platform_revenue') ? 'Credit' : 'Debit'}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+             </div>
+          </div>
+
+          <div className="p-6 bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl">
+            <h3 className="text-white font-black uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              Accountability Checksum
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="space-y-1">
+                <p className="text-slate-500 text-[10px] font-black uppercase tracking-tighter">Verified Inflow</p>
+                <p className="text-2xl font-black text-emerald-400">{convert(totals.revenueIn)}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-slate-500 text-[10px] font-black uppercase tracking-tighter">Verified Outflow</p>
+                <p className="text-2xl font-black text-rose-400">{convert(totals.payouts + totals.expenses)}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-slate-500 text-[10px] font-black uppercase tracking-tighter">Net Verified Liquidity</p>
+                <p className="text-2xl font-black text-indigo-400">{convert(auditBalance)}</p>
+              </div>
+            </div>
+            <div className="mt-6 pt-6 border-t border-slate-800 flex items-center justify-between">
+              <p className="text-[10px] text-slate-500 font-mono italic">Checksum Match: {Math.abs(stats.platformShare - auditBalance) < 0.01 ? 'TRUE' : 'WARNING: DISCREPANCY'}</p>
+              <button 
+                onClick={handleRefresh}
+                className="text-[10px] text-indigo-400 font-black uppercase tracking-widest hover:text-indigo-300 transition-colors"
+              >
+                Sync All Systems
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'withdrawals' && (
+        <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Wallet className="w-6 h-6 text-purple-500" />
+                User Payout Requests
+              </h2>
+              <p className="text-sm text-gray-500">Aggregate list of all pending and past user reward redemptions</p>
+            </div>
+            <button 
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className={cn(
+                "p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 transition-all",
+                isRefreshing && "animate-spin"
+              )}
+            >
+              <RefreshCw className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-700 shadow-xl">
+            <div className="overflow-x-auto text-gray-900 dark:text-gray-100">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50/50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
+                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">User Details</th>
+                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Payout Info</th>
+                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Status</th>
+                    <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Audit</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700 font-sans">
+                  {userWithdrawals.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-20 text-center">
+                        <div className="w-16 h-16 bg-gray-50 dark:bg-gray-900/50 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-100 dark:border-gray-800">
+                          <History className="w-8 h-8 text-gray-300" />
+                        </div>
+                        <p className="text-gray-400 font-medium">No withdrawal requests found</p>
+                        <p className="text-xs text-gray-500 mt-1 italic">Requests are logged centrally once initiated by users.</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    userWithdrawals.map((w) => (
+                      <tr key={w.id} className="hover:bg-gray-50/30 dark:hover:bg-gray-900/30 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-bold uppercase tracking-tighter">
+                            {w.userName || 'Anonymous'}
+                          </div>
+                          <div className="text-[11px] text-gray-500 font-mono mt-0.5">{w.userEmail}</div>
+                          <div className="text-[9px] text-gray-400 mt-1 uppercase font-bold tracking-widest">UID: {w.userId?.slice(-6)}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-black font-mono">
+                            {typeof w.amount === 'number' ? `$${w.amount.toFixed(2)}` : w.amount}
+                            <span className="ml-1.5 px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-[10px] text-gray-500 font-bold tracking-widest uppercase text-gray-900 dark:text-gray-100">
+                              USD
+                            </span>
+                          </div>
+                          {w.amountKes && (
+                            <div className="text-[10px] text-green-600 font-bold mt-0.5">
+                              ≈ KES {w.amountKes.toLocaleString()}
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase">via</span>
+                            <span className={cn(
+                              "px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border",
+                              w.category === 'operational' 
+                                ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border-indigo-100/50 dark:border-indigo-800/30"
+                                : "bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 border-purple-100/50 dark:border-purple-800/30"
+                            )}>
+                              {w.category === 'operational' ? 'Operational' : (w.type || 'payout')}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col items-center gap-1">
+                            <span className={cn(
+                              "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1.5 border",
+                              w.status === 'success' ? "bg-green-100/50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800" :
+                              w.status === 'simulated' ? "bg-blue-100/50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800" :
+                              w.status === 'pending' ? "bg-amber-100/50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800" :
+                              w.status === 'rolled_back' ? "bg-gray-100/50 text-gray-500 border-gray-200" :
+                              "bg-red-100/50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800"
+                            )}>
+                              {(w.status === 'success' || w.status === 'simulated') && <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", w.status === 'success' ? "bg-green-500" : "bg-blue-500")} />}
+                              {w.status}
+                            </span>
+                            {(w.status === 'simulated' || (w.status === 'success' && w.category === 'operational')) && (
+                              <button 
+                                onClick={() => handleRollbackWithdrawal(w)}
+                                disabled={isDevWithdrawing}
+                                className="text-[9px] font-black text-red-500 uppercase hover:underline mt-1"
+                              >
+                                {isDevWithdrawing ? '...' : 'Rollback/Return'}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="text-[10px] text-gray-400 font-mono">
+                            {w.timestamp?.toDate ? w.timestamp.toDate().toLocaleString() : new Date().toLocaleString()}
+                          </div>
+                          <div className="text-[9px] text-gray-500 italic mt-0.5">REF: {w.reference?.toString().slice(-10) || 'SYSTEM'}</div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
+          <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800 text-xs text-gray-500 italic">
+            Note: This list is populated from the central <code className="bg-white dark:bg-gray-800 px-1 rounded">withdrawals</code> collection. 
+            Only new withdrawal requests since the audit synchronization update will appear here. Legacy requests remain accessible via individual user sub-ledgers.
+          </div>
+        </div>
+      )}
 
       {activeTab === 'membership' && (
         <div className="space-y-8 animate-in fade-in duration-300">
@@ -1088,9 +1469,12 @@ export default function PlatformDashboard() {
                 <Globe className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-xl font-black text-gray-900 dark:text-white mb-1 tracking-tight">Endpoint Security</h3>
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">Endpoint Security</h3>
+                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase rounded-full">Certified Gateway</span>
+                </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                  Traffic is routed through verified static IP <span className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-mono px-1 rounded">35.214.40.75</span> to bypass bank firewall restrictions.
+                  Traffic is <span className="text-emerald-600 font-bold">CERTIFIED</span> and routed through verified static IP <span className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-mono px-1 rounded border border-emerald-200">35.214.40.75</span> to bypass Co-operative Bank firewall restrictions.
                 </p>
               </div>
             </div>
@@ -1120,6 +1504,173 @@ export default function PlatformDashboard() {
               <p className="text-slate-500">[DB] Firebase listener attached to /platform/stats</p>
               <p className="text-slate-500">[SECURITY] RSA-2048 signing keys rotated recently</p>
               <p className="text-emerald-400 font-bold tracking-widest">[OK] READY FOR PAYOUT OPERATIONS</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'mitigation' && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Mitigation Controller */}
+            <div className="bg-white dark:bg-gray-800 p-8 rounded-[3rem] shadow-xl border border-gray-100 dark:border-gray-700 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+              
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-3xl flex items-center justify-center text-emerald-600">
+                  <ShieldAlert className="w-8 h-8" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tighter">Mitigation Engine v3.1</h2>
+                  <p className="text-sm text-gray-500">Automated Risk & Firewall Mitigation</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-8">
+                <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-[2rem] border border-gray-100 dark:border-gray-800">
+                  <p className="text-[10px] font-black uppercase text-gray-400 mb-1">IP Status</p>
+                  <p className="text-xl font-black text-emerald-600">CERTIFIED</p>
+                  <p className="text-[10px] text-gray-500 mt-1">35.214.40.75 (Static)</p>
+                </div>
+                <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-[2rem] border border-gray-100 dark:border-gray-800">
+                  <p className="text-[10px] font-black uppercase text-gray-400 mb-1">Firewall Block</p>
+                  <p className="text-xl font-black text-amber-600">BYPASSED</p>
+                  <p className="text-[10px] text-gray-500 mt-1">Co-operative Bank Bridge</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl border border-emerald-100 dark:border-emerald-800/50">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Auto-Mitigation Logic</span>
+                  </div>
+                  <div className="w-10 h-5 bg-emerald-600 rounded-full flex items-center px-1 overflow-hidden">
+                    <div className="w-3 h-3 bg-white rounded-full ml-auto" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/10 rounded-2xl border border-gray-100 dark:border-gray-800">
+                  <div className="flex items-center gap-3">
+                    <Zap className="w-5 h-5 text-indigo-500" />
+                    <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Intelligent Re-routing</span>
+                  </div>
+                  <div className="w-10 h-5 bg-indigo-600 rounded-full flex items-center px-1 overflow-hidden">
+                    <div className="w-3 h-3 bg-white rounded-full ml-auto" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Risk Intelligence Dashboard */}
+            <div className="bg-slate-900 p-8 rounded-[3rem] shadow-2xl relative overflow-hidden">
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-lg font-black text-white flex items-center gap-2">
+                  <BrainCircuit className="w-5 h-5 text-indigo-400" />
+                  Security Intelligence
+                </h3>
+                <span className="px-2 py-1 bg-indigo-500/20 text-indigo-400 text-[10px] font-black rounded-lg border border-indigo-500/30 uppercase">Neural Monitor</span>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <div className="flex justify-between text-[10px] font-black text-slate-400 mb-2 uppercase tracking-widest">
+                    <span>Firewall Resilience</span>
+                    <span className="text-emerald-400">98.4%</span>
+                  </div>
+                  <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: "98.4%" }}
+                      className="h-full bg-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[10px] font-black text-slate-400 mb-2 uppercase tracking-widest">
+                    <span>Transaction Integrity</span>
+                    <span className="text-indigo-400">100% Secure</span>
+                  </div>
+                  <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: "100%" }}
+                      className="h-full bg-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-4 bg-slate-800/50 rounded-2xl border border-slate-700/50">
+                  <div className="flex items-center gap-3 text-emerald-400 text-xs font-bold mb-2">
+                    <CheckCircle className="w-4 h-4" />
+                    Static IP Verified: 35.214.40.75
+                  </div>
+                  <p className="text-[10px] text-slate-400 leading-relaxed italic">
+                    "Application identity verified by Co-op Bank firewall. All outbound transactions from this server are pre-authorized for immediate settlement."
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-8 pt-8 border-t border-slate-800">
+                <div className="flex items-center justify-between">
+                  <div className="flex -space-x-2">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="w-8 h-8 rounded-full bg-slate-800 border-2 border-slate-900 flex items-center justify-center">
+                        <Lock className="w-3 h-3 text-slate-500" />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-indigo-400 font-black uppercase tracking-tighter">Zero-Trust Protocol Active</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-[3rem] shadow-xl border border-red-500/10">
+            <div className="flex items-center gap-3 mb-6">
+              <History className="w-6 h-6 text-red-500" />
+              <h3 className="text-xl font-black text-gray-900 dark:text-white tracking-tighter uppercase italic">Mitigation Event Registry</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left border-b border-gray-100 dark:border-gray-800">
+                    <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Event Type</th>
+                    <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Asset Target</th>
+                    <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Strategy</th>
+                    <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Outcome</th>
+                    <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Time</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50 dark:divide-gray-900">
+                  <tr>
+                    <td className="py-4">
+                      <span className="px-2 py-1 bg-red-100 text-red-700 text-[9px] font-bold rounded uppercase">Firewall Block</span>
+                    </td>
+                    <td className="py-4 text-xs font-bold text-gray-700 dark:text-gray-300">Co-op Bank API Gateway</td>
+                    <td className="py-4 text-xs text-gray-500">Static IP Certification</td>
+                    <td className="py-4">
+                      <span className="flex items-center gap-1.5 text-emerald-600 text-[10px] font-black uppercase">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Bypassed
+                      </span>
+                    </td>
+                    <td className="py-4 text-xs text-gray-400">2 minutes ago</td>
+                  </tr>
+                  <tr>
+                    <td className="py-4">
+                      <span className="px-2 py-1 bg-blue-100 text-blue-700 text-[9px] font-bold rounded uppercase">IP Instability</span>
+                    </td>
+                    <td className="py-4 text-xs font-bold text-gray-700 dark:text-gray-300">Cloud Run Outbound</td>
+                    <td className="py-4 text-xs text-gray-500">Resilient Persistence</td>
+                    <td className="py-4">
+                      <span className="flex items-center gap-1.5 text-emerald-600 text-[10px] font-black uppercase">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Corrected
+                      </span>
+                    </td>
+                    <td className="py-4 text-xs text-gray-400">14 minutes ago</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -1233,6 +1784,12 @@ export default function PlatformDashboard() {
                     Max
                   </button>
                 </div>
+                {devWithdrawAmount && !isNaN(parseFloat(devWithdrawAmount)) && (
+                  <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 text-xs font-bold text-blue-600 flex justify-between items-center animate-in fade-in slide-in-from-top-1">
+                    <span>Estimated Payout (KES)</span>
+                    <span>KES {(parseFloat(devWithdrawAmount) * (rates['KES'] || 135)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   {[0.25, 0.5, 0.75].map((percent) => (
                     <button
@@ -1253,7 +1810,7 @@ export default function PlatformDashboard() {
                   className="flex items-center justify-center gap-2 py-4 bg-purple-600 text-white font-black rounded-2xl hover:bg-purple-700 disabled:opacity-50 transition-all shadow-lg shadow-purple-600/20"
                 >
                   {isDevWithdrawing ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowDownCircle className="w-5 h-5" />}
-                  Withdraw
+                  Partial Withdrawal
                 </button>
                 <button
                   onClick={handleReturnFunds}

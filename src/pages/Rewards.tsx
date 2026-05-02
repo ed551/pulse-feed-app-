@@ -179,26 +179,37 @@ export default function Rewards() {
         setSuccess(result.message || "Payout request initiated successfully!");
         setAmount("");
         
-          // Log transaction to Firestore
-          if (currentUser) {
-            const txRef = collection(db, 'users', currentUser.uid, 'transactions');
-            const currentRate = rates['KES'] || 135;
-            const usdAmount = numAmount / currentRate;
-            const pointsToDeduct = Math.floor(usdAmount * 100);
+            // Log transaction to Firestore
+            if (currentUser) {
+              const txRef = collection(db, 'users', currentUser.uid, 'transactions');
+              const currentRate = rates['KES'] || 135;
+              const usdAmount = numAmount / currentRate;
+              const pointsToDeduct = Math.floor(usdAmount * 100);
 
-            await addDoc(txRef, {
-              amount: numAmount,
-              currency: 'KES',
-              type: localMethod,
-              status: result.success ? 'success' : 'pending',
-              timestamp: serverTimestamp(),
-              reference: result.transactionId || result.CheckoutRequestID || "N/A",
-              details: result.message || "Transaction processed",
-              pointsDeducted: pointsToDeduct,
-              usdEquivalent: usdAmount,
-              previousPoints: points,
-              remainingPoints: points - pointsToDeduct
-            });
+              const txData = {
+                amount: numAmount,
+                currency: 'KES',
+                type: localMethod,
+                status: result.success ? 'success' : 'pending',
+                timestamp: serverTimestamp(),
+                reference: result.transactionId || result.CheckoutRequestID || "N/A",
+                details: result.message || "Transaction processed",
+                pointsDeducted: pointsToDeduct,
+                usdEquivalent: usdAmount,
+                previousPoints: points,
+                remainingPoints: points - pointsToDeduct,
+                userId: currentUser.uid,
+                userEmail: currentUser.email
+              };
+
+              await addDoc(txRef, txData);
+              
+              // Also log to the central withdrawals collection for admin visibility
+              await addDoc(collection(db, 'withdrawals'), {
+                ...txData,
+                userName: userData?.displayName || 'Anonymous',
+                processedAt: result.success ? serverTimestamp() : null
+              }).catch(err => console.error("Central withdrawal logging failed:", err));
 
             // Deduct both points AND balance to keep them in sync
             const userRef = doc(db, 'users', currentUser.uid);
@@ -250,7 +261,7 @@ export default function Rewards() {
         // Deduct both points AND balance
         const pointsToDeduct = Math.floor(numAmount * 100);
         
-        await addDoc(txRef, {
+        const txData = {
           amount: numAmount,
           currency: 'USD',
           type: payoutMethod,
@@ -262,8 +273,18 @@ export default function Rewards() {
           details: `International ${payoutMethod} payout request`,
           pointsDeducted: pointsToDeduct,
           previousPoints: points,
-          remainingPoints: points - pointsToDeduct
-        });
+          remainingPoints: points - pointsToDeduct,
+          userId: currentUser.uid,
+          userEmail: currentUser.email
+        };
+
+        await addDoc(txRef, txData);
+
+        // Also log to the central withdrawals collection for admin visibility
+        await addDoc(collection(db, 'withdrawals'), {
+          ...txData,
+          userName: userData?.displayName || 'Anonymous',
+        }).catch(err => console.error("Central withdrawal logging failed:", err));
 
         await updateDoc(userRef, {
           points: increment(-pointsToDeduct),

@@ -1,5 +1,5 @@
 import { db, auth } from './firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 export type InsightType = 'developer' | 'user';
 export type InsightCategory = 'life' | 'security' | 'health' | 'wealth' | 'general';
@@ -16,14 +16,18 @@ export async function saveInsight(type: InsightType, category: InsightCategory, 
   if (!auth.currentUser) return;
   
   try {
-    await addDoc(collection(db, 'insights'), {
+    // Generate a highly unique ID to prevent any potential collisions or "Already Exists" errors
+    // which can sometimes occur with addDoc if the client SDK retries a write.
+    const uniqueId = `insight_${Date.now()}_${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 10)}`;
+    
+    await setDoc(doc(db, 'insights', uniqueId), {
       type,
       category,
-      content,
+      content: content.trim(),
       authorId: auth.currentUser.uid,
-      timestamp: new Date().toISOString()
+      timestamp: serverTimestamp() // Use server-side timestamp for consistency
     });
-    console.log(`Insight saved: [${type}:${category}] ${content.substring(0, 50)}...`);
+    console.log(`Insight saved [ID: ${uniqueId}]: [${type}:${category}] ${content.substring(0, 50)}...`);
   } catch (err) {
     console.error("Error saving insight:", err);
   }

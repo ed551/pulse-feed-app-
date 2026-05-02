@@ -34,8 +34,9 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && 
-             (request.auth.token.email == "edwinmuoha@gmail.com" || 
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+             ((request.auth.token.email == "edwinmuoha@gmail.com" && request.auth.token.email_verified == true) || 
+              (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin'));
     }
 
     function immutable(field) {
@@ -205,6 +206,13 @@ service cloud.firestore {
     match /platform_transactions/{txId} {
       allow read: if isAdmin();
       allow create: if (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /withdrawals/{withdrawalId} {
+      allow get: if isAdmin() || (isSignedIn() && (resource == null || resource.data.userId == request.auth.uid));
+      allow list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || (isSignedIn() && request.resource.data.userId == request.auth.uid);
       allow update, delete: if isAdmin();
     }
 
