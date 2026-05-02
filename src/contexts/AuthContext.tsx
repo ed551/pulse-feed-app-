@@ -11,7 +11,7 @@ import {
   createUserWithEmailAndPassword,
   updateProfile
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, onSnapshot, serverTimestamp, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 
 interface UserData {
@@ -71,6 +71,7 @@ interface UserData {
   theme?: 'light' | 'dark' | 'system';
   blockedUsers?: string[];
   blockedGroups?: string[];
+  activeSessions?: string[];
   contentFilters?: {
     sensitiveContent: boolean;
     spamFilter: boolean;
@@ -87,6 +88,8 @@ interface AuthContextType {
   loading: boolean;
   isMfaVerified: boolean;
   setIsMfaVerified: (val: boolean) => void;
+  sessionError: string | null;
+  setSessionError: (val: string | null) => void;
   loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
   signupWithEmail: (email: string, pass: string, name: string, mfaOptions?: { type: 'biometric' | 'email_otp' | 'totp', phone?: string, secret?: string }) => Promise<void>;
@@ -108,7 +111,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isMfaVerified, setIsMfaVerified] = useState(false);
+  const [isMfaVerified, setIsMfaVerifiedState] = useState(() => {
+    const sessionMfa = sessionStorage.getItem(`pulse_mfa_verified_${sessionStorage.getItem('pulse_session_id')}`);
+    return sessionMfa === 'true';
+  });
+
+  const setIsMfaVerified = (val: boolean) => {
+    setIsMfaVerifiedState(val);
+    if (val) {
+      sessionStorage.setItem(`pulse_mfa_verified_${currentSessionId}`, 'true');
+    } else {
+      sessionStorage.removeItem(`pulse_mfa_verified_${currentSessionId}`);
+    }
+  };
+
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  
+  // Create a persistent sessionId for this tab/visit
+  const [currentSessionId] = useState(() => {
+    let id = sessionStorage.getItem('pulse_session_id');
+    if (!id) {
+      id = 'sess_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now();
+      sessionStorage.setItem('pulse_session_id', id);
+    }
+    return id;
+  });
 
   const [isFacebookApp, setIsFacebookApp] = useState(false);
 
@@ -158,16 +185,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (user) {
-          // Default to not verified if we have a user (will be checked in snapshot)
-          setIsMfaVerified(false);
+          // Check if this session is already verified in sessionStorage
+          const sessionMfa = sessionStorage.getItem(`pulse_mfa_verified_${currentSessionId}`);
+          if (sessionMfa !== 'true') {
+            setIsMfaVerified(false);
+          }
 
           // Fetch user data from Firestore
           const userRef = doc(db, 'users', user.uid);
-          unsubscribeUser = onSnapshot(userRef, (docSnap) => {
+          unsubscribeUser = onSnapshot(userRef, async (docSnap) => {
             if (docSnap.exists()) {
               const data = docSnap.data() as UserData;
+              // Hardcoded admin override for primary developer
+              if (user.email === 'edwinmuoha@gmail.com' && data.role !== 'admin') {
+                data.role = 'admin';
+              }
               setUserData(data);
               
+              // ENFORCE MAX 2 SIGN-INS (SESSIONS)
+              const activeSessions = data.activeSessions || [];
+              const isThisSessionRegistered = activeSessions.includes(currentSessionId);
+              
+              if (!isThisSessionRegistered) {
+                if (activeSessions.length >= 2) {
+                  console.error('Max concurrent sessions reached (2)');
+                  setSessionError('Security Alert: You are already signed in on 2 other devices. Please sign out from one of them to continue.');
+                  await logout();
+                  return;
+                } else {
+                  // Register this session
+                  await updateDoc(userRef, {
+                    activeSessions: arrayUnion(currentSessionId)
+                  });
+                }
+              }
+
               // Only auto-verify if MFA is disabled
               if (!data.twoFactorEnabled) {
                 setIsMfaVerified(true);
@@ -180,7 +232,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 email: user.email,
                 displayName: user.displayName,
                 photoURL: user.photoURL,
-                role: 'user',
+                role: user.email === 'edwinmuoha@gmail.com' ? 'admin' : 'user',
                 points: 1250,
                 balance: 12.5,
                 adRevenue: 0,
@@ -201,7 +253,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 uid: user.uid,
                 displayName: user.displayName,
                 photoURL: user.photoURL,
-                role: 'user',
+                role: user.email === 'edwinmuoha@gmail.com' ? 'admin' : 'user',
                 status: "Hey there! I'm using Pulse Feeds.",
                 isOnline: true,
                 lastSeen: serverTimestamp()
@@ -266,7 +318,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: result.user.email,
           displayName: name,
           photoURL: result.user.photoURL,
-          role: 'user',
+          role: result.user.email === 'edwinmuoha@gmail.com' ? 'admin' : 'user',
           points: 1250,
           balance: 12.5,
           adRevenue: 0,
@@ -287,7 +339,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           uid: result.user.uid,
           displayName: name,
           photoURL: result.user.photoURL,
-          role: 'user',
+          role: result.user.email === 'edwinmuoha@gmail.com' ? 'admin' : 'user',
           status: "Hey there! I'm using Pulse Feeds.",
           isOnline: true,
           lastSeen: serverTimestamp()
@@ -298,7 +350,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    if (currentUser && currentSessionId) {
+      try {
+        sessionStorage.removeItem(`pulse_mfa_verified_${currentSessionId}`);
+        const userRef = doc(db, 'users', currentUser.uid);
+        await updateDoc(userRef, {
+          activeSessions: arrayRemove(currentSessionId)
+        });
+      } catch (err) {
+        console.error('Failed to remove session during logout:', err);
+      }
+    }
     return signOut(auth);
   };
 
@@ -308,6 +371,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     isMfaVerified,
     setIsMfaVerified,
+    sessionError,
+    setSessionError,
     loginWithGoogle,
     loginWithEmail,
     signupWithEmail,

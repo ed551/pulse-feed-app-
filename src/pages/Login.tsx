@@ -7,10 +7,18 @@ import { motion, AnimatePresence } from 'motion/react';
 import { isBiometricsSupported, authenticateBiometric } from '../lib/biometrics';
 
 export default function Login() {
-  const { loginWithGoogle, loginWithEmail, signupWithEmail, logout, isFacebookApp, currentUser, userData, isMfaVerified, setIsMfaVerified } = useAuth();
+  const { loginWithGoogle, loginWithEmail, signupWithEmail, logout, isFacebookApp, currentUser, userData, isMfaVerified, setIsMfaVerified, sessionError, setSessionError } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (sessionError) {
+      setError(sessionError);
+      // Clear the error from global state so it doesn't linger after display
+      setSessionError(null);
+    }
+  }, [sessionError, setSessionError]);
   const [loading, setLoading] = useState(false);
   const [biometricSupported, setBiometricSupported] = useState(false);
   

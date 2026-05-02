@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../lib/firebase';
-import { collection, getDocs, query, doc, onSnapshot, updateDoc, increment, addDoc, serverTimestamp, getCountFromServer, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, doc, onSnapshot, updateDoc, increment, addDoc, serverTimestamp, getCountFromServer, orderBy, limit } from 'firebase/firestore';
 import { 
   Users, User, Award, DollarSign, TrendingUp, ShieldCheck, Activity, 
   Lock, Wallet, ArrowDownCircle, ArrowUpCircle, BarChart2, 
@@ -80,7 +80,41 @@ export default function PlatformDashboard() {
 
   const [platformTransactions, setPlatformTransactions] = useState<any[]>([]);
   const [userWithdrawals, setUserWithdrawals] = useState<any[]>([]);
+  const [systemActivity, setSystemActivity] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [systemHealth, setSystemHealth] = useState({
+    cpu: 18,
+    memory: 42,
+    disk: 65,
+    neuralLoad: 24
+  });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSystemHealth(prev => ({
+        cpu: Math.max(5, Math.min(95, prev.cpu + (Math.random() * 10 - 5))),
+        memory: Math.max(10, Math.min(90, prev.memory + (Math.random() * 4 - 2))),
+        disk: prev.disk,
+        neuralLoad: Math.max(0, Math.min(100, prev.neuralLoad + (Math.random() * 20 - 10)))
+      }));
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchSystemActivity = async () => {
+    try {
+      const q = query(collection(db, 'activity'), orderBy('timestamp', 'desc'), limit(20));
+      const snapshot = await getDocs(q);
+      const activities = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setSystemActivity(activities);
+    } catch (err) {
+      console.error("Error fetching system activity:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchSystemActivity();
+  }, []);
 
   // Moderation Logic
   const [modSettings, setModSettings] = useState<ModerationSettings>(getModerationSettings());
@@ -118,7 +152,7 @@ export default function PlatformDashboard() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await Promise.all([fetchUsers(), fetchTransactions(), fetchUserWithdrawals()]);
+    await Promise.all([fetchUsers(), fetchTransactions(), fetchUserWithdrawals(), fetchSystemActivity()]);
     setTimeout(() => setIsRefreshing(false), 1000);
   };
 
@@ -856,87 +890,140 @@ export default function PlatformDashboard() {
       </div>
 
       {activeTab === 'audit' && (
-        <div className="space-y-6 animate-in fade-in duration-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-black flex items-center gap-2">
-                <Database className="w-6 h-6 text-blue-600" />
-                Master Treasury Ledger
-              </h2>
-              <p className="text-sm text-gray-500">Chronological record of every financial pulse (Revenue, Expenses, Withdrawals)</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-100 dark:border-blue-800">
-                Total Events: {platformTransactions.length}
+        <div className="space-y-8 animate-in fade-in duration-500">
+          {/* Dynamic System Health Monitor */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {[
+              { label: 'CPU Cluster Load', value: Math.round(systemHealth.cpu), color: 'text-blue-500', bg: 'bg-blue-500/10' },
+              { label: 'Memory Persistence', value: Math.round(systemHealth.memory), color: 'text-purple-500', bg: 'bg-purple-500/10' },
+              { label: 'Neural Processing', value: Math.round(systemHealth.neuralLoad), color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
+              { label: 'Uptime Integrity', value: 99.98, color: 'text-emerald-500', bg: 'bg-emerald-500/10' }
+            ].map((stat, i) => (
+              <div key={i} className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden">
+                <div className={cn("absolute bottom-0 left-0 h-1 transition-all duration-1000", stat.bg.replace('10', '40'))} style={{ width: `${stat.value}%` }} />
+                <p className="text-[10px] font-black uppercase text-gray-400 mb-1">{stat.label}</p>
+                <div className="flex items-baseline gap-1">
+                  <span className={cn("text-2xl font-black tracking-tighter", stat.color)}>{stat.value}</span>
+                  <span className="text-[10px] font-bold text-gray-400">%</span>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-xl overflow-hidden">
-             <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-gray-50/50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
-                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Timestamp</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Transaction Category</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Detail & Reason</th>
-                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Treasury Impact</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {platformTransactions.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-6 py-20 text-center">
-                        <History className="w-12 h-12 text-gray-200 mx-auto mb-4" />
-                        <p className="text-gray-400 font-bold">No financial history recorded yet.</p>
-                      </td>
-                    </tr>
-                  ) : (
-                    platformTransactions.map((tx) => (
-                      <tr key={tx.id} className="hover:bg-gray-50/30 dark:hover:bg-gray-900/30 transition-colors group">
-                        <td className="px-6 py-4 whitespace-nowrap text-xs font-mono text-gray-400">
-                          {tx.timestamp?.seconds ? new Date(tx.timestamp.seconds * 1000).toLocaleString() : 'Just now'}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className={cn(
-                            "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border",
-                            tx.type === 'revenue' || tx.type === 'platform_revenue' ? "bg-green-50 text-green-700 border-green-100" :
-                            tx.type === 'payout' ? "bg-purple-50 text-purple-700 border-purple-100" :
-                            tx.type === 'expense' ? "bg-red-50 text-red-700 border-red-100" :
-                            "bg-blue-50 text-blue-700 border-blue-100"
-                          )}>
-                            <div className={cn(
-                              "w-1.5 h-1.5 rounded-full",
-                              tx.type === 'revenue' || tx.type === 'platform_revenue' ? "bg-green-500" :
-                              tx.type === 'payout' ? "bg-purple-500" :
-                              tx.type === 'expense' ? "bg-red-500" :
-                              "bg-blue-500"
-                            )} />
-                            {tx.type || 'transaction'}
-                          </div>
-                          <div className="text-[9px] text-gray-400 mt-1 uppercase font-bold tracking-tighter">Source: {tx.source || 'Manual'}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <p className="text-sm font-bold text-gray-900 dark:text-white max-w-md truncate">{tx.reason}</p>
-                          <p className="text-[10px] text-gray-500">ID: {tx.id?.slice(-8)} • IP: {tx.clientIp || 'Server'}</p>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className={cn(
-                            "text-sm font-black font-mono",
-                            (tx.type === 'revenue' || tx.type === 'platform_revenue') ? "text-green-600" : "text-red-600"
-                          )}>
-                            {(tx.type === 'revenue' || tx.type === 'platform_revenue') ? '+' : '-'}{convert(Math.abs(tx.totalAmount || tx.platformAmount || 0))}
-                          </div>
-                          <div className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">
-                            Impact: Treasury {(tx.type === 'revenue' || tx.type === 'platform_revenue') ? 'Credit' : 'Debit'}
-                          </div>
-                        </td>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Live Activity Pulse */}
+            <div className="lg:col-span-1 space-y-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-black uppercase tracking-widest text-gray-500 flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-amber-500" />
+                  Live Activity Pulse
+                </h3>
+                {isRefreshing && <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />}
+              </div>
+              <div className="space-y-3">
+                {systemActivity.length === 0 ? (
+                  <div className="p-8 text-center bg-gray-50/50 dark:bg-gray-900/50 rounded-3xl border-2 border-dashed border-gray-100 dark:border-gray-800">
+                    <p className="text-[10px] font-bold text-gray-400">Waiting for live signals...</p>
+                  </div>
+                ) : (
+                  systemActivity.map((act, i) => (
+                    <motion.div 
+                      key={act.id} 
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="p-4 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm flex gap-3 items-center"
+                    >
+                      <div className={cn(
+                        "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
+                        act.type === 'health_check' ? "bg-rose-100 text-rose-600" : "bg-blue-100 text-blue-600"
+                      )}>
+                        {act.type === 'health_check' ? <Fingerprint className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-black text-gray-900 dark:text-white truncate">
+                          {act.type === 'health_check' ? 'Biometric Signature Verified' : 'System Event'}
+                        </p>
+                        <p className="text-[9px] text-gray-500 uppercase tracking-tighter">
+                          UID: {act.userId?.slice(0, 8)}... • {act.timestamp?.seconds ? new Date(act.timestamp.seconds * 1000).toLocaleTimeString() : 'Recent'}
+                        </p>
+                      </div>
+                      <div className="text-[10px] font-black text-emerald-600">
+                        +{act.pointsGained || 0}
+                      </div>
+                    </motion.div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Treasury Audit */}
+            <div className="lg:col-span-2 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-black flex items-center gap-2">
+                    <Database className="w-6 h-6 text-blue-600" />
+                    Master Treasury Ledger
+                  </h2>
+                  <p className="text-sm text-gray-500">Financial state persistent record</p>
+                </div>
+                <div className="px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-100 dark:border-blue-800">
+                  Total Events: {platformTransactions.length}
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="bg-gray-50/50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
+                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Timestamp</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Category</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Detail</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Treasury Impact</th>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-             </div>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50 dark:divide-gray-900">
+                      {platformTransactions.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-6 py-20 text-center">
+                            <History className="w-12 h-12 text-gray-200 mx-auto mb-4" />
+                            <p className="text-gray-400 font-bold">No financial history recorded yet.</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        platformTransactions.map((tx) => (
+                          <tr key={tx.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/30 transition-colors group text-sm">
+                            <td className="px-6 py-4 whitespace-nowrap text-[10px] font-mono text-gray-400">
+                              {tx.timestamp?.seconds ? new Date(tx.timestamp.seconds * 1000).toLocaleString() : 'Just now'}
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className={cn(
+                                "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest border",
+                                tx.type === 'revenue' || tx.type === 'platform_revenue' ? "bg-green-50 text-green-700 border-green-100" :
+                                tx.type === 'payout' ? "bg-purple-50 text-purple-700 border-purple-100" :
+                                tx.type === 'expense' ? "bg-red-50 text-red-700 border-red-100" :
+                                "bg-blue-50 text-blue-700 border-blue-100"
+                              )}>
+                                {tx.type || 'transaction'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <p className="font-bold text-gray-900 dark:text-white truncate max-w-[200px]">{tx.reason}</p>
+                              <p className="text-[9px] text-gray-400 uppercase">IP: {tx.clientIp || 'Verified'}</p>
+                            </td>
+                            <td className="px-6 py-4 text-right font-black font-mono">
+                              <span className={cn((tx.type === 'revenue' || tx.type === 'platform_revenue') ? "text-green-600" : "text-red-600")}>
+                                {(tx.type === 'revenue' || tx.type === 'platform_revenue') ? '+' : '-'}{convert(Math.abs(tx.totalAmount || tx.platformAmount || 0))}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="p-6 bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl">

@@ -33,11 +33,19 @@ const AdsDashboard = lazy(() => import("./pages/AdsDashboard"));
 const GeminiLab = lazy(() => import("./pages/GeminiLab"));
 const Membership = lazy(() => import("./pages/Membership"));
 
+import HealthChecker from "./components/HealthChecker";
+
 const LoadingFallback = () => (
   <div className="flex items-center justify-center min-h-screen">
     <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
   </div>
 );
+
+const GlobalHealthWrapper = () => {
+  const { currentUser, isMfaVerified } = useAuth();
+  // Only show health check if logged in and passed MFA/2FA
+  return currentUser && isMfaVerified ? <HealthChecker /> : null;
+};
 
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const { currentUser, userData, loading } = useAuth();
@@ -101,6 +109,7 @@ export default function App() {
         <RevenueProvider>
           <HealthProvider>
             <HashRouter>
+              <GlobalHealthWrapper />
               <WakeLockHandler />
               <Analytics />
               <Suspense fallback={<LoadingFallback />}>

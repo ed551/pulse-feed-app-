@@ -30,7 +30,8 @@ import {
   Clock,
   Timer,
   Calendar,
-  Globe
+  Globe,
+  Activity
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useNavigate } from "react-router-dom";
@@ -75,9 +76,41 @@ export default function Settings() {
   const [timeFormat, setTimeFormat] = useState(userData?.timeFormat || "24h");
   const [dateFormat, setDateFormat] = useState(userData?.dateFormat || "DD/MM/YYYY");
   const [isSportsWatchPrecise, setIsSportsWatchPrecise] = useState(userData?.isSportsWatchPrecise ?? true);
+  const [healthInterval, setHealthInterval] = useState(() => localStorage.getItem('pulse_health_interval') || 'daily');
+  const [newsInterval, setNewsInterval] = useState(() => localStorage.getItem('pulse_news_interval') || '1h');
+
+  const updateHealthInterval = (val: string) => {
+    setHealthInterval(val);
+    localStorage.setItem('pulse_health_interval', val);
+  };
+
+  const updateNewsInterval = (val: string) => {
+    setNewsInterval(val);
+    localStorage.setItem('pulse_news_interval', val);
+  };
 
   // New settings states
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>((userData?.theme as 'light' | 'dark' | 'system') || "system");
+  const [activeSessions, setActiveSessions] = useState<string[]>(userData?.activeSessions || []);
+
+  useEffect(() => {
+    if (userData?.activeSessions) {
+      setActiveSessions(userData.activeSessions);
+    }
+  }, [userData?.activeSessions]);
+
+  const clearOtherSessions = async () => {
+    if (!currentUser) return;
+    try {
+      const userRef = doc(db, 'users', currentUser.uid);
+      const mySessionId = sessionStorage.getItem('pulse_session_id');
+      await updateDoc(userRef, {
+        activeSessions: mySessionId ? [mySessionId] : []
+      });
+    } catch (err) {
+      console.error('Failed to clear sessions:', err);
+    }
+  };
   const [contentFilters, setContentFilters] = useState(userData?.contentFilters || {
     sensitiveContent: false,
     spamFilter: true,
@@ -271,6 +304,123 @@ export default function Settings() {
   };
 
   const sections = [
+    {
+      id: 'health',
+      title: 'Health Engine',
+      description: 'Daily biometric wellness check-ins and community health.',
+      icon: <Activity className="w-5 h-5 text-rose-500" />,
+      content: (
+        <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="p-6 bg-rose-50/30 dark:bg-rose-900/10 rounded-[2rem] border border-rose-100 dark:border-rose-900/30">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 bg-rose-100 dark:bg-rose-900/30 rounded-2xl flex items-center justify-center text-rose-600">
+                <Activity className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-black text-gray-900 dark:text-white tracking-tight">Community Health & News</h3>
+                <p className="text-xs text-gray-500">Manage your wellness check-ins and delivery frequency.</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm">
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white">Check-in Interval</h4>
+                  <p className="text-[10px] text-gray-500">Frequency of fingerprint prompts</p>
+                </div>
+                <select 
+                  value={healthInterval}
+                  onChange={(e) => updateHealthInterval(e.target.value)}
+                  className="bg-gray-50 dark:bg-gray-900 border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-rose-500"
+                >
+                  <option value="30m">Every 30 Minutes</option>
+                  <option value="1h">Every 1 Hour</option>
+                  <option value="2h">Every 2 Hours</option>
+                  <option value="3h">Every 3 Hours</option>
+                  <option value="4h">Every 4 Hours</option>
+                  <option value="5h">Every 5 Hours</option>
+                  <option value="6h">Every 6 Hours</option>
+                  <option value="12h">Every 12 Hours</option>
+                  <option value="daily">Daily (Standard)</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm">
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white">News Delivery</h4>
+                  <p className="text-[10px] text-gray-500">How often the feed refreshes</p>
+                </div>
+                <select 
+                  value={newsInterval}
+                  onChange={(e) => updateNewsInterval(e.target.value)}
+                  className="bg-gray-50 dark:bg-gray-900 border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="30m">Every 30 Minutes</option>
+                  <option value="1h">Every Hour</option>
+                  <option value="6h">Every 6 Hours</option>
+                  <option value="daily">Daily Digestion</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm">
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white">Biometric Precision</h4>
+                  <p className="text-[10px] text-gray-500">Neural texture analysis level</p>
+                </div>
+                <button className="w-10 h-5 bg-rose-600 rounded-full flex items-center px-1">
+                  <div className="w-3 h-3 bg-white rounded-full ml-auto" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="mt-6 p-4 bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-rose-200 dark:border-rose-800">
+              <p className="text-[10px] text-rose-600 dark:text-rose-400 font-bold leading-relaxed text-center italic">
+                VALUE DRIVEN DELIVERY: Consistent check-ins and reading community news contributes to the "Wellness Architecture".
+              </p>
+            </div>
+          </div>
+
+          <div className="p-6 bg-indigo-50/30 dark:bg-indigo-900/10 rounded-[2rem] border border-indigo-100 dark:border-indigo-900/30">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center text-indigo-600">
+                <Shield className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-black text-gray-900 dark:text-white tracking-tight">Session Architecture</h3>
+                <p className="text-xs text-gray-500">Security protocol: Max 2 concurrent sessions.</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm">
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white">Active Sessions</h4>
+                  <p className="text-[10px] text-gray-500">{activeSessions.length} of 2 slots occupied</p>
+                </div>
+                <div className="flex gap-1">
+                  {Array.from({ length: 2 }).map((_, i) => (
+                    <div key={i} className={cn(
+                      "w-3 h-3 rounded-full",
+                      i < activeSessions.length ? "bg-indigo-500 animate-pulse" : "bg-gray-200 dark:bg-gray-700"
+                    )} />
+                  ))}
+                </div>
+              </div>
+
+              {activeSessions.length > 1 && (
+                <button 
+                  onClick={clearOtherSessions}
+                  className="w-full py-3 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/20"
+                >
+                  Terminate Other Sessions
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )
+    },
+
     {
       id: 'personal',
       title: t('personal_info'),

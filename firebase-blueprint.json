@@ -36,7 +36,12 @@
         "eventsRevenue": { "type": "number", "description": "The user's revenue from event participation" },
         "bio": { "type": "string", "description": "The user's bio" },
         "badges": { "type": "array", "items": { "$ref": "#/entities/Badge" }, "description": "The user's earned badges" },
-        "createdAt": { "type": "string", "format": "date-time", "description": "When the user was created" }
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the user was created" },
+        "activeSessions": { 
+          "type": "array", 
+          "items": { "type": "string" }, 
+          "description": "List of active session identifiers. Limited to 2 for security." 
+        }
       },
       "required": ["uid", "email", "role", "createdAt"]
     },
@@ -260,6 +265,49 @@
       },
       "required": ["uid", "displayName"]
     },
+    "Activity": {
+      "title": "Activity",
+      "description": "System or user activity log",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "action": { "type": "string" },
+        "target": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "metadata": { "type": "object" }
+      },
+      "required": ["action", "timestamp"]
+    },
+    "PlatformTransaction": {
+      "title": "PlatformTransaction",
+      "description": "A transaction affecting the platform treasury",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["revenue", "expense", "payout", "refund"] },
+        "source": { "type": "string" },
+        "userAmount": { "type": "number" },
+        "platformAmount": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "reason": { "type": "string" },
+        "userId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "totalAmount", "timestamp"]
+    },
+    "Withdrawal": {
+      "title": "Withdrawal",
+      "description": "A withdrawal request from a user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "method": { "type": "string" },
+        "reference": { "type": "string" }
+      },
+      "required": ["userId", "amount", "status", "timestamp"]
+    },
     "PlatformStats": {
       "title": "PlatformStats",
       "description": "Global platform financial and engagement statistics",
@@ -314,6 +362,18 @@
     "users_public/{userId}": {
       "schema": "#/entities/UserPublic",
       "description": "Stores public user profiles"
+    },
+    "activity/{activityId}": {
+      "schema": "#/entities/Activity",
+      "description": "Stores system and user activity logs"
+    },
+    "platform_transactions/{txId}": {
+      "schema": "#/entities/PlatformTransaction",
+      "description": "Stores platform treasury transactions"
+    },
+    "withdrawals/{withdrawalId}": {
+      "schema": "#/entities/Withdrawal",
+      "description": "Stores withdrawal requests"
     },
     "platform/stats": {
       "schema": "#/entities/PlatformStats",

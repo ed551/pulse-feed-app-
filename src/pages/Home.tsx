@@ -27,6 +27,8 @@ import { generateContentWithRetry } from "../lib/ai";
 import { Modality } from "@google/genai";
 import { saveInsight } from "../lib/insights";
 import { useTranslation } from "../lib/i18n";
+import HealthChecker from "../components/HealthChecker";
+import NewsFeed from "../components/NewsFeed";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -372,6 +374,10 @@ export default function Home() {
 
   return (
     <div className="space-y-6 pb-20">
+      <div className="mx-6">
+        <NewsFeed />
+      </div>
+
       {dbStatus === 'offline' && (
         <div className="mx-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-2xl flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4">
           <div className="flex items-center gap-3">
