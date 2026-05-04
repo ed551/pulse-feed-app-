@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { moderateContent } from '../services/moderationService';
 import { useNotifications } from '../hooks/useNotifications';
 import { generateContentWithRetry } from '../lib/ai';
+import { generateAvatar } from '../services/imageService';
 import { cn } from '../lib/utils';
 
 interface CreatePostModalProps {
@@ -27,6 +28,7 @@ export default function CreatePostModal({ type: initialType, onClose }: CreatePo
   const [videoUrl, setVideoUrl] = useState('');
   const [isPosting, setIsPosting] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   // Poll State
@@ -77,6 +79,25 @@ export default function CreatePostModal({ type: initialType, onClose }: CreatePo
       setError(err.message || "AI generation failed. Please try again.");
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleAiGenerateImage = async () => {
+    if (!content.trim() && !title.trim()) {
+      setError("Please add a title or content to describe the image.");
+      return;
+    }
+    setIsGeneratingImage(true);
+    setError(null);
+    try {
+      const prompt = `A professional, high-quality social media illustration for: ${title || content}. Aesthetic: Modern, minimalist, and vibrant. Concept: ${category}.`;
+      const imageUrl = await generateAvatar(prompt);
+      setImages(prev => [...prev, imageUrl]);
+      showNotification("AI Image Generated!", { body: "A custom visual has been added to your post." });
+    } catch (err: any) {
+      setError(err.message || "Failed to generate AI image.");
+    } finally {
+      setIsGeneratingImage(false);
     }
   };
 
@@ -440,6 +461,23 @@ export default function CreatePostModal({ type: initialType, onClose }: CreatePo
                 >
                   <Image className="w-6 h-6" />
                   <span className="text-[10px] font-bold uppercase mt-1">Add</span>
+                </button>
+                <button 
+                  onClick={handleAiGenerateImage}
+                  disabled={isGeneratingImage || (!content.trim() && !title.trim())}
+                  className="w-20 h-20 rounded-xl border-2 border-dashed border-indigo-200 dark:border-indigo-800/50 flex flex-col items-center justify-center text-indigo-400 hover:text-indigo-500 hover:border-indigo-500 transition-all group overflow-hidden relative"
+                >
+                  <div className="absolute inset-0 bg-indigo-500/5 group-hover:bg-indigo-500/10 transition-colors" />
+                  {isGeneratingImage ? <Loader2 className="w-6 h-6 animate-spin" /> : <Brain className="w-6 h-6" />}
+                  <span className="text-[10px] font-bold uppercase mt-1 z-10">AI Imagine</span>
+                  {isGeneratingImage && (
+                    <motion.div 
+                      className="absolute bottom-0 left-0 h-1 bg-indigo-500"
+                      initial={{ width: 0 }}
+                      animate={{ width: "100%" }}
+                      transition={{ duration: 5, repeat: Infinity }}
+                    />
+                  )}
                 </button>
               </div>
               <input 

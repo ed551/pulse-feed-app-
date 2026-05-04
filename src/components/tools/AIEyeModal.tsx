@@ -6,6 +6,7 @@ import { Modality } from '@google/genai';
 import { db } from '../../lib/firebase';
 import { setDoc, doc, arrayUnion } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
+import { speak } from '../../lib/speech';
 import { cn } from '../../lib/utils';
 
 interface AIEyeModalProps {
@@ -148,9 +149,8 @@ export default function AIEyeModal({ onClose }: AIEyeModalProps) {
       }
     } catch (error) {
       console.error("TTS Error:", error);
-      const msg = new SpeechSynthesisUtterance(text);
-      msg.onend = () => setIsSpeaking(false);
-      window.speechSynthesis.speak(msg);
+      speak(text);
+      setIsSpeaking(false);
     }
   };
 

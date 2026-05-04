@@ -29,6 +29,7 @@ import { saveInsight } from "../lib/insights";
 import { useTranslation } from "../lib/i18n";
 import HealthChecker from "../components/HealthChecker";
 import NewsFeed from "../components/NewsFeed";
+import GeminiPulse from "../components/GeminiPulse";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -449,6 +450,8 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      <GeminiPulse />
 
       {/* Profit Hub - ACTIVE EARNING CENTER */}
       <motion.div 

@@ -19,7 +19,12 @@ import {
   MicOff,
   Volume2,
   VolumeX,
-  Phone
+  Phone,
+  ScanSearch,
+  Search,
+  Info,
+  ExternalLink,
+  Target
 } from 'lucide-react';
 import { GoogleGenAI, Modality } from "@google/genai";
 import { generateContentWithRetry } from '../lib/ai';
@@ -47,6 +52,41 @@ export default function AIAssistant() {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isDeepDive, setIsDeepDive] = useState(false);
+
+  const handleScanPage = async () => {
+    setIsLoading(true);
+    try {
+      const mainContent = document.querySelector('main') || document.body;
+      const text = mainContent.innerText.substring(0, 5000); // Sample limit
+      
+      const userMsg: Message = {
+        role: 'user',
+        text: `[System Command: Scan Current Page]`,
+        timestamp: Date.now()
+      };
+      setMessages(prev => [...prev, userMsg]);
+
+      const response = await generateContentWithRetry({
+        model: "gemini-3.1-flash-live-preview", // High quality for analysis
+        contents: `Analyze this web page content: "${text}". 
+        Provide a 3-bullet summary and 2 actionable insights for the user based on their current goals in Pulse Feeds.`,
+        config: {
+          tools: [{ googleSearch: {} }] as any
+        }
+      });
+
+      setMessages(prev => [...prev, {
+        role: 'model',
+        text: response.text || "Analysis failed.",
+        timestamp: Date.now()
+      }]);
+    } catch (err) {
+      console.error("Scan error", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const scrollRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const dragControls = useDragControls();
@@ -339,14 +379,22 @@ export default function AIAssistant() {
                   <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold">Master AI Coach</h3>
+                  <h3 className="text-sm font-bold">Pulse AI Navigator</h3>
                   <div className="flex items-center gap-1">
                     <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-                    <span className="text-[10px] opacity-80">Ready to Assist</span>
+                    <span className="text-[10px] opacity-80">Intelligence Engine</span>
                   </div>
                 </div>
               </div>
               <div className="flex items-center gap-1">
+                <button 
+                  onClick={handleScanPage}
+                  disabled={isLoading}
+                  className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+                  title="Scan Current Page"
+                >
+                  <ScanSearch className={cn("w-4 h-4", isLoading && "animate-pulse")} />
+                </button>
                 <button 
                   onClick={isLiveMode ? stopVoiceSession : startVoiceSession}
                   disabled={isConnecting}

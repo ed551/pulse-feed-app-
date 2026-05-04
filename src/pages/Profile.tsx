@@ -402,6 +402,13 @@ export default function Profile() {
               <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center">
                 <Activity className="w-3 h-3 mr-1" /> {t('active_status')}
               </span>
+              <button 
+                onClick={() => window.dispatchEvent(new CustomEvent('trigger-wellness-scan'))}
+                className="bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center hover:bg-rose-200 dark:hover:bg-rose-900/50 transition-colors"
+                title="Trigger Wellness Scan"
+              >
+                <Fingerprint className="w-3 h-3 mr-1" /> Wellness Check
+              </button>
             </div>
           </div>
           

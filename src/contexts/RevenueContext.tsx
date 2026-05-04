@@ -263,6 +263,19 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
             serverSecret: "pulse-feeds-server-secret-2026"
           }).catch(() => {}); // Ignore errors here to keep interval smooth
 
+          // Log Platform Transaction for Audit Trail (Active Time)
+          await addDoc(collection(db, 'platform_transactions'), {
+            type: 'revenue',
+            source: 'active_time',
+            userAmount: userValue,
+            platformAmount: platformValue,
+            totalAmount: totalValue,
+            reason: "Active Usage Rewards (Sync)",
+            userId: currentUser.uid,
+            timestamp: serverTimestamp(),
+            serverSecret: "pulse-feeds-server-secret-2026"
+          }).catch(() => {});
+
           setTotalEarnedToday(prev => prev + userPoints);
           console.log(`Earned ${userPoints} point ($${userValue}) for being active! Platform earned $${platformValue}`);
         } catch (error) {

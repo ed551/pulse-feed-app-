@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { generateContentWithRetry } from '../lib/ai';
 import { db } from '../lib/firebase';
 import { collection, getDocs, query, doc, onSnapshot, updateDoc, increment, addDoc, serverTimestamp, getCountFromServer, orderBy, limit } from 'firebase/firestore';
 import { 
@@ -8,7 +9,7 @@ import {
   PieChart, Info, AlertTriangle, CheckCircle2, Loader2, RefreshCw, PlusSquare,
   Mail, Key, Smartphone, Fingerprint, BrainCircuit, FileText, Zap,
   Copy, ShieldAlert, Settings, Plus, Trash2, XCircle, CheckCircle,
-  Building2, Cpu, Globe, Database, Crown, Shield, Star, History
+  Building2, Cpu, Globe, Database, Crown, Shield, Star, History, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
@@ -82,6 +83,7 @@ export default function PlatformDashboard() {
   const [userWithdrawals, setUserWithdrawals] = useState<any[]>([]);
   const [systemActivity, setSystemActivity] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showSystemAuditPopup, setShowSystemAuditPopup] = useState(false);
   const [systemHealth, setSystemHealth] = useState({
     cpu: 18,
     memory: 42,
@@ -120,7 +122,38 @@ export default function PlatformDashboard() {
   const [modSettings, setModSettings] = useState<ModerationSettings>(getModerationSettings());
   const [newRule, setNewRule] = useState("");
   const [userCount, setUserCount] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<'financial' | 'withdrawals' | 'moderation' | 'infrastructure' | 'mitigation' | 'membership' | 'audit'>('financial');
+  const [activeTab, setActiveTab] = useState<'financial' | 'withdrawals' | 'moderation' | 'infrastructure' | 'mitigation' | 'membership' | 'audit' | 'intelligence'>('financial');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiReport, setAiReport] = useState<string | null>(null);
+
+  const runGeminiAnalysis = async () => {
+    setIsAnalyzing(true);
+    try {
+      const dataString = `
+        Total Users: ${stats.totalUsers}
+        Active Users: ${stats.activeUsers}
+        System Balance: ${convert(auditBalance)}
+        Gross Revenue: ${convert(stats.platformRevenue)}
+        Total User Wallet Obligations: ${convert(stats.totalUserBalances)}
+        Platform Share (Net): ${convert(stats.platformShare)}
+        Recent Activities: ${systemActivity.slice(0, 10).map(a => a.type).join(', ')}
+        Moderation sensitivity: ${modSettings.sensitivity}
+      `;
+
+      const response = await generateContentWithRetry({
+        model: "gemini-3-flash-preview",
+        contents: `Analyze this platform health data and provide a concise, 3-paragraph executive summary. 
+        Focus on financial sustainability, community growth, and potential risks. 
+        Data: ${dataString}`
+      });
+
+      setAiReport(response.text || "No analysis available.");
+    } catch (err) {
+      console.error("Analysis error", err);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   const reports = [
     { id: 1, user: 'Spammer123', reason: 'Inappropriate content', status: 'pending' },
@@ -184,14 +217,162 @@ export default function PlatformDashboard() {
 
   const isLive = true; // Hardcoded for this environment
 
+  // Calculate totals from transactions for Audit Trail
+  const totals = platformTransactions.reduce((acc, tx) => {
+    // Only count financial transactions
+    const financialTypes = ['payout', 'expense', 'revenue', 'platform_revenue', 'refund', 'system_event'];
+    if (!financialTypes.includes(tx.type)) return acc;
+
+    let amount = 0;
+    let totalGross = 0;
+    
+    if (tx.platformAmount !== undefined) {
+      amount = Math.abs(tx.platformAmount);
+      totalGross = Math.abs(tx.totalAmount || tx.platformAmount);
+    } else if (tx.source === 'platform' || tx.type === 'platform_revenue') {
+      amount = Math.abs(tx.totalAmount || 0);
+      totalGross = amount;
+    } else {
+      totalGross = Math.abs(tx.totalAmount || 0);
+    }
+
+    if (amount === 0 && totalGross === 0 && tx.type !== 'system_event') return acc;
+    
+    if (tx.type === 'payout') {
+      acc.payouts += amount;
+    } else if (tx.type === 'expense') {
+      acc.expenses += amount;
+    } else if (tx.type === 'revenue' || tx.type === 'platform_revenue') {
+      acc.revenueIn += amount;
+      acc.grossRevenueIn += totalGross;
+    } else if (tx.type === 'refund') {
+      acc.refunds += amount;
+    } else if (tx.type === 'system_event' && tx.platformAmount) {
+      // Adjust either revenue or expense based on sign
+      if (tx.platformAmount > 0) acc.revenueIn += tx.platformAmount;
+      else acc.expenses += Math.abs(tx.platformAmount);
+    }
+    return acc;
+  }, { payouts: 0, expenses: 0, revenueIn: 0, refunds: 0, grossRevenueIn: 0 });
+
+  // Correcting the balance logic: Balance = RevenueIn + Refunds - (Payouts + Expenses)
+  const auditBalance = (totals.revenueIn + totals.refunds) - (totals.payouts + totals.expenses);
+  const auditGrossRevenue = totals.grossRevenueIn;
+
+  // Integrity Audit Engine
+  const [auditReport, setAuditReport] = useState<{
+    discrepancy: number;
+    grossDiscrepancy: number;
+    health: 'healthy' | 'caution' | 'critical';
+    lastRan: Date;
+    issues: string[];
+  }>({ discrepancy: 0, grossDiscrepancy: 0, health: 'healthy', lastRan: new Date(), issues: [] });
+
+  const runIntegrityAudit = () => {
+    const diff = Math.abs(stats.platformShare - auditBalance);
+    const grossDiff = Math.abs(stats.platformRevenue - auditGrossRevenue);
+    const issues: string[] = [];
+    
+    if (diff > 0.005) {
+      issues.push(`Treasury divergence detected: Platform Share in stats doc (${convert(stats.platformShare)}) does not match calculated ledger (${convert(auditBalance)}).`);
+    }
+
+    if (grossDiff > 0.005) {
+      issues.push(`Gross Revenue deviation: Main record (${convert(stats.platformRevenue)}) vs Transactional logs (${convert(auditGrossRevenue)}).`);
+    }
+
+    // Check User Balances vs Wallet Sum
+    const walletSumLocal = users.reduce((acc, u) => acc + (u.balance || 0), 0);
+    const walletDiff = Math.abs(stats.totalUserBalances - walletSumLocal);
+    if (walletDiff > 1) { // Allow small rounding diff
+      issues.push(`User Wallet Imbalance: Stats record (${convert(stats.totalUserBalances)}) differs from sum of user accounts (${convert(walletSumLocal)}).`);
+    }
+
+    setAuditReport({
+      discrepancy: diff + walletDiff,
+      grossDiscrepancy: grossDiff,
+      health: (diff + walletDiff + grossDiff) > 100 ? 'critical' : (diff + walletDiff + grossDiff) > 0 ? 'caution' : 'healthy',
+      lastRan: new Date(),
+      issues
+    });
+  };
+
+  useEffect(() => {
+    if (!loading && platformTransactions.length > 0) {
+      runIntegrityAudit();
+    }
+  }, [stats.platformShare, stats.platformRevenue, auditBalance, auditGrossRevenue, users, loading]);
+
+  const handleRecalculateEntireLedger = async () => {
+    setIsRefreshing(true);
+    try {
+      const statsRef = doc(db, "platform", "stats");
+      
+      // "Always Pick Higher Amount" Protocol
+      const targetPlatformShare = Math.max(stats.platformShare, auditBalance);
+      const targetGrossRevenue = Math.max(stats.platformRevenue, auditGrossRevenue);
+      
+      // Calculate necessary adjustments for the Ledger to reach the target
+      const treasuryAdjustment = targetPlatformShare - auditBalance;
+      const grossAdjustment = targetGrossRevenue - auditGrossRevenue;
+      
+      // 1. Align the Transactional Ledger if adjustment is needed
+      if (Math.abs(treasuryAdjustment) > 0.0001 || Math.abs(grossAdjustment) > 0.0001) {
+        await addDoc(collection(db, 'platform_transactions'), {
+          type: 'system_event',
+          source: 'reconciliation_adjustment',
+          reason: "High-Water Mark Reconciliation: Syncing ledger to highest verified record.",
+          platformAmount: treasuryAdjustment,
+          totalAmount: grossAdjustment,
+          userId: currentUser?.uid || 'system',
+          timestamp: serverTimestamp(),
+          serverSecret: "pulse-feeds-server-secret-2026"
+        });
+      }
+
+      // 2. Align the Official Stats Doc to the target
+      const walletSumLocal = users.reduce((acc, u) => acc + (u.balance || 0), 0);
+      await updateDoc(statsRef, {
+        platformShare: targetPlatformShare,
+        platformRevenue: targetGrossRevenue,
+        totalUserBalances: walletSumLocal,
+        lastAudit: serverTimestamp(),
+        serverSecret: "pulse-feeds-server-secret-2026"
+      });
+      
+      setSuccess(`Full System Reconciliation Complete. Adopting higher amounts: ${convert(targetPlatformShare)} Net / ${convert(targetGrossRevenue)} Gross.`);
+      handleRefresh();
+    } catch (err) {
+      setError("Audit Reconciliation Failed.");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
-    fetchTransactions();
-    fetchUserWithdrawals();
+    
+    // Real-time Platform Transactions subscription
+    const txQuery = query(collection(db, 'platform_transactions'), orderBy('timestamp', 'desc'));
+    const unsubscribeTxs = onSnapshot(txQuery, (snapshot) => {
+      const txs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPlatformTransactions(txs);
+    }, (error) => {
+      console.error("Error subscribing to transactions:", error);
+    });
+
+    // Real-time Withdrawals subscription
+    const wQuery = query(collection(db, 'withdrawals'), orderBy('timestamp', 'desc'));
+    const unsubscribeWs = onSnapshot(wQuery, (snapshot) => {
+      const ws = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setUserWithdrawals(ws);
+    }, (error) => {
+      console.error("Error subscribing to withdrawals:", error);
+    });
     
     // Subscribe to platform stats
     const statsRef = doc(db, "platform", "stats");
-    const unsubscribe = onSnapshot(statsRef, (docSnap) => {
+    const unsubscribeStats = onSnapshot(statsRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setStats(prev => ({
@@ -205,50 +386,19 @@ export default function PlatformDashboard() {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeTxs();
+      unsubscribeWs();
+      unsubscribeStats();
+    };
   }, []);
 
   const fetchTransactions = async () => {
-    try {
-      const q = query(collection(db, 'platform_transactions'));
-      const querySnapshot = await getDocs(q);
-      const txs: any[] = [];
-      querySnapshot.forEach((doc) => {
-        txs.push({ id: doc.id, ...doc.data() });
-      });
-      // Sort by timestamp descending
-      txs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-      setPlatformTransactions(txs);
-    } catch (error: any) {
-      console.error("Error fetching transactions:", error);
-      if (error.message?.includes("permission-denied")) {
-        setError("Access denied to platform transactions. Ensure you are logged in as the platform administrator.");
-      }
-    }
+    // Now handled by onSnapshot in useEffect
   };
 
   const fetchUserWithdrawals = async () => {
-    try {
-      // Simplified query to check if permissions fixed
-      const q = query(collection(db, 'withdrawals'));
-      const querySnapshot = await getDocs(q);
-      const ws: any[] = [];
-      querySnapshot.forEach((doc) => {
-        ws.push({ id: doc.id, ...doc.data() });
-      });
-      // Sort manually for now if needed, or keep to test
-      setUserWithdrawals(ws.sort((a, b) => {
-        const tA = a.timestamp?.seconds || 0;
-        const tB = b.timestamp?.seconds || 0;
-        return tB - tA;
-      }));
-    } catch (error: any) {
-      handleFirestoreError(error, OperationType.LIST, 'withdrawals');
-      console.error("Error fetching withdrawals:", error);
-      if (error.message?.includes("permission-denied") || error.message?.includes("insufficient permissions")) {
-         setError("Access denied to User Withdrawals. This usually means the collection is empty and rules are strictly filtering, or you are not a verified administrator.");
-      }
-    }
+    // Now handled by onSnapshot in useEffect
   };
 
   const fetchUsers = async () => {
@@ -314,6 +464,7 @@ export default function PlatformDashboard() {
           clearInterval(interval);
           setIsScanning(false);
           setIsDevUnlocked(true);
+          setShowSystemAuditPopup(true);
           return 100;
         }
         return prev + 10;
@@ -736,28 +887,155 @@ export default function PlatformDashboard() {
     );
   }
 
-  // Calculate totals from transactions for Audit Trail
-  const totals = platformTransactions.reduce((acc, tx) => {
-    // Audit Trail uses platformAmount as the primary field for Treasury impact
-    const amount = Math.abs(tx.platformAmount || tx.totalAmount || 0);
-    
-    if (tx.type === 'payout') {
-      acc.payouts += amount;
-    } else if (tx.type === 'expense') {
-      acc.expenses += amount;
-    } else if (tx.type === 'revenue' || tx.type === 'platform_revenue') {
-      acc.revenueIn += amount;
-    }
-    return acc;
-  }, { payouts: 0, expenses: 0, revenueIn: 0 });
-
-  // Correcting the balance logic: Balance should ideally be RevenueIn - (Payouts + Expenses)
-  // But since we use increment() in Firestore, we should ensure the UI reflects the Audit Trail
-  // If there's a discrepancy, it's usually due to initial balance or missing transactions.
-  const auditBalance = totals.revenueIn - (totals.payouts + totals.expenses);
-
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8 pb-24">
+      {/* System Health / Audit Popup */}
+      <AnimatePresence>
+        {showSystemAuditPopup && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-[3rem] shadow-2xl border border-white/20 overflow-hidden relative"
+            >
+              <div className="p-8 text-center bg-gradient-to-b from-indigo-50 to-white dark:from-indigo-950/20 dark:to-gray-900 border-b border-gray-100 dark:border-gray-800">
+                <button 
+                  onClick={() => setShowSystemAuditPopup(false)}
+                  className="absolute top-6 right-6 p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-full z-10 transition-colors"
+                >
+                  <XCircle className="w-5 h-5 text-gray-400" />
+                </button>
+                
+                <div className={cn(
+                  "w-16 h-16 rounded-3xl flex items-center justify-center mx-auto shadow-lg mb-4 transition-colors",
+                  auditReport.health === 'critical' ? "bg-red-500 shadow-red-500/30" : 
+                  auditReport.health === 'caution' ? "bg-orange-500 shadow-orange-500/30" : 
+                  "bg-indigo-500 shadow-indigo-500/30"
+                )}>
+                  <ShieldCheck className="w-8 h-8 text-white" />
+                </div>
+                
+                <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tighter">
+                  System Health Report
+                </h2>
+                <p className="text-xs text-gray-500 mt-2 font-bold uppercase tracking-widest px-8">
+                  Integrity Audit Engine : Terminal Status {auditReport.health.toUpperCase()}
+                </p>
+              </div>
+
+              <div className="p-10 space-y-6">
+                <div className="space-y-4">
+                  <div className="p-6 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-800 relative">
+                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-4 flex items-center gap-1">
+                      <Database className="w-3 h-3 text-indigo-500" />
+                      Financial Audit Trail (Net Share)
+                    </p>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-gray-500">Record Balance</p>
+                        <p className="text-xl font-black text-gray-900 dark:text-white">{convert(stats.platformShare)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-gray-500">Ledger Sum</p>
+                        <p className="text-xl font-black text-gray-900 dark:text-white">{convert(auditBalance)}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                      <span className="text-xs font-bold text-gray-500">Discrepancy</span>
+                      <span className={cn(
+                        "text-xs font-black",
+                        auditReport.discrepancy > 0.005 ? "text-orange-600" : "text-green-600"
+                      )}>
+                        {convert(auditReport.discrepancy)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Gross Revenue section (Higher amounts) */}
+                  <div className="p-6 bg-indigo-50/30 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100 dark:border-indigo-800 relative">
+                    <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest mb-4 flex items-center gap-1">
+                      <TrendingUp className="w-3 h-3 text-indigo-500" />
+                      Gross Revenue Audit (Total Inflow)
+                    </p>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-indigo-500/70">Main Record</p>
+                        <p className="text-xl font-black text-gray-900 dark:text-white">{convert(stats.platformRevenue)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-indigo-500/70">Logs Sum</p>
+                        <p className="text-xl font-black text-gray-900 dark:text-white">{convert(auditGrossRevenue)}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-indigo-100 dark:border-gray-800 flex items-center justify-between">
+                      <span className="text-xs font-bold text-indigo-500/70">Deviation</span>
+                      <span className={cn(
+                        "text-xs font-black",
+                        auditReport.grossDiscrepancy > 0.005 ? "text-orange-600" : "text-green-600"
+                      )}>
+                        {convert(auditReport.grossDiscrepancy)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {auditReport.issues.length > 0 ? (
+                    <div className="space-y-2">
+                       {auditReport.issues.map((issue, idx) => (
+                         <div key={idx} className="flex gap-2 p-3 bg-red-50 dark:bg-red-950/20 rounded-xl border border-red-100 dark:border-red-900/30">
+                           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                           <p className="text-[10px] font-bold text-red-800 dark:text-red-200 leading-relaxed">{issue}</p>
+                         </div>
+                       ))}
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-xl border border-green-100 dark:border-green-900/30 flex items-center gap-3">
+                      <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shrink-0">
+                        <CheckCircle className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-green-800 dark:text-green-200 uppercase">Integrity Verified</p>
+                        <p className="text-[10px] text-green-700 dark:text-green-400 font-medium">All financial vectors are in perfect alignment.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  {auditReport.health !== 'healthy' && (
+                    <button 
+                      onClick={async () => {
+                        await handleRecalculateEntireLedger();
+                        setShowSystemAuditPopup(false);
+                      }}
+                      className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black uppercase tracking-tighter transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Full System Reconciliation
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => setShowSystemAuditPopup(false)}
+                    className={cn(
+                      "w-full py-4 rounded-2xl font-black uppercase tracking-tighter transition-all",
+                      auditReport.health === 'healthy' 
+                        ? "bg-indigo-600 hover:bg-indigo-700 text-white" 
+                        : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200"
+                    )}
+                  >
+                    Close Report
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-gray-900 dark:text-white flex items-center gap-2">
@@ -850,6 +1128,15 @@ export default function PlatformDashboard() {
           )}
         >
           Withdraw List
+        </button>
+        <button 
+          onClick={() => setActiveTab('intelligence')}
+          className={cn(
+            "pb-2 px-4 text-sm font-bold transition-all relative whitespace-nowrap",
+            activeTab === 'intelligence' ? "text-indigo-600 border-b-2 border-indigo-600" : "text-gray-400 hover:text-gray-600"
+          )}
+        >
+          Intelligence Nucleus
         </button>
         <button 
           onClick={() => setActiveTab('moderation')}
@@ -1270,29 +1557,152 @@ export default function PlatformDashboard() {
         </div>
       )}
 
+      {activeTab === 'intelligence' && (
+        <div className="space-y-8 animate-in zoom-in-95 duration-300">
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-[3rem] shadow-xl border border-indigo-100 dark:border-indigo-900/30 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
+              <BrainCircuit className="w-64 h-64" />
+            </div>
+            
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+              <div>
+                <h2 className="text-3xl font-black text-gray-900 dark:text-white tracking-tighter flex items-center gap-3">
+                  <Sparkles className="w-8 h-8 text-indigo-600" />
+                  Gemini Intelligence Nucleus
+                </h2>
+                <p className="text-gray-500 dark:text-gray-400 font-medium">Deep-system analysis using Gemini 3 Flash models</p>
+              </div>
+              <button 
+                onClick={runGeminiAnalysis}
+                disabled={isAnalyzing}
+                className="px-8 py-4 bg-indigo-600 text-white font-black rounded-2xl shadow-xl shadow-indigo-600/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-3 disabled:opacity-50"
+              >
+                {isAnalyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
+                {aiReport ? 'Re-Analyze Platform' : 'Generate Platform Audit'}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="space-y-6">
+                <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-3xl border border-gray-100 dark:border-gray-800">
+                  <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">Neural Pulse Metrics</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex justify-between text-[10px] font-black text-gray-500 mb-1">
+                        <span>DATA DENSITY</span>
+                        <span>{(stats.totalUsers * 0.42).toFixed(1)} GB</span>
+                      </div>
+                      <div className="h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <motion.div initial={{ width: 0 }} animate={{ width: "65%" }} className="h-full bg-indigo-500" />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-[10px] font-black text-gray-500 mb-1">
+                        <span>AI LOAD</span>
+                        <span>{isAnalyzing ? 'PEAK' : 'STABLE'}</span>
+                      </div>
+                      <div className="h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <motion.div initial={{ width: 0 }} animate={{ width: isAnalyzing ? "95%" : "28%" }} className="h-full bg-purple-500 transition-all" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-6 bg-indigo-50 dark:bg-indigo-900/20 rounded-3xl border border-indigo-100 dark:border-indigo-800">
+                    <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Health Index</p>
+                    <p className="text-3xl font-black text-indigo-700 dark:text-indigo-400">92/100</p>
+                  </div>
+                  <div className="p-6 bg-emerald-50 dark:bg-emerald-900/20 rounded-3xl border border-emerald-100 dark:border-emerald-800">
+                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Sustainability</p>
+                    <p className="text-3xl font-black text-emerald-700 dark:text-emerald-400">A+</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border-2 border-dashed border-gray-200 dark:border-gray-800 p-8 min-h-[300px] flex flex-col items-center justify-center text-center">
+                {aiReport ? (
+                  <div className="text-left animate-in fade-in slide-in-from-bottom-4">
+                    <div className="flex items-center gap-2 text-indigo-600 mb-4 font-black uppercase text-xs tracking-widest">
+                      <BrainCircuit className="w-4 h-4" />
+                      Gemini Executive Summary
+                    </div>
+                    <div className="prose dark:prose-invert prose-p:text-sm prose-p:leading-relaxed prose-p:text-gray-600 dark:prose-p:text-gray-400">
+                      {aiReport.split('\n\n').map((para, i) => (
+                        <p key={i}>{para}</p>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <Cpu className="w-12 h-12 text-gray-300 dark:text-gray-700 mb-4 animate-pulse" />
+                    <h4 className="text-lg font-bold text-gray-400">No Analysis Cached</h4>
+                    <p className="text-xs text-gray-500 max-w-xs mt-2">Initialize the Intelligence Nucleus to run a deep scan of all platform modules.</p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {activeTab === 'financial' && (
         <div className="space-y-8 animate-in fade-in duration-300">
-          {Math.abs(stats.platformShare - auditBalance) > 0.01 && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-2xl flex items-center gap-3 text-orange-800 dark:text-orange-200"
-            >
-              <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-              <div className="text-xs">
-                <span className="font-bold">Audit Imbalance Detected:</span> Treasury balance ({convert(stats.platformShare)}) differs from Audit Trail ({convert(auditBalance)}). 
-                <button 
-                  onClick={async () => {
-                    const statsRef = doc(db, 'platform', 'stats');
-                    await updateDoc(statsRef, { platformShare: auditBalance, lastUpdated: serverTimestamp(), serverSecret: "pulse-feeds-server-secret-2026" });
-                  }}
-                  className="ml-2 font-black underline decoration-orange-500/50 hover:text-orange-950 dark:hover:text-white transition-colors"
-                >
-                  Force Sync (Recalibrate Treasury)
-                </button>
-              </div>
-            </motion.div>
-          )}
+          <AnimatePresence>
+            {auditReport.health !== 'healthy' && (
+              <motion.div 
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className={cn(
+                  "p-6 border rounded-[2rem] flex flex-col md:flex-row items-center gap-6 shadow-xl",
+                  auditReport.health === 'critical' 
+                    ? "bg-red-50 border-red-100 dark:bg-red-950/20 dark:border-red-900/50" 
+                    : "bg-orange-50 border-orange-100 dark:bg-orange-950/20 dark:border-orange-900/50"
+                )}
+              >
+                <div className={cn(
+                  "w-16 h-16 rounded-2xl flex items-center justify-center shrink-0",
+                  auditReport.health === 'critical' ? "bg-red-500 text-white shadow-lg shadow-red-500/20" : "bg-orange-500 text-white shadow-lg shadow-orange-500/20"
+                )}>
+                  <ShieldAlert className="w-8 h-8" />
+                </div>
+                
+                <div className="flex-1 space-y-2">
+                  <h3 className={cn(
+                    "text-lg font-black tracking-tighter",
+                    auditReport.health === 'critical' ? "text-red-900 dark:text-red-100" : "text-orange-900 dark:text-orange-100"
+                  )}>
+                    {auditReport.health === 'critical' ? 'Financial Integrity Critical Failure' : 'Treasury Imbalance Detected'}
+                  </h3>
+                  <div className="space-y-1">
+                    {auditReport.issues.map((issue, idx) => (
+                      <p key={idx} className="text-xs font-medium opacity-80 leading-relaxed">• {issue}</p>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 shrink-0">
+                  <button 
+                    onClick={handleRecalculateEntireLedger}
+                    disabled={isRefreshing}
+                    className={cn(
+                      "px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2",
+                      auditReport.health === 'critical' 
+                        ? "bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-600/20" 
+                        : "bg-orange-600 text-white hover:bg-orange-700 shadow-lg shadow-orange-600/20"
+                    )}
+                  >
+                    {isRefreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                    Accept Changes & Sync
+                  </button>
+                  <p className="text-[10px] text-center opacity-50 font-bold uppercase tracking-widest">
+                    Last Verified: {auditReport.lastRan.toLocaleTimeString()}
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Performance Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

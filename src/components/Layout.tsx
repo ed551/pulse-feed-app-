@@ -23,6 +23,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useRevenue } from "../contexts/RevenueContext";
 import { useNotifications } from "../hooks/useNotifications";
 import { useTranslation } from "../lib/i18n";
+import { speak, stopSpeech, narratePage } from "../lib/speech";
 import AIAssistant from "./AIAssistant";
 import SelfHealing from "./SelfHealing";
 import CreatePostModal from "./CreatePostModal";
@@ -128,6 +129,7 @@ export default function Layout() {
     { path: '/', icon: Home, label: t('home') },
     { path: '/groups', icon: Users, label: t('groups') },
     { path: '/rewards', icon: Gem, label: t('rewards') },
+    { path: '/audio', icon: Headphones, label: 'Audio' },
     { path: '/notifications', icon: Bell, label: t('alerts') },
     { path: '/profile', icon: User, label: t('profile') },
   ];
@@ -194,6 +196,7 @@ export default function Layout() {
   const [isShortening, setIsShortening] = useState(false);
 
   const { showNotification } = useNotifications();
+  const [isGlobalAudioActive, setIsGlobalAudioActive] = useState(false);
 
   useEffect(() => {
     if (isDark) {
@@ -327,9 +330,8 @@ export default function Layout() {
       }
       // Fallback to browser TTS if Gemini fails
       const statusMessage = "Pulse Feeds is currently in development. To be fully functional, I need a secure backend connection, valid API keys for all integrated services, and a verified administrative account. System health is currently optimal, but these components are required for full feature deployment.";
-      const msg = new SpeechSynthesisUtterance(statusMessage);
-      msg.onend = () => setIsSpeaking(false);
-      window.speechSynthesis.speak(msg);
+      speak(statusMessage);
+      setIsSpeaking(false);
     }
   };
 
@@ -460,6 +462,16 @@ export default function Layout() {
 
   const toggleDateFormat = () => setDateFormatIndex((prev) => (prev + 1) % dateFormats.length);
 
+  const handleTogglePageNarration = () => {
+    if (isGlobalAudioActive) {
+      stopSpeech();
+      setIsGlobalAudioActive(false);
+    } else {
+      setIsGlobalAudioActive(true);
+      narratePage(() => setIsGlobalAudioActive(false));
+    }
+  };
+
   const fetchWeather = useCallback(async (lat: number, lon: number, city: string) => {
     if (lat === undefined || lon === undefined || isNaN(lat) || isNaN(lon)) {
       console.warn("Weather: Invalid coordinates, skipping fetch", { lat, lon });
@@ -589,8 +601,7 @@ export default function Layout() {
                 setWeatherAnalysis(analysisResponse.text);
                 localStorage.setItem('weather_analysis', analysisResponse.text);
                 localStorage.setItem('weather_analysis_time', Date.now().toString());
-                const msg = new SpeechSynthesisUtterance(analysisResponse.text);
-                window.speechSynthesis.speak(msg);
+                speak(analysisResponse.text);
               }
             } catch (aiErr: any) {
               if (cachedAnalysis) setWeatherAnalysis(cachedAnalysis);
@@ -1263,6 +1274,36 @@ export default function Layout() {
                 setActiveCategory,
                 showAdvancedSearch
               }} />
+
+              {/* Floating Global Audio Narrator */}
+              <div className="fixed bottom-24 right-6 z-[80] flex flex-col items-center gap-3">
+                <AnimatePresence>
+                  {isGlobalAudioActive && (
+                    <motion.div 
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      className="bg-indigo-600 text-white px-4 py-2 rounded-2xl shadow-xl flex items-center gap-2 mb-2"
+                    >
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Narrating Page</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                
+                <button
+                  onClick={handleTogglePageNarration}
+                  className={cn(
+                    "w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 border-4",
+                    isGlobalAudioActive 
+                      ? "bg-red-500 border-red-400 text-white animate-pulse" 
+                      : "bg-indigo-600 border-white dark:border-gray-800 text-white hover:bg-indigo-700"
+                  )}
+                  title="Toggle Page Narration"
+                >
+                  {isGlobalAudioActive ? <X className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
+                </button>
+              </div>
 
               {/* Global App Disclaimer */}
               <div className="mt-20 pt-12 border-t border-gray-100 dark:border-gray-800/50 pb-12">

@@ -5,6 +5,7 @@ import { generateContentWithRetry } from '../../lib/ai';
 import { Modality } from '@google/genai';
 import { useNotifications } from '../../hooks/useNotifications';
 import { saveInsight } from '../../lib/insights';
+import { speak } from '../../lib/speech';
 import { cn } from '../../lib/utils';
 import { useHealth } from '../../contexts/HealthContext';
 
@@ -116,8 +117,7 @@ export default function FingerprintModal({ onClose, onSuccess }: FingerprintModa
         const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
         await audio.play();
       } else {
-        const msg = new SpeechSynthesisUtterance(`Deep Scan Complete. ${cleanAdvice}`);
-        window.speechSynthesis.speak(msg);
+        speak(`Deep Scan Complete. ${cleanAdvice}`);
       }
       
       showNotification("Deep Scan Complete", { body: cleanAdvice });

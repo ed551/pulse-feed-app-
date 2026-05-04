@@ -32,6 +32,7 @@ const Support = lazy(() => import("./pages/Support"));
 const AdsDashboard = lazy(() => import("./pages/AdsDashboard"));
 const GeminiLab = lazy(() => import("./pages/GeminiLab"));
 const Membership = lazy(() => import("./pages/Membership"));
+const AudioHub = lazy(() => import("./pages/AudioHub"));
 
 import HealthChecker from "./components/HealthChecker";
 
@@ -195,6 +196,11 @@ export default function App() {
                   <Route path="membership" element={
                     <ProtectedRoute>
                       <Membership />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="audio" element={
+                    <ProtectedRoute>
+                      <AudioHub />
                     </ProtectedRoute>
                   } />
                 </Route>

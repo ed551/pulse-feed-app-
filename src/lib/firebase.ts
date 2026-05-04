@@ -10,19 +10,56 @@ import firebaseConfig from '../../firebase-applet-config.json';
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
-// Initialize Firestore
+// Initializing Firestore with optional database ID
 const firestoreDatabaseId = firebaseConfig.firestoreDatabaseId;
 
-console.log('Initializing Firestore with database ID:', firestoreDatabaseId || '(default)', 'and forcing long polling.');
+console.log('Initializing Firestore with database ID:', firestoreDatabaseId || '(default)');
 
 // Silence noisy non-fatal Firestore warnings (like idle stream timeouts) in the browser
 setLogLevel('error');
 
-// Using initializeFirestore with forced long polling 
-// to fix "Could not reach Cloud Firestore backend" errors in restricted IAB/Proxied environments.
-const dbInstance = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-}, (firestoreDatabaseId && firestoreDatabaseId !== '(default)') ? firestoreDatabaseId : undefined);
+// Use a factory-like initialization to prevent multiple initialization errors
+const getDb = () => {
+  try {
+    // Try to get existing instance first if any secondary init happened elsewhere
+    // but typically we want to be the primary one.
+    const dbId = (firestoreDatabaseId && firestoreDatabaseId !== '(default)') ? firestoreDatabaseId : undefined;
+    
+    // We use initializeFirestore for persistent settings in proxied/IAB environments
+    return initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+      experimentalAutoDetectLongPolling: true,
+    }, dbId);
+  } catch (e: any) {
+    // If already initialized, initializeFirestore might throw. 
+    // In that case, we should try to get the instance or just use default initializeFirestore
+    console.warn("Firestore initialization notice:", e.message);
+    
+    // Attempting a simpler initialization if first one failed
+    try {
+      // @ts-ignore - internal check for existing instances if needed or just catch
+      return initializeFirestore(app, {}, (firestoreDatabaseId && firestoreDatabaseId !== '(default)') ? firestoreDatabaseId : undefined);
+    } catch (innerErr: any) {
+      console.error("Secondary Firestore initialization failed:", innerErr.message);
+      // Fallback to basic initialization if all else fails
+      // Note: this might still throw if double-init is the issue, handled by export below
+      throw innerErr;
+    }
+  }
+};
+
+let dbInstance;
+try {
+  dbInstance = getDb();
+} catch (e) {
+  // If we REALLY can't init via initializeFirestore, we'll have to use the standard getter 
+  // though it won't have the long polling settings.
+  console.error("Critical Firestore Init Failure, falling back to getFirestore");
+  // We'll import it just in case, but we already have it from earlier SDKs usually
+  // For v9 web it's best to use initialized instance.
+  // We'll just try to recover the app if possible.
+  dbInstance = (app as any)._firestoreInst; // Hacky fallback if needed
+}
 
 export const db = dbInstance;
 
@@ -104,9 +141,35 @@ export function onConnectionStatusChange(callback: (status: ConnectionStatus) =>
   return () => { statusListeners.delete(callback); };
 }
 
-function setConnectionStatus(status: ConnectionStatus) {
+export function setConnectionStatus(status: ConnectionStatus) {
   connectionStatus = status;
   statusListeners.forEach(listener => listener(status));
+}
+
+/**
+ * Force-terminates the Firestore instance and attempts a fresh connection.
+ * Used to resolve persistent "unavailable" or "[code=unavailable]" errors.
+ */
+export async function reconnectFirestore() {
+  try {
+    setConnectionStatus('testing');
+    console.log("Starting Firestore Neural Reset...");
+    
+    // Explicitly terminate the current instance to clear stuck internal streams
+    if (db) {
+      await (db as any).terminate?.();
+    }
+    
+    // Brief delay to allow sockets to close
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Re-initialization happens automatically on next access if terminated correctly
+    // or we can just reload the page as the ultimate self-healing loop
+    window.location.reload(); 
+  } catch (err) {
+    console.error("Neural reset failed:", err);
+    setConnectionStatus('error');
+  }
 }
 
 async function testConnection(retries = 3) {

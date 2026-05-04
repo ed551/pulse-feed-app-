@@ -12,7 +12,7 @@ import {
   updateProfile
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, onSnapshot, serverTimestamp, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { auth, db, handleFirestoreError, OperationType, onConnectionStatusChange, ConnectionStatus } from '../lib/firebase';
 
 interface UserData {
   uid: string;
@@ -138,6 +138,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   const [isFacebookApp, setIsFacebookApp] = useState(false);
+  const [connStatus, setConnStatus] = useState<ConnectionStatus>('initial');
+
+  useEffect(() => {
+    return onConnectionStatusChange(setConnStatus);
+  }, []);
 
   useEffect(() => {
     const ua = navigator.userAgent || navigator.vendor || (window as any).opera;
@@ -207,17 +212,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               const isThisSessionRegistered = activeSessions.includes(currentSessionId);
               
               if (!isThisSessionRegistered) {
-                if (activeSessions.length >= 2) {
-                  console.error('Max concurrent sessions reached (2)');
-                  setSessionError('Security Alert: You are already signed in on 2 other devices. Please sign out from one of them to continue.');
-                  await logout();
-                  return;
-                } else {
-                  // Register this session
+                if (activeSessions.length >= 5) {
+                  // Auto-rotate: remove oldest session to make room for new one
+                  const oldestSession = activeSessions[0];
                   await updateDoc(userRef, {
-                    activeSessions: arrayUnion(currentSessionId)
+                    activeSessions: arrayRemove(oldestSession)
                   });
                 }
+                
+                // Register this session
+                await updateDoc(userRef, {
+                  activeSessions: arrayUnion(currentSessionId)
+                });
               }
 
               // Only auto-verify if MFA is disabled
@@ -383,9 +389,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={value}>
       {loading ? (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white space-y-4">
-          <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-          <div className="text-sm font-medium text-gray-400 animate-pulse">Initializing Secure Session...</div>
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-900 text-white space-y-6 px-6">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-8 h-8 border-4 border-rose-500/10 border-b-rose-500 rounded-full animate-pulse"></div>
+            </div>
+          </div>
+          
+          <div className="text-center space-y-2">
+            <div className="text-lg font-black tracking-tighter text-white">
+              {connStatus === 'error' ? 'Connection Problem Detected' : 'Initializing Secure Session...'}
+            </div>
+            <div className="text-xs font-bold text-gray-500 uppercase tracking-widest max-w-sm leading-relaxed">
+              {connStatus === 'testing' ? 'Verifying Neural Backend Link...' : 
+               connStatus === 'error' ? 'Could not reach Cloud Firestore. Protocol retry in progress.' : 
+               'Synchronizing Biometric Cluster...'}
+            </div>
+          </div>
+
+          {connStatus === 'error' && (
+            <button 
+              onClick={() => window.location.reload()}
+              className="mt-4 px-6 py-2 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black uppercase tracking-widest rounded-full transition-all active:scale-95"
+            >
+              Force Protocol Reset
+            </button>
+          )}
+          
+          {connStatus === 'error' && (
+            <p className="text-[10px] text-gray-600 font-medium max-w-xs text-center border-t border-gray-800 pt-4 mt-8">
+              Troubleshooting: This platform requires an active internet connection. If you are behind a restrictive proxy or VPN, please ensure Firebase endpoints are allowlisted.
+            </p>
+          )}
         </div>
       ) : children}
     </AuthContext.Provider>
