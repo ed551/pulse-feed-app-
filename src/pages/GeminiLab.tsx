@@ -11,8 +11,10 @@ import {
   Trash2,
   ChevronRight,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Globe
 } from 'lucide-react';
+import { cn } from '../lib/utils';
 import { generateContentWithRetry } from "../lib/ai";
 
 const MODELS = [
@@ -79,6 +81,9 @@ export default function GeminiLab() {
       const response = await generateContentWithRetry({
         model: selectedModel,
         contents: contents,
+        config: {
+          tools: [{ googleSearch: {} }] as any
+        }
       });
 
       const modelMsg: LabMessage = {
@@ -124,26 +129,47 @@ export default function GeminiLab() {
       </header>
 
       {/* Model Selection */}
-      <div className="grid grid-cols-1 gap-3 mb-8">
-        <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest ml-1">Active Engine</p>
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-          {MODELS.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => setSelectedModel(m.id)}
-              className={`flex-shrink-0 px-4 py-3 rounded-2xl border transition-all ${
-                selectedModel === m.id 
-                ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-300' 
-                : 'bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:border-zinc-700'
-              }`}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <Cpu className="w-4 h-4" />
-                <span className="text-sm font-semibold">{m.name}</span>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+        <div className="space-y-3">
+          <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest ml-1">Active Engine</p>
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+            {MODELS.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => setSelectedModel(m.id)}
+                className={`flex-shrink-0 px-4 py-3 rounded-2xl border transition-all ${
+                  selectedModel === m.id 
+                  ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-300' 
+                  : 'bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:border-zinc-700'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <Cpu className="w-4 h-4" />
+                  <span className="text-sm font-semibold">{m.name}</span>
+                </div>
+                <p className="text-[10px] opacity-60">{m.desc}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest ml-1">Live Status</p>
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-blue-500/20 text-blue-400">
+                <Globe className="w-4 h-4 animate-pulse" />
               </div>
-              <p className="text-[10px] opacity-60">{m.desc}</p>
-            </button>
-          ))}
+              <div>
+                <p className="text-xs font-bold text-zinc-200">Search Grounding: ACTIVE</p>
+                <p className="text-[10px] text-zinc-500">Master Intelligence synchronized with live web</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-[8px] font-bold text-green-500 uppercase">Live</span>
+            </div>
+          </div>
         </div>
       </div>
 

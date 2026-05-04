@@ -188,11 +188,7 @@ export default function App() {
                       <AdsDashboard />
                     </ProtectedRoute>
                   } />
-                  <Route path="lab" element={
-                    <ProtectedRoute>
-                      <GeminiLab />
-                    </ProtectedRoute>
-                  } />
+                  <Route path="lab" element={<GeminiLab />} />
                   <Route path="membership" element={
                     <ProtectedRoute>
                       <Membership />

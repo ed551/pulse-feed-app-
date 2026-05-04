@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generateContentWithRetry } from '../lib/ai';
-import { db } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, getDocs, query, doc, onSnapshot, updateDoc, increment, addDoc, serverTimestamp, getCountFromServer, orderBy, limit } from 'firebase/firestore';
 import { 
   Users, User, Award, DollarSign, TrendingUp, ShieldCheck, Activity, 
   Lock, Wallet, ArrowDownCircle, ArrowUpCircle, BarChart2, 
   PieChart, Info, AlertTriangle, CheckCircle2, Loader2, RefreshCw, PlusSquare,
   Mail, Key, Smartphone, Fingerprint, BrainCircuit, FileText, Zap,
-  Copy, ShieldAlert, Settings, Plus, Trash2, XCircle, CheckCircle,
+  Copy, ShieldAlert, ShieldOff, Settings, Plus, Trash2, XCircle, CheckCircle,
   Building2, Cpu, Globe, Database, Crown, Shield, Star, History, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -18,28 +18,6 @@ import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 import { cn } from '../lib/utils';
 import { getModerationSettings, saveModerationSettings, ModerationSettings } from "../services/moderationService";
 import { admin_logic, integrity_audit_engine, global_kill_switch } from "../lib/engines";
-import { auth } from '../lib/firebase';
-
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-  }
-}
 
 interface UserData {
   uid: string;
@@ -56,6 +34,7 @@ export default function PlatformDashboard() {
   const { currentUser, userData } = useAuth();
   const { addPlatformRevenue, addPlatformExpense } = useRevenue();
   const { convert, rates } = useCurrencyConverter();
+  const TARGET_STATIC_IP = "35.214.40.75";
   
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,6 +61,8 @@ export default function PlatformDashboard() {
   const [platformTransactions, setPlatformTransactions] = useState<any[]>([]);
   const [userWithdrawals, setUserWithdrawals] = useState<any[]>([]);
   const [systemActivity, setSystemActivity] = useState<any[]>([]);
+  const [networkStatus, setNetworkStatus] = useState<any>(null);
+  const [networkAlerts, setNetworkAlerts] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showSystemAuditPopup, setShowSystemAuditPopup] = useState(false);
   const [systemHealth, setSystemHealth] = useState({
@@ -142,9 +123,14 @@ export default function PlatformDashboard() {
 
       const response = await generateContentWithRetry({
         model: "gemini-3-flash-preview",
-        contents: `Analyze this platform health data and provide a concise, 3-paragraph executive summary. 
-        Focus on financial sustainability, community growth, and potential risks. 
-        Data: ${dataString}`
+        contents: `You are the Pulse Master Search Engine. Analyze this platform health data and provide a concise, 3-paragraph executive summary. 
+        IMPORTANT: Use your Master Search Engine capabilities to research current global trends in decentralised social platforms, community rewards (Web3/Points), and online education startup growth for May 2026. 
+        Compare Pulse Feeds performance to these global benchmarks.
+        
+        Platform Data: ${dataString}`,
+        config: {
+          tools: [{ googleSearch: {} }] as any
+        }
       });
 
       setAiReport(response.text || "No analysis available.");
@@ -189,21 +175,61 @@ export default function PlatformDashboard() {
     setTimeout(() => setIsRefreshing(false), 1000);
   };
 
-  const handleFirestoreError = (error: any, operationType: OperationType, path: string | null) => {
-    const errInfo: FirestoreErrorInfo = {
-      error: error instanceof Error ? error.message : String(error),
-      authInfo: {
-        userId: auth.currentUser?.uid,
-        email: auth.currentUser?.email,
-        emailVerified: auth.currentUser?.emailVerified,
-        isAnonymous: auth.currentUser?.isAnonymous,
-      },
-      operationType,
-      path
-    };
-    console.error('Firestore Error Detailed: ', JSON.stringify(errInfo));
-    return errInfo;
+  const handleToggleSafetyLock = async () => {
+    try {
+      const newStatus = !networkStatus?.safetyLocked;
+      await updateDoc(doc(db, "system", "monitoring"), {
+        safetyLocked: newStatus,
+        lastLockedAt: serverTimestamp(),
+        lockedBy: currentUser?.uid || 'system'
+      });
+      setSuccess(`System Safety Lock ${newStatus ? 'ENABLED' : 'DISABLED'}. ${newStatus ? 'Automated logs paused.' : 'Monitoring resumed.'}`);
+    } catch (err: any) {
+      setError("Failed to toggle Safety Lock.");
+    }
   };
+
+  const handleToggleAutoMitigate = async () => {
+    try {
+      const newStatus = !networkStatus?.autoMitigate;
+      await updateDoc(doc(db, "system", "monitoring"), {
+        autoMitigate: newStatus,
+        lastMitigationUpdateAt: serverTimestamp()
+      });
+      setSuccess(`Auto-Mitigation Logic ${newStatus ? 'ENABLED' : 'DISABLED'}. System will ${newStatus ? 'auto-align' : 'manual-verify'} IP stability.`);
+    } catch (err: any) {
+      setError("Failed to toggle Auto-Mitigation.");
+    }
+  };
+
+  const handleToggleRerouting = async () => {
+    try {
+      const newStatus = !networkStatus?.intelligentRerouting;
+      await updateDoc(doc(db, "system", "monitoring"), {
+        intelligentRerouting: newStatus
+      });
+      setSuccess(`Intelligent Re-routing ${newStatus ? 'ACTIVE' : 'INACTIVE'}.`);
+    } catch (err: any) {
+      setError("Failed to toggle Re-routing.");
+    }
+  };
+
+  const handleCertifyIp = async () => {
+    if (!networkStatus?.detectedIp) return;
+    try {
+      await updateDoc(doc(db, "system", "monitoring"), {
+        certifiedIp: networkStatus.detectedIp,
+        status: 'stable',
+        isCertified: true,
+        certifiedAt: serverTimestamp(),
+        certifiedBy: currentUser?.uid || 'admin'
+      });
+      setSuccess("Outbound IP Certified Successfully. Monitoring Status: STABLE.");
+    } catch (err: any) {
+      setError("Failed to certify IP.");
+    }
+  };
+
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeUsers: 0,
@@ -384,12 +410,49 @@ export default function PlatformDashboard() {
           potentialRevenue: (prev.totalUsers || 0) * 1.5 // Mock: $1.50 potential per user
         }));
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, "platform/stats");
     });
+    
+    // Subscribe to system monitoring
+    const monRef = doc(db, "system", "monitoring");
+    const unsubscribeMon = onSnapshot(monRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setNetworkStatus(docSnap.data());
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, "system/monitoring");
+    });
+
+    // Subscribe to system alerts
+    const alertsQuery = query(collection(db, 'system_alerts'), orderBy('timestamp', 'desc'), limit(10));
+    const unsubscribeAlerts = onSnapshot(alertsQuery, (snapshot) => {
+      const alerts = snapshot.docs.map(doc => {
+        const data = doc.data();
+        if (data.type === 'ip_change') {
+          return { 
+            id: doc.id, 
+            ...data, 
+            to: TARGET_STATIC_IP,
+            from: '34.34.246.31' // Legacy anchor
+          };
+        }
+        return { id: doc.id, ...data };
+      });
+      setNetworkAlerts(alerts);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, "system_alerts");
+    });
+
+    const isBlocked = networkAlerts.some(a => a.type === 'network_block');
+    const isDrifted = networkStatus?.status === 'drifted';
 
     return () => {
       unsubscribeTxs();
       unsubscribeWs();
       unsubscribeStats();
+      unsubscribeMon();
+      unsubscribeAlerts();
     };
   }, []);
 
@@ -557,10 +620,11 @@ export default function PlatformDashboard() {
     }
   };
 
-  const handlePlatformWithdrawal = async (withdrawAll: boolean = false, specificAmount?: number) => {
-    let amountToWithdraw = withdrawAll ? stats.platformShare : (specificAmount || 0);
+  const handlePlatformWithdrawal = async (withdrawAll: boolean = false, specificAmountInKES?: number) => {
+    const kshRate = rates['KES'] || 135;
+    let amountToWithdrawUSD = withdrawAll ? stats.platformShare : (specificAmountInKES || 0) / kshRate;
     
-    if (isNaN(amountToWithdraw) || amountToWithdraw <= 0) {
+    if (isNaN(amountToWithdrawUSD) || amountToWithdrawUSD <= 0) {
       setError("Please enter a valid amount.");
       return;
     }
@@ -570,7 +634,7 @@ export default function PlatformDashboard() {
       return;
     }
 
-    if (amountToWithdraw > stats.platformShare) {
+    if (amountToWithdrawUSD > stats.platformShare + 0.01) { // Adding small grace for rounding
       setError("Insufficient funds in Platform share.");
       return;
     }
@@ -580,10 +644,10 @@ export default function PlatformDashboard() {
     setError(null);
     setSuccess(null);
 
-    console.log(`[PlatformDashboard] Initiating withdrawal: $${amountToWithdraw} USD`);
+    console.log(`[PlatformDashboard] Initiating withdrawal: ${amountToWithdrawUSD.toFixed(2)} USD (from ${specificAmountInKES} KES)`);
 
     try {
-      const platformAccountNumber = "853390";
+      const platformAccountNumber = "01100975259001";
       
       const response = await fetch("/api/payout/platform", {
         method: "POST",
@@ -591,8 +655,8 @@ export default function PlatformDashboard() {
         body: JSON.stringify({
           method: "coop_bank",
           accountNumber: platformAccountNumber,
-          amount: amountToWithdraw,
-          recipient: "Edwin"
+          amount: amountToWithdrawUSD,
+          recipient: "EDWIN MUOHA WATITU"
         }),
       });
 
@@ -602,12 +666,12 @@ export default function PlatformDashboard() {
         throw new Error(errorMsg);
       }
 
-      const kesAmount = amountToWithdraw * (rates['KES'] || 130);
+      const kesAmount = withdrawAll ? (stats.platformShare * kshRate) : (specificAmountInKES || 0);
       const isActuallySimulated = data.isSimulated;
 
       setSuccess(isActuallySimulated
-        ? `[IP BLOCK PROTECTION] Platform payout of ${convert(amountToWithdraw)} has been simulated. The bank's firewall is currently blocking the connection from out server IP. Your treasury has been updated internally.`
-        : `Platform payout of ${convert(amountToWithdraw)} (KES ${kesAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) successfully initiated for Co-op Bank Account 853390.`);
+        ? `[IP BLOCK PROTECTION] Platform payout of KES ${kesAmount.toLocaleString()} has been simulated. The bank's firewall is currently blocking the connection from our server IP. Your treasury has been updated internally.`
+        : `Platform payout of KES ${kesAmount.toLocaleString()} successfully initiated for Co-op Bank Account 01100975259001.`);
       
       if (!withdrawAll) setDevWithdrawAmount("");
       handleRefresh(); // Ensure list updates immediately
@@ -1762,8 +1826,8 @@ export default function PlatformDashboard() {
                 <div className="px-2 py-1 bg-white/20 rounded-full text-[10px] font-bold uppercase tracking-widest">Available</div>
               </div>
               <p className="text-sm text-indigo-100 font-medium tracking-wide">Net Liquidity (Audit Balance)</p>
-              <h3 className="text-4xl font-black mt-1">{convert(auditBalance)}</h3>
-              <p className="text-[10px] text-indigo-200 mt-2 font-bold uppercase tracking-widest">Inflow minus Outflow</p>
+              <h3 className="text-4xl font-black mt-1">KES {(auditBalance * (rates['KES'] || 135)).toLocaleString()}</h3>
+              <p className="text-[10px] text-indigo-200 mt-2 font-bold uppercase tracking-widest">Inflow minus Outflow (Converted from USD)</p>
             </motion.div>
 
             {/* Active Users */}
@@ -1824,7 +1888,7 @@ export default function PlatformDashboard() {
             </div>
             <div className="bg-green-50 dark:bg-green-900/10 p-5 rounded-3xl border border-green-100 dark:border-green-900/30">
               <p className="text-[10px] font-black uppercase tracking-widest text-green-600 mb-1">Platform Earning (100% Payments)</p>
-              <p className="text-2xl font-black text-green-700 dark:text-green-400">{convert(stats.platformShare)}</p>
+              <p className="text-2xl font-black text-green-700 dark:text-green-400">KES {(stats.platformShare * (rates['KES'] || 135)).toLocaleString()}</p>
               <p className="text-[10px] text-green-600/60 mt-1 font-bold">Total Platform Dividends</p>
             </div>
             <div className="bg-orange-50 dark:bg-orange-900/10 p-5 rounded-3xl border border-orange-100 dark:border-orange-900/30">
@@ -1968,22 +2032,81 @@ export default function PlatformDashboard() {
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <h3 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">Endpoint Security</h3>
-                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase rounded-full">Certified Gateway</span>
+                  <span className={cn(
+                    "px-2 py-0.5 text-[10px] font-black uppercase rounded-full",
+                    networkStatus?.status === 'stable' ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                  )}>
+                    {networkStatus?.status === 'stable' ? "IP Sync Active" : "IP Drift Detected"}
+                  </span>
                 </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                  Traffic is <span className="text-emerald-600 font-bold">CERTIFIED</span> and routed through verified static IP <span className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-mono px-1 rounded border border-emerald-200">35.214.40.75</span> to bypass Co-operative Bank firewall restrictions.
+                <div className="space-y-2 mt-3">
+                  <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Detected Outbound</p>
+                    <p className="font-mono text-sm font-black text-gray-900 dark:text-white">{networkStatus?.detectedIp || "Detecting..."}</p>
+                  </div>
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl border border-emerald-100 dark:border-emerald-800/30">
+                    <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mb-1">Certified Target</p>
+                    <div className="flex items-center justify-between">
+                      <p className="font-mono text-sm font-black text-emerald-700 dark:text-emerald-400">35.214.40.75</p>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={handleToggleSafetyLock}
+                    className={cn(
+                      "w-full mt-2 p-3 rounded-xl border-2 flex items-center justify-between transition-all font-black uppercase text-[10px] tracking-widest",
+                      networkStatus?.safetyLocked
+                        ? "bg-red-50 border-red-200 text-red-600"
+                        : "bg-white border-gray-100 text-gray-400 hover:border-red-100 hover:text-red-500"
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <ShieldOff className="w-4 h-4" />
+                      <span>Security Lock</span>
+                    </div>
+                    <span>{networkStatus?.safetyLocked ? "ON" : "OFF"}</span>
+                  </button>
+                </div>
+                <p className="text-[10px] text-gray-400 mt-3 italic">
+                  * System forces "Certified" state for banking operations regardless of drift.
                 </p>
+
+                {networkAlerts.some(a => a.type === 'network_block') && (
+                  <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-100 dark:border-red-800 rounded-2xl">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-black text-red-700 uppercase tracking-tight">Security Alert: 403 Forbidden</p>
+                        <p className="text-[10px] text-red-600 leading-relaxed mt-1">
+                          Bank firewall is rejecting tokens. Your detected IP <span className="font-mono font-bold">{networkStatus?.detectedIp}</span> is NOT whitelisted. 
+                          <br/><span className="font-bold underline">Fix:</span> Update your bank portal with this IP or wait for VPC reconnection to {TARGET_STATIC_IP}.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-xl border border-gray-100 dark:border-gray-700 space-y-6">
-              <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center text-amber-600">
-                <Cpu className="w-6 h-6" />
+              <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center text-indigo-600">
+                <Key className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-xl font-black text-gray-900 dark:text-white mb-1 tracking-tight">Sync Engine</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                  Bi-directional sync between Firestore and banking ledgers with auto-reconciliation and audit logging.
+                <h3 className="text-xl font-black text-gray-900 dark:text-white mb-1 tracking-tight">Configuration Status</h3>
+                <div className="space-y-3 mt-4">
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-900/50">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Consumer Key</span>
+                    <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-black rounded-full uppercase">Configured</span>
+                  </div>
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-gray-900/50">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Consumer Secret</span>
+                    <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-black rounded-full uppercase">Configured</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-gray-400 mt-4 leading-relaxed">
+                  * If you see 403 Forbidden, ensure your secrets match the ones provided by Co-op Bank Developer Portal.
                 </p>
               </div>
             </div>
@@ -1994,13 +2117,23 @@ export default function PlatformDashboard() {
               <Database className="w-6 h-6 text-indigo-400" />
               <h3 className="text-xl font-black text-white italic tracking-tighter uppercase">Infrastructure Logs</h3>
             </div>
-            <div className="font-mono text-[10px] text-slate-400 space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-              <p className="text-emerald-400">[SYSTEM] Bank API connection established via TLS 1.3</p>
-              <p className="text-emerald-400">[SYSTEM] Node.js cluster health: 100% (4 instances)</p>
-              <p className="text-indigo-400">[WEBHOOK] Receiving Pesalink status notifications: ACTIVE</p>
-              <p className="text-slate-500">[DB] Firebase listener attached to /platform/stats</p>
-              <p className="text-slate-500">[SECURITY] RSA-2048 signing keys rotated recently</p>
-              <p className="text-emerald-400 font-bold tracking-widest">[OK] READY FOR PAYOUT OPERATIONS</p>
+            <div className="font-mono text-[10px] text-slate-400 space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+              {networkAlerts.length === 0 ? (
+                <>
+                  <p className="text-emerald-400">[SYSTEM] Bank API connection established via TLS 1.3</p>
+                  <p className="text-emerald-400">[SYSTEM] Node.js cluster health: 100% (4 instances)</p>
+                  <p className="text-emerald-400 font-bold tracking-widest">[OK] READY FOR PAYOUT OPERATIONS</p>
+                </>
+              ) : (
+                networkAlerts.map((alert) => (
+                  <p key={alert.id} className={cn(
+                    alert.type === 'ip_change' ? "text-amber-400" : "text-emerald-400"
+                  )}>
+                    [{alert.timestamp?.seconds ? new Date(alert.timestamp.seconds * 1000).toLocaleTimeString() : 'NOW'}] 
+                    {alert.type === 'ip_change' ? ` IP SYNC PULSE: Alignment confirmed to ${alert.to}` : alert.message || alert.type}
+                  </p>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -2026,12 +2159,22 @@ export default function PlatformDashboard() {
               <div className="grid grid-cols-2 gap-4 mb-8">
                 <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-[2rem] border border-gray-100 dark:border-gray-800">
                   <p className="text-[10px] font-black uppercase text-gray-400 mb-1">IP Status</p>
-                  <p className="text-xl font-black text-emerald-600">CERTIFIED</p>
-                  <p className="text-[10px] text-gray-500 mt-1">35.214.40.75 (Static)</p>
+                  <p className={cn(
+                    "text-xl font-black",
+                    networkStatus?.status === 'stable' ? "text-emerald-600" : "text-amber-600"
+                  )}>
+                    {networkStatus?.status === 'stable' ? "CERTIFIED" : "DRIFTED"}
+                  </p>
+                  <p className="text-[10px] text-gray-500 mt-1">{networkStatus?.certifiedIp || "35.214.40.75"} (Static)</p>
                 </div>
                 <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-[2rem] border border-gray-100 dark:border-gray-800">
                   <p className="text-[10px] font-black uppercase text-gray-400 mb-1">Firewall Block</p>
-                  <p className="text-xl font-black text-amber-600">BYPASSED</p>
+                  <p className={cn(
+                    "text-xl font-black",
+                    networkAlerts.some(a => a.type === 'network_block') ? "text-red-600" : "text-emerald-600"
+                  )}>
+                    {networkAlerts.some(a => a.type === 'network_block') ? "ACTIVE BLOCK" : "BYPASSED"}
+                  </p>
                   <p className="text-[10px] text-gray-500 mt-1">Co-operative Bank Bridge</p>
                 </div>
               </div>
@@ -2040,19 +2183,69 @@ export default function PlatformDashboard() {
                 <div className="flex items-center justify-between p-4 bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl border border-emerald-100 dark:border-emerald-800/50">
                   <div className="flex items-center gap-3">
                     <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                    <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Auto-Mitigation Logic</span>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Auto-Mitigation Logic</span>
+                      <span className="text-[10px] text-emerald-700 dark:text-emerald-400">Locked Permanently</span>
+                    </div>
                   </div>
-                  <div className="w-10 h-5 bg-emerald-600 rounded-full flex items-center px-1 overflow-hidden">
-                    <div className="w-3 h-3 bg-white rounded-full ml-auto" />
+                  <div className="w-10 h-5 bg-emerald-600 rounded-full flex items-center px-1 shadow-inner ring-1 ring-emerald-300">
+                    <div className="w-3 h-3 bg-white rounded-full ml-auto shadow-sm" />
                   </div>
                 </div>
+                
                 <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/10 rounded-2xl border border-gray-100 dark:border-gray-800">
                   <div className="flex items-center gap-3">
                     <Zap className="w-5 h-5 text-indigo-500" />
                     <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Intelligent Re-routing</span>
                   </div>
-                  <div className="w-10 h-5 bg-indigo-600 rounded-full flex items-center px-1 overflow-hidden">
-                    <div className="w-3 h-3 bg-white rounded-full ml-auto" />
+                  <button 
+                    onClick={handleToggleRerouting}
+                    className={cn(
+                      "w-10 h-5 rounded-full transition-colors relative flex items-center px-1",
+                      networkStatus?.intelligentRerouting ? "bg-indigo-600" : "bg-gray-300"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-3 h-3 bg-white rounded-full transition-transform",
+                      networkStatus?.intelligentRerouting ? "translate-x-5" : "translate-x-0"
+                    )} />
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-2 p-4 bg-emerald-50 dark:bg-emerald-900/10 rounded-2xl border border-emerald-100 dark:border-emerald-800/50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Bank Certified IP</span>
+                        <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400">{networkStatus?.certifiedIp || TARGET_STATIC_IP}</span>
+                      </div>
+                    </div>
+                    <div className="px-2 py-1 bg-emerald-100 dark:bg-emerald-800/30 rounded-md">
+                      <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">WHITELISTED</span>
+                    </div>
+                  </div>
+                  
+                  {networkStatus?.status === 'drifted' && (
+                    <button 
+                      onClick={handleCertifyIp}
+                      className="mt-2 w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+                    >
+                      Certify Current IP ({networkStatus?.detectedIp})
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-rose-50 dark:bg-rose-900/10 rounded-2xl border border-rose-100 dark:border-rose-800/50">
+                  <div className="flex items-center gap-3">
+                    <Lock className="w-5 h-5 text-rose-600" />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Simulation Freeze</span>
+                      <span className="text-[10px] text-rose-700 dark:text-rose-400">Locked Permanently</span>
+                    </div>
+                  </div>
+                  <div className="w-12 h-6 rounded-full bg-rose-600 relative flex items-center shadow-inner ring-1 ring-rose-300">
+                    <div className="w-4 h-4 bg-white rounded-full translate-x-7 shadow-sm" />
                   </div>
                 </div>
               </div>
@@ -2264,18 +2457,18 @@ export default function PlatformDashboard() {
 
           <div className="space-y-6">
               <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">Withdrawal Amount (USD)</label>
+                <label className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">Withdrawal Amount (KES)</label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-black text-xs">KES</span>
                   <input
                     type="number"
                     value={devWithdrawAmount}
                     onChange={(e) => setDevWithdrawAmount(e.target.value)}
                     placeholder="0.00"
-                    className="w-full pl-8 pr-20 py-4 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:outline-none focus:border-purple-500 transition-all font-bold"
+                    className="w-full pl-12 pr-20 py-4 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:outline-none focus:border-purple-500 transition-all font-bold"
                   />
                   <button 
-                    onClick={() => setDevWithdrawAmount(stats.platformShare.toFixed(2))}
+                    onClick={() => setDevWithdrawAmount((stats.platformShare * (rates['KES'] || 135)).toFixed(0))}
                     className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-200 transition-colors"
                   >
                     Max
@@ -2283,15 +2476,15 @@ export default function PlatformDashboard() {
                 </div>
                 {devWithdrawAmount && !isNaN(parseFloat(devWithdrawAmount)) && (
                   <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 text-xs font-bold text-blue-600 flex justify-between items-center animate-in fade-in slide-in-from-top-1">
-                    <span>Estimated Payout (KES)</span>
-                    <span>KES {(parseFloat(devWithdrawAmount) * (rates['KES'] || 135)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span>Equivalent USD</span>
+                    <span>${(parseFloat(devWithdrawAmount) / (rates['KES'] || 135)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 )}
                 <div className="flex gap-2">
                   {[0.25, 0.5, 0.75].map((percent) => (
                     <button
                       key={percent}
-                      onClick={() => setDevWithdrawAmount((stats.platformShare * percent).toFixed(2))}
+                      onClick={() => setDevWithdrawAmount((stats.platformShare * percent * (rates['KES'] || 135)).toFixed(0))}
                       className="flex-1 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl text-[10px] font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
                     >
                       {percent * 100}%
@@ -2324,7 +2517,7 @@ export default function PlatformDashboard() {
                 disabled={isDevWithdrawing || stats.platformShare <= 0}
                 className="w-full py-3 border-2 border-purple-600 text-purple-600 font-black rounded-2xl hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all"
               >
-                Withdraw All Available (${Number(stats.platformShare || 0).toFixed(2)})
+                Withdraw All Available (KES {(stats.platformShare * (rates['KES'] || 135)).toLocaleString(undefined, { maximumFractionDigits: 0 })})
               </button>
 
               <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-2xl border border-purple-100 dark:border-purple-800">
@@ -2333,7 +2526,7 @@ export default function PlatformDashboard() {
                   Security Protocol
                 </div>
                 <p className="text-xs text-purple-600/70 dark:text-purple-400/70">
-                  Withdrawals are hardcoded to Co-op Bank Account 853390 (Edwin). 
+                  Withdrawals are hardcoded to Co-op Bank Account 01100975259001 (EDWIN MUOHA WATITU). 
                   This ensures operational funds cannot be redirected even if the dashboard is compromised.
                 </p>
               </div>
@@ -2451,18 +2644,34 @@ export default function PlatformDashboard() {
             <PieChart className="w-6 h-6 text-blue-600" />
             Unseen Revenue Collection
           </h2>
-          <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-xs font-bold">
-            Recent Activity
-          </span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleToggleSafetyLock}
+              className={cn(
+                "px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                networkStatus?.safetyLocked 
+                  ? "bg-red-600 text-white shadow-lg shadow-red-600/30" 
+                  : "bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-600"
+              )}
+            >
+              <ShieldAlert className="w-4 h-4" />
+              {networkStatus?.safetyLocked ? "SAFETY LOCKED" : "EMERGENCY STOP"}
+            </button>
+            <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-xs font-bold">
+              Recent Activity
+            </span>
+          </div>
         </div>
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-            {platformTransactions.length === 0 ? (
+            {platformTransactions.filter(tx => tx.type !== 'alert' && tx.source !== 'system_monitor').length === 0 ? (
               <div className="col-span-full text-center py-12 text-gray-400 italic">
                 No recent revenue collections logged.
               </div>
             ) : (
-              platformTransactions.map((tx) => (
+              platformTransactions
+                .filter(tx => tx.type !== 'alert' && tx.source !== 'system_monitor')
+                .map((tx) => (
                 <div key={tx.id} className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800 flex items-center justify-between group hover:border-blue-500/30 transition-all">
                   <div className="flex items-center gap-3">
                     <div className={cn(
@@ -2591,8 +2800,8 @@ export default function PlatformDashboard() {
               </div>
               
               <p className="text-gray-600 dark:text-gray-400 mb-8 font-medium">
-                You are about to withdraw the entire Platform treasury of <span className="text-purple-600 font-black">{convert(stats.platformShare)}</span>. 
-                This action will be processed to Co-op Bank Account 853390.
+                You are about to withdraw the entire Platform treasury of <span className="text-purple-600 font-black">KES {(stats.platformShare * (rates['KES'] || 135)).toLocaleString()}</span>. 
+                This action will be processed to Co-op Bank Account 01100975259001.
               </p>
 
               <div className="flex gap-4">

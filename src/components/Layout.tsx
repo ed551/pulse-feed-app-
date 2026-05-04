@@ -1,7 +1,7 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { 
-  Home, Users, PlusSquare, Gem, User, ShieldAlert, Bell, FileText, Lock, Headphones, Settings,
+  Home, Users, PlusSquare, Gem, User, ShieldAlert, Bell, FileText, Lock, Headphones, Settings, Beaker,
   Sun, Moon, CloudRain, Cloud, CloudLightning, Clock, Watch, BellRing, StickyNote,
   Fingerprint, HeartPulse, MapPin, Phone, MessageCircle, Gamepad2, Globe, BrainCircuit,
   Languages, Ticket, Snowflake, Calendar, Smartphone, Monitor, PhoneCall, Wrench, Building2,
@@ -923,6 +923,7 @@ export default function Layout() {
     { path: '/education', icon: GraduationCap, color: 'text-blue-500', label: t('education') },
     { path: '/events', icon: Calendar, color: 'text-indigo-600', label: t('events') },
     { path: '/dating', icon: Heart, color: 'text-pink-500', label: t('dating') },
+    { path: '/lab', icon: Beaker, color: 'text-indigo-400', label: t('gemini_lab') },
     { path: '/community', icon: Users, color: 'text-indigo-500', label: t('community_hub') },
     { path: '/platform', icon: Lock, color: 'text-indigo-600', label: t('platform') },
     { path: '/notifications', icon: Bell, color: 'text-orange-500', label: t('notifications') },

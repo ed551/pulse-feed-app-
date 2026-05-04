@@ -187,7 +187,7 @@ export default function FingerprintModal({ onClose, onSuccess }: FingerprintModa
         </button>
       </div>
       
-      <div className="h-4">
+      <div className="h-4 flex flex-col items-center">
         {fingerprintProgress > 0 && fingerprintProgress < 100 && (
           <span className="text-xs font-mono text-cyan-600 dark:text-cyan-400 animate-pulse">
             Scanning... {fingerprintProgress}%
@@ -197,6 +197,18 @@ export default function FingerprintModal({ onClose, onSuccess }: FingerprintModa
           <span className="text-xs font-bold text-green-600 dark:text-green-400">
             Identity Verified
           </span>
+        )}
+        
+        {!isPressing && fingerprintProgress === 0 && (
+          <button 
+            onClick={() => {
+              speak("Hardware scan bypassed. Proceeding with virtual signature.");
+              setFingerprintProgress(100);
+            }}
+            className="mt-4 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-cyan-500 hover:bg-cyan-50 dark:hover:bg-cyan-900/10 px-3 py-1.5 rounded-lg transition-all border border-transparent hover:border-cyan-100 dark:hover:border-cyan-900/30"
+          >
+            Skip for now
+          </button>
         )}
       </div>
     </div>

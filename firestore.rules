@@ -34,7 +34,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && 
-             ((request.auth.token.email == "edwinmuoha@gmail.com" && request.auth.token.email_verified == true) || 
+             ((request.auth.token.email == "edwinmuoha@gmail.com" && request.auth.token.get('email_verified', false) == true) || 
               (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
                get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin'));
     }
@@ -52,29 +52,13 @@ service cloud.firestore {
     // ===============================================================
     
     function isValidUserSchema(data) {
-      return (!('uid' in data) || (data.uid is string && data.uid.size() == 28)) &&
-             (!('email' in data) || (data.email is string && isValidEmail(data.email))) &&
+      // Basic type validation for common fields
+      return (!('uid' in data) || (data.uid is string)) &&
+             (!('email' in data) || (data.email is string)) &&
              (!('role' in data) || (data.role in ['admin', 'user'])) &&
-             (!('displayName' in data) || (data.displayName == null || (data.displayName is string && data.displayName.size() <= 100))) &&
-             (!('photoURL' in data) || (data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 500))) &&
              (!('points' in data) || (data.points is number)) &&
              (!('balance' in data) || (data.balance is number)) &&
-             (!('twoFactorEnabled' in data) || (data.twoFactorEnabled is bool)) &&
-             (!('twoFactorType' in data) || (data.twoFactorType in ['biometric', 'email_otp', 'totp'])) &&
-             (!('twoFactorSecret' in data) || (data.twoFactorSecret == null || (data.twoFactorSecret is string))) &&
-             (!('phoneNumber' in data) || (data.phoneNumber == null || (data.phoneNumber is string && data.phoneNumber.size() <= 30))) &&
-             (!('activeSessions' in data) || (data.activeSessions is list)) &&
-             (!('enrolledCourses' in data) || (data.enrolledCourses is list)) &&
-             (!('completedModules' in data) || (data.completedModules is list)) &&
-             (!('adRevenue' in data) || (data.adRevenue is number)) &&
-             (!('educationRevenue' in data) || (data.educationRevenue is number)) &&
-             (!('activeTimeRevenue' in data) || (data.activeTimeRevenue is number)) &&
-             (!('datingRevenue' in data) || (data.datingRevenue is number)) &&
-             (!('communityRevenue' in data) || (data.communityRevenue is number)) &&
-             (!('eventsRevenue' in data) || (data.eventsRevenue is number)) &&
-             (!('isDatingActive' in data) || (data.isDatingActive is bool)) &&
-             (!('serverSecret' in data) || (data.serverSecret == "pulse-feeds-server-secret-2026")) &&
-             (!('createdAt' in data) || (data.createdAt is timestamp || data.createdAt == request.time));
+             (!('serverSecret' in data) || (data.serverSecret == "pulse-feeds-server-secret-2026"));
     }
 
     function isValidUserCreate(data) {
@@ -117,7 +101,7 @@ service cloud.firestore {
     // ===============================================================
     
     match /system/{docId} {
-      allow read: if true;
+      allow read: if true; 
       allow create: if isSignedIn();
       allow update, delete: if (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
       
@@ -126,25 +110,32 @@ service cloud.firestore {
         allow read: if isAdmin();
       }
     }
+
+    match /system_alerts/{alertId} {
+      allow read: if isAdmin();
+      allow create: if (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
+      allow update, delete: if isAdmin();
+    }
     
     match /users/{userId} {
       allow get: if isOwner(userId) || isAdmin() || (isSignedIn() && existing().get('isDatingActive', false) == true);
       allow list: if isAdmin();
       // Pillar 3: isValidId on userId
-      allow create: if (isOwner(userId) || incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") && isValidId(userId) && isValidUserCreate(incoming());
-      allow update: if (isOwner(userId) || incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026" || isAdmin()) && 
+      allow create: if (isOwner(userId) || request.resource.data.get('serverSecret', '') == "pulse-feeds-server-secret-2026") && isValidId(userId) && isValidUserCreate(incoming());
+      allow update: if (isOwner(userId) || request.resource.data.get('serverSecret', '') == "pulse-feeds-server-secret-2026" || isAdmin()) && 
                     isValidUserSchema(incoming()) && 
-                    immutable('uid') && immutable('createdAt') && (isAdmin() || immutable('role'));
+                    immutable('uid') && immutable('createdAt') && 
+                    (isAdmin() || request.resource.data.get('serverSecret', '') == "pulse-feeds-server-secret-2026" || immutable('role'));
       
       match /transactions/{transactionId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow create: if (isOwner(userId) || incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") && isValidId(transactionId);
+        allow create: if (isOwner(userId) || request.resource.data.get('serverSecret', '') == "pulse-feeds-server-secret-2026") && isValidId(transactionId);
         allow update, delete: if isAdmin();
       }
 
       match /points_ledger/{ledgerId} {
         allow read: if isOwner(userId) || isAdmin();
-        allow create: if (isOwner(userId) || incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") && isValidId(ledgerId);
+        allow create: if (isOwner(userId) || request.resource.data.get('serverSecret', '') == "pulse-feeds-server-secret-2026") && isValidId(ledgerId);
         allow update, delete: if isAdmin();
       }
     }
@@ -201,14 +192,14 @@ service cloud.firestore {
 
     match /users_public/{userId} {
       allow read: if isSignedIn();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) && immutable('uid');
+      allow create: if isOwner(userId) && (!('role' in incoming()) || incoming().role == 'user' || request.auth.token.email == "edwinmuoha@gmail.com");
+      allow update: if isOwner(userId) && immutable('uid') && immutable('role');
       allow delete: if isAdmin();
     }
 
     match /otps/{userId} {
       allow read: if true; 
-      allow write: if (request.resource.data.serverSecret == "pulse-feeds-server-secret-2026") || isAdmin() || isOwner(userId);
+      allow write: if (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin() || isOwner(userId);
     }
 
     match /platform/{docId} {

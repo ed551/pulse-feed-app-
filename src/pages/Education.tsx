@@ -756,6 +756,8 @@ export default function Education() {
       if (moduleTitle.includes('Knowledge') || moduleTitle.includes('Quantum') || moduleTitle.includes('Unified')) {
         prompt = `You are the PULSE AI MASTER BRAIN. You have been asked to provide the absolute, definitive, and exhaustive "Everything AI Knows" download for Project Management.
         
+        IMPORTANT: Use Google Search to find the latest high-stakes project management data, AI advancements in PM, and global standards for May 2026.
+        
         This is a multi-disciplinary, high-stakes knowledge transfer. 
         Core areas to cover:
         1. THE QUANTUM SHIFT: How AI moves Project Management from tracking to predicting.
@@ -771,6 +773,8 @@ export default function Education() {
         prompt = `You are a Lead Project Strategist and Academic Dean. 
         The student is studying the module "${moduleTitle}" within the course "${courseTitle}".
         
+        IMPORTANT: Use Google Search to research the latest real-world info and current 2026 data about "${moduleTitle}".
+        
         Your goal is to provide "Everything AI knows" about this specific topic. 
         Create a comprehensive, collegiate-level lesson that covers:
         1. Technical Core Principles
@@ -785,7 +789,10 @@ export default function Education() {
 
       const response = await generateContentWithRetry({
         model: "gemini-3-flash-preview",
-        contents: prompt
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }] as any
+        }
       });
 
       setDeepDiveContent(response.text || 'Unable to generate deep dive content.');
@@ -1049,11 +1056,12 @@ export default function Education() {
       await new Promise(resolve => setTimeout(resolve, 10));
 
       // Step 3: Synthesis with Gemini
-      setTrainingStatus('Synthesizing Expert Curriculum...');
+      setTrainingStatus('Synthesizing Expert Curriculum via Master Search...');
       const prompt = `You are a world-class Educational Researcher and Master Curriculum Designer. 
       Your task is to create a high-impact, professional course curriculum for the topic: "${trainingTopic}".
       
-      Be confident, authoritative, and expert in your tone.
+      IMPORTANT: Use Google Search to research the most current, market-leading content and academic standards for "${trainingTopic}" in May 2026. 
+      Ensure the modules reflect real-world industry requirements.
       
       Return a JSON object with:
       - title: A powerful, professional course title
@@ -1067,7 +1075,8 @@ export default function Education() {
         model: "gemini-3-flash-preview",
         contents: prompt,
         config: {
-          responseMimeType: "application/json"
+          responseMimeType: "application/json",
+          tools: [{ googleSearch: {} }] as any
         }
       });
 

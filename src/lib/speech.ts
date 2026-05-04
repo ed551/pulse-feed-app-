@@ -91,26 +91,29 @@ const processQueue = () => {
   // Keep only a small history to save memory but enough to prevent GC during playback
   if ((window as any)._activeUtterances.length > 10) (window as any)._activeUtterances.shift();
 
+  let heartbeat: any;
+
   utterance.onend = () => {
+    if (heartbeat) clearInterval(heartbeat);
     processQueue();
   };
 
   utterance.onerror = (event) => {
+    if (heartbeat) clearInterval(heartbeat);
     console.error('Speech error:', event);
-    // On some browsers, speech hangs. Attempting to resume or cancel and continue.
     window.speechSynthesis.resume();
     processQueue();
   };
 
   // Chrome bug fix: voice stops after 15s. Heartbeat prevents it.
-  const heartbeat = setInterval(() => {
-    if (window.speechSynthesis.speaking) {
+  heartbeat = setInterval(() => {
+    if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
       window.speechSynthesis.pause();
       window.speechSynthesis.resume();
-    } else {
+    } else if (!window.speechSynthesis.speaking) {
       clearInterval(heartbeat);
     }
-  }, 10000);
+  }, 14000);
 
   window.speechSynthesis.speak(utterance);
 };
@@ -136,16 +139,29 @@ export const speak = (text: string, options?: { rate?: number; gender?: 'female'
   onCompleteCallback = options?.onEnd || null; // Re-set after stopSpeech clears it
   
   // Clean text and split by distinct sentences/pauses
-  // Handles extremely long notes without truncation
-  // Added split by long chunks just in case
+  // Handles extremely long notes without truncation by splitting into small, digestible chunks
   const chunks = text
     .replace(/([.!?])\s+/g, "$1|")
+    .replace(/([,;:])\s+/g, "$1|") // Also split by major pauses
     .split("|")
     .filter(c => c.trim().length > 0)
     .flatMap(c => {
-      // If a single chunk is too long (> 200 chars), try to split by comma
-      if (c.length > 200) {
-        return c.split(',').map((part, i, arr) => i < arr.length - 1 ? part + ',' : part);
+      // If a single chunk is still too long (> 120 chars), split by word bounds
+      if (c.length > 120) {
+        const parts: string[] = [];
+        let current = '';
+        const words = c.split(' ');
+        
+        words.forEach(word => {
+          if ((current + word).length > 110) {
+            parts.push(current.trim());
+            current = word + ' ';
+          } else {
+            current += word + ' ';
+          }
+        });
+        if (current) parts.push(current.trim());
+        return parts;
       }
       return [c];
     });

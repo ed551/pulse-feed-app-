@@ -257,6 +257,18 @@ export default function HealthChecker() {
                     {isScanning ? `Biometric Data: ${scanProgress}%` : "Press & Hold for Scan"}
                   </p>
                 </div>
+
+                {!isScanning && (
+                  <button 
+                    onClick={() => {
+                      speak("Bypassing biometric scan. Initiating manual analytical override.");
+                      startAnalysis();
+                    }}
+                    className="mt-8 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/10 rounded-xl transition-all border border-transparent hover:border-rose-100 dark:hover:border-rose-900/30 active:scale-95"
+                  >
+                    Skip to Report (Bypass Scan)
+                  </button>
+                )}
               </div>
             </div>
           ) : isAnalyzing ? (

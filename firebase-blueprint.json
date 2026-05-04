@@ -308,6 +308,33 @@
       },
       "required": ["userId", "amount", "status", "timestamp"]
     },
+    "SystemMonitoring": {
+      "title": "SystemMonitoring",
+      "description": "System monitoring and IP status",
+      "type": "object",
+      "properties": {
+        "detectedIp": { "type": "string" },
+        "certifiedIp": { "type": "string" },
+        "isCertified": { "type": "boolean" },
+        "lastDetectedAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string" },
+        "lastKnownIp": { "type": "string" }
+      }
+    },
+    "SystemAlert": {
+      "title": "SystemAlert",
+      "description": "System level alert",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "intended": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "message": { "type": "string" }
+      },
+      "required": ["type", "timestamp"]
+    },
     "PlatformStats": {
       "title": "PlatformStats",
       "description": "Global platform financial and engagement statistics",
@@ -374,6 +401,14 @@
     "withdrawals/{withdrawalId}": {
       "schema": "#/entities/Withdrawal",
       "description": "Stores withdrawal requests"
+    },
+    "system/monitoring": {
+      "schema": "#/entities/SystemMonitoring",
+      "description": "Stores system monitoring data"
+    },
+    "system_alerts/{alertId}": {
+      "schema": "#/entities/SystemAlert",
+      "description": "Stores system level alerts and notifications"
     },
     "platform/stats": {
       "schema": "#/entities/PlatformStats",
