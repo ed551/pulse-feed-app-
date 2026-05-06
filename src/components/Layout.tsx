@@ -302,8 +302,8 @@ export default function Layout() {
       const statusMessage = "Pulse Feeds is currently in development. To be fully functional, I need a secure backend connection, valid API keys for all integrated services, and a verified administrative account. System health is currently optimal, but these components are required for full feature deployment.";
       
       const response = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
-        contents: [{ parts: [{ text: `Say clearly and professionally: ${statusMessage}` }] }],
+        model: "gemini-2.0-flash",
+        contents: [{ role: "user", parts: [{ text: `Say clearly and professionally: ${statusMessage}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -371,8 +371,8 @@ export default function Layout() {
         try {
           const prompt = `Provide a smart, professional 1-sentence market analysis for gold today. The predicted direction is ${prediction.direction}. Mention one potential economic driver.`;
           const response = await generateContentWithRetry({
-            model: "gemini-3-flash-preview",
-            contents: prompt
+            model: "gemini-2.0-flash",
+            contents: [{ role: "user", parts: [{ text: prompt }] }]
           });
           
           if (response.text) {
@@ -594,9 +594,9 @@ export default function Layout() {
           if (shouldAnalyze) {
             try {
               const analysisResponse = await generateContentWithRetry({
-                model: "gemini-3-flash-preview",
-                contents: `Analyze this weather for ${city}: Today is ${newWeather.temp} and ${newWeather.type}. Tomorrow's forecast is ${forecastWeather.temp} and ${forecastWeather.type}. Provide a 1-sentence smart summary for the user about the current conditions and the transition to tomorrow.`,
-              });
+              model: "gemini-2.0-flash",
+              contents: [{ role: "user", parts: [{ text: `Analyze this weather for ${city}: Today is ${newWeather.temp} and ${newWeather.type}. Tomorrow's forecast is ${forecastWeather.temp} and ${forecastWeather.type}. Provide a 1-sentence smart summary for the user about the current conditions and the transition to tomorrow.` }] }],
+            });
               if (analysisResponse.text) {
                 setWeatherAnalysis(analysisResponse.text);
                 localStorage.setItem('weather_analysis', analysisResponse.text);
@@ -640,8 +640,8 @@ export default function Layout() {
     try {
       setWeatherHealProgress(20);
       const searchResponse = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
-        contents: `What is the current weather in ${city}? Provide temperature in Celsius and general condition.`,
+        model: "gemini-2.0-flash",
+        contents: [{ role: "user", parts: [{ text: `What is the current weather in ${city}? Provide temperature in Celsius and general condition.` }] }],
         config: {
           tools: [{ googleSearch: {} }]
         }
@@ -650,8 +650,8 @@ export default function Layout() {
       
       if (searchResponse.text) {
         const analysis = await generateContentWithRetry({
-          model: "gemini-3-flash-preview",
-          contents: `Extract temperature (number only) and condition from this weather report: "${searchResponse.text}". Format: TEMP: [number] | CONDITION: [Hot/Sunny, Cold/Chilly, Rainy, Cloudy/Fair, Stormy]`,
+          model: "gemini-2.0-flash",
+          contents: [{ role: "user", parts: [{ text: `Extract temperature (number only) and condition from this weather report: "${searchResponse.text}". Format: TEMP: [number] | CONDITION: [Hot/Sunny, Cold/Chilly, Rainy, Cloudy/Fair, Stormy]` }] }],
         });
         
         const text = analysis.text || "";
@@ -848,8 +848,8 @@ export default function Layout() {
       
       // Smart Analysis for the correction
       const analysisResponse = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
-        contents: `The user corrected the weather. It was reported as ${currentWeather.temp} ${currentWeather.type}, but the user says it is actually ${temp}°C and ${cond}. Provide a 1-sentence smart acknowledgment and update the system intelligence about this local discrepancy.`,
+        model: "gemini-2.0-flash",
+        contents: [{ role: "user", parts: [{ text: `The user corrected the weather. It was reported as ${currentWeather.temp} ${currentWeather.type}, but the user says it is actually ${temp}°C and ${cond}. Provide a 1-sentence smart acknowledgment and update the system intelligence about this local discrepancy.` }] }],
       });
       
       setCurrentWeather(correctedWeather);

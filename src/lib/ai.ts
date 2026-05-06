@@ -43,6 +43,21 @@ export async function generateContentWithRetry(params: GenerateContentParameters
         const isQuotaExceeded = error?.status === 429 || error?.message?.includes("quota") || error?.message?.includes("RESOURCE_EXHAUSTED") || error?.message?.includes("429");
         const isProxyError = error?.message?.includes("Rpc failed due to xhr error") || error?.status === 500 || error?.status === 503;
         
+        // Model Fallback Logic: If gemini-3 fails with quota/proxy issues, try gemini-2.0-flash
+        if ((isQuotaExceeded || isProxyError || error?.status === 404) && params.model?.startsWith('gemini-3')) {
+          console.warn(`Gemini 3 series reported issues. Falling back to Gemini 2.0 Flash for stability.`);
+          params.model = 'gemini-2.0-flash';
+          // No retry increment for first model swap
+          continue; 
+        }
+
+        // If even the fallback model 404s, try one more generic identifier
+        if (error?.status === 404 && params.model === 'gemini-2.0-flash') {
+          console.warn("Gemini 2.0 Flash not found, trying gemini-1.5-flash...");
+          params.model = 'gemini-1.5-flash';
+          continue;
+        }
+
         if ((isQuotaExceeded || isProxyError) && retries < MAX_RETRIES) {
           retries++;
           // Exponential backoff with jitter

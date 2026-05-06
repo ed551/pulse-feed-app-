@@ -28,6 +28,7 @@ const Calls = lazy(() => import("./pages/Calls"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const BankIntegration = lazy(() => import("./pages/BankIntegration"));
+const OperationsHQ = lazy(() => import("./pages/OperationsHQ"));
 const Support = lazy(() => import("./pages/Support"));
 const AdsDashboard = lazy(() => import("./pages/AdsDashboard"));
 const GeminiLab = lazy(() => import("./pages/GeminiLab"));
@@ -182,6 +183,11 @@ export default function App() {
                   <Route path="terms" element={<Terms />} />
                   <Route path="privacy" element={<Privacy />} />
                   <Route path="bank-integration" element={<BankIntegration />} />
+                  <Route path="operations" element={
+                    <AdminRoute>
+                      <OperationsHQ />
+                    </AdminRoute>
+                  } />
                   <Route path="support" element={<Support />} />
                   <Route path="ads" element={
                     <ProtectedRoute>

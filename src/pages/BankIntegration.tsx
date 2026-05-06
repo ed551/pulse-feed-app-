@@ -23,38 +23,38 @@ const BankingPortal: React.FC = () => {
   const [testResult, setTestResult] = useState<any>(null);
 
   const iftPayload = {
-    MessageReference: "PULSE-IFT-001",
+    MessageReference: "PULSE-IFT-002",
     Source: {
-      AccountNumber: "011XXXXXXXXXXX",
+      AccountNumber: "01100975259001",
       Amount: 5000.00,
       TransactionCurrency: "KES"
     },
     Destinations: [
       {
         Reference: "WDL-77283",
-        AccountNumber: "01100XXXXXX100",
+        AccountNumber: "01100975259001",
         Amount: 5000.00,
         TransactionCurrency: "KES",
-        Narration: "Pulse Feeds Salary"
+        Narration: "Pulse Feeds Operating Funds"
       }
     ]
   };
 
   const pesalinkPayload = {
-    MessageReference: "PULSE-PSL-001",
+    MessageReference: "PULSE-PSL-002",
     Source: {
-      AccountNumber: "011XXXXXXXXXXX",
+      AccountNumber: "01100975259001",
       Amount: 5000.00,
       TransactionCurrency: "KES"
     },
     Destinations: [
       {
         Reference: "WDL-77284",
-        AccountNumber: "1234567890",
-        BankCode: "01", // Example bank code
+        AccountNumber: "254707919065", // Verified recipient phone in JSON
+        BankCode: "11", // Co-op Bank PesaLink code (11)
         Amount: 5000.00,
         TransactionCurrency: "KES",
-        Narration: "Pulse Feeds Salary"
+        Narration: "EDWIN MUOHA WATITU"
       }
     ]
   };

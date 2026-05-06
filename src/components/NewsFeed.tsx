@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Newspaper, RefreshCw, ExternalLink, Sparkles, TrendingUp, Clock, Globe } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
 import { cn } from '../lib/utils';
 
 interface NewsItem {
@@ -53,29 +52,17 @@ export default function NewsFeed() {
 
     setIsLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-      const prompt = `Generate 8 highly relevant news items for a platform called Pulse Feeds.
-      Include a mix of 4 International news items and 4 Local news items.
-      ${location ? `Context for Local News: User's approximate coordinates are ${location}.` : "Context for Local News: Focus on general high-vibrancy community achievements and grass-roots impact."}
+      const url = new URL('/api/news', window.location.origin);
+      if (location) url.searchParams.append('location', location);
       
-      Requirements:
-      - Focus on social impact, community achievements, real-world issue detection, and educational milestones.
-      - Format: JSON array of objects with: id (string), title (string), summary (string), category (string), timestamp (string), impactLevel ('high'|'medium'|'low'), scope ('local'|'international').
-      - Keep summaries concise and impactful. Avoid generic corporate speak.
-      - Categories should be specific like 'Science', 'Environment', 'Co-op', 'Edu', 'Tech', 'Social'.`;
-
-      const result = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [{ role: 'user', parts: [{ text: prompt }] }]
-      });
-      const text = result.text || '';
-      const cleanedJson = text.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(cleanedJson);
-
-      setNews(parsed);
+      const response = await fetch(url.toString());
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      
+      setNews(data);
       setLastRefreshed(now);
       localStorage.setItem('pulse_last_news_fetch', now.toString());
-      localStorage.setItem('pulse_cached_news', JSON.stringify(parsed));
+      localStorage.setItem('pulse_cached_news', JSON.stringify(data));
     } catch (error) {
       console.error("News Fetch Error:", error);
       // Fallback to static if AI fails

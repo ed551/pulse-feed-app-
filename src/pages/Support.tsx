@@ -41,7 +41,7 @@ export default function Support() {
 
     try {
       const response = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.0-flash",
         contents: [
           ...messages.map(m => ({ role: m.role, parts: [{ text: m.content }] })),
           { role: 'user', parts: [{ text: userMessage }] }

@@ -30,13 +30,13 @@ export default function GeminiPulse() {
         // based on the vision of the community.
         
         const response = await generateContentWithRetry({
-          model: "gemini-3-flash-preview",
-          contents: `Generate 3 current "Community Pulse Insights" for a social app called Pulse Feeds.
+          model: "gemini-2.0-flash",
+          contents: [{ role: "user", parts: [{ text: `Generate 3 current "Community Pulse Insights" for a social app called Pulse Feeds.
           These should sound like real-time data trends.
           Format as JSON array: [{title, description, category, val, trend}]
           Categories: growth, finance, social, health.
           Trends: up, down, stable.
-          Example: {title: "Health Surge", description: "Users are completing 40% more health scans this week.", category: "health", val: "+40%", trend: "up"}`,
+          Example: {title: "Health Surge", description: "Users are completing 40% more health scans this week.", category: "health", val: "+40%", trend: "up"}` }] }],
         });
 
         const text = response.text || "[]";

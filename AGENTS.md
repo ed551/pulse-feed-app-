@@ -6,8 +6,11 @@ Pulse Feeds is a multi-functional community platform designed for social interac
 ## Key Features & Guidelines
 
 ### 1. AI Model Consistency
-- **Standard:** Exclusively use **Gemini 3 Flash** models (`gemini-3-flash-preview`, `gemini-3.1-flash-live-preview`, `gemini-3.1-flash-image-preview`) for all AI features.
-- **Reasoning:** Ensures high speed, reliability, and consistent behavior across the app.
+- **Primary Model:** Use **Gemini 2.0 Flash** (`gemini-2.0-flash`) for all standard AI interactions to ensure maximum speed and stability.
+- **Fallback Logic:** If `gemini-2.0-flash` is unavailable, fall back to **Gemini 1.5 Flash** (`gemini-1.5-flash`). This logic is centralized in `src/lib/ai.ts`.
+- **Request Interval:** To prevent API rate limits, a minimum request interval of 2000ms is enforced between AI calls via `generateContentWithRetry`.
+- **Prompt Structure:** Always use the structured `contents: [{ role: "user", parts: [{ text: "..." }] }]` format for all AI requests.
+- **Reasoning:** These measures ensure high reliability, handle quota limits gracefully, and provide a consistent user experience during peak usage.
 
 ### 2. UI & Navigation
 - **Permanent Navigation:** The bottom navigation bar must be fixed and consistently visible across all views (mobile and desktop).

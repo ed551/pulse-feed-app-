@@ -59,8 +59,8 @@ export default function CreatePostModal({ type: initialType, onClose }: CreatePo
       }
 
       const response = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
-        contents: prompt
+        model: "gemini-2.0-flash",
+        contents: [{ role: "user", parts: [{ text: prompt }] }]
       });
 
       const result = response.text?.trim() || "";
