@@ -1054,8 +1054,29 @@ async function startServer() {
 
   app.post("/api/payout/mpesa", async (req, res) => {
     const clientIp = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
-    const { phoneNumber, amount } = req.body;
+    const { phoneNumber, amount, userId, scaToken, reference: providedReference } = req.body;
     
+    // Safety 1: Idempotency
+    const reference = providedReference || `USER-MPESA-${userId || 'anon'}-${Date.now()}`;
+    const existingTx = await checkIdempotency(reference);
+    if (existingTx) return res.json({ success: existingTx.status === 'success', transactionId: reference, isDuplicate: true });
+
+    // Safety 2: Velocity Limit
+    if (userId) {
+      try {
+        await checkVelocityLimit(userId, parseFloat(amount) / 130);
+      } catch (velErr: any) {
+        return res.status(429).json({ success: false, error: "Velocity Limit", message: velErr.message });
+      }
+    }
+
+    // Safety 3: SCA for high value
+    if (parseFloat(amount) > 10000 && !scaToken) {
+      return res.status(401).json({ success: false, error: "SCA_REQUIRED", message: "Large payouts require SCA verification." });
+    }
+
+    await markIdempotency(reference, 'pending', { userId, amount, phoneNumber });
+
     // Check which bank is configured
     const equityKey = process.env.EQUITY_CONSUMER_KEY;
     const coopKey = process.env.COOP_BANK_CONSUMER_KEY;
@@ -1186,8 +1207,29 @@ async function startServer() {
 
   app.post("/api/payout/bank", async (req, res) => {
     const clientIp = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
-    const { bankDetails, amount } = req.body;
+    const { bankDetails, amount, userId, scaToken, reference: providedReference } = req.body;
     
+    // Safety 1: Idempotency
+    const reference = providedReference || `USER-BANK-${userId || 'anon'}-${Date.now()}`;
+    const existingTx = await checkIdempotency(reference);
+    if (existingTx) return res.json({ success: existingTx.status === 'success', transactionId: reference, isDuplicate: true });
+
+    // Safety 2: Velocity Limit
+    if (userId) {
+      try {
+        await checkVelocityLimit(userId, parseFloat(amount) / 130);
+      } catch (velErr: any) {
+        return res.status(429).json({ success: false, error: "Velocity Limit", message: velErr.message });
+      }
+    }
+
+    // Safety 3: SCA for high value
+    if (parseFloat(amount) > 20000 && !scaToken) {
+      return res.status(401).json({ success: false, error: "SCA_REQUIRED", message: "Bank transfers over 20k KES require SCA verification." });
+    }
+
+    await markIdempotency(reference, 'pending', { userId, amount, accountNumber: bankDetails.accountNumber });
+
     const equityKey = process.env.EQUITY_CONSUMER_KEY;
 
     if (COOP_CONFIG.clientId) {
@@ -1436,9 +1478,34 @@ async function startServer() {
   app.post("/api/payout/platform", async (req, res) => {
     const clientIp = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
     console.log(`[API] Received platform payout request from IP: ${clientIp}`, req.body);
-    const { phoneNumber, accountNumber, method, amount: rawAmount, recipient } = req.body;
+    const { phoneNumber, accountNumber, method, amount: rawAmount, recipient, scaToken, reference: providedReference } = req.body;
     const amount = parseFloat(rawAmount);
     const destination = accountNumber || phoneNumber || "Unknown";
+    const reference = providedReference || `PLAT-PAY-${Date.now()}`;
+
+    // 1. Idempotency Check
+    const activeTx = await checkIdempotency(reference);
+    if (activeTx) {
+      return res.json({ 
+        success: activeTx.status === 'success', 
+        transactionId: reference, 
+        message: `Duplicate request detected. Status: ${activeTx.status}`,
+        isDuplicate: true 
+      });
+    }
+
+    // 2. SCA verification for treasury movement
+    const isScaValid = await verifyActionSCA(scaToken);
+    if (!isScaValid) {
+      return res.status(401).json({ error: "SCA_REQUIRED", message: "Strong Customer Authentication failed or missing. Treasury movements require a valid Master SEC-PIN." });
+    }
+
+    // 3. Velocity and Fraud Check
+    try {
+      await checkVelocityLimit('platform-admin', amount);
+    } catch (velErr: any) {
+      return res.status(429).json({ error: "VELOCITY_LIMIT", message: velErr.message });
+    }
     
     console.log(`[Developer Payout] Request Body:`, JSON.stringify(req.body));
     console.log(`[Developer Payout] Initiating for ${recipient} (${destination}) with amount $${amount} USD via ${method}`);
@@ -1447,6 +1514,9 @@ async function startServer() {
     if (isNaN(amount) || amount <= 0) {
       return res.status(400).json({ error: "Invalid amount provided" });
     }
+
+    // Mark as pending in idempotency store
+    await markIdempotency(reference, 'pending', { amount, destination, type: 'platform_payout' });
 
     try {
       // 1. Verify the treasury has enough funds using Resilient Adapter (Client SDK Fallback)

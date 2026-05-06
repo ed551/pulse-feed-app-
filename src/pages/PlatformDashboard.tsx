@@ -9,7 +9,7 @@ import {
   PieChart, Info, AlertTriangle, CheckCircle2, Loader2, RefreshCw, PlusSquare,
   Mail, Key, Smartphone, Fingerprint, BrainCircuit, FileText, Zap,
   Copy, ShieldAlert, ShieldOff, Settings, Plus, Trash2, XCircle, CheckCircle,
-  Building2, Cpu, Globe, Database, Crown, Shield, Star, History, Sparkles
+  Building2, Cpu, Globe, Database, Crown, Shield, Star, History, Sparkles, Radio
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
