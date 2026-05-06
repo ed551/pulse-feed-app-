@@ -347,6 +347,17 @@
         "lastUpdated": { "type": "string", "format": "date-time", "description": "When the stats were last updated" }
       },
       "required": ["platformRevenue", "developerShare", "lastUpdated"]
+    },
+    "SecurityConfig": {
+      "title": "SecurityConfig",
+      "description": "System security configuration and master PIN",
+      "type": "object",
+      "properties": {
+        "secPin": { "type": "string", "description": "The hashed or plain master security PIN" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "lastRotationAt": { "type": "string", "format": "date-time" },
+        "rotatedBy": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -413,6 +424,10 @@
     "platform/stats": {
       "schema": "#/entities/PlatformStats",
       "description": "Stores global platform statistics"
+    },
+    "system/security": {
+      "schema": "#/entities/SecurityConfig",
+      "description": "Stores master security PIN and rotation history"
     }
   }
 }

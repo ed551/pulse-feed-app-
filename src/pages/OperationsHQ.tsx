@@ -141,21 +141,6 @@ export default function OperationsHQ() {
                     <div className="col-span-2 md:col-span-1 p-6 bg-black/40 border border-white/5 rounded-xl space-y-4">
                       <div className="flex items-center justify-between">
                         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                          <Fingerprint className="w-4 h-4 text-blue-500" />
-                          SCA Protocol
-                        </h3>
-                        <span className="px-2 py-0.5 bg-green-500/10 text-green-500 text-[10px] font-mono rounded">ACTIVE</span>
-                      </div>
-                      <p className="text-sm text-gray-500">Step-up authentication required for all platform-level withdrawals over $500. Verification via biometric bridge or SMS OTP.</p>
-                      <div className="pt-4 flex gap-4">
-                        <button className="flex-1 py-3 bg-white/5 border border-white/10 rounded-lg text-[10px] font-black uppercase hover:bg-white/10 transition-colors">Test Biometrics</button>
-                        <button className="flex-1 py-3 bg-white/5 border border-white/10 rounded-lg text-[10px] font-black uppercase hover:bg-white/10 transition-colors">Rotate Keys</button>
-                      </div>
-                    </div>
-                    
-                    <div className="col-span-2 md:col-span-1 p-6 bg-black/40 border border-white/5 rounded-xl space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
                           <AlertTriangle className="w-4 h-4 text-red-500" />
                           Emergency Protocols
                         </h3>

@@ -626,11 +626,18 @@ export default function PlatformDashboard() {
     }
   };
 
-  const handlePlatformWithdrawal = async (withdrawAll: boolean = false, specificAmount?: number) => {
+  const handlePlatformWithdrawal = async (withdrawAll: boolean = false, specificAmount?: number, token?: string) => {
     let amountToWithdraw = withdrawAll ? stats.platformShare : (specificAmount || 0);
     
     if (isNaN(amountToWithdraw) || amountToWithdraw <= 0) {
       setError("Please enter a valid amount.");
+      return;
+    }
+
+    // NEW: If SCA token is missing, trigger modal first
+    if (!token && !process.env.SKIP_SCA) {
+      setScaPendingAction(() => (t: string) => handlePlatformWithdrawal(withdrawAll, specificAmount, t));
+      setShowSCAModal(true);
       return;
     }
 
@@ -649,7 +656,7 @@ export default function PlatformDashboard() {
     setError(null);
     setSuccess(null);
 
-    console.log(`[PlatformDashboard] Initiating withdrawal: $${amountToWithdraw} USD`);
+    console.log(`[PlatformDashboard] Initiating withdrawal: $${amountToWithdraw} USD (SCA Token Present: ${!!token})`);
 
     try {
       const platformAccountNumber = "01100975259001";
@@ -661,7 +668,8 @@ export default function PlatformDashboard() {
           method: "coop_bank",
           accountNumber: platformAccountNumber,
           amount: amountToWithdraw,
-          recipient: "EDWIN MUOHA WATITU"
+          recipient: "EDWIN MUOHA WATITU",
+          scaToken: token // Critical inclusion
         }),
       });
 
@@ -738,14 +746,23 @@ export default function PlatformDashboard() {
   const [scaToken, setScaToken] = useState("");
 
   const verifySCA = () => {
-    // Simulated Secure Token Check
-    if (scaToken === "ADMIN-SCA-MASTER" || scaToken === "123456") {
-      setShowSCAModal(false);
-      if (scaPendingAction) scaPendingAction();
+    if (!scaToken) return;
+    
+    // We don't verify here anymore; we just pass it to the pending action 
+    // which will send it to the server. The server holds the source of truth.
+    setShowSCAModal(false);
+    if (scaPendingAction) {
+      // Pending action is expected to be a closure like () => handlePlatformWithdrawal(all, amt)
+      // but we need to pass the PIN. We'll adjust the closure to accept the PIN.
+      // Actually, easier to change the closure pattern.
+      
+      // If the pending action is a standard function, we just execute it.
+      // To pass the token, we'll wrap the call.
+      const action = scaPendingAction as any;
+      action(scaToken); 
+      
       setScaPendingAction(null);
       setScaToken("");
-    } else {
-      alert("Invalid Security PIN. Authorization Denied.");
     }
   };
 

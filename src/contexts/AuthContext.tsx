@@ -220,10 +220,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   });
                 }
                 
-                // Register this session
-                await updateDoc(userRef, {
-                  activeSessions: arrayUnion(currentSessionId)
-                });
+          // Register this session
+          await updateDoc(userRef, {
+            activeSessions: arrayUnion(currentSessionId)
+          }).catch(err => {
+            console.error('Error registering active session:', err);
+            // Non-critical, so we don't handleFirestoreError here to avoid auth loops
+          });
               }
 
               // Only auto-verify if MFA is disabled
@@ -251,6 +254,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               
               setDoc(userRef, initialData, { merge: true }).catch(err => {
                 console.error('Error initializing user document:', err);
+                try {
+                   handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`);
+                } catch(e) { /* Already logged */ }
               });
 
               // Also initialize public profile
@@ -265,6 +271,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 lastSeen: serverTimestamp()
               }, { merge: true }).catch(err => {
                 console.error('Error initializing public user document:', err);
+                try {
+                   handleFirestoreError(err, OperationType.WRITE, `users_public/${user.uid}`);
+                } catch(e) { /* Already logged */ }
               });
             }
           }, (error) => {

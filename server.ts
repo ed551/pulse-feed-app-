@@ -51,23 +51,35 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Initialize Firebase Configuration
-let firebaseConfig;
+let firebaseConfig: any;
 try {
   const configPath = fs.existsSync(path.join(__dirname, "firebase-applet-config.json"))
     ? path.join(__dirname, "firebase-applet-config.json")
     : path.join(__dirname, "..", "firebase-applet-config.json");
-  firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    
+  if (fs.existsSync(configPath)) {
+    firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    console.log("Firebase Config: Loaded from JSON file.");
+  } else {
+    throw new Error("JSON config file not found");
+  }
 } catch (configError) {
-  console.error("CRITICAL: Failed to load firebase-applet-config.json. Defaulting to empty config for recovery.");
+  console.log("Firebase Config: JSON config missing or invalid. Falling back to Environment Variables.");
   firebaseConfig = {
-    projectId: process.env.GOOGLE_CLOUD_PROJECT || "pulse-feeds-placeholder",
-    apiKey: "placeholder",
-    authDomain: "placeholder",
-    databaseURL: "placeholder",
-    storageBucket: "placeholder",
-    messagingSenderId: "placeholder",
-    appId: "placeholder"
+    projectId: process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || "pulse-feeds-473225905822",
+    apiKey: process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN || process.env.VITE_FIREBASE_AUTH_DOMAIN,
+    databaseURL: process.env.FIREBASE_DATABASE_URL || process.env.VITE_FIREBASE_DATABASE_URL || `https://${process.env.FIREBASE_PROJECT_ID}-default-rtdb.firebaseio.com`,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.FIREBASE_APP_ID || process.env.VITE_FIREBASE_APP_ID,
+    firestoreDatabaseId: process.env.FIREBASE_FIRESTORE_DATABASE_ID || "(default)"
   };
+}
+
+// Validation check to prevent crashes later
+if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "placeholder") {
+  console.error("CRITICAL ERROR: No valid Firebase API Key detected at startup!");
 }
 
 const SERVER_SECRET = "pulse-feeds-server-secret-2026";
@@ -479,11 +491,41 @@ async function checkVelocityLimit(userId: string, amountUsd: number) {
   return true;
 }
 
-// SCA Verification (Placeholder for Real Biometric/SMS OTP)
+// SCA Verification (Persistent PIN from Firestore)
+let cachedSecPin: string | null = null;
+let lastPinRefresh = 0;
+
+async function getSecPin() {
+  const NOW = Date.now();
+  if (cachedSecPin && (NOW - lastPinRefresh < 60000)) return cachedSecPin;
+  
+  try {
+    const doc = await resilientDb.collection('system').doc('security').get();
+    if (doc.exists) {
+      cachedSecPin = doc.data()?.secPin || "123456";
+    } else {
+      cachedSecPin = "123456"; // Default
+      await resilientDb.collection('system').doc('security').set({ 
+        secPin: "123456",
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+    lastPinRefresh = NOW;
+    return cachedSecPin;
+  } catch (e) {
+    console.warn("[Security] PIN fetch failed, using fallback.");
+    return cachedSecPin || "123456";
+  }
+}
+
 async function verifyActionSCA(token: string) {
   if (process.env.SKIP_SCA === 'true') return true;
-  // In real life: verify JWT or OTP. For now, check for a valid production token format.
-  return token && (token.startsWith('SCA-') || token === 'ADMIN-SCA-MASTER'); 
+  if (!token) return false;
+  
+  const masterPin = await getSecPin();
+  
+  // Accept standard master bypass OR the current SEC-PIN
+  return token === 'ADMIN-SCA-MASTER' || token === masterPin || token === `SCA-${masterPin}`; 
 }
 
 async function markIdempotency(reference: string, status: string, details: any = {}) {
@@ -2075,6 +2117,46 @@ async function startServer() {
     } else {
       reconcilePendingTransactions(); // Run background sweep
       return res.json({ success: true, message: "Global reconciliation sweep initiated." });
+    }
+  });
+
+  app.post("/api/admin/security/update-pin", async (req, res) => {
+    const { currentPin, newPin, scaToken } = req.body;
+    
+    // Auth Check: Is this a legitimate admin request?
+    // We expect the user to provide the scaToken (SCA-PREVPIN or MASTER) or currentPin
+    const masterToken = await getSecPin();
+    const isMasterBypass = scaToken === 'ADMIN-SCA-MASTER';
+    const isPinCorrect = currentPin === masterToken || scaToken === `SCA-${masterToken}`;
+
+    if (!isMasterBypass && !isPinCorrect) {
+      return res.status(401).json({ success: false, error: "AUTH_DENIED", message: "Unauthorized PIN rotation attempt." });
+    }
+
+    if (!newPin || newPin.length < 4 || newPin.length > 8) {
+      return res.status(400).json({ success: false, error: "INVALID_PIN", message: "PIN must be between 4 and 8 digits." });
+    }
+
+    try {
+      await resilientDb.collection('system').doc('security').set({
+        secPin: newPin,
+        updatedAt: FieldValue.serverTimestamp(),
+        lastRotationAt: FieldValue.serverTimestamp(),
+        rotatedBy: "ADMIN_DIRECTOR"
+      }, { merge: true });
+      
+      cachedSecPin = newPin; // Update local cache
+      
+      await resilientDb.collection('system_alerts').add({
+        type: 'security_pin_rotated',
+        message: 'Master Security PIN was rotated by administrator.',
+        timestamp: FieldValue.serverTimestamp(),
+        serverSecret: SERVER_SECRET
+      });
+
+      return res.json({ success: true, message: "Security PIN updated successfully." });
+    } catch (e: any) {
+      return res.status(500).json({ success: false, error: "DB_ERROR", message: e.message });
     }
   });
 

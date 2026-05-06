@@ -15,6 +15,7 @@ import {
   Check,
   Loader2,
   Heart,
+  Key,
   X,
   Sun,
   Moon,
@@ -890,6 +891,72 @@ export default function Settings() {
                 )} />
               </button>
             </div>
+          </div>
+
+          <div className="h-px bg-gray-100 dark:bg-gray-700 my-2" />
+
+          {/* Platform SEC-PIN (Administrative) */}
+          <div className="space-y-4">
+             <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-600 shadow-sm">
+                  <Key className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-tight">Vault Security PIN</h4>
+                  <p className="text-[10px] text-gray-500">Master PIN used for platform-level withdrawals and sensitive operations.</p>
+                </div>
+             </div>
+
+             <div className="p-5 bg-white dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-4 shadow-sm">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest pl-1">Current PIN</label>
+                    <input 
+                      type="password" 
+                      id="settCurrentPin"
+                      className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-xs font-mono focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="••••••"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest pl-1">New Secret PIN</label>
+                    <input 
+                      type="password" 
+                      id="settNewPin"
+                      className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-xs font-mono focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="4-8 digits"
+                    />
+                  </div>
+                </div>
+                <button 
+                  onClick={async () => {
+                    const cur = (document.getElementById('settCurrentPin') as HTMLInputElement).value;
+                    const next = (document.getElementById('settNewPin') as HTMLInputElement).value;
+                    if(!cur || !next) return alert("Validation Failed: Both PINs are required.");
+                    
+                    try {
+                      const res = await fetch("/api/admin/security/update-pin", {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ currentPin: cur, newPin: next })
+                      });
+                      const data = await res.json();
+                      if (res.ok) {
+                        alert("SEC-PIN Success: Your master security key has been rotated.");
+                        (document.getElementById('settCurrentPin') as HTMLInputElement).value = "";
+                        (document.getElementById('settNewPin') as HTMLInputElement).value = "";
+                      } else {
+                        alert(`Security Logic Error: ${data.message}`);
+                      }
+                    } catch (e: any) {
+                      alert(`Network Integration Error: ${e.message}`);
+                    }
+                  }}
+                  className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/20 active:scale-[0.98]"
+                >
+                  Rotate Master PIN
+                </button>
+             </div>
           </div>
 
           <div className="h-px bg-gray-100 dark:bg-gray-700 my-2" />
