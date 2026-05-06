@@ -1,5 +1,6 @@
 // Build Version: 1.0.8 - Port 3000 Enforcement & Startup Resiliency
 import express from "express";
+import crypto from "crypto";
 // Build Version: 1.0.7 - Deployment Retry After 503
 import { createServer as createViteServer } from "vite";
 import path from "path";
@@ -594,8 +595,10 @@ async function startServer() {
   monitorIP().catch(err => console.error("Initial IP check failed:", err));
   
   setInterval(monitorIP, 1000 * 60 * 5); // Check every 5 minutes in production
+  setInterval(reconcilePendingTransactions, 1000 * 60 * 2); // Poll status every 2 minutes
   console.log("NODE_ENV:", process.env.NODE_ENV);
   console.log("Monitor Interval: 5m (Production-Ready)");
+  console.log("Reconciliation Interval: 2m (Bank Status Polling Active)");
   
   const app = express();
   app.set('trust proxy', 1);
@@ -1462,6 +1465,94 @@ async function startServer() {
     res.json({ status: "SUCCESS" });
   });
 
+  // --- Co-op Bank Transaction Status Reconciliation ---
+  async function syncCoopTransactionStatus(reference: string) {
+    try {
+      const accessToken = await getCoopBankAccessToken();
+      if (accessToken.startsWith('BRIDGE_CERTIFIED')) {
+        console.warn(`[Recon] Skipping ${reference} - Service currently bridged.`);
+        return;
+      }
+
+      console.log(`[Recon] Querying status for ${reference}...`);
+      const response = await axios.post(
+        `${COOP_CONFIG.baseUrl}/Enquiry/TransactionStatus_V3/3.0.0/`,
+        {
+          MessageReference: reference,
+          UserID: COOP_CONFIG.userId || "EDWINMUOHA"
+        },
+        { 
+          headers: { 
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+            "User-Agent": STANDARD_USER_AGENT
+          },
+          timeout: 10000
+        }
+      );
+
+      const data = response.data;
+      console.log(`[Recon] Bank Response for ${reference}:`, JSON.stringify(data));
+
+      const { TransactionStatus, TransactionStatusDescription } = data;
+      
+      if (TransactionStatus !== undefined) {
+        const payoutRef = resilientDb.collection("payouts").doc(reference);
+        const isSuccess = TransactionStatus === "00" || TransactionStatus === "0";
+        // Final states: 00 (Success), 09 (Failed/Rejected), 11 (Invalid). 01 is often Pending.
+        const isTerminal = TransactionStatus !== "01" && TransactionStatus !== "pending";
+
+        if (isTerminal) {
+          await payoutRef.update({
+            status: isSuccess ? "completed" : "failed",
+            bankResponse: data,
+            updatedAt: FieldValue.serverTimestamp(),
+            reconciledAt: FieldValue.serverTimestamp()
+          });
+
+          // Also update idempotency to reflect final state
+          await resilientDb.collection("idempotency_keys").doc(reference).update({
+            status: isSuccess ? "success" : "failed",
+            reconciledAt: FieldValue.serverTimestamp()
+          }).catch(() => {});
+
+          console.log(`[Recon] ${reference} marked as ${isSuccess ? 'SUCCESS' : 'FAILED'}: ${TransactionStatusDescription}`);
+        } else {
+          console.log(`[Recon] ${reference} is still PENDING at bank side.`);
+        }
+      }
+    } catch (error: any) {
+      console.error(`[Recon] Status check for ${reference} failed:`, error.response?.data || error.message);
+    }
+  }
+
+  async function reconcilePendingTransactions() {
+    try {
+      console.log("[Maintenance] Running Co-op Bank Transaction Reconciliation...");
+      // Query for pending payouts initiated via Co-op Bank
+      const pendingSnap = await resilientDb.collection("payouts")
+        .where("status", "==", "pending")
+        .get();
+
+      if (pendingSnap.docs.length === 0) {
+        console.log("[Maintenance] No pending transactions found for reconciliation.");
+        return;
+      }
+
+      console.log(`[Maintenance] Found ${pendingSnap.docs.length} pending transactions to reconcile.`);
+      
+      for (const doc of pendingSnap.docs) {
+        await syncCoopTransactionStatus(doc.id);
+        // Small delay between bank queries to avoid rate limits
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    } catch (error: any) {
+      console.error("[Maintenance] Reconciliation sweep failed:", error.message);
+    }
+  }
+
+  // --- End of Recon Helpers ---
+
   // M-Pesa Callbacks
   app.post("/api/mpesa/callback", (req, res) => {
     console.log("M-Pesa Callback Received:", JSON.stringify(req.body, null, 2));
@@ -1643,6 +1734,18 @@ async function startServer() {
               
               transactionId = reference;
               payoutDetails = response.data;
+              
+              // CRITICAL: Record the payout for the "Transaction Status Leg" (polling)
+              await resilientDb.collection("payouts").doc(reference).set({
+                status: 'pending',
+                amount: kesAmount,
+                type: method || 'IFT',
+                recipient: recipient || 'Treasury',
+                destination: destination,
+                initiatedAt: FieldValue.serverTimestamp(),
+                bankDetails: { endpoint, payload }
+              }).catch((e: any) => console.error("[Paza] Failed to record payout doc:", e.message));
+
               console.log(`[Developer Payout] Real payout request success: ${transactionId}`, JSON.stringify(payoutDetails));
             } catch (apiErr: any) {
               const apiErrorData = apiErr.response?.data;
@@ -1888,36 +1991,91 @@ async function startServer() {
 
   // Co-op Bank Callback Handler
   app.post("/api/payout/coop/callback", async (req, res) => {
-    console.log("Received Co-op Bank Callback:", JSON.stringify(req.body, null, 2));
+    const callbackId = `CB-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    console.log(`[Webhook] [${callbackId}] Received Callback:`, JSON.stringify(req.body));
     
-    const { MessageReference, TransactionStatus, TransactionStatusDescription } = req.body;
+    // 1. Send immediate 200 OK to the bank to prevent retry-loop timeouts
+    res.status(200).json({ status: "RECEIVED", callbackId });
 
-    try {
-      // Update transaction status via Resilient Adapter
-      const payoutRef = resilientDb.collection("payouts").doc(MessageReference);
-      const snap = await payoutRef.get();
+    // 2. Perform background processing so the API response isn't blocked
+    (async () => {
+      try {
+        // --- Signature Verification (Security) ---
+        const signature = req.headers['x-coop-signature'] as string;
+        const webhookSecret = process.env.COOP_WEBHOOK_SECRET;
+        const skipVerify = process.env.SKIP_SIGNATURE_VERIFY === 'true';
 
-      if (snap.exists) {
-        await payoutRef.update({
-          status: TransactionStatus === "00" ? "completed" : "failed",
-          bankResponse: req.body,
-          updatedAt: FieldValue.serverTimestamp()
-        });
-        console.log(`Updated payout ${MessageReference} to ${TransactionStatus === "00" ? "completed" : "failed"}`);
-      } else {
-        // Log it anyway for debugging via Resilient Adapter
-        await resilientDb.collection("callback_logs").add({
-          type: "coop_bank",
-          data: req.body,
-          receivedAt: FieldValue.serverTimestamp()
-        });
+        if (webhookSecret && !skipVerify) {
+          const expectedSignature = crypto
+            .createHmac('sha256', webhookSecret)
+            .update(JSON.stringify(req.body))
+            .digest('hex');
+
+          if (signature !== expectedSignature) {
+            console.error(`[Webhook] [${callbackId}] INVALID SIGNATURE. Dropping request.`);
+            await resilientDb.collection("system_alerts").add({
+              type: "webhook_security_breach",
+              message: "Invalid HMAC signature received on Co-op callback",
+              details: { callbackId, receivedSignature: signature },
+              timestamp: FieldValue.serverTimestamp()
+            });
+            return;
+          }
+        }
+
+        const { MessageReference, TransactionStatus, TransactionStatusDescription } = req.body;
+        if (!MessageReference) throw new Error("Missing MessageReference in callback body");
+
+        // 3. Reconciliation: Update transaction status
+        const payoutRef = resilientDb.collection("payouts").doc(MessageReference);
+        const snap = await payoutRef.get();
+
+        if (snap.exists) {
+          const isSuccess = TransactionStatus === "00" || TransactionStatus === "0";
+          await payoutRef.update({
+            status: isSuccess ? "completed" : "failed",
+            bankResponse: req.body,
+            updatedAt: FieldValue.serverTimestamp(),
+            reconciledAt: FieldValue.serverTimestamp()
+          });
+          
+          console.log(`[Webhook] [${callbackId}] RECONCILED: ${MessageReference} -> ${isSuccess ? 'SUCCESS' : 'FAILED'}`);
+
+          // Update idempotency to reflect terminal status
+          await resilientDb.collection("idempotency_keys").doc(MessageReference).update({
+            status: isSuccess ? "success" : "failed"
+          }).catch(() => {});
+          
+          // Log success to audit
+          await resilientDb.collection("system_alerts").add({
+            type: isSuccess ? "payout_reconciled" : "payout_failed_bank",
+            message: `Bank Callback: ${TransactionStatusDescription || 'Update received'}`,
+            details: { reference: MessageReference, status: TransactionStatus },
+            timestamp: FieldValue.serverTimestamp()
+          });
+        } else {
+          console.warn(`[Webhook] [${callbackId}] ORPHAN CALLBACK: Reference ${MessageReference} not found in DB.`);
+          await resilientDb.collection("callback_logs").add({
+            type: "coop_bank_orphan",
+            data: req.body,
+            receivedAt: FieldValue.serverTimestamp()
+          });
+        }
+      } catch (processingError: any) {
+        console.error(`[Webhook] [${callbackId}] PROCESSING ERROR:`, processingError.message);
       }
-    } catch (error) {
-      console.error("Error processing Co-op callback:", error);
-    }
+    })();
+  });
 
-    // Always return 200 OK to the bank
-    res.status(200).send("OK");
+  app.post("/api/admin/bank-recon", async (req, res) => {
+    const { reference } = req.body;
+    if (reference) {
+      await syncCoopTransactionStatus(reference);
+      return res.json({ success: true, message: `Sync initiated for ${reference}` });
+    } else {
+      reconcilePendingTransactions(); // Run background sweep
+      return res.json({ success: true, message: "Global reconciliation sweep initiated." });
+    }
   });
 
   // Geocoding Proxy (Legacy and Pulse Alias)
