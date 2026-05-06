@@ -528,6 +528,27 @@ async function verifyActionSCA(token: string) {
   return token === 'ADMIN-SCA-MASTER' || token === masterPin || token === `SCA-${masterPin}`; 
 }
 
+// Verify User SEC-PIN (for standard withdrawals)
+async function verifyUserSCA(userId: string, pin: string) {
+  if (process.env.SKIP_SCA === 'true') return true;
+  if (!userId || !pin) return false;
+  
+  try {
+    const userSecRef = resilientDb.collection('users').doc(userId).collection('private').doc('security');
+    const doc = await userSecRef.get();
+    
+    if (doc.exists) {
+      return doc.data()?.secPin === pin;
+    } else {
+      // Default PIN for new users or those who haven't set one yet
+      return pin === "123456";
+    }
+  } catch (e: any) {
+    console.error(`[Security] Failed to verify user SCA for ${userId}:`, e.message);
+    return false;
+  }
+}
+
 async function markIdempotency(reference: string, status: string, details: any = {}) {
   await resilientDb.collection('idempotency_keys').doc(reference).set({
     status,
@@ -1115,8 +1136,13 @@ async function startServer() {
       }
     }
 
-    // Safety 3: SCA for high value
-    if (parseFloat(amount) > 10000 && !scaToken) {
+    // Safety 3: SCA Verification
+    if (userId) {
+      const isScaValid = await verifyUserSCA(userId, scaToken);
+      if (!isScaValid) {
+        return res.status(401).json({ success: false, error: "SCA_REQUIRED", message: "Invalid Security PIN. Authorization Denied." });
+      }
+    } else if (parseFloat(amount) > 10000 && !scaToken) {
       return res.status(401).json({ success: false, error: "SCA_REQUIRED", message: "Large payouts require SCA verification." });
     }
 
@@ -1268,8 +1294,13 @@ async function startServer() {
       }
     }
 
-    // Safety 3: SCA for high value
-    if (parseFloat(amount) > 20000 && !scaToken) {
+    // Safety 3: SCA Verification
+    if (userId) {
+      const isScaValid = await verifyUserSCA(userId, scaToken);
+      if (!isScaValid) {
+        return res.status(401).json({ success: false, error: "SCA_REQUIRED", message: "Invalid Security PIN. Authorization Denied." });
+      }
+    } else if (parseFloat(amount) > 20000 && !scaToken) {
       return res.status(401).json({ success: false, error: "SCA_REQUIRED", message: "Bank transfers over 20k KES require SCA verification." });
     }
 
@@ -2157,6 +2188,47 @@ async function startServer() {
       return res.json({ success: true, message: "Security PIN updated successfully." });
     } catch (e: any) {
       return res.status(500).json({ success: false, error: "DB_ERROR", message: e.message });
+    }
+  });
+
+  app.post("/api/user/security/update-pin", async (req, res) => {
+    const { userId, currentPin, newPin } = req.body;
+    if (!userId) return res.status(400).json({ error: "User ID required" });
+
+    try {
+      const isOldMatch = await verifyUserSCA(userId, currentPin);
+      if (!isOldMatch) {
+         return res.status(401).json({ success: false, error: "AUTH_DENIED", message: "Incorrect current PIN." });
+      }
+
+      await resilientDb.collection('users').doc(userId).collection('private').doc('security').set({
+        secPin: newPin,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      return res.json({ success: true, message: "Security PIN updated successfully." });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/user/security/reset-pin", async (req, res) => {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Email required" });
+
+    try {
+      console.log(`[Security] Initiating PIN reset for ${email}`);
+      // In a real app, send an email with a unique verification link.
+      // For now, we simulate success and logs it.
+      await resilientDb.collection('system_alerts').add({
+        type: 'user_pin_reset_requested',
+        message: `PIN reset link sent to ${email}`,
+        timestamp: FieldValue.serverTimestamp()
+      });
+
+      return res.json({ success: true, message: "Reset instructions have been sent to your email." });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
     }
   });
 

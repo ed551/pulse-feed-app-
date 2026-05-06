@@ -33,6 +33,9 @@ export default function Rewards() {
   const { isIdle, activeSeconds, totalEarnedToday, addPlatformRevenue } = useRevenue();
   const { currency, availableCurrencies, changeCurrency, convert, loading, rates } = useCurrencyConverter();
   const [activeTab, setActiveTab] = useState<'overview' | 'local' | 'international'>('overview');
+  const [showSCAModal, setShowSCAModal] = useState(false);
+  const [scaToken, setScaToken] = useState("");
+  const [scaPendingAction, setScaPendingAction] = useState<((pin: string) => void) | null>(null);
   const [localMethod, setLocalMethod] = useState<'mpesa' | 'bank' | 'paybill'>('mpesa');
   const [paybillDetails, setPaybillDetails] = useState({
     businessNumber: "",
@@ -137,9 +140,17 @@ export default function Rewards() {
     }, { totalEarned: 0, totalWithdrawn: 0, pendingWithdrawals: 0 });
   }, [transactions, rates]);
 
-  const handlePayment = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handlePayment = async (e?: React.FormEvent, pin?: string) => {
+    if (e) e.preventDefault();
     if (!amount) return;
+    
+    // Trigger SCA if not provided
+    if (!pin && !isDeveloper && !process.env.SKIP_SCA) {
+      setScaPendingAction(() => (p: string) => handlePayment(undefined, p));
+      setShowSCAModal(true);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
@@ -152,7 +163,11 @@ export default function Rewards() {
       if (!isDeveloper && numAmount > kesBalance) throw new Error("Insufficient balance");
 
       let endpoint = '/api/payout/mpesa';
-      let body: any = { amount: numAmount };
+      let body: any = { 
+        amount: numAmount, 
+        userId: currentUser?.uid,
+        scaToken: pin
+      };
 
       if (localMethod === 'mpesa') {
         if (!phoneNumber) throw new Error("Phone number is required");
@@ -239,9 +254,17 @@ export default function Rewards() {
     }
   };
 
-  const handleInternationalPayout = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleInternationalPayout = async (e?: React.FormEvent, pin?: string) => {
+    if (e) e.preventDefault();
     if (!payoutAmount) return;
+
+    // Trigger SCA if not provided
+    if (!pin && !isDeveloper && !process.env.SKIP_SCA) {
+      setScaPendingAction(() => (p: string) => handleInternationalPayout(undefined, p));
+      setShowSCAModal(true);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
@@ -275,7 +298,8 @@ export default function Rewards() {
           previousPoints: points,
           remainingPoints: points - pointsToDeduct,
           userId: currentUser.uid,
-          userEmail: currentUser.email
+          userEmail: currentUser.email,
+          scaToken: pin
         };
 
         await addDoc(txRef, txData);
@@ -439,6 +463,92 @@ export default function Rewards() {
 
   return (
     <div className="space-y-8 pb-12">
+      {/* SCA Verification Modal */}
+      <AnimatePresence>
+        {showSCAModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-8 shadow-2xl border border-gray-100 dark:border-gray-700 max-w-sm w-full relative overflow-hidden"
+            >
+               {/* Decorative background */}
+               <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-full -mr-16 -mt-16 blur-2xl" />
+               <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/5 rounded-full -ml-16 -mb-16 blur-2xl" />
+
+               <div className="relative z-10">
+                 <div className="flex justify-center mb-6">
+                   <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 rounded-2xl flex items-center justify-center text-orange-600 shadow-inner">
+                     <Lock className="w-8 h-8" />
+                   </div>
+                 </div>
+                 
+                 <div className="text-center mb-8">
+                   <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Security Protocol</h3>
+                   <p className="text-xs text-gray-500 mt-2 px-4 italic">Standard Customer Authentication required for platform withdrawals.</p>
+                 </div>
+
+                 <div className="space-y-4">
+                   <div className="relative">
+                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                       <KeyRound className="w-5 h-5" />
+                     </div>
+                     <input 
+                       type="password"
+                       maxLength={8}
+                       placeholder="Enter 4-8 Digit PIN"
+                       value={scaToken}
+                       onChange={(e) => setScaToken(e.target.value)}
+                       className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl pl-12 pr-4 py-4 text-sm font-mono focus:ring-2 focus:ring-orange-500 outline-none transition-all shadow-sm"
+                       autoFocus
+                     />
+                     {scaToken.length === 0 && (
+                       <p className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-orange-500/50 uppercase tracking-widest pointer-events-none">Required</p>
+                     )}
+                   </div>
+
+                   <button 
+                     onClick={() => {
+                        if (!scaToken) return;
+                        setShowSCAModal(false);
+                        if (scaPendingAction) scaPendingAction(scaToken);
+                        setScaPendingAction(null);
+                        setScaToken("");
+                     }}
+                     disabled={scaToken.length < 4}
+                     className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-orange-600/30 active:scale-95 disabled:opacity-50 disabled:grayscale"
+                   >
+                     Authorize Payout
+                   </button>
+                   
+                   <button 
+                     onClick={() => {
+                       setShowSCAModal(false);
+                       setScaToken("");
+                       setScaPendingAction(null);
+                     }}
+                     className="w-full py-3 bg-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-[10px] font-black uppercase tracking-widest transition-colors"
+                   >
+                     Cancel Operation
+                   </button>
+                 </div>
+
+                 <div className="mt-8 pt-6 border-t border-gray-50 dark:border-gray-700/50 flex items-center justify-center gap-2 text-[9px] text-gray-400 font-bold uppercase tracking-widest">
+                   <ShieldCheck className="w-3 h-3 text-green-500" />
+                   SEC-PIN v4.2 Deployment
+                 </div>
+               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="text-center py-4">
         <h1 className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-yellow-400 to-orange-500 mb-2">Rewards & Payouts</h1>
         <div className="flex items-center justify-center space-x-2 mb-2">

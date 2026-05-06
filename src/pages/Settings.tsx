@@ -797,6 +797,100 @@ export default function Settings() {
             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('two_factor_auth')}</h4>
             
             <div className="grid grid-cols-1 gap-2">
+              <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-purple-500/10 rounded-xl flex items-center justify-center text-purple-600">
+                      <KeyRound className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-tight">Security PIN (SCA)</h4>
+                      <p className="text-[10px] text-gray-500">The 4-8 digit key required for all withdrawals.</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-gray-400 pl-1">Current PIN</label>
+                      <input 
+                        type="password" 
+                        id="userCurrentPin"
+                         className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-xs font-mono focus:ring-2 focus:ring-purple-500 outline-none"
+                        placeholder="••••••"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-gray-400 pl-1">New PIN</label>
+                      <input 
+                        type="password" 
+                        id="userNewPin"
+                         className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-xs font-mono focus:ring-2 focus:ring-purple-500 outline-none"
+                        placeholder="4-8 digits"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={async () => {
+                        const cur = (document.getElementById('userCurrentPin') as HTMLInputElement).value;
+                        const next = (document.getElementById('userNewPin') as HTMLInputElement).value;
+                        if(!cur || !next) return alert("Validation Error: Please provide both current and new PIN.");
+                        if(next.length < 4 || next.length > 8) return alert("Validation Error: PIN must be 4-8 digits.");
+                        
+                        try {
+                          const res = await fetch("/api/user/security/update-pin", {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userId: currentUser?.uid, currentPin: cur, newPin: next })
+                          });
+                          const data = await res.json();
+                          if (res.ok) {
+                            alert("Success: Your Security PIN has been rotated.");
+                            (document.getElementById('userCurrentPin') as HTMLInputElement).value = "";
+                            (document.getElementById('userNewPin') as HTMLInputElement).value = "";
+                          } else {
+                            alert(`Security Error: ${data.message}`);
+                          }
+                        } catch (e: any) {
+                          alert(`Connection Error: ${e.message}`);
+                        }
+                      }}
+                      className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-purple-600/20 active:scale-95"
+                    >
+                      Update SEC-PIN
+                    </button>
+                    <button 
+                      onClick={async () => {
+                        if (!currentUser?.email) return;
+                        if (!confirm("Reset PIN via Email? Instructions will be sent to your registered address.")) return;
+                        
+                        try {
+                          const res = await fetch("/api/user/security/reset-pin", {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email: currentUser.email })
+                          });
+                          const data = await res.json();
+                          if (res.ok) {
+                            alert("Recovery Started: Please check your email for reset instructions.");
+                          } else {
+                            alert(`Error: ${data.message}`);
+                          }
+                        } catch (e: any) {
+                          alert(`Connection Error: ${e.message}`);
+                        }
+                      }}
+                      className="px-4 py-3 bg-white dark:bg-gray-700 text-purple-600 border border-purple-200 dark:border-purple-800 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
+                    >
+                      Forgot?
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-gray-400 italic text-center">Default PIN is <span className="font-bold">123456</span> unless previously rotated.</p>
+                </div>
+              </div>
+
               {[
                 { id: 'biometric', icon: Fingerprint, label: t('biometric_scanner'), desc: t('biometric_desc'), color: 'text-cyan-500' },
                 { id: 'email_otp', icon: Mail, label: t('email_otp'), desc: t('email_otp_desc'), color: 'text-blue-500' },

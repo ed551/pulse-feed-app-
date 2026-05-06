@@ -135,6 +135,12 @@ service cloud.firestore {
         allow update, delete: if isAdmin();
       }
 
+      match /private/security {
+        // User PINs and MFA settings
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isOwner(userId) || (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
+      }
+
       match /points_ledger/{ledgerId} {
         allow read: if isOwner(userId) || isAdmin();
         allow create: if (isOwner(userId) || request.resource.data.get('serverSecret', '') == "pulse-feeds-server-secret-2026") && isValidId(ledgerId);
