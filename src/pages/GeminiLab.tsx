@@ -18,8 +18,8 @@ import { cn } from '../lib/utils';
 import { generateContentWithRetry } from "../lib/ai";
 
 const MODELS = [
-  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', desc: 'Next-gen multimodal' },
-  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', desc: 'Fast & efficient' }
+  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', desc: 'Next-gen performance' },
+  { id: 'gemini-flash-latest', name: 'Gemini Flash Latest', desc: 'Optimized efficiency' }
 ];
 
 interface LabMessage {

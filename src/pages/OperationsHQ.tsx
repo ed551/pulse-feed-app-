@@ -35,7 +35,7 @@ export default function OperationsHQ() {
         setHealthStatus(prev => ({
           ...prev,
           apiStatus: data.safetyLocked ? 'locked' : 'nominal',
-          ipAlignment: data.lastKnownIp === '34.34.246.31' ? 'synchronized' : 'drift_detected'
+          ipAlignment: data.lastKnownIp === '35.214.40.75' ? 'synchronized' : 'drift_detected'
         }));
       }
     });

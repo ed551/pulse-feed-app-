@@ -59,7 +59,7 @@ interface UserData {
   membershipLevel?: 'bronze' | 'silver' | 'gold';
   membershipStatus?: 'active' | 'expired' | 'canceled';
   twoFactorEnabled?: boolean;
-  twoFactorType?: 'biometric' | 'email_otp' | 'totp';
+  twoFactorType?: 'biometric' | 'email_otp' | 'totp' | 'passkey';
   twoFactorSecret?: string;
   phoneNumber?: string;
   language?: string;
@@ -92,7 +92,7 @@ interface AuthContextType {
   setSessionError: (val: string | null) => void;
   loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
-  signupWithEmail: (email: string, pass: string, name: string, mfaOptions?: { type: 'biometric' | 'email_otp' | 'totp', phone?: string, secret?: string }) => Promise<void>;
+  signupWithEmail: (email: string, pass: string, name: string, mfaOptions?: { type: 'biometric' | 'email_otp' | 'totp' | 'passkey', phone?: string, secret?: string }) => Promise<void>;
   logout: () => Promise<void>;
   isFacebookApp: boolean;
 }
@@ -211,22 +211,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               const activeSessions = data.activeSessions || [];
               const isThisSessionRegistered = activeSessions.includes(currentSessionId);
               
+              // Register this session
               if (!isThisSessionRegistered) {
                 if (activeSessions.length >= 5) {
                   // Auto-rotate: remove oldest session to make room for new one
                   const oldestSession = activeSessions[0];
-                  await updateDoc(userRef, {
+                  updateDoc(userRef, {
                     activeSessions: arrayRemove(oldestSession)
-                  });
+                  }).catch(console.error);
                 }
                 
-          // Register this session
-          await updateDoc(userRef, {
-            activeSessions: arrayUnion(currentSessionId)
-          }).catch(err => {
-            console.error('Error registering active session:', err);
-            // Non-critical, so we don't handleFirestoreError here to avoid auth loops
-          });
+                // Register this session - small delay for token stabilization
+                setTimeout(async () => {
+                  try {
+                    await updateDoc(userRef, {
+                      activeSessions: arrayUnion(currentSessionId)
+                    });
+                  } catch (err) {
+                    console.error('Error registering active session:', err);
+                  }
+                }, 1000);
               }
 
               // Only auto-verify if MFA is disabled
@@ -236,45 +240,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             } else {
               console.log('Initializing new user document...');
               // Initialize user data if it doesn't exist
-              const initialData = {
-                uid: user.uid,
-                email: user.email,
-                displayName: user.displayName,
-                photoURL: user.photoURL,
-                role: user.email === 'edwinmuoha@gmail.com' ? 'admin' : 'user',
-                points: 1250,
-                balance: 12.5,
-                adRevenue: 0,
-                enrolledCourses: [],
-                completedModules: [],
-                createdAt: serverTimestamp(),
-                twoFactorEnabled: false,
-                twoFactorType: 'email_otp'
-              };
-              
-              setDoc(userRef, initialData, { merge: true }).catch(err => {
-                console.error('Error initializing user document:', err);
+              // Small delay to ensure auth token is flushed to Firestore client
+              setTimeout(async () => {
+                const initialData = {
+                  uid: user.uid,
+                  email: user.email,
+                  displayName: user.displayName,
+                  photoURL: user.photoURL,
+                  role: user.email === 'edwinmuoha@gmail.com' ? 'admin' : 'user',
+                  points: 1250,
+                  balance: 12.5,
+                  adRevenue: 0,
+                  enrolledCourses: [],
+                  completedModules: [],
+                  createdAt: serverTimestamp(),
+                  twoFactorEnabled: false,
+                  twoFactorType: 'email_otp'
+                };
+                
                 try {
-                   handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`);
-                } catch(e) { /* Already logged */ }
-              });
-
-              // Also initialize public profile
-              const publicRef = doc(db, 'users_public', user.uid);
-              setDoc(publicRef, {
-                uid: user.uid,
-                displayName: user.displayName,
-                photoURL: user.photoURL,
-                role: user.email === 'edwinmuoha@gmail.com' ? 'admin' : 'user',
-                status: "Hey there! I'm using Pulse Feeds.",
-                isOnline: true,
-                lastSeen: serverTimestamp()
-              }, { merge: true }).catch(err => {
-                console.error('Error initializing public user document:', err);
-                try {
-                   handleFirestoreError(err, OperationType.WRITE, `users_public/${user.uid}`);
-                } catch(e) { /* Already logged */ }
-              });
+                  await setDoc(userRef, initialData, { merge: true });
+                  
+                  // Also initialize public profile
+                  const publicRef = doc(db, 'users_public', user.uid);
+                  await setDoc(publicRef, {
+                    uid: user.uid,
+                    displayName: user.displayName,
+                    photoURL: user.photoURL,
+                    role: user.email === 'edwinmuoha@gmail.com' ? 'admin' : 'user',
+                    status: "Hey there! I'm using Pulse Feeds.",
+                    isOnline: true,
+                    lastSeen: serverTimestamp()
+                  }, { merge: true });
+                } catch (err) {
+                  console.error('Error initializing user document:', err);
+                }
+              }, 1000);
             }
           }, (error) => {
             console.error('User document snapshot error:', error);

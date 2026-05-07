@@ -7,7 +7,7 @@ const MAX_RETRIES = 5;
 const INITIAL_DELAY = 1000; // 1 second
 
 let requestQueue: Promise<void> = Promise.resolve();
-const MIN_REQUEST_INTERVAL = 400; // 400ms between AI requests for better responsiveness
+const MIN_REQUEST_INTERVAL = 2000; // 2000ms between AI requests to prevent rate limits as per AGENTS.md
 
 async function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -26,7 +26,7 @@ export async function generateContentWithRetry(params: GenerateContentParameters
   await currentQueue;
   
   // Only enable High Thinking if explicitly requested to save time
-  if (params.model?.startsWith('gemini-3') && !params.model.includes('tts') && params.config?.thinkingConfig === undefined) {
+  if (params.model?.startsWith('gemini-2.0') && !params.model.includes('tts') && params.config?.thinkingConfig === undefined) {
     // thinkingLevel is withheld for standard use to keep it fast
   }
   
@@ -43,18 +43,19 @@ export async function generateContentWithRetry(params: GenerateContentParameters
         const isQuotaExceeded = error?.status === 429 || error?.message?.includes("quota") || error?.message?.includes("RESOURCE_EXHAUSTED") || error?.message?.includes("429");
         const isProxyError = error?.message?.includes("Rpc failed due to xhr error") || error?.status === 500 || error?.status === 503;
         
-        // Model Fallback Logic: If gemini-3 fails with quota/proxy issues, try gemini-2.0-flash
-        if ((isQuotaExceeded || isProxyError || error?.status === 404) && params.model?.startsWith('gemini-3')) {
-          console.warn(`Gemini 3 series reported issues. Falling back to Gemini 2.0 Flash for stability.`);
-          params.model = 'gemini-2.0-flash';
+        // Model Fallback Logic: If gemini-2.0-flash fails with quota/proxy issues, try gemini-1.5-flash
+        if ((isQuotaExceeded || isProxyError || error?.status === 404 || error?.message?.includes("404")) && params.model?.startsWith('gemini-2.0')) {
+          console.warn(`Gemini 2.0 series reported issues. Falling back to Gemini 1.5 Flash for stability.`);
+          params.model = 'gemini-1.5-flash';
           // No retry increment for first model swap
           continue; 
         }
 
-        // If even the fallback model 404s, try one more generic identifier
-        if (error?.status === 404 && params.model === 'gemini-2.0-flash') {
-          console.warn("Gemini 2.0 Flash not found, trying gemini-1.5-flash...");
-          params.model = 'gemini-1.5-flash';
+        // If fallback hits quota or 404, try last resort
+        if ((isQuotaExceeded || error?.status === 404) && params.model === 'gemini-flash-latest') {
+          console.warn("Gemini Flash Latest issues, trying gemini-2.0-flash-exp (if available)...");
+          // Reverting to a known stable preview if latest fails
+          params.model = 'gemini-2.0-flash-exp'; 
           continue;
         }
 

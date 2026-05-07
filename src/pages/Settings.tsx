@@ -37,12 +37,14 @@ import {
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useNavigate } from "react-router-dom";
+import { startRegistration } from "@simplewebauthn/browser";
 import { useAuth } from "../contexts/AuthContext";
 import { useTranslation } from "../lib/i18n";
 import { db } from "../lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import FingerprintModal from "../components/tools/FingerprintModal";
 import OTPModal from "../components/tools/OTPModal";
+import PasskeyModal from "../components/tools/PasskeyModal";
 import { cn } from "../lib/utils";
 
 export default function Settings() {
@@ -210,6 +212,13 @@ export default function Settings() {
 
   const handleUpdate2FA = async (type: string) => {
     if (!currentUser) return;
+    
+    // If it's a passkey, we handle registration first
+    if (type === 'passkey') {
+      await handleRegisterPasskey();
+      return;
+    }
+
     try {
       const updates: any = { twoFactorType: type };
       
@@ -226,6 +235,56 @@ export default function Settings() {
       await updateDoc(doc(db, 'users', currentUser.uid), updates);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleRegisterPasskey = async () => {
+    if (!currentUser) return;
+    setIsSaving(true);
+    try {
+      // 1. Get options from server
+      const resp = await fetch('/api/auth/passkey/generate-registration-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.uid,
+          userEmail: currentUser.email,
+          userName: currentUser.displayName,
+        }),
+      });
+
+      const options = await resp.json();
+      if (options.error) throw new Error(options.error);
+
+      // 2. Start registration in browser
+      const regResp = await startRegistration(options);
+
+      // 3. Verify with server
+      const verifyResp = await fetch('/api/auth/passkey/verify-registration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.uid,
+          response: regResp,
+          deviceName: navigator.userAgent.split(' ')[0] // Simple device name
+        }),
+      });
+
+      const verification = await verifyResp.json();
+      if (verification.verified) {
+        alert("Passkey Registered Successfully! Your 2FA is now set to Passkey.");
+      } else {
+        throw new Error(verification.error || "Verification failed");
+      }
+    } catch (e: any) {
+      console.error("[Passkey] Error:", e);
+      if (e.name === 'NotAllowedError') {
+        alert("Registration cancelled or timed out.");
+      } else {
+        alert(`Passkey Error: ${e.message}`);
+      }
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -893,6 +952,7 @@ export default function Settings() {
               </div>
 
               {[
+                { id: 'passkey', icon: ShieldCheck, label: 'Passkey (FIDO2)', desc: 'Secure biometric login', color: 'text-indigo-500' },
                 { id: 'biometric', icon: Fingerprint, label: t('biometric_scanner'), desc: t('biometric_desc'), color: 'text-cyan-500' },
                 { id: 'email_otp', icon: Mail, label: t('email_otp'), desc: t('email_otp_desc'), color: 'text-blue-500' },
                 { id: 'totp', icon: Shield, label: t('google_auth'), desc: t('totp_desc'), color: 'text-orange-500' }
@@ -1394,7 +1454,13 @@ export default function Settings() {
             >
               <X className="w-5 h-5" />
             </button>
-            {userData?.twoFactorType !== 'biometric' && userData?.twoFactorEnabled ? (
+            {userData?.twoFactorType === 'passkey' && userData?.twoFactorEnabled ? (
+              <PasskeyModal 
+                userId={currentUser?.uid || ''}
+                onClose={() => setShowFingerprintModal(false)}
+                onSuccess={handleFingerprintSuccess}
+              />
+            ) : userData?.twoFactorType !== 'biometric' && userData?.twoFactorEnabled ? (
               <OTPModal 
                 userId={currentUser?.uid || ''} 
                 email={userData?.email}

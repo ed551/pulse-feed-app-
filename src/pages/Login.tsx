@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { LogIn, ShieldAlert, Fingerprint, AlertCircle, ExternalLink, MoreHorizontal, Share2, Mail, Lock, User as UserIcon, ArrowRight, UserPlus, Smartphone, ShieldCheck, ChevronLeft, Shield, QrCode, Copy, Loader2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
+import { startAuthentication } from '@simplewebauthn/browser';
 import { isBiometricsSupported, authenticateBiometric } from '../lib/biometrics';
 
 export default function Login() {
@@ -31,12 +32,12 @@ export default function Login() {
   
   // 2FA states
   const [mfaStep, setMfaStep] = useState<'none' | 'challenge'>('none');
-  const [mfaType, setMfaType] = useState<'email_otp' | 'biometric' | 'totp'>('email_otp');
+  const [mfaType, setMfaType] = useState<'email_otp' | 'biometric' | 'totp' | 'passkey'>('email_otp');
   const [phone, setPhone] = useState('');
   const [totpSecret, setTotpSecret] = useState('');
   const [otp, setOtp] = useState('');
   const [isSendingOtp, setIsSendingOtp] = useState(false);
-  const [mfaMethod, setMfaMethod] = useState<'email' | 'biometric' | 'totp'>('email');
+  const [mfaMethod, setMfaMethod] = useState<'email' | 'biometric' | 'totp' | 'passkey'>('email');
 
   useEffect(() => {
     setBiometricSupported(isBiometricsSupported());
@@ -50,11 +51,65 @@ export default function Login() {
   useEffect(() => {
     if (currentUser && !isMfaVerified && userData) {
       setMfaStep('challenge');
-      const method = userData.twoFactorType === 'biometric' ? 'biometric' : 
+      const method = userData.twoFactorType === 'passkey' ? 'passkey' :
+                     userData.twoFactorType === 'biometric' ? 'biometric' : 
                      userData.twoFactorType === 'totp' ? 'totp' : 'email';
       setMfaMethod(method as any);
+
+      // Auto-trigger passkey if selected
+      if (method === 'passkey') {
+        setTimeout(() => handleMfaPasskey(), 500);
+      }
     }
   }, [currentUser, isMfaVerified, userData, setIsMfaVerified]);
+
+  const handleMfaPasskey = async () => {
+    if (!currentUser) return;
+    try {
+      setLoading(true);
+      setError('');
+      
+      // 1. Get options from server
+      const resp = await fetch('/api/auth/passkey/generate-authentication-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.uid }),
+      });
+
+      const options = await resp.json();
+      if (options.error) throw new Error(options.error);
+
+      // 2. Start authentication in browser
+      const authResp = await startAuthentication(options);
+
+      // 3. Verify with server
+      const verifyResp = await fetch('/api/auth/passkey/verify-authentication', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.uid,
+          response: authResp,
+        }),
+      });
+
+      const verification = await verifyResp.json();
+      if (verification.verified) {
+        setIsMfaVerified(true);
+        navigate(from, { replace: true });
+      } else {
+        throw new Error(verification.error || "Verification failed");
+      }
+    } catch (err: any) {
+      console.error("[Passkey Auth Error]", err);
+      if (err.name === 'NotAllowedError') {
+        setError("Authentication cancelled or timed out.");
+      } else {
+        setError(err.message || 'Passkey authentication failed');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (mode === 'signup' && signupStep === 2 && mfaType === 'totp' && !totpSecret) {
@@ -153,6 +208,8 @@ export default function Login() {
     if (mfaStep === 'challenge') {
       if (mfaMethod === 'biometric') {
         handleMfaBiometric();
+      } else if (mfaMethod === 'passkey') {
+        handleMfaPasskey();
       } else {
         verifyOtp();
       }
@@ -299,20 +356,22 @@ To fix this:
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 bg-orange-100 dark:bg-orange-900/40 rounded-xl text-orange-600">
                   {mfaMethod === 'biometric' ? <Fingerprint className="w-5 h-5" /> : 
+                   mfaMethod === 'passkey' ? <ShieldCheck className="w-5 h-5" /> :
                    mfaMethod === 'totp' ? <ShieldCheck className="w-5 h-5" /> :
                    <Mail className="w-5 h-5" />}
                 </div>
                 <div className="text-left">
-                  <p className="text-xs font-bold text-gray-900 dark:text-white capitalize">{mfaMethod} Verification</p>
+                  <p className="text-xs font-bold text-gray-900 dark:text-white capitalize">{mfaMethod.replace('_', ' ')} Verification</p>
                   <p className="text-[10px] text-gray-500">
                     {mfaMethod === 'biometric' ? 'Use face/fingerprint authentication' : 
+                     mfaMethod === 'passkey' ? 'Use your Passkey (Biometrics/Security Key)' :
                      mfaMethod === 'totp' ? 'Enter the code from Google Authenticator' :
                      'Check your inbox for a 6-digit code'}
                   </p>
                 </div>
               </div>
 
-              {mfaMethod !== 'biometric' ? (
+              {mfaMethod !== 'biometric' && mfaMethod !== 'passkey' ? (
                 <div className="space-y-4">
                   <div className="relative">
                     <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -348,6 +407,14 @@ To fix this:
                     </button>
                   </div>
                 </div>
+              ) : mfaMethod === 'passkey' ? (
+                <button
+                  onClick={handleMfaPasskey}
+                  disabled={loading}
+                  className="w-full py-4 bg-orange-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-orange-500/30 hover:bg-orange-700 transition-all flex items-center justify-center gap-2"
+                >
+                  {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <><ShieldCheck className="w-5 h-5" /> Authenticate with Passkey</>}
+                </button>
               ) : (
                 <button
                   onClick={handleMfaBiometric}

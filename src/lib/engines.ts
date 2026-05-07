@@ -88,6 +88,67 @@ export const auto_updater = () => console.log("auto_updater running");
 export const resource_governor = () => console.log("resource_governor running");
 export const theme_engine = () => console.log("theme_engine running");
 export const HeaderIntelligence = () => console.log("HeaderIntelligence running");
+
+// High Performance Self-Update Engine
+export class SelfUpdateEngine {
+  private static instance: SelfUpdateEngine;
+  private tasks: Map<string, { interval: number; lastRun: number; action: () => void }> = new Map();
+  private isRunning: boolean = false;
+  private loopId: number | null = null;
+
+  private constructor() {}
+
+  static getInstance() {
+    if (!SelfUpdateEngine.instance) {
+      SelfUpdateEngine.instance = new SelfUpdateEngine();
+    }
+    return SelfUpdateEngine.instance;
+  }
+
+  register(id: string, action: () => void, intervalMs: number) {
+    this.tasks.set(id, { action, interval: intervalMs, lastRun: Date.now() });
+    console.log(`[Self-Update Engine] Registered task: ${id} (${intervalMs}ms)`);
+  }
+
+  unregister(id: string) {
+    this.tasks.delete(id);
+  }
+
+  start() {
+    if (this.isRunning) return;
+    this.isRunning = true;
+    console.log("[Self-Update Engine] Initialized and active.");
+    
+    const runLoop = () => {
+      if (!this.isRunning) return;
+      
+      const now = Date.now();
+      this.tasks.forEach((task, id) => {
+        if (now - task.lastRun >= task.interval) {
+          // Wrap in try/catch to ensure one failing task doesn't kill the engine
+          try {
+            task.action();
+          } catch (err) {
+            console.error(`[Self-Update Engine] Task failed: ${id}`, err);
+          }
+          task.lastRun = now;
+        }
+      });
+      
+      // Use setTimeout for background tasks to be less aggressive than requestAnimationFrame
+      // 1000ms check frequency is plenty for background system maintenance
+      this.loopId = window.setTimeout(runLoop, 1000) as unknown as number;
+    };
+    
+    this.loopId = window.setTimeout(runLoop, 1000) as unknown as number;
+  }
+
+  stop() {
+    this.isRunning = false;
+    if (this.loopId) window.clearTimeout(this.loopId);
+  }
+}
+
 export const ai_auto_diagnostics = () => {
   console.log("AI Auto-Diagnostics: Monitoring system health...");
   // This engine analyzes system logs and provides diagnostic insights

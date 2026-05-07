@@ -624,7 +624,7 @@ export default function Education() {
       Language: Professional. No small talk.`;
 
       const ttsResponse = await generateContentWithRetry({
-        model: "gemini-2.0-flash",
+        model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ text: customText ? `Read this intelligence brief at a normal, professional pace: ${customText.substring(0, 3000)}` : masterScriptPrompt }] }],
         config: {
           responseModalities: [Modality.AUDIO],
@@ -788,7 +788,7 @@ export default function Education() {
       }
 
       const response = await generateContentWithRetry({
-        model: "gemini-2.0-flash",
+        model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
           tools: [{ googleSearch: {} }] as any

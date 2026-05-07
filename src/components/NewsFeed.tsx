@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Newspaper, RefreshCw, ExternalLink, Sparkles, TrendingUp, Clock, Globe } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { generateContentWithRetry } from '../lib/ai';
 
 interface NewsItem {
   id: string;
@@ -11,6 +12,7 @@ interface NewsItem {
   timestamp: string;
   impactLevel: 'high' | 'medium' | 'low';
   scope: 'local' | 'international';
+  url: string;
 }
 
 export default function NewsFeed() {
@@ -25,8 +27,7 @@ export default function NewsFeed() {
         async (position) => {
           try {
             const { latitude, longitude } = position.coords;
-            // Reverse geocoding can be complex, just pass coordinates and ask Gemini to infer or use general context
-            setLocation(`${latitude}, ${longitude}`);
+            setLocation(`${latitude.toFixed(2)}, ${longitude.toFixed(2)}`);
           } catch (e) {
             console.error("Location error", e);
           }
@@ -52,23 +53,61 @@ export default function NewsFeed() {
 
     setIsLoading(true);
     try {
-      const url = new URL('/api/news', window.location.origin);
-      if (location) url.searchParams.append('location', location);
+      const prompt = `Generate 8 highly relevant current news items for a platform called Pulse Feeds.
+      Include a mix of 4 International news items and 4 Local news items.
+      ${location ? `Context for Local News: User's approximate location is ${location}.` : "Context for Local News: Focus on high-vibrancy community achievements and grass-roots impact."}
       
-      const response = await fetch(url.toString());
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
+      Requirements:
+      - USE REAL NEWS from the last 24-48 hours. Use the Google Search tool to find actual headlines and valid source URLs.
+      - DO NOT generate placeholder URLs like example.com. EVERY item must have a real, working URL to a news article.
+      - Focus on social impact, community achievements, real-world issue detection, and educational milestones.
+      - Format: JSON array of objects with: id (string), title (string), summary (string), category (string), timestamp (string), impactLevel ('high'|'medium'|'low'), scope ('local'|'international'), url (string).
+      - Categories should be specific like 'Science', 'Environment', 'Co-op', 'Edu', 'Tech', 'Social'.`;
+
+      const genResult = await generateContentWithRetry({
+        model: "gemini-2.0-flash",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: {
+          tools: [{ googleSearch: {} }]
+        }
+      });
       
-      setNews(data);
-      setLastRefreshed(now);
-      localStorage.setItem('pulse_last_news_fetch', now.toString());
-      localStorage.setItem('pulse_cached_news', JSON.stringify(data));
-    } catch (error) {
-      console.error("News Fetch Error:", error);
+      const textResponse = genResult.text;
+      const jsonMatch = textResponse?.match(/\[[\s\S]*\]/);
+      
+      if (jsonMatch) {
+        let parsed = JSON.parse(jsonMatch[0]);
+        // Ensure every item has a real URL, fallback to search if missing or placeholder
+        parsed = parsed.map((item: any) => {
+          const url = item.url || '';
+          const isPlaceholder = !url || url.includes('example.com') || url.includes('placeholder.com') || !url.startsWith('http');
+          
+          return {
+            ...item,
+            url: isPlaceholder ? `https://www.google.com/search?q=${encodeURIComponent(item.title)}` : url
+          };
+        });
+        
+        setNews(parsed);
+        setLastRefreshed(now);
+        localStorage.setItem('pulse_last_news_fetch', now.toString());
+        localStorage.setItem('pulse_cached_news', JSON.stringify(parsed));
+      } else {
+        throw new Error("Invalid output format from AI");
+      }
+    } catch (error: any) {
+      const isQuota = error?.status === 429 || error?.message?.includes("quota") || error?.message?.includes("RESOURCE_EXHAUSTED");
+      
+      if (isQuota) {
+        console.warn("News Feed: AI Quota exhausted, using local fallback content.");
+      } else {
+        console.error("News Fetch Error:", error);
+      }
+
       // Fallback to static if AI fails
       const fallback = [
-        { id: '1', title: 'Global Climate Summit Reaches Accord', summary: 'International leaders agree on a new framework for community-led carbon reduction projects.', category: 'Social', timestamp: '1h ago', impactLevel: 'high', scope: 'international' },
-        { id: '2', title: 'Local Co-op Program Expands', summary: 'Community-run agricultural cooperative in your region expands its reach to five new districts.', category: 'Co-op', timestamp: '3h ago', impactLevel: 'medium', scope: 'local' }
+        { id: '1', title: 'Global Climate Summit Reaches Accord', summary: 'International leaders agree on a new framework for community-led carbon reduction projects.', category: 'Social', timestamp: '1h ago', impactLevel: 'high', scope: 'international', url: 'https://www.google.com/search?q=Global+Climate+Summit+Accord' },
+        { id: '2', title: 'Local Co-op Program Expands', summary: 'Community-run agricultural cooperative in your region expands its reach to five new districts.', category: 'Co-op', timestamp: '3h ago', impactLevel: 'medium', scope: 'local', url: 'https://www.google.com/search?q=Local+Co-op+Program+Expansion' }
       ] as NewsItem[];
       setNews(fallback);
     } finally {
@@ -140,7 +179,10 @@ export default function NewsFeed() {
                   <TrendingUp className="w-3 h-3" />
                   Impact Verified
                 </div>
-                <button className="text-[10px] font-black text-gray-400 hover:text-gray-600 uppercase flex items-center gap-1 group/btn">
+                <button 
+                  onClick={() => item.url && window.open(item.url, '_blank')}
+                  className="text-[10px] font-black text-gray-400 hover:text-gray-600 uppercase flex items-center gap-1 group/btn"
+                >
                   Read More
                   <ExternalLink className="w-2.5 h-2.5 group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-transform" />
                 </button>

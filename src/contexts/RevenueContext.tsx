@@ -10,6 +10,7 @@ interface RevenueContextType {
   addRevenue: (userAmount: number, platformAmount: number, reason: string, source: 'ad' | 'education' | 'active_time' | 'dating' | 'community' | 'events') => Promise<void>;
   addPlatformRevenue: (amount: number, reason: string) => Promise<void>;
   addPlatformExpense: (amount: number, reason: string) => Promise<void>;
+  syncActiveTimeRewards: () => Promise<void>;
 }
 
 const RevenueContext = createContext<RevenueContextType | undefined>(undefined);
@@ -26,12 +27,102 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [activeSeconds, setActiveSeconds] = useState(0);
   const [totalEarnedToday, setTotalEarnedToday] = useState(0);
   
+  // Self-Update Engine: Batched Synchronization
+  const pendingUserPointsRef = useRef(0);
+  const pendingUserValueRef = useRef(0);
+  const pendingPlatformValueRef = useRef(0);
+  const lastSyncRef = useRef<number>(Date.now());
+  
   const idleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const earningIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const userDataRef = useRef(userData);
+
+  // Keep ref in sync
+  useEffect(() => {
+    userDataRef.current = userData;
+  }, [userData]);
   
-  const IDLE_THRESHOLD = 60000; // 60 seconds
-  const EARNING_INTERVAL = 60000; // Increase to 1 minute for more substantial increments
-  const POINTS_PER_INTERVAL = 2; // Total points to split (1 for user, 1 for platform)
+  const IDLE_THRESHOLD = 300000; // 5 minutes
+  const EARNING_INTERVAL = 30000; // Check every 30s locally
+  const SYNC_INTERVAL = 300000; // Sync to DB every 5 mins
+  const POINTS_PER_INTERVAL = 2.5; // Adjusted for 30s
+
+  const syncPendingToFirestore = async () => {
+    if (!currentUser || pendingUserPointsRef.current <= 0) return;
+    
+    const userPts = pendingUserPointsRef.current;
+    const userVal = pendingUserValueRef.current;
+    const platVal = pendingPlatformValueRef.current;
+    const totalVal = userVal + platVal;
+    
+    // Reset counters before async call to prevent race conditions
+    pendingUserPointsRef.current = 0;
+    pendingUserValueRef.current = 0;
+    pendingPlatformValueRef.current = 0;
+    lastSyncRef.current = Date.now();
+
+    try {
+      const userRef = doc(db, 'users', currentUser.uid);
+      const statsRef = doc(db, 'platform', 'stats');
+
+      await updateDoc(userRef, {
+        points: increment(userPts),
+        balance: increment(userVal),
+        activeTimeRevenue: increment(userVal)
+      });
+
+      // User-specific Points Ledger
+      await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
+        amount: userPts,
+        balanceAfter: (userDataRef.current?.points || 0) + userPts,
+        type: 'accrual',
+        source: 'active_time',
+        reason: 'Activity Reward (Engine Sync)',
+        timestamp: serverTimestamp()
+      }).catch(() => {});
+
+      // LOG TRANSACTION
+      await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), {
+        amount: userVal,
+        currency: 'USD',
+        type: 'earning',
+        source: 'active_time',
+        status: 'success',
+        timestamp: serverTimestamp(),
+        reference: `ACTV-${Date.now()}-${currentUser.uid.slice(0, 4)}`,
+        details: 'Active Engagement Rewards (Batched)',
+        pointsAdded: userPts,
+        remainingPoints: (userDataRef.current?.points || 0) + userPts
+      }).catch(() => {});
+
+      await updateDoc(statsRef, {
+        platformRevenue: increment(totalVal),
+        platformShare: increment(platVal),
+        totalUserBalances: increment(userVal),
+        serverSecret: "pulse-feeds-server-secret-2026"
+      }).catch(() => {});
+
+      await addDoc(collection(db, 'platform_transactions'), {
+        type: 'revenue',
+        source: 'active_time',
+        userAmount: userVal,
+        platformAmount: platVal,
+        totalAmount: totalVal,
+        reason: "Active Usage Rewards (Engine Sync)",
+        userId: currentUser.uid,
+        timestamp: serverTimestamp(),
+        serverSecret: "pulse-feeds-server-secret-2026"
+      }).catch(() => {});
+
+      console.log(`[Self-Update] Successfully synced batched rewards: ${userPts} pts ($${userVal.toFixed(2)})`);
+    } catch (error) {
+      console.error("[Self-Update] Sync failure, restoring pending values:", error);
+      // Restore if failed
+      pendingUserPointsRef.current += userPts;
+      pendingUserValueRef.current += userVal;
+      pendingPlatformValueRef.current += platVal;
+    }
+  };
 
   const addRevenue = async (userAmount: number, platformAmount: number, reason: string, source: 'ad' | 'education' | 'active_time' | 'dating' | 'community' | 'events') => {
     if (!currentUser) return;
@@ -52,7 +143,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (response.ok) {
         const result = await response.json();
         console.log(`[API Revenue] Success: User Earned $${result.userAmount}, Platform Earned $${result.platformAmount}`);
-        setTotalEarnedToday(prev => prev + result.pointsAdded);
+        setTotalEarnedToday(prev => prev + (result.pointsAdded || 0));
         return;
       }
 
@@ -83,7 +174,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // User-specific Points Ledger (Full Audit Trail)
       await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
         amount: pointsToAdd,
-        balanceAfter: (userData?.points || 0) + pointsToAdd,
+        balanceAfter: (userDataRef.current?.points || 0) + pointsToAdd,
         type: 'accrual',
         source: source,
         reason,
@@ -101,7 +192,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
         reference: `REVN-${Date.now()}-${currentUser.uid.slice(0, 4)}`,
         details: reason,
         pointsAdded: pointsToAdd,
-        remainingPoints: (userData?.points || 0) + pointsToAdd
+        remainingPoints: (userDataRef.current?.points || 0) + pointsToAdd
       }).catch(err => console.error("Error logging user transaction:", err));
 
       // Update Platform Stats (Platform Share & Total User Balances)
@@ -228,76 +319,30 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   useEffect(() => {
     if (currentUser && !isIdle) {
-      earningIntervalRef.current = setInterval(async () => {
-        try {
-          const userRef = doc(db, 'users', currentUser.uid);
-          const statsRef = doc(db, 'platform', 'stats');
+      earningIntervalRef.current = setInterval(() => {
+        // Accumulate locally
+        const userPts = Math.floor(POINTS_PER_INTERVAL * 0.5);
+        const userVal = userPts / 100;
+        const platVal = (POINTS_PER_INTERVAL - userPts) / 100;
 
-          // 1 point = $0.01. So POINTS_PER_INTERVAL (2) = $0.02
-          // Distribution: 50% to User, 50% to Platform
-          const userPoints = Math.max(1, Math.floor(POINTS_PER_INTERVAL * 0.5));
-          const userValue = userPoints / 100;
-          const platformValue = (POINTS_PER_INTERVAL - userPoints) / 100;
-          const totalValue = userValue + platformValue;
+        pendingUserPointsRef.current += userPts;
+        pendingUserValueRef.current += userVal;
+        pendingPlatformValueRef.current += platVal;
 
-          await updateDoc(userRef, {
-            points: increment(userPoints),
-            balance: increment(userValue),
-            activeTimeRevenue: increment(userValue)
-          });
+        setTotalEarnedToday(prev => prev + userPts);
+        console.log(`[Self-Update] Pending Engine: ${pendingUserPointsRef.current} pts. Sync in ${Math.round((SYNC_INTERVAL - (Date.now() - lastSyncRef.current)) / 1000)}s`);
 
-          // User-specific Points Ledger (Audit Trail for Active Time)
-          await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
-            amount: userPoints,
-            balanceAfter: (userData?.points || 0) + userPoints,
-            type: 'accrual',
-            source: 'active_time',
-            reason: 'Activity Reward (Sync)',
-            timestamp: serverTimestamp()
-          }).catch(() => {});
-
-          // LOG TRANSACTION - This is crucial for the Rewards Page Audit to show data
-          await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), {
-            amount: userValue,
-            currency: 'USD',
-            type: 'earning',
-            source: 'active_time',
-            status: 'success',
-            timestamp: serverTimestamp(),
-            reference: `ACTV-${Date.now()}-${currentUser.uid.slice(0, 4)}`,
-            details: 'Active Engagement Rewards',
-            pointsAdded: userPoints,
-            remainingPoints: (userData?.points || 0) + userPoints
-          }).catch(err => console.error("Error logging user active transaction:", err));
-
-          await updateDoc(statsRef, {
-            platformRevenue: increment(totalValue),
-            platformShare: increment(platformValue),
-            totalUserBalances: increment(userValue),
-            serverSecret: "pulse-feeds-server-secret-2026"
-          }).catch(() => {}); // Ignore errors here to keep interval smooth
-
-          // Log Platform Transaction for Audit Trail (Active Time)
-          await addDoc(collection(db, 'platform_transactions'), {
-            type: 'revenue',
-            source: 'active_time',
-            userAmount: userValue,
-            platformAmount: platformValue,
-            totalAmount: totalValue,
-            reason: "Active Usage Rewards (Sync)",
-            userId: currentUser.uid,
-            timestamp: serverTimestamp(),
-            serverSecret: "pulse-feeds-server-secret-2026"
-          }).catch(() => {});
-
-          setTotalEarnedToday(prev => prev + userPoints);
-          console.log(`Earned ${userPoints} point ($${userValue}) for being active! Platform earned $${platformValue}`);
-        } catch (error) {
-          console.error("Error updating points:", error);
+        // Check if it's time to sync
+        if (Date.now() - lastSyncRef.current >= SYNC_INTERVAL) {
+          syncPendingToFirestore();
         }
       }, EARNING_INTERVAL);
     } else {
       if (earningIntervalRef.current) clearInterval(earningIntervalRef.current);
+      // Sync on idle or logout
+      if (pendingUserPointsRef.current > 0) {
+        syncPendingToFirestore();
+      }
     }
 
     return () => {
@@ -316,7 +361,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [isIdle]);
 
   return (
-    <RevenueContext.Provider value={{ isIdle, activeSeconds, totalEarnedToday, addRevenue, addPlatformRevenue, addPlatformExpense }}>
+    <RevenueContext.Provider value={{ isIdle, activeSeconds, totalEarnedToday, addRevenue, addPlatformRevenue, addPlatformExpense, syncActiveTimeRewards: syncPendingToFirestore }}>
       {children}
     </RevenueContext.Provider>
   );

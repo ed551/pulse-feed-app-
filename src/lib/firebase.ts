@@ -21,29 +21,25 @@ setLogLevel('error');
 // Use a factory-like initialization to prevent multiple initialization errors
 const getDb = () => {
   try {
-    // Try to get existing instance first if any secondary init happened elsewhere
-    // but typically we want to be the primary one.
     const dbId = (firestoreDatabaseId && firestoreDatabaseId !== '(default)') ? firestoreDatabaseId : undefined;
     
     // We use initializeFirestore for persistent settings in proxied/IAB environments
+    // forcing long polling is essential for stability in the AI Studio preview
     return initializeFirestore(app, {
       experimentalForceLongPolling: true,
-      experimentalAutoDetectLongPolling: true,
     }, dbId);
   } catch (e: any) {
-    // If already initialized, initializeFirestore might throw. 
-    // In that case, we should try to get the instance or just use default initializeFirestore
-    console.warn("Firestore initialization notice:", e.message);
+    console.warn("Primary Firestore initialization notice:", e.message);
     
     // Attempting a simpler initialization if first one failed
     try {
-      // @ts-ignore - internal check for existing instances if needed or just catch
-      return initializeFirestore(app, {}, (firestoreDatabaseId && firestoreDatabaseId !== '(default)') ? firestoreDatabaseId : undefined);
+      return initializeFirestore(app, {
+        experimentalForceLongPolling: true,
+      }, (firestoreDatabaseId && firestoreDatabaseId !== '(default)') ? firestoreDatabaseId : undefined);
     } catch (innerErr: any) {
       console.error("Secondary Firestore initialization failed:", innerErr.message);
-      // Fallback to basic initialization if all else fails
-      // Note: this might still throw if double-init is the issue, handled by export below
-      throw innerErr;
+      // Final attempt: fallback to basic getter which might use existing instance
+      return (app as any)._firestoreInst || initializeFirestore(app, {});
     }
   }
 };

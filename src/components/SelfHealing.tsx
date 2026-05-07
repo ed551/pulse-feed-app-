@@ -1,31 +1,71 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { saveInsight } from '../lib/insights';
-import { self_healing_protocol, ai_auto_diagnostics, automated_hotfix_compiler } from '../lib/engines';
+import { SelfUpdateEngine, ai_auto_diagnostics, automated_hotfix_compiler } from '../lib/engines';
 import { generateContentWithRetry } from '../lib/ai';
+import { reconnectFirestore } from '../lib/firebase';
+import { Shield, Zap, RefreshCw, AlertCircle } from 'lucide-react';
+import { motion } from 'motion/react';
 
 export default function SelfHealing() {
-  useEffect(() => {
-    // Initialize engines
-    self_healing_protocol();
-    ai_auto_diagnostics();
-    automated_hotfix_compiler();
+  const engine = useRef(SelfUpdateEngine.getInstance());
 
-    // Global error listener
+  useEffect(() => {
+    // Lazy Start: Wait 5 seconds after mount to begin monitoring
+    const bootTimer = setTimeout(() => {
+      engine.current.start();
+      
+      // Register diagnostic task at low frequency (every 2 mins)
+      engine.current.register('health_check', () => {
+        console.log("[Self-Healing] Routine health check performed.");
+      }, 120000);
+
+      ai_auto_diagnostics();
+      automated_hotfix_compiler();
+    }, 5000);
+
+    // Optimized event listeners
     const handleError = (event: ErrorEvent) => {
+      if (event.message?.includes('ResizeObserver')) return; // Ignore harmless noise
+      
+      // Special handling for Firestore unavailable errors
+      if (event.message?.toLowerCase().includes('unavailable') && event.message?.toLowerCase().includes('firestore')) {
+        handleFirestoreUnavailable();
+      }
+      
       reportIssue('error', `Runtime Error: ${event.message}`);
     };
 
-    // Unhandled promise rejection listener
     const handleRejection = (event: PromiseRejectionEvent) => {
-      reportIssue('error', `Unhandled Promise Rejection: ${event.reason}`);
+      const reason = event.reason?.message || String(event.reason);
+      
+      if (reason.toLowerCase().includes('unavailable') && reason.toLowerCase().includes('firestore')) {
+        handleFirestoreUnavailable();
+      }
+      
+      reportIssue('error', `Unhandled Promise Rejection: ${reason}`);
+    };
+
+    const handleFirestoreUnavailable = () => {
+      console.warn("[Self-Healing] Persistent Firestore unavailability detected. Initiating reconnection protocol...");
+      saveInsight('developer', 'general', "[Self-Healing] Firestore unavailable. Triggering reconnectFirestore.");
+      
+      // Only auto-reconnect if it's been more than 10 seconds since last attempt to avoid reload loops
+      const lastReconnect = sessionStorage.getItem('last_firestore_reconnect');
+      const now = Date.now();
+      if (!lastReconnect || (now - parseInt(lastReconnect)) > 10000) {
+        sessionStorage.setItem('last_firestore_reconnect', now.toString());
+        setTimeout(() => reconnectFirestore(), 2000);
+      }
     };
 
     window.addEventListener('error', handleError);
     window.addEventListener('unhandledrejection', handleRejection);
 
     return () => {
+      clearTimeout(bootTimer);
       window.removeEventListener('error', handleError);
       window.removeEventListener('unhandledrejection', handleRejection);
+      engine.current.stop();
     };
   }, []);
 
@@ -96,40 +136,57 @@ export default function SelfHealing() {
   if (healStatus === 'idle') return null;
 
   return (
-    <div className="absolute bottom-48 sm:bottom-44 right-6 z-[9999]">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-purple-100 dark:border-purple-900/30 p-4 max-w-xs animate-in fade-in slide-in-from-bottom-4 duration-300">
-        <div className="flex items-center gap-3 mb-2">
-          <div className={`w-3 h-3 rounded-full animate-pulse ${
-            healStatus === 'healing' ? 'bg-yellow-500' : 
-            healStatus === 'detecting' ? 'bg-blue-500' : 
-            'bg-green-500'
-          }`} />
-          <span className="text-sm font-bold text-gray-900 dark:text-white capitalize">
-            Self-Healing: {healStatus}
-          </span>
-        </div>
-        
-        {lastDiagnosis && (
-          <div className="text-xs text-gray-500 dark:text-gray-400 line-clamp-3 bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg">
-            {lastDiagnosis}
+    <div className="fixed bottom-24 right-6 z-[9999] pointer-events-none">
+      <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-blue-100 dark:border-blue-900/30 rounded-2xl p-4 shadow-2xl max-w-[280px] pointer-events-auto">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-blue-500/10 rounded-lg">
+              <Shield className="w-3.5 h-3.5 text-blue-500" />
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">
+              System Warden
+            </span>
           </div>
-        )}
-        
+          <div className="flex gap-1">
+            <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
+            <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse delay-75" />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            {healStatus === 'healing' ? (
+              <RefreshCw className="w-3 h-3 text-amber-500 animate-spin" />
+            ) : healStatus === 'detecting' ? (
+              <Zap className="w-3 h-3 text-blue-500 animate-pulse" />
+            ) : (
+              <AlertCircle className="w-3 h-3 text-emerald-500" />
+            )}
+            <span className="text-xs font-bold text-gray-900 dark:text-white">
+              {healStatus === 'healing' ? 'Applying Hotfix...' : 
+               healStatus === 'detecting' ? 'Analyzing Anomaly...' : 
+               'Integrity Balanced'}
+            </span>
+          </div>
+
+          {lastDiagnosis && (
+            <div className="p-2 bg-gray-50 dark:bg-black/40 rounded-xl border border-gray-100 dark:border-white/5 text-[9px] font-medium text-gray-400 dark:text-gray-500 italic leading-relaxed">
+              {lastDiagnosis}
+            </div>
+          )}
+        </div>
+
         {healStatus === 'healing' && (
-          <div className="mt-3 h-1 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-            <div className="h-full bg-purple-600 animate-progress w-full" />
+          <div className="mt-3 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800 h-1">
+            <motion.div 
+              initial={{ x: '-100%' }}
+              animate={{ x: '100%' }}
+              transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+              className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 w-full"
+            />
           </div>
         )}
       </div>
-      <style>{`
-        @keyframes progress {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-        .animate-progress {
-          animation: progress 2s infinite linear;
-        }
-      `}</style>
     </div>
   );
 }

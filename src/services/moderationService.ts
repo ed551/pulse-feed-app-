@@ -62,7 +62,7 @@ If rejected, provide a brief reason and list the flagged categories.
 
   try {
     const response = await generateContentWithRetry({
-      model: "gemini-2.0-flash",
+      model: "gemini-3-flash-preview",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         responseMimeType: "application/json",

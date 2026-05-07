@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Gem, Award, TrendingUp, DollarSign, Receipt, Landmark, CheckCircle, Globe, Wallet, Phone, ArrowUpRight, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Info, Smartphone, CreditCard, ShieldCheck, Calendar, Lock, KeyRound, AlertTriangle, Building2, RefreshCw, RotateCcw } from "lucide-react";
+import { Gem, Award, TrendingUp, DollarSign, Receipt, Landmark, CheckCircle, Globe, Wallet, Phone, ArrowUpRight, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Info, Smartphone, CreditCard, ShieldCheck, ShieldOff, Calendar, Lock, KeyRound, AlertTriangle, Building2, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import { mpesa_handler, unified_participant_payout, rewards_policy, equal_distribution_protocol, merchant_of_record_tax_remittance } from "../lib/engines";
 import { useCurrencyConverter } from "../hooks/useCurrencyConverter";
 import { motion, AnimatePresence } from "motion/react";
@@ -7,7 +7,7 @@ import { cn } from "../lib/utils";
 import { useAuth } from "../contexts/AuthContext";
 import { useRevenue } from "../contexts/RevenueContext";
 import { db, handleFirestoreError, OperationType } from "../lib/firebase";
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, getDocs } from "firebase/firestore";
 
 interface Transaction {
   id: string;
@@ -30,7 +30,7 @@ interface Transaction {
 export default function Rewards() {
   const { currentUser, userData } = useAuth();
   const isDeveloper = currentUser?.email === 'edwinmuoha@gmail.com';
-  const { isIdle, activeSeconds, totalEarnedToday, addPlatformRevenue } = useRevenue();
+  const { isIdle, activeSeconds, totalEarnedToday, addPlatformRevenue, syncActiveTimeRewards } = useRevenue();
   const { currency, availableCurrencies, changeCurrency, convert, loading, rates } = useCurrencyConverter();
   const [activeTab, setActiveTab] = useState<'overview' | 'local' | 'international'>('overview');
   const [showSCAModal, setShowSCAModal] = useState(false);
@@ -163,6 +163,19 @@ export default function Rewards() {
       
       const currentRate = rates['KES'] || 135;
       const kesBalance = (points * currentRate / 100);
+
+      // Velocity Limit Check
+      if (isDeveloper) {
+        const last24h = Date.now() - (24 * 60 * 60 * 1000);
+        const recentWithdrawals = transactions
+          .filter(tx => ['mpesa', 'bank', 'paybill', 'payout'].includes(tx.type || '') && (tx.timestamp?.toMillis?.() || 0) > last24h)
+          .reduce((sum, tx) => sum + (tx.amount / (rates['KES'] || 135)), 0);
+          
+        if (recentWithdrawals + (numAmount / currentRate) > 5000) {
+          throw new Error("Developer Velocity Limit Reached: $5,000/24h. Please wait for the next cycle.");
+        }
+      }
+
       if (!isDeveloper && numAmount > kesBalance) throw new Error("Insufficient balance");
 
       let endpoint = '/api/payout/mpesa';
@@ -374,6 +387,9 @@ export default function Rewards() {
     if (!currentUser) return;
     setIsSyncing(true);
     try {
+      // 0. Self Update Engine: Flush pending memory points to Firestore before sync
+      await syncActiveTimeRewards();
+
       // 1. Get all ledger entries
       const ledgerSnap = await getDocs(collection(db, 'users', currentUser.uid, 'points_ledger'));
       let totalPoints = 0;
@@ -452,6 +468,34 @@ export default function Rewards() {
     }));
   };
 
+  const handlePurgeAuditGhosts = async () => {
+    if (!currentUser || !isDeveloper) return;
+    if (!window.confirm("This will permanently delete all withdrawal records from your account to fix audit discrepancies. Continue?")) return;
+    
+    setIsResetting(true);
+    try {
+      const withdrawalTypes = ['mpesa', 'bank', 'paybill', 'payout'];
+      const ghostTxs = transactions.filter(tx => withdrawalTypes.includes(tx.type || ''));
+      const { deleteDoc, doc } = await import('firebase/firestore');
+      
+      for (const tx of ghostTxs) {
+        await deleteDoc(doc(db, 'users', currentUser.uid, 'transactions', tx.id));
+      }
+      
+      const userRef = doc(db, 'users', currentUser.uid);
+      await updateDoc(userRef, {
+        totalWithdrawals: 0,
+        balanceRestoredAt: serverTimestamp()
+      });
+      
+      setSuccess(`Purged ${ghostTxs.length} ghost transactions. Audit trail cleared.`);
+    } catch (err) {
+      setError("Failed to purge ghosts.");
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   const handleResetTesting = async () => {
     if (!currentUser || isResetting) return;
     setIsResetting(true);
@@ -481,7 +525,15 @@ export default function Rewards() {
   ];
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-8 pb-12 pt-4 px-4 sm:px-6">
+      {/* Notice Banner */}
+      <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-2xl border border-orange-100 dark:border-orange-800 flex items-center justify-center gap-3">
+        <Clock className="w-4 h-4 text-orange-600 shrink-0" />
+        <p className="text-[10px] sm:text-xs font-bold text-orange-800 dark:text-orange-300 uppercase tracking-widest text-center">
+          Withdrawal Update: Payments are processed on the 1st of every month. Next cycle: 1st June, 2026.
+        </p>
+      </div>
+
       {/* SCA Verification Modal */}
       <AnimatePresence>
         {showSCAModal && (
@@ -588,8 +640,7 @@ export default function Rewards() {
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-2xl max-w-xl mx-auto overflow-x-auto">
+      <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl max-w-xl mx-auto overflow-x-auto">
         <button 
           onClick={() => setActiveTab('overview')}
           className={cn(
@@ -682,6 +733,17 @@ export default function Rewards() {
                     {isResetting ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <RotateCcw className="w-3 h-3 mr-2" />}
                     Reset Test
                   </button>
+
+                  {isDeveloper && (
+                    <button 
+                      onClick={handlePurgeAuditGhosts}
+                      disabled={isResetting}
+                      className="px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center transition-all border border-white/30 active:scale-95 text-emerald-100"
+                    >
+                      <ShieldOff className="w-3 h-3 mr-2 text-emerald-500" />
+                      Clear Ghosts
+                    </button>
+                  )}
 
                   {isDeveloper && (
                     <button 
