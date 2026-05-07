@@ -30,8 +30,8 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const earningIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   const IDLE_THRESHOLD = 60000; // 60 seconds
-  const EARNING_INTERVAL = 30000; // 30 seconds
-  const POINTS_PER_INTERVAL = 1;
+  const EARNING_INTERVAL = 60000; // Increase to 1 minute for more substantial increments
+  const POINTS_PER_INTERVAL = 2; // Total points to split (1 for user, 1 for platform)
 
   const addRevenue = async (userAmount: number, platformAmount: number, reason: string, source: 'ad' | 'education' | 'active_time' | 'dating' | 'community' | 'events') => {
     if (!currentUser) return;
@@ -63,7 +63,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const statsRef = doc(db, 'platform', 'stats');
 
       // 1 point = $0.01. So $1.00 = 100 points.
-      const pointsToAdd = Math.floor(userAmount * 100);
+      const pointsToAdd = userAmount > 0 ? Math.max(1, Math.floor(userAmount * 100)) : 0;
       
       // Update User Data with specific revenue source tracking
       const updateData: any = {
@@ -233,12 +233,12 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const userRef = doc(db, 'users', currentUser.uid);
           const statsRef = doc(db, 'platform', 'stats');
 
-          // 1 point = $0.01. So POINTS_PER_INTERVAL (1) = $0.01
-          // Active earning is distributed 50/50 (as per "User engagement excluding payment is 50/50 distribution")
-          const totalValue = POINTS_PER_INTERVAL / 100;
-          const userValue = totalValue * 0.5;
-          const platformValue = totalValue * 0.5;
-          const userPoints = Math.floor(userValue * 100);
+          // 1 point = $0.01. So POINTS_PER_INTERVAL (2) = $0.02
+          // Distribution: 50% to User, 50% to Platform
+          const userPoints = Math.max(1, Math.floor(POINTS_PER_INTERVAL * 0.5));
+          const userValue = userPoints / 100;
+          const platformValue = (POINTS_PER_INTERVAL - userPoints) / 100;
+          const totalValue = userValue + platformValue;
 
           await updateDoc(userRef, {
             points: increment(userPoints),
@@ -252,9 +252,23 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
             balanceAfter: (userData?.points || 0) + userPoints,
             type: 'accrual',
             source: 'active_time',
-            reason: 'Activity Reward',
+            reason: 'Activity Reward (Sync)',
             timestamp: serverTimestamp()
           }).catch(() => {});
+
+          // LOG TRANSACTION - This is crucial for the Rewards Page Audit to show data
+          await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), {
+            amount: userValue,
+            currency: 'USD',
+            type: 'earning',
+            source: 'active_time',
+            status: 'success',
+            timestamp: serverTimestamp(),
+            reference: `ACTV-${Date.now()}-${currentUser.uid.slice(0, 4)}`,
+            details: 'Active Engagement Rewards',
+            pointsAdded: userPoints,
+            remainingPoints: (userData?.points || 0) + userPoints
+          }).catch(err => console.error("Error logging user active transaction:", err));
 
           await updateDoc(statsRef, {
             platformRevenue: increment(totalValue),

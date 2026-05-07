@@ -2746,7 +2746,7 @@ async function startServer() {
           platformAmount = totalAmount;
       }
 
-      const pointsToAdd = Math.floor(userAmount * 100);
+      const pointsToAdd = userAmount > 0 ? Math.max(1, Math.floor(userAmount * 100)) : 0;
       const timestamp = FieldValue.serverTimestamp();
 
       // Update User Data (if user earns)

@@ -16,6 +16,7 @@ import {
   Loader2,
   Heart,
   Key,
+  KeyRound,
   X,
   Sun,
   Moon,
@@ -896,7 +897,7 @@ export default function Settings() {
                 { id: 'email_otp', icon: Mail, label: t('email_otp'), desc: t('email_otp_desc'), color: 'text-blue-500' },
                 { id: 'totp', icon: Shield, label: t('google_auth'), desc: t('totp_desc'), color: 'text-orange-500' }
               ].map(method => (
-                <div key={method.id} className="space-y-2">
+                <div key={`mfa-${method.id}`} className="space-y-2">
                   <button
                     onClick={() => handleUpdate2FA(method.id)}
                     className={cn(
@@ -1073,7 +1074,7 @@ export default function Settings() {
 
               {(userData?.blockedUsers || []).length > 0 && (
                 <div className="space-y-2 pl-2 border-l-2 border-red-100 dark:border-red-900/30">
-                  {userData?.blockedUsers?.map((uid: string) => (
+                  {Array.from(new Set(userData?.blockedUsers || [])).map((uid: string) => (
                     <div key={uid} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 rounded-full bg-gray-200" />
@@ -1288,7 +1289,7 @@ export default function Settings() {
       <div className="space-y-4">
         {sections.map((section) => (
           <div 
-            key={section.id}
+            key={`section-${section.id}`}
             className={cn(
               "bg-white dark:bg-gray-800 rounded-2xl shadow-sm border transition-all overflow-hidden",
               activeSection === section.id 

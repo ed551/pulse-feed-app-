@@ -120,7 +120,10 @@ export default function Rewards() {
       orderBy('timestamp', 'desc')
     );
     return onSnapshot(q, (snapshot) => {
-      setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)));
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+      // Ensure unique IDs
+      const uniqueData = data.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+      setTransactions(uniqueData);
     }, (err) => handleFirestoreError(err, OperationType.GET, `users/${currentUser.uid}/transactions`));
   }, [currentUser]);
 
@@ -371,14 +374,30 @@ export default function Rewards() {
     if (!currentUser) return;
     setIsSyncing(true);
     try {
-      // Direct call to ensure points are fresh from server
-      const { doc, getDoc } = await import('firebase/firestore');
-      const snap = await getDoc(doc(db, 'users', currentUser.uid));
-      if (snap.exists()) {
-        setSuccess("Wallet synchronized with ledger successfully!");
-        setTimeout(() => setSuccess(null), 3000);
-      }
+      // 1. Get all ledger entries
+      const ledgerSnap = await getDocs(collection(db, 'users', currentUser.uid, 'points_ledger'));
+      let totalPoints = 0;
+      
+      ledgerSnap.forEach(doc => {
+        const data = doc.data();
+        if (data.type === 'accrual') totalPoints += (data.amount || 0);
+        if (data.type === 'redemption') totalPoints -= (data.amount || 0);
+      });
+
+      const calculatedBalance = totalPoints / 100;
+
+      // 2. Update user document to match ledger
+      const userRef = doc(db, 'users', currentUser.uid);
+      await updateDoc(userRef, {
+        points: totalPoints,
+        balance: calculatedBalance,
+        lastSyncAt: serverTimestamp()
+      });
+
+      setSuccess(`Wallet synchronized! Found ${totalPoints} total points from ledger.`);
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
+      console.error("Sync error:", err);
       setError("Failed to sync wallet. Please check connection.");
     } finally {
       setIsSyncing(false);
@@ -1155,7 +1174,7 @@ export default function Rewards() {
                     {transactions.length > 0 ? (
                       transactions.map((tx) => (
                         <motion.div
-                          key={tx.id}
+                          key={`activity-${tx.id}`}
                           layout
                           initial={{ opacity: 0, scale: 0.9 }}
                           animate={{ opacity: 1, scale: 1 }}
@@ -1448,7 +1467,7 @@ export default function Rewards() {
                   <div className="space-y-3">
                     {transactions.filter(tx => tx.id.startsWith('INT-')).length > 0 ? (
                       transactions.filter(tx => tx.id.startsWith('INT-')).map(tx => (
-                        <div key={tx.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
+                        <div key={`int-payout-${tx.id}`} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
                           <div className="flex items-center space-x-3">
                             <div className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center">
                               <ArrowUpRight className="w-4 h-4" />
