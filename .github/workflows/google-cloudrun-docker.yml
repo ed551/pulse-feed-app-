@@ -35,10 +35,10 @@ on:
       - '"main"'
 
 env:
-  PROJECT_ID: 'my-project' # TODO: update to your Google Cloud project ID
-  REGION: 'us-central1' # TODO: update to your region
-  SERVICE: 'my-service' # TODO: update to your service name
-  WORKLOAD_IDENTITY_PROVIDER: 'projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/my-provider' # TODO: update to your workload identity provider
+  PROJECT_ID: consumer-rewards-app-2026
+  REGION: europe-west2
+  SERVICE: pulse-feeds-final
+  WORKLOAD_IDENTITY_PROVIDER: 'projects/473225905822/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider'
 
 jobs:
   deploy:
