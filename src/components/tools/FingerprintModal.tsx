@@ -85,7 +85,7 @@ export default function FingerprintModal({ onClose, onSuccess }: FingerprintModa
       Format developer insights as [INSIGHT:developer:category:content].`;
 
       const response = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.0-flash",
         contents: prompt,
       });
       
@@ -100,7 +100,7 @@ export default function FingerprintModal({ onClose, onSuccess }: FingerprintModa
       const cleanAdvice = advice.replace(/\[INSIGHT:[^\]]+\]/g, '').trim();
 
       const ttsResponse = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.0-flash",
         contents: [{ parts: [{ text: `Deep Scan Complete. ${cleanAdvice}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],

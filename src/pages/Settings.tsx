@@ -972,7 +972,14 @@ export default function Settings() {
                         <method.icon className="w-4 h-4" />
                       </div>
                       <div className="text-left">
-                        <p className="text-sm font-bold text-gray-900 dark:text-white">{method.label}</p>
+                        <p className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                          {method.label}
+                          {method.id === 'passkey' && userData?.passkeyRegistered && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 uppercase tracking-wider">
+                              Registered
+                            </span>
+                          )}
+                        </p>
                         <p className="text-[10px] text-gray-500">{method.desc}</p>
                       </div>
                     </div>

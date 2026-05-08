@@ -68,7 +68,7 @@ export default function AIAssistant() {
       setMessages(prev => [...prev, userMsg]);
 
       const response = await generateContentWithRetry({
-        model: "gemini-3-flash-preview", 
+        model: "gemini-2.0-flash", 
         contents: [{ role: "user", parts: [{ text: `Analyze this web page content: "${text}". 
         Provide a 3-bullet summary and 2 actionable insights for the user based on their current goals in Pulse Feeds.` }] }],
         config: {
@@ -163,7 +163,7 @@ export default function AIAssistant() {
       // 2. Setup Gemini Live
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const session = await ai.live.connect({
-        model: "gemini-3.1-flash-live-preview",
+        model: "gemini-1.5-flash",
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -298,7 +298,7 @@ export default function AIAssistant() {
       Be professional, visionary, and boundlessly curious. Always cite current trends from May 2026 when relevant.`;
 
       const response = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.0-flash",
         contents: [{ role: "user", parts: [{ text: `${context}\n\nUser: ${input}` }] }],
         config: {
           systemInstruction,

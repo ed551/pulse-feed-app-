@@ -37,11 +37,6 @@ import {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
 } from '@simplewebauthn/server';
-import type {
-  RegistrationResponseJSON,
-  AuthenticationResponseJSON,
-} from '@simplewebauthn/types';
-import { isoUint8Array } from '@simplewebauthn/server/helpers';
 
 dotenv.config();
 
@@ -152,10 +147,24 @@ const memoryCache = new Map<string, any>();
 
 let adminSdkHealthy = true;
 
+// Helper to get Admin SDK reference for slash-separated paths
+const getAdminRef = (path: string) => {
+  const parts = path.split('/').filter(p => p);
+  let ref: any = db;
+  for (let i = 0; i < parts.length; i++) {
+    if (i % 2 === 0) {
+      ref = ref.collection(parts[i]);
+    } else {
+      ref = ref.doc(parts[i]);
+    }
+  }
+  return ref;
+};
+
 // Resilient Database Wrapper to handle Admin SDK failures gracefully
 const resilientDb = {
-  collection: (collPath: string): any => {
-    const collObj = {
+  collection: function(collPath: string): any {
+    const collObj: any = {
       doc: (docId: string) => {
         const docPath = `${collPath}/${docId}`;
         const docObj: any = {
@@ -163,7 +172,8 @@ const resilientDb = {
             try {
               if (adminSdkHealthy) {
                 try {
-                  const adminSnap = await db.collection(collPath).doc(docId).get();
+                  const adminRef = getAdminRef(docPath);
+                  const adminSnap = await adminRef.get();
                   if (adminSnap.exists) memoryCache.set(docPath, adminSnap.data());
                   return { exists: adminSnap.exists, data: () => adminSnap.data(), id: adminSnap.id };
                 } catch (adminErr: any) {
@@ -188,7 +198,8 @@ const resilientDb = {
             try {
               if (adminSdkHealthy) {
                 try {
-                  await db.collection(collPath).doc(docId).set(data, options);
+                  const adminRef = getAdminRef(docPath);
+                  await adminRef.set(data, options);
                   return;
                 } catch (e: any) {
                   if (e.message.includes('PERMISSION_DENIED')) adminSdkHealthy = false;
@@ -206,7 +217,8 @@ const resilientDb = {
             try {
               if (adminSdkHealthy) {
                 try {
-                  await db.collection(collPath).doc(docId).update(data);
+                  const adminRef = getAdminRef(docPath);
+                  await adminRef.update(data);
                   return;
                 } catch (e: any) {
                   if (e.message.includes('PERMISSION_DENIED')) adminSdkHealthy = false;
@@ -223,7 +235,8 @@ const resilientDb = {
             try {
               if (adminSdkHealthy) {
                 try {
-                  await db.collection(collPath).doc(docId).delete();
+                  const adminRef = getAdminRef(docPath);
+                  await adminRef.delete();
                   return;
                 } catch (e: any) {
                   if (e.message.includes('PERMISSION_DENIED')) adminSdkHealthy = false;
@@ -242,7 +255,8 @@ const resilientDb = {
         try {
           if (adminSdkHealthy) {
             try {
-              const ref = await db.collection(collPath).add(data);
+              const adminRef = getAdminRef(collPath);
+              const ref = await adminRef.add(data);
               memoryCache.set(`${collPath}/${ref.id}`, data);
               return { id: ref.id };
             } catch (e: any) {
@@ -258,13 +272,33 @@ const resilientDb = {
           return { id: `temp-${Date.now()}` };
         }
       },
+      get: async () => {
+        try {
+          if (adminSdkHealthy) {
+            try {
+              const adminRef = getAdminRef(collPath);
+              const snap = await adminRef.get();
+              return { docs: snap.docs.map((d: any) => ({ id: d.id, data: () => d.data(), exists: true })) };
+            } catch (e: any) {
+              if (e.message.includes('PERMISSION_DENIED')) adminSdkHealthy = false;
+              console.warn(`[ResilientDB] Admin SDK Coll GET Denied for ${collPath}:`, e.message);
+            }
+          }
+          const snap = await getDocs(collection(clientDb, collPath));
+          return { docs: snap.docs.map(d => ({ id: d.id, data: () => d.data(), exists: true })) };
+        } catch (e: any) {
+          console.error(`[ResilientDB] GET failed for collection ${collPath}:`, e.message);
+          return { docs: [] };
+        }
+      },
       where: (field: string, op: string, value: any) => ({
         get: async () => {
           try {
             if (adminSdkHealthy) {
               try {
-                const snap = await db.collection(collPath).where(field, op as any, value).get();
-                return { docs: snap.docs.map(d => ({ id: d.id, data: () => d.data(), exists: true })) };
+                const adminRef = getAdminRef(collPath);
+                const snap = await adminRef.where(field, op as any, value).get();
+                return { docs: snap.docs.map((d: any) => ({ id: d.id, data: () => d.data(), exists: true })) };
               } catch (e: any) {
                 if (e.message.includes('PERMISSION_DENIED')) adminSdkHealthy = false;
               }
@@ -2288,8 +2322,8 @@ async function startServer() {
       // Get existing credentials to prevent re-registration of the same device
       const passkeysSnap = await resilientDb.collection('users').doc(userId).collection('passkeys').get();
       const existingCredentials = passkeysSnap.docs.map((doc: any) => ({
-        id: doc.id,
-        type: 'public-key',
+        id: Buffer.from(doc.id, 'base64url'),
+        type: 'public-key' as const,
         transports: doc.data().transports,
       }));
 
@@ -2342,7 +2376,7 @@ async function startServer() {
         const { credential } = verification.registrationInfo;
 
         const newPasskey = {
-          credentialID: Buffer.from(credential.id).toString('base64'),
+          credentialID: Buffer.from(credential.id).toString('base64url'),
           credentialPublicKey: Buffer.from(credential.publicKey).toString('base64'),
           counter: credential.counter,
           transports: response.response.transports,
@@ -2362,7 +2396,8 @@ async function startServer() {
         // Auto-enable 2FA if helpful
         await resilientDb.collection('users').doc(userId).update({
           twoFactorType: 'passkey',
-          twoFactorEnabled: true
+          twoFactorEnabled: true,
+          passkeyRegistered: true
         });
 
         res.json({ verified: true });
@@ -2382,8 +2417,8 @@ async function startServer() {
     try {
       const passkeysSnap = await resilientDb.collection('users').doc(userId).collection('passkeys').get();
       const allowCredentials = passkeysSnap.docs.map((doc: any) => ({
-        id: doc.id,
-        type: 'public-key',
+        id: Buffer.from(doc.id, 'base64url'),
+        type: 'public-key' as const,
         transports: doc.data().transports,
       }));
 
@@ -2428,8 +2463,8 @@ async function startServer() {
         expectedOrigin: origin,
         expectedRPID: rpID,
         credential: {
-          id: passkey.credentialID,
-          publicKey: isoUint8Array.fromHex(Buffer.from(passkey.credentialPublicKey, 'base64').toString('hex')),
+          id: Buffer.from(passkey.credentialID, 'base64url'),
+          publicKey: Buffer.from(passkey.credentialPublicKey, 'base64'),
           counter: passkey.counter,
         },
       });

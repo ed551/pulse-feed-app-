@@ -41,11 +41,11 @@ export async function generateContentWithRetry(params: GenerateContentParameters
         return response;
       } catch (error: any) {
         const isQuotaExceeded = error?.status === 429 || error?.message?.includes("quota") || error?.message?.includes("RESOURCE_EXHAUSTED") || error?.message?.includes("429");
-        const isProxyError = error?.message?.includes("Rpc failed due to xhr error") || error?.status === 500 || error?.status === 503;
+        const isProxyError = error?.status === 404 || error?.status === 500 || error?.status === 503 || error?.message?.includes("404") || error?.message?.includes("xhr error");
         
-        // Model Fallback Logic: If gemini-2.0-flash fails with quota/proxy issues, try gemini-1.5-flash
-        if ((isQuotaExceeded || isProxyError || error?.status === 404 || error?.message?.includes("404")) && params.model?.startsWith('gemini-2.0')) {
-          console.warn(`Gemini 2.0 series reported issues. Falling back to Gemini 1.5 Flash for stability.`);
+        // Model Fallback Logic: If gemini-2.0/3.0 fails with quota/proxy/404 issues, try gemini-1.5-flash
+        if ((isQuotaExceeded || isProxyError || error?.status === 404) && params.model?.startsWith('gemini-2.0')) {
+          console.warn(`Gemini series ${params.model} reported issues (404/Quota). Falling back to Gemini 1.5 Flash for stability.`);
           params.model = 'gemini-1.5-flash';
           // No retry increment for first model swap
           continue; 
