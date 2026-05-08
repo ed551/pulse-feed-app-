@@ -72,6 +72,7 @@ interface UserData {
   blockedUsers?: string[];
   blockedGroups?: string[];
   activeSessions?: string[];
+  passkeyRegistered?: boolean;
   contentFilters?: {
     sensitiveContent: boolean;
     spamFilter: boolean;

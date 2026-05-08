@@ -242,14 +242,6 @@ export default function Rewards() {
                 processedAt: result.success ? serverTimestamp() : null
               }).catch(err => console.error("Central withdrawal logging failed:", err));
 
-            // Deduct both points AND balance to keep them in sync
-            const userRef = doc(db, 'users', currentUser.uid);
-            await updateDoc(userRef, {
-              points: increment(-pointsToDeduct),
-              balance: increment(-usdAmount),
-              totalWithdrawals: increment(usdAmount)
-            });
-
             // Audit Ledger Entry
             await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
               amount: -pointsToDeduct,
