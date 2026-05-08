@@ -45,7 +45,7 @@ Structure:
 Keep it very brief but high impact. Use Markdown. Use the scan date provided above as the reference date in the report.`;
 
       const response = await generateContentWithRetry({
-        model: "gemini-2.0-flash",
+        model: "gemini-3-flash-preview",
         contents: prompt
       });
 
@@ -134,7 +134,7 @@ Keep it very brief but high impact. Use Markdown. Use the scan date provided abo
             <Loader2 className="w-10 h-10 animate-spin text-red-500 mx-auto" />
             <div className="space-y-1">
               <p className="font-bold text-gray-900 dark:text-white">Analyzing Bio-metrics...</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400 px-4">Gemini 3 Flash is generating your personalized health status and improvement report.</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 px-4">Gemini 3 Flash Preview is generating your personalized health status and improvement report.</p>
             </div>
           </motion.div>
         )}

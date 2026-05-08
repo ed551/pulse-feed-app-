@@ -60,6 +60,8 @@ export default function Settings() {
   const [email, setEmail] = useState(currentUser?.email || "");
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isPasskeyAuthenticating, setIsPasskeyAuthenticating] = useState(false);
+  const [passkeyAuthorized, setPasskeyAuthorized] = useState(false);
 
   // Dating states
   const [isDatingActive, setIsDatingActive] = useState(userData?.isDatingActive || false);
@@ -873,13 +875,64 @@ export default function Settings() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-gray-400 pl-1">Current PIN</label>
-                      <input 
-                        type="password" 
-                        id="userCurrentPin"
-                         className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-xs font-mono focus:ring-2 focus:ring-purple-500 outline-none"
-                        placeholder="••••••"
-                      />
+                      <label className="text-[10px] font-black uppercase text-gray-400 pl-1">Verification</label>
+                      {passkeyAuthorized ? (
+                        <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-xl px-4 py-3 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                          <ShieldCheck className="w-4 h-4" />
+                          Authenticated via Passkey
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          <input 
+                            type="password" 
+                            id="userCurrentPin"
+                            className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-xs font-mono focus:ring-2 focus:ring-purple-500 outline-none"
+                            placeholder="Current PIN"
+                          />
+                          {userData?.passkeyRegistered && (
+                            <button 
+                              onClick={async () => {
+                                if (!currentUser) return;
+                                setIsPasskeyAuthenticating(true);
+                                try {
+                                  // 1. Get options from server
+                                  const resp = await fetch('/api/auth/passkey/generate-authentication-options', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ userId: currentUser.uid }),
+                                  });
+                                  const options = await resp.json();
+                                  if (options.error) throw new Error(options.error);
+
+                                  // 2. Start authentication
+                                  const authResp = await (window as any).SimpleWebAuthnBrowser.startAuthentication(options);
+
+                                  // 3. Verify
+                                  const verifyResp = await fetch('/api/auth/passkey/verify-authentication', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ userId: currentUser.uid, response: authResp }),
+                                  });
+                                  const verification = await verifyResp.json();
+                                  if (verification.verified) {
+                                    setPasskeyAuthorized(true);
+                                  } else {
+                                    throw new Error(verification.error || "Verification failed");
+                                  }
+                                } catch (e: any) {
+                                  alert(`Auth Error: ${e.message}`);
+                                } finally {
+                                  setIsPasskeyAuthenticating(false);
+                                }
+                              }}
+                              disabled={isPasskeyAuthenticating}
+                              className="text-[9px] font-black uppercase text-indigo-600 dark:text-indigo-400 text-center hover:underline"
+                            >
+                              {isPasskeyAuthenticating ? "Verifying..." : "Or Verify with Passkey"}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-gray-400 pl-1">New PIN</label>
@@ -894,22 +947,32 @@ export default function Settings() {
                   <div className="flex gap-2">
                     <button 
                       onClick={async () => {
-                        const cur = (document.getElementById('userCurrentPin') as HTMLInputElement).value;
+                        const cur = (document.getElementById('userCurrentPin') as HTMLInputElement)?.value || "";
                         const next = (document.getElementById('userNewPin') as HTMLInputElement).value;
-                        if(!cur || !next) return alert("Validation Error: Please provide both current and new PIN.");
+                        
+                        if(!passkeyAuthorized && !cur) return alert("Validation Error: Please provide your current PIN or verify with Passkey.");
+                        if(!next) return alert("Validation Error: Please provide a new PIN.");
                         if(next.length < 4 || next.length > 8) return alert("Validation Error: PIN must be 4-8 digits.");
                         
                         try {
                           const res = await fetch("/api/user/security/update-pin", {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ userId: currentUser?.uid, currentPin: cur, newPin: next })
+                            body: JSON.stringify({ 
+                              userId: currentUser?.uid, 
+                              currentPin: cur, 
+                              newPin: next,
+                              usePasskey: passkeyAuthorized
+                            })
                           });
                           const data = await res.json();
                           if (res.ok) {
                             alert("Success: Your Security PIN has been rotated.");
-                            (document.getElementById('userCurrentPin') as HTMLInputElement).value = "";
+                            if (document.getElementById('userCurrentPin')) {
+                              (document.getElementById('userCurrentPin') as HTMLInputElement).value = "";
+                            }
                             (document.getElementById('userNewPin') as HTMLInputElement).value = "";
+                            setPasskeyAuthorized(false);
                           } else {
                             alert(`Security Error: ${data.message}`);
                           }

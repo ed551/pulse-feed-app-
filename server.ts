@@ -139,9 +139,14 @@ setLogLevel('error');
 
 // We use initializeFirestore with long-polling enabled to avoid "Listen" stream timeout errors (GrpcConnection idle stream)
 // which are common in server-side environments where the SDK tries to maintain a persistent connection it doesn't need.
-const clientDb = initializeFirestore(clientApp, {
-  experimentalAutoDetectLongPolling: true,
-}, firebaseConfig.firestoreDatabaseId || "(default)");
+let clientDb: any;
+try {
+  clientDb = initializeFirestore(clientApp, {
+    experimentalAutoDetectLongPolling: true,
+  }, firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)' ? firebaseConfig.firestoreDatabaseId : undefined);
+} catch (e: any) {
+  clientDb = (clientApp as any)._firestoreInst || initializeFirestore(clientApp, {}, firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)' ? firebaseConfig.firestoreDatabaseId : undefined);
+}
 
 const memoryCache = new Map<string, any>();
 
@@ -567,10 +572,14 @@ async function getSecPin() {
   }
 }
 
-async function verifyActionSCA(token: string) {
+async function verifyActionSCA(token: string, userId?: string, usePasskey?: boolean) {
   if (process.env.SKIP_SCA === 'true') return true;
-  if (!token) return false;
   
+  if (usePasskey && userId) {
+     return await verifyUserAuthorization(userId, { usePasskey: true });
+  }
+
+  if (!token) return false;
   const masterPin = await getSecPin();
   
   // Accept standard master bypass OR the current SEC-PIN
@@ -578,9 +587,34 @@ async function verifyActionSCA(token: string) {
 }
 
 // Verify User SEC-PIN (for standard withdrawals)
-async function verifyUserSCA(userId: string, pin: string) {
+async function verifyUserAuthorization(userId: string, authData: { scaToken?: string; usePasskey?: boolean }) {
   if (process.env.SKIP_SCA === 'true') return true;
-  if (!userId || !pin) return false;
+  if (!userId) return false;
+
+  // Option 1: Passkey Verification (Recent authentication within 5 minutes)
+  if (authData.usePasskey) {
+    try {
+      const userDoc = await resilientDb.collection('users').doc(userId).get();
+      const lastAuth = userDoc.data()?.lastPasskeyAuth;
+      if (lastAuth) {
+        const lastAuthDate = lastAuth.toDate();
+        const now = new Date();
+        const diffMinutes = (now.getTime() - lastAuthDate.getTime()) / 60000;
+        if (diffMinutes <= 5) {
+          console.log(`[Security] Authorization granted via recent Passkey for ${userId}`);
+          return true;
+        }
+      }
+      return false;
+    } catch (e: any) {
+      console.error(`[Security] Passkey auth check failed:`, e.message);
+      return false;
+    }
+  }
+
+  // Option 2: PIN Verification
+  const pin = authData.scaToken;
+  if (!pin) return false;
   
   try {
     const userSecRef = resilientDb.collection('users').doc(userId).collection('private').doc('security');
@@ -589,11 +623,10 @@ async function verifyUserSCA(userId: string, pin: string) {
     if (doc.exists) {
       return doc.data()?.secPin === pin;
     } else {
-      // Default PIN for new users or those who haven't set one yet
       return pin === "123456";
     }
   } catch (e: any) {
-    console.error(`[Security] Failed to verify user SCA for ${userId}:`, e.message);
+    console.error(`[Security] PIN auth check failed:`, e.message);
     return false;
   }
 }
@@ -1405,11 +1438,11 @@ async function startServer() {
       }
     }
 
-    // Safety 3: SCA Verification
+    // Safety 3: SCA/Passkey Verification
     if (userId) {
-      const isScaValid = await verifyUserSCA(userId, scaToken);
-      if (!isScaValid) {
-        return res.status(401).json({ success: false, error: "SCA_REQUIRED", message: "Invalid Security PIN. Authorization Denied." });
+      const isAuthValid = await verifyUserAuthorization(userId, { scaToken, usePasskey: req.body.usePasskey });
+      if (!isAuthValid) {
+        return res.status(401).json({ success: false, error: "AUTH_REQUIRED", message: "Invalid PIN or Passkey Verification Expired. Authorization Denied." });
       }
     } else if (parseFloat(amount) > 10000 && !scaToken) {
       return res.status(401).json({ success: false, error: "SCA_REQUIRED", message: "Large payouts require SCA verification." });
@@ -1539,11 +1572,11 @@ async function startServer() {
       }
     }
 
-    // Safety 3: SCA Verification
+    // Safety 3: SCA/Passkey Verification
     if (userId) {
-      const isScaValid = await verifyUserSCA(userId, scaToken);
-      if (!isScaValid) {
-        return res.status(401).json({ success: false, error: "SCA_REQUIRED", message: "Invalid Security PIN. Authorization Denied." });
+      const isAuthValid = await verifyUserAuthorization(userId, { scaToken, usePasskey: req.body.usePasskey });
+      if (!isAuthValid) {
+        return res.status(401).json({ success: false, error: "AUTH_REQUIRED", message: "Invalid PIN or Passkey Verification Expired. Authorization Denied." });
       }
     } else if (parseFloat(amount) > 20000 && !scaToken) {
       return res.status(401).json({ success: false, error: "SCA_REQUIRED", message: "Bank transfers over 20k KES require SCA verification." });
@@ -1864,7 +1897,7 @@ async function startServer() {
   app.post("/api/payout/platform", async (req, res) => {
     const clientIp = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
     console.log(`[API] Received platform payout request from IP: ${clientIp}`, req.body);
-    const { phoneNumber, accountNumber, method, amount: rawAmount, recipient, scaToken, reference: providedReference } = req.body;
+    const { phoneNumber, accountNumber, userId, method, amount: rawAmount, recipient, scaToken, usePasskey, reference: providedReference } = req.body;
     const amount = parseFloat(rawAmount);
     const destination = accountNumber || phoneNumber || "Unknown";
     const reference = providedReference || `PLAT-PAY-${Date.now()}`;
@@ -1880,10 +1913,10 @@ async function startServer() {
       });
     }
 
-    // 2. SCA verification for treasury movement
-    const isScaValid = await verifyActionSCA(scaToken);
-    if (!isScaValid) {
-      return res.status(401).json({ error: "SCA_REQUIRED", message: "Strong Customer Authentication failed or missing. Treasury movements require a valid Master SEC-PIN." });
+    // 2. SCA/Passkey verification for treasury movement
+    const isAuthValid = await verifyActionSCA(scaToken, userId, usePasskey);
+    if (!isAuthValid) {
+      return res.status(401).json({ error: "SCA_REQUIRED", message: "Strong Customer Authentication failed or missing. Treasury movements require a valid Master SEC-PIN or active Passkey session." });
     }
 
     // 3. Velocity and Fraud Check
@@ -2330,9 +2363,9 @@ async function startServer() {
     if (!userId) return res.status(400).json({ error: "User ID required" });
 
     try {
-      const isOldMatch = await verifyUserSCA(userId, currentPin);
-      if (!isOldMatch) {
-         return res.status(401).json({ success: false, error: "AUTH_DENIED", message: "Incorrect current PIN." });
+      const isAuthValid = await verifyUserAuthorization(userId, { scaToken: currentPin, usePasskey: req.body.usePasskey });
+      if (!isAuthValid) {
+         return res.status(401).json({ success: false, error: "AUTH_DENIED", message: "Verification failed. Incorrect PIN or Passkey registration required." });
       }
 
       await resilientDb.collection('users').doc(userId).collection('private').doc('security').set({
@@ -2387,7 +2420,7 @@ async function startServer() {
       const options = await generateRegistrationOptions({
         rpName,
         rpID,
-        userID: userId,
+        userID: Buffer.from(userId),
         userName: userEmail || userId,
         userDisplayName: userName || userEmail || userId,
         attestationType: 'none',
@@ -2537,6 +2570,11 @@ async function startServer() {
 
         // Clean up challenge
         await resilientDb.collection('users').doc(userId).collection('currentChallenge').doc('authentication').delete();
+
+        // Record last successful verification for session-based trust (e.g. for withdrawals)
+        await resilientDb.collection('users').doc(userId).update({
+          lastPasskeyAuth: FieldValue.serverTimestamp()
+        });
 
         res.json({ verified: true });
       } else {

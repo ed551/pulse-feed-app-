@@ -82,7 +82,7 @@ export default function AIEyeModal({ onClose }: AIEyeModalProps) {
         BADGE: [Badge Name, e.g., "Security Specialist", "Wealth Architect", "Wellness Guru"]`;
 
         const response = await generateContentWithRetry({
-          model: "gemini-2.0-flash",
+          model: "gemini-3-flash-preview",
           contents: {
             parts: [
               { text: prompt },
@@ -127,7 +127,7 @@ export default function AIEyeModal({ onClose }: AIEyeModalProps) {
     setIsSpeaking(true);
     try {
       const response = await generateContentWithRetry({
-        model: "gemini-2.0-flash",
+        model: "gemini-3-flash-preview",
         contents: [{ parts: [{ text: `Say clearly and helpfully: ${text}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],

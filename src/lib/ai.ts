@@ -26,7 +26,7 @@ export async function generateContentWithRetry(params: GenerateContentParameters
   await currentQueue;
   
   // Only enable High Thinking if explicitly requested to save time
-  if (params.model?.startsWith('gemini-2.0') && !params.model.includes('tts') && params.config?.thinkingConfig === undefined) {
+  if ((params.model?.startsWith('gemini-2.0') || params.model?.startsWith('gemini-3')) && !params.model.includes('tts') && params.config?.thinkingConfig === undefined) {
     // thinkingLevel is withheld for standard use to keep it fast
   }
   
@@ -43,19 +43,18 @@ export async function generateContentWithRetry(params: GenerateContentParameters
         const isQuotaExceeded = error?.status === 429 || error?.message?.includes("quota") || error?.message?.includes("RESOURCE_EXHAUSTED") || error?.message?.includes("429");
         const isProxyError = error?.status === 404 || error?.status === 500 || error?.status === 503 || error?.message?.includes("404") || error?.message?.includes("xhr error");
         
-        // Model Fallback Logic: If gemini-2.0/3.0 fails with quota/proxy/404 issues, try gemini-1.5-flash
-        if ((isQuotaExceeded || isProxyError || error?.status === 404) && params.model?.startsWith('gemini-2.0')) {
-          console.warn(`Gemini series ${params.model} reported issues (404/Quota). Falling back to Gemini 1.5 Flash for stability.`);
-          params.model = 'gemini-1.5-flash';
+        // Model Fallback Logic: If a model fails with 404 or quota, try standard stable flash
+        if ((isQuotaExceeded || isProxyError || error?.status === 404) && (params.model?.includes('2.0') || params.model?.includes('3.0'))) {
+          console.warn(`Gemini series ${params.model} reported issues (404/Quota). Falling back to gemini-3-flash-preview for stability.`);
+          params.model = 'gemini-3-flash-preview';
           // No retry increment for first model swap
           continue; 
         }
 
-        // If fallback hits quota or 404, try last resort
-        if ((isQuotaExceeded || error?.status === 404) && params.model === 'gemini-flash-latest') {
-          console.warn("Gemini Flash Latest issues, trying gemini-2.0-flash-exp (if available)...");
-          // Reverting to a known stable preview if latest fails
-          params.model = 'gemini-2.0-flash-exp'; 
+        // If fallback hits quota or 404, try last resort stable alias
+        if ((isQuotaExceeded || error?.status === 404) && params.model === 'gemini-3-flash-preview') {
+          console.warn("Gemini 3 Preview failed, trying gemini-flash-latest...");
+          params.model = 'gemini-flash-latest'; 
           continue;
         }
 

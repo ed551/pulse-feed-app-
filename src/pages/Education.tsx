@@ -624,7 +624,7 @@ export default function Education() {
       Language: Professional. No small talk.`;
 
       const ttsResponse = await generateContentWithRetry({
-        model: "gemini-2.0-flash",
+        model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ text: customText ? `Read this intelligence brief at a normal, professional pace: ${customText.substring(0, 3000)}` : masterScriptPrompt }] }],
         config: {
           responseModalities: [Modality.AUDIO],
@@ -712,7 +712,7 @@ export default function Education() {
       Use highly professional, industry-specific terminology in ${targetLang.name}. Format with clear headers and professional structure.`;
 
       const response = await generateContentWithRetry({
-        model: "gemini-2.0-flash",
+        model: "gemini-3-flash-preview",
         contents: prompt
       });
 
@@ -788,7 +788,7 @@ export default function Education() {
       }
 
       const response = await generateContentWithRetry({
-        model: "gemini-2.0-flash",
+        model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
           tools: [{ googleSearch: {} }] as any
@@ -830,7 +830,7 @@ export default function Education() {
       Avoid generic advice. Be deep, technical yet accessible, and vision-focused.`;
 
       const response = await generateContentWithRetry({
-        model: "gemini-2.0-flash",
+        model: "gemini-3-flash-preview",
         contents: prompt
       });
 
@@ -898,7 +898,7 @@ export default function Education() {
       - explanation: a brief explanation of why that answer is correct.`;
 
       const response = await generateContentWithRetry({
-        model: "gemini-2.0-flash",
+        model: "gemini-3-flash-preview",
         contents: prompt,
         config: {
           responseMimeType: "application/json"
@@ -1072,7 +1072,7 @@ export default function Education() {
       - badgeDescription: A professional certification description`;
 
       const response = await generateContentWithRetry({
-        model: "gemini-2.0-flash",
+        model: "gemini-3-flash-preview",
         contents: prompt,
         config: {
           responseMimeType: "application/json",

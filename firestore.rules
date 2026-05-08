@@ -146,6 +146,14 @@ service cloud.firestore {
         allow create: if (isOwner(userId) || request.resource.data.get('serverSecret', '') == "pulse-feeds-server-secret-2026") && isValidId(ledgerId);
         allow update, delete: if isAdmin();
       }
+
+      match /passkeys/{passkeyId} {
+        allow read, write: if isOwner(userId) || (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
+      }
+
+      match /currentChallenge/{challengeId} {
+        allow read, write: if isOwner(userId) || (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
+      }
     }
     
     match /activity/{activityId} {

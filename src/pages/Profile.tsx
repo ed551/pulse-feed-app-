@@ -68,7 +68,7 @@ export default function Profile() {
       const postsText = userPosts.map(p => `${p.title || 'Untitled'}: ${p.content}`).join('\n\n');
       const prompt = `Based on these posts by ${currentUser?.displayName || 'the user'}, provide a short, 2-sentence "Smart Personality Summary" that captures their vibe and interests:\n\n${postsText}`;
       const response = await generateContentWithRetry({ 
-        model: "gemini-2.0-flash",
+        model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ text: prompt }] }] 
       });
       setSmartSummary(response.text || null);
@@ -84,7 +84,7 @@ export default function Profile() {
     try {
       const prompt = `Generate a short, catchy title (max 5 words) for this post content: "${content}". Return ONLY the title text.`;
       const response = await generateContentWithRetry({ 
-        model: "gemini-2.0-flash",
+        model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ text: prompt }] }] 
       });
       const smartTitle = response.text;

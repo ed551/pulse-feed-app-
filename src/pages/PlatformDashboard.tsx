@@ -124,7 +124,7 @@ export default function PlatformDashboard() {
       `;
 
       const response = await generateContentWithRetry({
-        model: "gemini-2.0-flash",
+        model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ text: `You are the Pulse Master Search Engine. Analyze this platform health data and provide a concise, 3-paragraph executive summary. 
         IMPORTANT: Use your Master Search Engine capabilities to research current global trends in decentralised social platforms, community rewards (Web3/Points), and online education startup growth for May 2026. 
         Compare Pulse Feeds performance to these global benchmarks.
@@ -641,7 +641,7 @@ export default function PlatformDashboard() {
     }
   };
 
-  const handlePlatformWithdrawal = async (withdrawAll: boolean = false, specificAmount?: number, token?: string) => {
+  const handlePlatformWithdrawal = async (withdrawAll: boolean = false, specificAmount?: number, token?: string, usePasskey?: boolean) => {
     let amountToWithdraw = withdrawAll ? stats.platformShare : (specificAmount || 0);
     
     if (isNaN(amountToWithdraw) || amountToWithdraw <= 0) {
@@ -650,8 +650,8 @@ export default function PlatformDashboard() {
     }
 
     // NEW: If SCA token is missing, trigger modal first
-    if (!token && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (t: string) => handlePlatformWithdrawal(withdrawAll, specificAmount, t));
+    if (!token && !usePasskey && !process.env.SKIP_SCA) {
+      setScaPendingAction(() => (t: string, up?: boolean) => handlePlatformWithdrawal(withdrawAll, specificAmount, t, up));
       setShowSCAModal(true);
       return;
     }
@@ -684,7 +684,8 @@ export default function PlatformDashboard() {
           accountNumber: platformAccountNumber,
           amount: amountToWithdraw,
           recipient: "EDWIN MUOHA WATITU",
-          scaToken: token // Critical inclusion
+          scaToken: token, // Critical inclusion
+          usePasskey
         }),
       });
 
@@ -757,25 +758,17 @@ export default function PlatformDashboard() {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [showAnomaliesOnly, setShowAnomaliesOnly] = useState(false);
   const [showSCAModal, setShowSCAModal] = useState(false);
-  const [scaPendingAction, setScaPendingAction] = useState<(() => void) | null>(null);
+  const [authMethod, setAuthMethod] = useState<'pin' | 'passkey'>('pin');
+  const [isPasskeyAuthenticating, setIsPasskeyAuthenticating] = useState(false);
+  const [scaPendingAction, setScaPendingAction] = useState<((pin: string, usePasskey?: boolean) => void) | null>(null);
   const [scaToken, setScaToken] = useState("");
 
-  const verifySCA = () => {
-    if (!scaToken) return;
+  const verifySCA = (pin?: string, usePasskey?: boolean) => {
+    if (!pin && !usePasskey) return;
     
-    // We don't verify here anymore; we just pass it to the pending action 
-    // which will send it to the server. The server holds the source of truth.
     setShowSCAModal(false);
     if (scaPendingAction) {
-      // Pending action is expected to be a closure like () => handlePlatformWithdrawal(all, amt)
-      // but we need to pass the PIN. We'll adjust the closure to accept the PIN.
-      // Actually, easier to change the closure pattern.
-      
-      // If the pending action is a standard function, we just execute it.
-      // To pass the token, we'll wrap the call.
-      const action = scaPendingAction as any;
-      action(scaToken); 
-      
+      scaPendingAction(pin || "", usePasskey || false); 
       setScaPendingAction(null);
       setScaToken("");
     }
@@ -3043,43 +3036,128 @@ export default function PlatformDashboard() {
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
               
-              <div className="text-center mb-8">
+              <div className="text-center mb-6">
                 <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-500/20">
                   <Fingerprint className="w-8 h-8 text-blue-400" />
                 </div>
                 <h3 className="text-xl font-black text-white uppercase tracking-tight">Security Step-Up</h3>
-                <p className="text-xs text-gray-500 mt-2">Strong Customer Authentication required for high-value treasury movement.</p>
+                <p className="text-[10px] text-gray-500 mt-2 font-bold italic">SCA required for high-value treasury movement.</p>
+              </div>
+
+              {/* Auth Method choice */}
+              <div className="flex p-1 bg-white/5 rounded-xl mb-6">
+                <button 
+                  onClick={() => setAuthMethod('pin')}
+                  className={cn(
+                    "flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
+                    authMethod === 'pin' ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"
+                  )}
+                >
+                  Admin PIN
+                </button>
+                <button 
+                  onClick={() => setAuthMethod('passkey')}
+                  className={cn(
+                    "flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
+                    authMethod === 'passkey' ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"
+                  )}
+                >
+                  Passkey
+                </button>
               </div>
 
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block pl-1">Enter Master SEC-PIN</label>
-                  <input 
-                    type="password"
-                    value={scaToken}
-                    onChange={(e) => setScaToken(e.target.value)}
-                    placeholder="••••••"
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-center text-2xl tracking-[0.5em] font-mono text-white focus:border-blue-500 outline-none transition-all"
-                  />
-                  <p className="text-[9px] text-center text-gray-600 italic">Hint for demo: 123456 or ADMIN-SCA-MASTER</p>
-                </div>
+                {authMethod === 'pin' ? (
+                  <>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block pl-1">Enter Master SEC-PIN</label>
+                      <input 
+                        type="password"
+                        value={scaToken}
+                        onChange={(e) => setScaToken(e.target.value)}
+                        placeholder="••••••"
+                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-center text-2xl tracking-[0.5em] font-mono text-white focus:border-blue-500 outline-none transition-all"
+                        autoFocus
+                      />
+                      <p className="text-[9px] text-center text-gray-600 italic">Hint: 123456 or ADMIN-SCA-MASTER</p>
+                    </div>
 
-                <div className="flex gap-3">
+                    <button
+                      onClick={() => verifySCA(scaToken, false)}
+                      disabled={scaToken.length < 4}
+                      className="w-full py-4 bg-blue-600 text-white font-black rounded-xl uppercase text-xs shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all disabled:opacity-50"
+                    >
+                      Authorize Transfer
+                    </button>
+                  </>
+                ) : (
+                  <div className="text-center space-y-4 py-2">
+                    {userData?.passkeyRegistered ? (
+                      <>
+                        <div className="w-12 h-12 bg-indigo-500/10 rounded-full flex items-center justify-center text-indigo-400 mx-auto">
+                          <ShieldCheck className="w-6 h-6" />
+                        </div>
+                        <p className="text-[10px] text-gray-400 font-medium px-4">Verify using hardware biometrics or platform security key.</p>
+                        <button
+                          onClick={async () => {
+                            if (!currentUser) return;
+                            setIsPasskeyAuthenticating(true);
+                            try {
+                              const resp = await fetch('/api/auth/passkey/generate-authentication-options', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ userId: currentUser.uid }),
+                              });
+                              const options = await resp.json();
+                              if (options.error) throw new Error(options.error);
+                              
+                              const authResp = await (window as any).SimpleWebAuthnBrowser.startAuthentication(options);
+                              
+                              const verifyResp = await fetch('/api/auth/passkey/verify-authentication', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ userId: currentUser.uid, response: authResp }),
+                              });
+                              const verification = await verifyResp.json();
+                              if (verification.verified) {
+                                 verifySCA("", true);
+                                 setAuthMethod('pin');
+                              } else {
+                                throw new Error(verification.error || "Verification failed");
+                              }
+                            } catch (e: any) {
+                              alert(`Auth Error: ${e.message}`);
+                            } finally {
+                              setIsPasskeyAuthenticating(false);
+                            }
+                          }}
+                          disabled={isPasskeyAuthenticating}
+                          className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/30 disabled:opacity-50"
+                        >
+                          {isPasskeyAuthenticating ? "Verifying..." : "Verify Passkey"}
+                        </button>
+                      </>
+                    ) : (
+                      <div className="bg-red-500/10 p-4 rounded-xl border border-red-500/20">
+                        <ShieldAlert className="w-5 h-5 text-red-500 mx-auto mb-2" />
+                        <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">Passkey Missing</p>
+                        <p className="text-[9px] text-gray-500 mt-1">Register biometrics in Settings first.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-2">
                   <button
                     onClick={() => {
                       setShowSCAModal(false);
                       setScaPendingAction(null);
                       setScaToken("");
+                      setIsPasskeyAuthenticating(false);
                     }}
-                    className="flex-1 py-3 text-gray-400 font-bold uppercase text-xs hover:text-white transition-colors"
+                    className="w-full py-2 text-gray-500 font-bold uppercase text-[10px] hover:text-white transition-colors"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={verifySCA}
-                    className="flex-1 py-3 bg-blue-600 text-white font-black rounded-xl uppercase text-xs shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all"
-                  >
-                    Authorize
+                    Abort Treasury Action
                   </button>
                 </div>
               </div>

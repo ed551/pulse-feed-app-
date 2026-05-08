@@ -34,8 +34,10 @@ export default function Rewards() {
   const { currency, availableCurrencies, changeCurrency, convert, loading, rates } = useCurrencyConverter();
   const [activeTab, setActiveTab] = useState<'overview' | 'local' | 'international'>('overview');
   const [showSCAModal, setShowSCAModal] = useState(false);
+  const [authMethod, setAuthMethod] = useState<'pin' | 'passkey'>('pin');
+  const [isPasskeyAuthenticating, setIsPasskeyAuthenticating] = useState(false);
   const [scaToken, setScaToken] = useState("");
-  const [scaPendingAction, setScaPendingAction] = useState<((pin: string) => void) | null>(null);
+  const [scaPendingAction, setScaPendingAction] = useState<((pin: string, usePasskey?: boolean) => void) | null>(null);
   const [localMethod, setLocalMethod] = useState<'mpesa' | 'bank' | 'paybill'>('mpesa');
   const [paybillDetails, setPaybillDetails] = useState({
     businessNumber: "",
@@ -143,13 +145,13 @@ export default function Rewards() {
     }, { totalEarned: 0, totalWithdrawn: 0, pendingWithdrawals: 0 });
   }, [transactions, rates]);
 
-  const handlePayment = async (e?: React.FormEvent, pin?: string) => {
+  const handlePayment = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean) => {
     if (e) e.preventDefault();
     if (!amount) return;
     
     // Trigger SCA if not provided
-    if (!pin && !isDeveloper && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (p: string) => handlePayment(undefined, p));
+    if (!pin && !usePasskey && !isDeveloper && !process.env.SKIP_SCA) {
+      setScaPendingAction(() => (p: string, up?: boolean) => handlePayment(undefined, p, up));
       setShowSCAModal(true);
       return;
     }
@@ -182,7 +184,8 @@ export default function Rewards() {
       let body: any = { 
         amount: numAmount, 
         userId: currentUser?.uid,
-        scaToken: pin
+        scaToken: pin,
+        usePasskey
       };
 
       if (localMethod === 'mpesa') {
@@ -262,13 +265,13 @@ export default function Rewards() {
     }
   };
 
-  const handleInternationalPayout = async (e?: React.FormEvent, pin?: string) => {
+  const handleInternationalPayout = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean) => {
     if (e) e.preventDefault();
     if (!payoutAmount) return;
 
     // Trigger SCA if not provided
-    if (!pin && !isDeveloper && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (p: string) => handleInternationalPayout(undefined, p));
+    if (!pin && !usePasskey && !isDeveloper && !process.env.SKIP_SCA) {
+      setScaPendingAction(() => (p: string, up?: boolean) => handleInternationalPayout(undefined, p, up));
       setShowSCAModal(true);
       return;
     }
@@ -307,7 +310,8 @@ export default function Rewards() {
           remainingPoints: points - pointsToDeduct,
           userId: currentUser.uid,
           userEmail: currentUser.email,
-          scaToken: pin
+          scaToken: pin,
+          usePasskey
         };
 
         await addDoc(txRef, txData);
@@ -552,49 +556,130 @@ export default function Rewards() {
                    </div>
                  </div>
                  
-                 <div className="text-center mb-8">
+                 <div className="text-center mb-6">
                    <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Security Protocol</h3>
-                   <p className="text-xs text-gray-500 mt-2 px-4 italic">Standard Customer Authentication required for platform withdrawals.</p>
+                   <p className="text-[10px] text-gray-500 mt-2 px-4 font-bold italic">Verification required to authorize withdrawal.</p>
+                 </div>
+
+                 {/* Auth Method Toggle */}
+                 <div className="flex p-1 bg-gray-100 dark:bg-gray-900 rounded-xl mb-6">
+                   <button 
+                     onClick={() => setAuthMethod('pin')}
+                     className={cn(
+                       "flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
+                       authMethod === 'pin' ? "bg-white dark:bg-gray-800 text-orange-600 shadow-sm" : "text-gray-400"
+                     )}
+                   >
+                     Security PIN
+                   </button>
+                   <button 
+                     onClick={() => setAuthMethod('passkey')}
+                     className={cn(
+                       "flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
+                       authMethod === 'passkey' ? "bg-white dark:bg-gray-800 text-orange-600 shadow-sm" : "text-gray-400"
+                     )}
+                   >
+                     Passkey
+                   </button>
                  </div>
 
                  <div className="space-y-4">
-                   <div className="relative">
-                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-                       <KeyRound className="w-5 h-5" />
-                     </div>
-                     <input 
-                       type="password"
-                       maxLength={8}
-                       placeholder="Enter 4-8 Digit PIN"
-                       value={scaToken}
-                       onChange={(e) => setScaToken(e.target.value)}
-                       className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl pl-12 pr-4 py-4 text-sm font-mono focus:ring-2 focus:ring-orange-500 outline-none transition-all shadow-sm"
-                       autoFocus
-                     />
-                     {scaToken.length === 0 && (
-                       <p className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-orange-500/50 uppercase tracking-widest pointer-events-none">Required</p>
-                     )}
-                   </div>
+                   {authMethod === 'pin' ? (
+                     <>
+                      <div className="relative">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                          <KeyRound className="w-5 h-5" />
+                        </div>
+                        <input 
+                          type="password"
+                          maxLength={8}
+                          placeholder="Enter PIN"
+                          value={scaToken}
+                          onChange={(e) => setScaToken(e.target.value)}
+                          className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl pl-12 pr-4 py-4 text-sm font-mono focus:ring-2 focus:ring-orange-500 outline-none transition-all shadow-sm"
+                          autoFocus
+                        />
+                      </div>
 
-                   <button 
-                     onClick={() => {
-                        if (!scaToken) return;
-                        setShowSCAModal(false);
-                        if (scaPendingAction) scaPendingAction(scaToken);
-                        setScaPendingAction(null);
-                        setScaToken("");
-                     }}
-                     disabled={scaToken.length < 4}
-                     className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-orange-600/30 active:scale-95 disabled:opacity-50 disabled:grayscale"
-                   >
-                     Authorize Payout
-                   </button>
+                      <button 
+                        onClick={() => {
+                           if (!scaToken) return;
+                           setShowSCAModal(false);
+                           if (scaPendingAction) scaPendingAction(scaToken, false);
+                           setScaPendingAction(null);
+                           setScaToken("");
+                        }}
+                        disabled={scaToken.length < 4}
+                        className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-orange-600/30 active:scale-95 disabled:opacity-50"
+                      >
+                        Authorize with PIN
+                      </button>
+                     </>
+                   ) : (
+                     <div className="text-center space-y-4 py-2">
+                        {userData?.passkeyRegistered ? (
+                          <>
+                             <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center text-indigo-600 mx-auto">
+                               <ShieldCheck className="w-6 h-6" />
+                             </div>
+                             <p className="text-[10px] text-gray-500 font-medium">Verify identity via your device biometrics.</p>
+                             <button
+                               onClick={async () => {
+                                 if (!currentUser) return;
+                                 setIsPasskeyAuthenticating(true);
+                                 try {
+                                   const resp = await fetch('/api/auth/passkey/generate-authentication-options', {
+                                     method: 'POST',
+                                     headers: { 'Content-Type': 'application/json' },
+                                     body: JSON.stringify({ userId: currentUser.uid }),
+                                   });
+                                   const options = await resp.json();
+                                   if (options.error) throw new Error(options.error);
+                                   
+                                   const authResp = await (window as any).SimpleWebAuthnBrowser.startAuthentication(options);
+                                   
+                                   const verifyResp = await fetch('/api/auth/passkey/verify-authentication', {
+                                     method: 'POST',
+                                     headers: { 'Content-Type': 'application/json' },
+                                     body: JSON.stringify({ userId: currentUser.uid, response: authResp }),
+                                   });
+                                   const verification = await verifyResp.json();
+                                   if (verification.verified) {
+                                      setShowSCAModal(false);
+                                      if (scaPendingAction) scaPendingAction("", true);
+                                      setScaPendingAction(null);
+                                      setAuthMethod('pin');
+                                   } else {
+                                     throw new Error(verification.error || "Verification failed");
+                                   }
+                                 } catch (e: any) {
+                                   alert(`Passkey Error: ${e.message}`);
+                                 } finally {
+                                   setIsPasskeyAuthenticating(false);
+                                 }
+                               }}
+                               disabled={isPasskeyAuthenticating}
+                               className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/30 active:scale-95 disabled:opacity-50"
+                             >
+                               {isPasskeyAuthenticating ? "Checking..." : "Use Passkey"}
+                             </button>
+                          </>
+                        ) : (
+                          <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-100 dark:border-amber-900/20">
+                            <AlertCircle className="w-5 h-5 text-amber-500 mx-auto mb-2" />
+                            <p className="text-[10px] text-amber-800 dark:text-amber-200 font-bold">PASSKEY NOT REGISTERED</p>
+                            <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-1 uppercase tracking-tighter">Enable passkeys in Settings</p>
+                          </div>
+                        )}
+                     </div>
+                   )}
                    
                    <button 
                      onClick={() => {
                        setShowSCAModal(false);
                        setScaToken("");
                        setScaPendingAction(null);
+                       setIsPasskeyAuthenticating(false);
                      }}
                      className="w-full py-3 bg-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-[10px] font-black uppercase tracking-widest transition-colors"
                    >
@@ -602,9 +687,9 @@ export default function Rewards() {
                    </button>
                  </div>
 
-                 <div className="mt-8 pt-6 border-t border-gray-50 dark:border-gray-700/50 flex items-center justify-center gap-2 text-[9px] text-gray-400 font-bold uppercase tracking-widest">
+                 <div className="mt-6 pt-4 border-t border-gray-50 dark:border-gray-700/50 flex items-center justify-center gap-2 text-[8px] text-gray-400 font-bold uppercase tracking-widest">
                    <ShieldCheck className="w-3 h-3 text-green-500" />
-                   SEC-PIN v4.2 Deployment
+                   Military Grade Port Guard v5.0
                  </div>
                </div>
             </motion.div>

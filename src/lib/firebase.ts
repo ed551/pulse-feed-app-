@@ -19,42 +19,35 @@ console.log('Initializing Firestore with database ID:', firestoreDatabaseId || '
 setLogLevel('error');
 
 // Use a factory-like initialization to prevent multiple initialization errors
-const getDb = () => {
+const getDb = (forceLongPolling = false) => {
   try {
     const dbId = (firestoreDatabaseId && firestoreDatabaseId !== '(default)') ? firestoreDatabaseId : undefined;
     
     // We use initializeFirestore for persistent settings in proxied/IAB environments
     // forcing long polling is essential for stability in the AI Studio preview
     return initializeFirestore(app, {
-      experimentalForceLongPolling: true,
+      experimentalAutoDetectLongPolling: !forceLongPolling,
+      experimentalForceLongPolling: forceLongPolling,
     }, dbId);
   } catch (e: any) {
-    console.warn("Primary Firestore initialization notice:", e.message);
-    
-    // Attempting a simpler initialization if first one failed
-    try {
-      return initializeFirestore(app, {
-        experimentalForceLongPolling: true,
-      }, (firestoreDatabaseId && firestoreDatabaseId !== '(default)') ? firestoreDatabaseId : undefined);
-    } catch (innerErr: any) {
-      console.error("Secondary Firestore initialization failed:", innerErr.message);
-      // Final attempt: fallback to basic getter which might use existing instance
-      return (app as any)._firestoreInst || initializeFirestore(app, {});
+    if (e.message.includes('already exists')) {
+      return (app as any)._firestoreInst;
     }
+    throw e;
   }
 };
 
-let dbInstance;
+let dbInstance: any;
 try {
-  dbInstance = getDb();
+  // Try with auto-detect first (more modern)
+  dbInstance = getDb(false);
 } catch (e) {
-  // If we REALLY can't init via initializeFirestore, we'll have to use the standard getter 
-  // though it won't have the long polling settings.
-  console.error("Critical Firestore Init Failure, falling back to getFirestore");
-  // We'll import it just in case, but we already have it from earlier SDKs usually
-  // For v9 web it's best to use initialized instance.
-  // We'll just try to recover the app if possible.
-  dbInstance = (app as any)._firestoreInst; // Hacky fallback if needed
+  try {
+    // Fallback to forced long polling (often safer in sandboxes)
+    dbInstance = getDb(true);
+  } catch (inner) {
+    console.error("Firestore initialization failed completely:", inner);
+  }
 }
 
 export const db = dbInstance;
@@ -197,7 +190,7 @@ async function testConnection(retries = 3) {
       setConnectionStatus('error');
       console.error("CRITICAL: Firestore connection failed after multiple attempts.");
       console.error(`Last Error: [${errorCode}] ${errorMessage}`);
-      console.error("Troubleshooting: 1. Check if the database 'ai-studio-5dd0f0b0-4dc9-4cc3-82e8-070c94b6bcd3' exists in the Firebase console. 2. Ensure the project 'consumer-rewards-app-2026' is active.");
+      console.error(`Troubleshooting: 1. Check if the database '${firestoreDatabaseId || "(default)"}' exists in project '${firebaseConfig.projectId}'. 2. Ensure rules allow read access to '_connection_test_'.`);
     } else {
       // Other errors (like 404 or permission denied) actually confirm we ARE online and reaching the server
       console.log("Firebase connection confirmed (received server response).");
