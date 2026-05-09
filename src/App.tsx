@@ -36,6 +36,7 @@ const Membership = lazy(() => import("./pages/Membership"));
 const AudioHub = lazy(() => import("./pages/AudioHub"));
 
 import HealthChecker from "./components/HealthChecker";
+import { IdleAILock } from "./components/IdleAILock";
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -113,6 +114,7 @@ export default function App() {
             <HashRouter>
               <GlobalHealthWrapper />
               <WakeLockHandler />
+              <IdleAILock />
               <Analytics />
               <Suspense fallback={<LoadingFallback />}>
                 <Routes>

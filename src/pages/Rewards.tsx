@@ -766,7 +766,11 @@ export default function Rewards() {
                                      throw new Error(verification.error || "Verification failed");
                                    }
                                  } catch (e: any) {
-                                   setScaError(e.message);
+                                   if (e.name === 'SecurityError' || e.message?.includes('feature is not enabled')) {
+                                     setScaError("🔒 PREVIEW BLOCKED: Passkeys cannot be used inside this frame. Please click 'Open in New Tab' at the top of AI Studio.");
+                                   } else {
+                                     setScaError(e.message);
+                                   }
                                  } finally {
                                    setIsPasskeyAuthenticating(false);
                                  }

@@ -51,6 +51,8 @@ export default function PasskeyModal({ userId, onClose, onSuccess }: PasskeyModa
       console.error("[Passkey Auth] Error:", e);
       if (e.name === 'NotAllowedError') {
         setError("Authentication cancelled or timed out.");
+      } else if (e.name === 'SecurityError' || e.message?.includes('feature is not enabled')) {
+        setError("🔒 PREVIEW BLOCKED: Passkeys cannot be used inside this frame. Please click 'Open in New Tab' at the top of AI Studio.");
       } else {
         setError(e.message || "Failed to authenticate with passkey.");
       }

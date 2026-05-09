@@ -16,6 +16,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRevenue } from '../contexts/RevenueContext';
 import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 import { cn } from '../lib/utils';
+import { isIframe, getPasskeyErrorLinkMessage } from '../lib/iframeUtils';
 import { getModerationSettings, saveModerationSettings, ModerationSettings } from "../services/moderationService";
 import { admin_logic, integrity_audit_engine, global_kill_switch } from "../lib/engines";
 
@@ -277,6 +278,9 @@ export default function PlatformDashboard() {
   // Simplified balance logic: Sum of all platform impacts
   const auditBalance = totals.ledgerBalance;
   const auditGrossRevenue = totals.grossRevenueIn;
+
+  // Withdrawable Liquidity: The amount platform considers its own minus any uncleared expenses
+  const netWithdrawableLiquidity = Math.max(0, auditBalance);
 
   // Integrity Audit Engine
   const [auditReport, setAuditReport] = useState<{
@@ -641,7 +645,7 @@ export default function PlatformDashboard() {
   };
 
   const handlePlatformWithdrawal = async (withdrawAll: boolean = false, specificAmount?: number, token?: string, usePasskey?: boolean) => {
-    let amountToWithdraw = withdrawAll ? stats.platformShare : (specificAmount || 0);
+    let amountToWithdraw = withdrawAll ? auditBalance : (specificAmount || 0);
     
     if (isNaN(amountToWithdraw) || amountToWithdraw <= 0) {
       setError("Please enter a valid amount.");
@@ -660,9 +664,15 @@ export default function PlatformDashboard() {
       return;
     }
 
+    // Auto-reconcile if requested amount exceeds official share (fixes sync issues)
     if (amountToWithdraw > stats.platformShare) {
-      setError("Insufficient funds in Platform share.");
-      return;
+      console.log("[PlatformDashboard] Requested amount exceeds official share. Reconciling treasury first...");
+      try {
+        await handleRecalculateEntireLedger();
+      } catch (reconErr) {
+        console.error("Auto-reconciliation failed:", reconErr);
+        // Continue anyway if auditBalance is trusted
+      }
     }
     
     setIsDevWithdrawing(true);
@@ -1993,11 +2003,11 @@ export default function PlatformDashboard() {
                 <div className="p-3 bg-white/20 rounded-xl">
                   <Wallet className="w-6 h-6" />
                 </div>
-                <div className="px-2 py-1 bg-white/20 rounded-full text-[10px] font-bold uppercase tracking-widest">Available</div>
+                <div className="px-2 py-1 bg-white/20 rounded-full text-[10px] font-bold uppercase tracking-widest">Audited</div>
               </div>
-              <p className="text-sm text-indigo-100 font-medium tracking-wide">Net Liquidity (Audit Balance)</p>
-              <h3 className="text-4xl font-black mt-1">{convert(auditBalance)}</h3>
-              <p className="text-[10px] text-indigo-200 mt-2 font-bold uppercase tracking-widest">Inflow minus Outflow</p>
+              <p className="text-sm text-indigo-100 font-medium tracking-wide">Withdrawable Net Liquidity</p>
+              <h3 className="text-4xl font-black mt-1">{convert(netWithdrawableLiquidity)}</h3>
+              <p className="text-[10px] text-indigo-200 mt-2 font-bold uppercase tracking-widest tracking-tighter italic">Ledger Sum (Revenue - Expenses - Payouts)</p>
             </motion.div>
 
             {/* Active Users */}
@@ -2057,9 +2067,9 @@ export default function PlatformDashboard() {
               <p className="text-[10px] text-gray-500 mt-1">Projected revenue from current user base</p>
             </div>
             <div className="bg-green-50 dark:bg-green-900/10 p-5 rounded-3xl border border-green-100 dark:border-green-900/30">
-              <p className="text-[10px] font-black uppercase tracking-widest text-green-600 mb-1">Platform Earning (100% Payments)</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-green-600 mb-1">Platform Share (Net Reserve)</p>
               <p className="text-2xl font-black text-green-700 dark:text-green-400">{convert(stats.platformShare)}</p>
-              <p className="text-[10px] text-green-600/60 mt-1 font-bold">Total Platform Dividends</p>
+              <p className="text-[10px] text-green-600/60 mt-1 font-bold">Total Platform Balance (Official)</p>
             </div>
             <div className="bg-orange-50 dark:bg-orange-900/10 p-5 rounded-3xl border border-orange-100 dark:border-orange-900/30">
               <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 mb-1">Community Earning (Engagement Pool)</p>
@@ -2648,7 +2658,7 @@ export default function PlatformDashboard() {
                     className="w-full pl-12 pr-20 py-4 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:outline-none focus:border-purple-500 transition-all font-bold"
                   />
                   <button 
-                    onClick={() => setDevWithdrawAmount(stats.platformShare.toFixed(2))}
+                    onClick={() => setDevWithdrawAmount(auditBalance.toFixed(2))}
                     className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-200 transition-colors"
                   >
                     Max
@@ -2664,7 +2674,7 @@ export default function PlatformDashboard() {
                   {[0.25, 0.5, 0.75].map((percent) => (
                     <button
                       key={percent}
-                      onClick={() => setDevWithdrawAmount((stats.platformShare * percent).toFixed(2))}
+                      onClick={() => setDevWithdrawAmount((auditBalance * percent).toFixed(2))}
                       className="flex-1 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl text-[10px] font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
                     >
                       {percent * 100}%
@@ -2694,10 +2704,10 @@ export default function PlatformDashboard() {
 
               <button
                 onClick={() => handlePlatformWithdrawal(true)}
-                disabled={isDevWithdrawing || stats.platformShare <= 0}
+                disabled={isDevWithdrawing || auditBalance <= 0}
                 className="w-full py-3 border-2 border-purple-600 text-purple-600 font-black rounded-2xl hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all"
               >
-                Withdraw All Available (${Number(stats.platformShare || 0).toFixed(2)})
+                Withdraw All Available (${Number(auditBalance || 0).toFixed(2)})
               </button>
 
               <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-2xl border border-purple-100 dark:border-purple-800">
@@ -2991,7 +3001,7 @@ export default function PlatformDashboard() {
               </div>
               
               <p className="text-gray-600 dark:text-gray-400 mb-8 font-medium">
-                You are about to withdraw the entire Platform treasury of <span className="text-purple-600 font-black">{convert(stats.platformShare)}</span>. 
+                You are about to withdraw the entire Platform treasury of <span className="text-purple-600 font-black">{convert(auditBalance)}</span>. 
                 This action will be processed to Co-op Bank Account 01100975259001.
               </p>
 
@@ -3125,7 +3135,11 @@ export default function PlatformDashboard() {
                                 throw new Error(verification.error || "Verification failed");
                               }
                             } catch (e: any) {
-                              alert(`Auth Error: ${e.message}`);
+                              if (e.name === 'SecurityError' || e.message?.includes('feature is not enabled')) {
+                                alert("🔒 PREVIEW BLOCKED: Passkeys cannot be used inside this frame. \n\nPlease click 'Open in New Tab' at the top of AI Studio.");
+                              } else {
+                                alert(`Auth Error: ${e.message}`);
+                              }
                             } finally {
                               setIsPasskeyAuthenticating(false);
                             }

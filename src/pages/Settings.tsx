@@ -38,6 +38,7 @@ import {
 import { QRCodeSVG } from "qrcode.react";
 import { useNavigate } from "react-router-dom";
 import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
+import { isIframe, getPasskeyErrorLinkMessage } from "../lib/iframeUtils";
 import { useAuth } from "../contexts/AuthContext";
 import { useTranslation } from "../lib/i18n";
 import { db } from "../lib/firebase";
@@ -242,6 +243,12 @@ export default function Settings() {
 
   const handleRegisterPasskey = async () => {
     if (!currentUser) return;
+    
+    if (isIframe() && !window.PublicKeyCredential) {
+      alert(getPasskeyErrorLinkMessage());
+      return;
+    }
+
     setIsSaving(true);
     try {
       // 1. Get options from server
@@ -282,6 +289,8 @@ export default function Settings() {
       console.error("[Passkey] Error:", e);
       if (e.name === 'NotAllowedError') {
         alert("Registration cancelled or timed out.");
+      } else if (e.name === 'SecurityError' || e.message?.includes('feature is not enabled')) {
+        alert("🔒 PREVIEW BLOCKED: Passkey registration is not allowed inside this preview frame. \n\nPlease click 'Open in New Tab' at the top of AI Studio to register your security key.");
       } else {
         alert(`Passkey Error: ${e.message}`);
       }
@@ -893,6 +902,12 @@ export default function Settings() {
                             <button 
                               onClick={async () => {
                                 if (!currentUser) return;
+                                
+                                if (isIframe() && !window.PublicKeyCredential) {
+                                  alert(getPasskeyErrorLinkMessage());
+                                  return;
+                                }
+
                                 setIsPasskeyAuthenticating(true);
                                 try {
                                   // 1. Get options from server

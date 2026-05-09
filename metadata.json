@@ -1,5 +1,5 @@
 {
   "name": "Pulse Feeds",
   "description": "Pulse Feeds: Next-gen AI-powered community app using Gemini 3 Flash. Optimized for production deployment and secure real-time interactions.",
-  "requestFramePermissions": ["geolocation", "camera", "microphone", "screen-wake-lock", "publickey-credentials-create", "publickey-credentials-get"]
+  "requestFramePermissions": ["geolocation", "camera", "microphone", "screen-wake-lock", "publickey-credentials-create", "publickey-credentials-get", "payment", "webauthn"]
 }

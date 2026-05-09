@@ -109,6 +109,12 @@ export default function Layout() {
     return () => window.removeEventListener('toggle-view-mode', handleToggleView);
   }, []);
 
+  useEffect(() => {
+    const handleLockRequest = () => setIsLocked(true);
+    window.addEventListener('pulse-app-lock', handleLockRequest);
+    return () => window.removeEventListener('pulse-app-lock', handleLockRequest);
+  }, []);
+
   const mainRef = useRef<HTMLDivElement>(null);
 
   const [activeModal, setActiveModal] = useState<string | null>(null);

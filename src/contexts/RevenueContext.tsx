@@ -5,6 +5,7 @@ import { db } from '../lib/firebase';
 
 interface RevenueContextType {
   isIdle: boolean;
+  setIsIdle: (val: boolean) => void;
   activeSeconds: number;
   totalEarnedToday: number;
   addRevenue: (userAmount: number, platformAmount: number, reason: string, source: 'ad' | 'education' | 'active_time' | 'dating' | 'community' | 'events') => Promise<void>;
@@ -361,7 +362,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [isIdle]);
 
   return (
-    <RevenueContext.Provider value={{ isIdle, activeSeconds, totalEarnedToday, addRevenue, addPlatformRevenue, addPlatformExpense, syncActiveTimeRewards: syncPendingToFirestore }}>
+    <RevenueContext.Provider value={{ isIdle, setIsIdle, activeSeconds, totalEarnedToday, addRevenue, addPlatformRevenue, addPlatformExpense, syncActiveTimeRewards: syncPendingToFirestore }}>
       {children}
     </RevenueContext.Provider>
   );

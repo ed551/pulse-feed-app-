@@ -6,6 +6,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { isBiometricsSupported, authenticateBiometric } from '../lib/biometrics';
+import { isIframe, getPasskeyErrorLinkMessage, checkPasskeyCapability } from '../lib/iframeUtils';
 
 export default function Login() {
   const { loginWithGoogle, loginWithEmail, signupWithEmail, logout, isFacebookApp, currentUser, userData, isMfaVerified, setIsMfaVerified, sessionError, setSessionError } = useAuth();
@@ -22,6 +23,17 @@ export default function Login() {
   }, [sessionError, setSessionError]);
   const [loading, setLoading] = useState(false);
   const [biometricSupported, setBiometricSupported] = useState(false);
+  const [passkeyBlocked, setPasskeyBlocked] = useState(false);
+
+  useEffect(() => {
+    const checkCap = async () => {
+      const cap = await checkPasskeyCapability();
+      if (!cap.supported && cap.reason === 'blocked_by_iframe') {
+        setPasskeyBlocked(true);
+      }
+    };
+    checkCap();
+  }, []);
   
   // New auth states
   const [mode, setMode] = useState<'login' | 'signup'>('login');
@@ -103,6 +115,8 @@ export default function Login() {
       console.error("[Passkey Auth Error]", err);
       if (err.name === 'NotAllowedError') {
         setError("Authentication cancelled or timed out.");
+      } else if (err.name === 'SecurityError' || err.message?.includes('feature is not enabled')) {
+        setError("🔒 PREVIEW BLOCKED: Passkeys cannot be used inside this frame. Please click 'Open in New Tab' at the top of AI Studio to use your Passkey.");
       } else {
         setError(err.message || 'Passkey authentication failed');
       }
@@ -331,7 +345,11 @@ To fix this:
       // In a real app, you'd verify the credential with your backend here
       navigate(from, { replace: true });
     } catch (err: any) {
-      setError('Biometric authentication failed');
+      if (err.name === 'SecurityError' || err.message?.includes('feature is not enabled')) {
+        setError("🔒 PREVIEW BLOCKED: Biometrics cannot be used inside this frame. Please click 'Open in New Tab' at the top of AI Studio to use your device biometrics.");
+      } else {
+        setError('Biometric authentication failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -543,15 +561,21 @@ To fix this:
             <>
               <button
                 type="button"
-                onClick={() => setMfaType('passkey')}
-                className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${mfaType === 'passkey' ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-500' : 'bg-gray-50 dark:bg-gray-900 border-gray-100 dark:border-gray-700'}`}
+                onClick={() => {
+                  if (passkeyBlocked) {
+                    setError(getPasskeyErrorLinkMessage());
+                    return;
+                  }
+                  setMfaType('passkey');
+                }}
+                className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${mfaType === 'passkey' ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-500' : 'bg-gray-50 dark:bg-gray-900 border-gray-100 dark:border-gray-700'} ${passkeyBlocked ? 'opacity-50' : ''}`}
               >
                 <div className={`p-2 rounded-lg ${mfaType === 'passkey' ? 'bg-orange-500 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-500'}`}>
                   <ShieldCheck className="w-4 h-4" />
                 </div>
                 <div className="text-left">
-                  <p className="text-xs font-bold text-gray-900 dark:text-white">Passkey (FIDO2)</p>
-                  <p className="text-[10px] text-gray-500">Fastest biometric security</p>
+                  <p className="text-xs font-bold text-gray-900 dark:text-white">Passkey (FIDO2) {passkeyBlocked && "🔒"}</p>
+                  <p className="text-[10px] text-gray-500">{passkeyBlocked ? 'Blocked in Preview' : 'Fastest biometric security'}</p>
                 </div>
               </button>
 

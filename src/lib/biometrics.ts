@@ -33,11 +33,17 @@ export const registerBiometric = async (userId: string) => {
     timeout: 60000,
   };
 
-  const credential = await navigator.credentials.create({
-    publicKey: publicKeyCredentialCreationOptions,
-  });
-
-  return credential;
+  try {
+    const credential = await navigator.credentials.create({
+      publicKey: publicKeyCredentialCreationOptions,
+    });
+    return credential;
+  } catch (error: any) {
+    if (error.name === 'SecurityError' || error.message?.includes('feature is not enabled')) {
+      throw new Error("WEBAUTHN_IFRAME_BLOCKED: Passkeys cannot be created inside this preview frame. Please open the application in a new tab to use Biometrics/Passkeys.");
+    }
+    throw error;
+  }
 };
 
 export const authenticateBiometric = async () => {
@@ -53,9 +59,15 @@ export const authenticateBiometric = async () => {
     timeout: 60000,
   };
 
-  const credential = await navigator.credentials.get({
-    publicKey: publicKeyCredentialRequestOptions,
-  });
-
-  return credential;
+  try {
+    const credential = await navigator.credentials.get({
+      publicKey: publicKeyCredentialRequestOptions,
+    });
+    return credential;
+  } catch (error: any) {
+    if (error.name === 'SecurityError' || error.message?.includes('feature is not enabled')) {
+      throw new Error("WEBAUTHN_IFRAME_BLOCKED: Passkeys cannot be accessed inside this preview frame. Please open the application in a new tab to use Biometrics/Passkeys.");
+    }
+    throw error;
+  }
 };
