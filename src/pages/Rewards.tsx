@@ -34,10 +34,12 @@ export default function Rewards() {
   const { currency, availableCurrencies, changeCurrency, convert, loading, rates } = useCurrencyConverter();
   const [activeTab, setActiveTab] = useState<'overview' | 'local' | 'international'>('overview');
   const [showSCAModal, setShowSCAModal] = useState(false);
-  const [authMethod, setAuthMethod] = useState<'pin' | 'passkey'>('pin');
+  const [authMethod, setAuthMethod] = useState<'pin' | 'passkey' | 'totp'>('pin');
   const [isPasskeyAuthenticating, setIsPasskeyAuthenticating] = useState(false);
   const [scaToken, setScaToken] = useState("");
-  const [scaPendingAction, setScaPendingAction] = useState<((pin: string, usePasskey?: boolean) => void) | null>(null);
+  const [totpCode, setTotpCode] = useState("");
+  const [scaError, setScaError] = useState<string | null>(null);
+  const [scaPendingAction, setScaPendingAction] = useState<((pin: string, usePasskey?: boolean, totp?: string) => void) | null>(null);
   const [localMethod, setLocalMethod] = useState<'mpesa' | 'bank' | 'paybill'>('mpesa');
   const [paybillDetails, setPaybillDetails] = useState({
     businessNumber: "",
@@ -145,13 +147,13 @@ export default function Rewards() {
     }, { totalEarned: 0, totalWithdrawn: 0, pendingWithdrawals: 0 });
   }, [transactions, rates]);
 
-  const handlePayment = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean) => {
+  const handlePayment = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean, totp?: string) => {
     if (e) e.preventDefault();
     if (!amount) return;
     
     // Trigger SCA if not provided
-    if (!pin && !usePasskey && !isDeveloper && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (p: string, up?: boolean) => handlePayment(undefined, p, up));
+    if (!pin && !usePasskey && !totp && !isDeveloper && !process.env.SKIP_SCA) {
+      setScaPendingAction(() => (p: string, up?: boolean, t?: string) => handlePayment(undefined, p, up, t));
       setShowSCAModal(true);
       return;
     }
@@ -166,16 +168,22 @@ export default function Rewards() {
       const currentRate = rates['KES'] || 135;
       const kesBalance = (points * currentRate / 100);
 
-      // Velocity Limit Check
-      if (isDeveloper) {
-        const last24h = Date.now() - (24 * 60 * 60 * 1000);
-        const recentWithdrawals = transactions
-          .filter(tx => ['mpesa', 'bank', 'paybill', 'payout'].includes(tx.type || '') && (tx.timestamp?.toMillis?.() || 0) > last24h)
-          .reduce((sum, tx) => sum + (tx.amount / (rates['KES'] || 135)), 0);
+      const last24h = Date.now() - (24 * 60 * 60 * 1000);
+      const recentWithdrawalsUSD = transactions
+        .filter(tx => ['mpesa', 'bank', 'paybill', 'payout', 'paypal', 'stripe'].includes(tx.type || '') && (tx.timestamp?.toMillis?.() || 0) > last24h)
+        .reduce((sum, tx) => {
+          const txAmountUSD = (tx.currency === 'KES') ? (tx.amount / (rates['KES'] || 135)) : tx.amount;
+          return sum + txAmountUSD;
+        }, 0);
+
+      // Velocity Limit Check (Informational)
+      const requestedUSD = numAmount / currentRate;
+      let limitUSD = 50; 
+      if (isDeveloper) limitUSD = 5000;
+      else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitUSD = 500;
           
-        if (recentWithdrawals + (numAmount / currentRate) > 5000) {
-          throw new Error("Developer Velocity Limit Reached: $5,000/24h. Please wait for the next cycle.");
-        }
+      if (recentWithdrawalsUSD + requestedUSD > limitUSD && !totp && !usePasskey) {
+        setScaError(`Daily limit of $${limitUSD} reached with PIN. Use TOTP or Passkey to authorize up to $5,000.`);
       }
 
       if (!isDeveloper && numAmount > kesBalance) throw new Error("Insufficient balance");
@@ -185,7 +193,8 @@ export default function Rewards() {
         amount: numAmount, 
         userId: currentUser?.uid,
         scaToken: pin,
-        usePasskey
+        usePasskey,
+        totpCode: totp
       };
 
       if (localMethod === 'mpesa') {
@@ -209,6 +218,13 @@ export default function Rewards() {
 
       const result = await response.json();
       
+      if (result.status === 'SOFT_DECLINE') {
+        setScaError(result.message);
+        setShowSCAModal(true);
+        setScaPendingAction(() => (p: string, up?: boolean, t?: string) => handlePayment(undefined, p, up, t));
+        return;
+      }
+
       if (result.success || result.ResponseCode === "0") {
         setSuccess(result.message || "Payout request initiated successfully!");
         setAmount("");
@@ -265,13 +281,13 @@ export default function Rewards() {
     }
   };
 
-  const handleInternationalPayout = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean) => {
+  const handleInternationalPayout = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean, totp?: string) => {
     if (e) e.preventDefault();
     if (!payoutAmount) return;
 
     // Trigger SCA if not provided
-    if (!pin && !usePasskey && !isDeveloper && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (p: string, up?: boolean) => handleInternationalPayout(undefined, p, up));
+    if (!pin && !usePasskey && !totp && !isDeveloper && !process.env.SKIP_SCA) {
+      setScaPendingAction(() => (p: string, up?: boolean, t?: string) => handleInternationalPayout(undefined, p, up, t));
       setShowSCAModal(true);
       return;
     }
@@ -282,17 +298,62 @@ export default function Rewards() {
       const numAmount = parseFloat(payoutAmount);
       const minAmount = isDeveloper ? 0.01 : 10;
       if (numAmount < minAmount) throw new Error(`Minimum withdrawal is $${minAmount.toFixed(2)} USD`); 
+      
+      const last24h = Date.now() - (24 * 60 * 60 * 1000);
+      const recentWithdrawalsUSD = transactions
+        .filter(tx => ['mpesa', 'bank', 'paybill', 'payout', 'paypal', 'stripe'].includes(tx.type || '') && (tx.timestamp?.toMillis?.() || 0) > last24h)
+        .reduce((sum, tx) => {
+          const txAmountUSD = (tx.currency === 'KES') ? (tx.amount / (rates['KES'] || 135)) : tx.amount;
+          return sum + txAmountUSD;
+        }, 0);
+
+      // Velocity Limit Check (Informational)
+      let limitUSD = 50; 
+      if (isDeveloper) limitUSD = 5000;
+      else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitUSD = 500;
+          
+      if (recentWithdrawalsUSD + numAmount > limitUSD && !totp && !usePasskey) {
+        setScaError(`Daily limit of $${limitUSD} reached with PIN. Use TOTP or Passkey to authorize up to $5,000.`);
+      }
+
       if (!isDeveloper && numAmount > balance) throw new Error("Insufficient balance");
 
       // Logic for international payout
       if (currentUser) {
+        const body = {
+          method: payoutMethod,
+          amount: numAmount,
+          email: payoutEmail,
+          bankDetails: payoutMethod === 'bank' ? bankDetails : null,
+          userId: currentUser.uid,
+          scaToken: pin,
+          usePasskey,
+          totpCode: totp
+        };
+
+        const response = await fetch('/api/payout/international', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'SOFT_DECLINE') {
+          setScaError(result.message);
+          setShowSCAModal(true);
+          setScaPendingAction(() => (p: string, up?: boolean, t?: string) => handleInternationalPayout(undefined, p, up, t));
+          return;
+        }
+
+        if (!result.success) {
+          throw new Error(result.message || "Payout initiation failed");
+        }
+
         const txRef = collection(db, 'users', currentUser.uid, 'transactions');
         const userRef = doc(db, 'users', currentUser.uid);
         
-        // Use a unique reference
-        const reference = `INT-${Date.now()}-${currentUser.uid.slice(0, 4)}`;
-
-        // Deduct both points AND balance
+        const reference = result.transactionId || `INT-${Date.now()}`;
         const pointsToDeduct = Math.floor(numAmount * 100);
         
         const txData = {
@@ -311,7 +372,8 @@ export default function Rewards() {
           userId: currentUser.uid,
           userEmail: currentUser.email,
           scaToken: pin,
-          usePasskey
+          usePasskey,
+          totpCode: totp
         };
 
         await addDoc(txRef, txData);
@@ -562,26 +624,42 @@ export default function Rewards() {
                  </div>
 
                  {/* Auth Method Toggle */}
-                 <div className="flex p-1 bg-gray-100 dark:bg-gray-900 rounded-xl mb-6">
+                 <div className="flex p-1 bg-gray-100 dark:bg-gray-900 rounded-xl mb-4">
                    <button 
-                     onClick={() => setAuthMethod('pin')}
+                     onClick={() => { setAuthMethod('pin'); setScaError(null); }}
                      className={cn(
-                       "flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
+                       "flex-1 py-2 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all",
                        authMethod === 'pin' ? "bg-white dark:bg-gray-800 text-orange-600 shadow-sm" : "text-gray-400"
                      )}
                    >
-                     Security PIN
+                     PIN
                    </button>
                    <button 
-                     onClick={() => setAuthMethod('passkey')}
+                     onClick={() => { setAuthMethod('totp'); setScaError(null); }}
                      className={cn(
-                       "flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
+                       "flex-1 py-2 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all",
+                       authMethod === 'totp' ? "bg-white dark:bg-gray-800 text-orange-600 shadow-sm" : "text-gray-400"
+                     )}
+                   >
+                     Code
+                   </button>
+                   <button 
+                     onClick={() => { setAuthMethod('passkey'); setScaError(null); }}
+                     className={cn(
+                       "flex-1 py-2 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all",
                        authMethod === 'passkey' ? "bg-white dark:bg-gray-800 text-orange-600 shadow-sm" : "text-gray-400"
                      )}
                    >
                      Passkey
                    </button>
                  </div>
+
+                 {scaError && (
+                   <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-xl flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                      <p className="text-[10px] text-red-600 dark:text-red-400 font-bold">{scaError}</p>
+                   </div>
+                 )}
 
                  <div className="space-y-4">
                    {authMethod === 'pin' ? (
@@ -595,7 +673,7 @@ export default function Rewards() {
                           maxLength={8}
                           placeholder="Enter PIN"
                           value={scaToken}
-                          onChange={(e) => setScaToken(e.target.value)}
+                          onChange={(e) => { setScaToken(e.target.value); setScaError(null); }}
                           className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl pl-12 pr-4 py-4 text-sm font-mono focus:ring-2 focus:ring-orange-500 outline-none transition-all shadow-sm"
                           autoFocus
                         />
@@ -604,16 +682,50 @@ export default function Rewards() {
                       <button 
                         onClick={() => {
                            if (!scaToken) return;
-                           setShowSCAModal(false);
                            if (scaPendingAction) scaPendingAction(scaToken, false);
+                           setShowSCAModal(false);
                            setScaPendingAction(null);
                            setScaToken("");
+                           setScaError(null);
                         }}
                         disabled={scaToken.length < 4}
                         className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-orange-600/30 active:scale-95 disabled:opacity-50"
                       >
                         Authorize with PIN
                       </button>
+                     </>
+                   ) : authMethod === 'totp' ? (
+                     <>
+                        <div className="relative">
+                          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                            <Smartphone className="w-5 h-5" />
+                          </div>
+                          <input 
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={6}
+                            placeholder="6-digit Code"
+                            value={totpCode}
+                            onChange={(e) => { setTotpCode(e.target.value.replace(/\D/g, '')); setScaError(null); }}
+                            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl pl-12 pr-4 py-4 text-sm font-mono tracking-[0.5em] text-center focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm"
+                            autoFocus
+                          />
+                        </div>
+
+                        <button 
+                          onClick={() => {
+                             if (totpCode.length !== 6) return;
+                             if (scaPendingAction) scaPendingAction("", false, totpCode);
+                             setShowSCAModal(false);
+                             setScaPendingAction(null);
+                             setTotpCode("");
+                             setScaError(null);
+                          }}
+                          disabled={totpCode.length !== 6}
+                          className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/30 active:scale-95 disabled:opacity-50"
+                        >
+                          Authorize with Code
+                        </button>
                      </>
                    ) : (
                      <div className="text-center space-y-4 py-2">
@@ -627,6 +739,7 @@ export default function Rewards() {
                                onClick={async () => {
                                  if (!currentUser) return;
                                  setIsPasskeyAuthenticating(true);
+                                 setScaError(null);
                                  try {
                                    const resp = await fetch('/api/auth/passkey/generate-authentication-options', {
                                      method: 'POST',
@@ -653,7 +766,7 @@ export default function Rewards() {
                                      throw new Error(verification.error || "Verification failed");
                                    }
                                  } catch (e: any) {
-                                   alert(`Passkey Error: ${e.message}`);
+                                   setScaError(e.message);
                                  } finally {
                                    setIsPasskeyAuthenticating(false);
                                  }
@@ -673,7 +786,7 @@ export default function Rewards() {
                         )}
                      </div>
                    )}
-                   
+                 </div>
                    <button 
                      onClick={() => {
                        setShowSCAModal(false);
@@ -685,7 +798,6 @@ export default function Rewards() {
                    >
                      Cancel Operation
                    </button>
-                 </div>
 
                  <div className="mt-6 pt-4 border-t border-gray-50 dark:border-gray-700/50 flex items-center justify-center gap-2 text-[8px] text-gray-400 font-bold uppercase tracking-widest">
                    <ShieldCheck className="w-3 h-3 text-green-500" />

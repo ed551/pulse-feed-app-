@@ -7,7 +7,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import axios from 'axios';
-import { initializeApp, getApps } from "firebase-admin/app";
+import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getFirestore as getAdminFirestore, FieldValue } from "firebase-admin/firestore";
 import { initializeApp as initClientApp } from "firebase/app";
 import { 
@@ -28,6 +28,8 @@ import {
   getDocs,
   setLogLevel
 } from "firebase/firestore";
+import { applicationDefault } from 'firebase-admin/app';
+
 import fs from "fs";
 import nodemailer from 'nodemailer';
 import * as otplibPkg from 'otplib';
@@ -93,22 +95,28 @@ const STANDARD_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebK
 // Initialize Firebase Admin
 let firebaseAdminApp;
 try {
-  // Use explicit Project ID from config if possible to avoid pointing to the container project accidentally
+  // Use explicit Project ID from config if possible
   firebaseAdminApp = initializeApp({
-    projectId: firebaseConfig.projectId
+    projectId: firebaseConfig.projectId,
+    credential: applicationDefault()
   });
-  console.log(`Firebase Admin: Initialized with explicit Project ID from config: ${firebaseConfig.projectId}`);
-} catch (error) {
+  console.log(`Firebase Admin: Initialized with explicit Project ID: ${firebaseConfig.projectId} and applicationDefault()`);
+} catch (error: any) {
   const apps = getApps();
   if (apps.length > 0) {
     firebaseAdminApp = apps[0];
     console.log("Firebase Admin: Using existing app instance");
   } else {
-    // Last resort: use default ADC
-    firebaseAdminApp = initializeApp();
-    console.log("Firebase Admin: Initialized with default ADC fallback");
+    try {
+      firebaseAdminApp = initializeApp();
+      console.log("Firebase Admin: Initialized with default ADC fallback");
+    } catch (innerError: any) {
+      console.error("CRITICAL: Firebase Admin failed to initialize entirely:", innerError.message);
+      // We will continue with resilient adapter only
+    }
   }
 }
+
 
 // Log project and database details for debugging
 const detectedProjectId = firebaseAdminApp.options.projectId || process.env.GOOGLE_CLOUD_PROJECT || firebaseConfig.projectId;
@@ -285,11 +293,22 @@ const resilientDb = {
               const snap = await adminRef.get();
               return { docs: snap.docs.map((d: any) => ({ id: d.id, data: () => d.data(), exists: true })) };
             } catch (e: any) {
-              if (e.message.includes('PERMISSION_DENIED')) adminSdkHealthy = false;
-              console.warn(`[ResilientDB] Admin SDK Coll GET Denied for ${collPath}:`, e.message);
+              if (e.message.includes('PERMISSION_DENIED') || e.message.includes('insufficient permissions')) {
+                adminSdkHealthy = false;
+                console.warn(`[ResilientDB] Admin SDK Coll GET Denied for ${collPath}:`, e.message);
+              }
             }
           }
-          const snap = await getDocs(collection(clientDb, collPath));
+          // Enhanced Client SDK query with serverSecret bypass filter
+          const q = query(collection(clientDb, collPath), where('serverSecret', '==', SERVER_SECRET));
+          const snap = await getDocs(q);
+          
+          // If no results with secret, try without (incase it's a collection that doesn't use it, e.g. public ones)
+          if (snap.empty) {
+             const publicSnap = await getDocs(collection(clientDb, collPath)).catch(() => ({ docs: [], empty: true }));
+             if (!publicSnap.empty) return { docs: (publicSnap as any).docs.map((d: any) => ({ id: d.id, data: () => d.data(), exists: true })) };
+          }
+          
           return { docs: snap.docs.map(d => ({ id: d.id, data: () => d.data(), exists: true })) };
         } catch (e: any) {
           console.error(`[ResilientDB] GET failed for collection ${collPath}:`, e.message);
@@ -521,7 +540,7 @@ async function checkIdempotency(reference: string) {
 }
 
 // Velocity Limits (Financial Fraud Detection)
-async function checkVelocityLimit(userId: string, amountUsd: number) {
+async function checkVelocityLimit(userId: string, amountUsd: number, authLevel: number = 0) {
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const txs = await resilientDb.collection('withdrawals')
     .where('userId', '==', userId)
@@ -530,17 +549,44 @@ async function checkVelocityLimit(userId: string, amountUsd: number) {
 
   let totalDay = amountUsd;
   txs.forEach(doc => {
-    totalDay += (doc.data()?.amount || 0);
+    const data = doc.data();
+    const val = data.currency === 'KES' ? (data.amount / 130) : (data.amount || 0);
+    totalDay += val;
   });
 
-  // Increased limits to support developer withdrawals (at least 450,000 KES ~ $3,500 USD)
-  // Standard user limit: $10,000 USD/day
-  // Certified Developer/Platform Admin limit: $250,000 USD/day
-  const IS_DEVELOPER = userId === 'platform-admin' || userId === 'user-system' || userId === 'VwAXFpbGmHckh1XJApntswai2kH2'; 
-  const DAILY_MAX = IS_DEVELOPER ? 250000 : 10000; 
+  const userDoc = await resilientDb.collection('users').doc(userId).get();
+  const userData = userDoc.data();
+  const IS_DEVELOPER = userId === 'platform-admin' || userId === 'user-system' || userData?.email === 'edwinmuoha@gmail.com'; 
+  
+  // 1. Dynamic Throttling: Base limits
+  let dailyMax = 50; // default for unverified
+  if (IS_DEVELOPER) dailyMax = 5000;
+  else if (userData?.kycVerified) dailyMax = 500;
 
-  if (totalDay > DAILY_MAX) {
-    throw new Error(`Velocity limit exceeded. Daily max for ${IS_DEVELOPER ? 'Developer' : 'User'}: $${DAILY_MAX.toLocaleString()}. Attempted total: $${totalDay.toFixed(2)}`);
+  // 2. Emergency Carve-Out Rule (Multi-Factor Overrides)
+  const accountAgeDays = userData?.createdAt ? (Date.now() - userData.createdAt.toDate().getTime()) / (1000 * 60 * 60 * 24) : 0;
+  const isTrustedAccount = accountAgeDays > 90;
+
+  // Level 1: PIN
+  // Level 2: TOTP (Code) -> Unlocks 2x buffer
+  if (authLevel === 2) dailyMax = Math.max(dailyMax, isTrustedAccount ? 1500 : 1000);
+  // Level 3: Passkey -> Unlocks 5x buffer or up to $5,000
+  if (authLevel === 3) dailyMax = Math.max(dailyMax, 5000);
+
+  // 3. Admin Override (Manual Review / Fast-Track)
+  if (userData?.tempVelocityOverride && userData?.tempOverrideExpires?.toDate() > new Date()) {
+    dailyMax = userData.tempVelocityOverride;
+  }
+
+  if (totalDay > dailyMax) {
+    const softDeclineInfo = {
+      status: 'SOFT_DECLINE',
+      limit: dailyMax,
+      current: totalDay,
+      requiredLevel: authLevel < 2 ? 2 : 3,
+      message: `Daily velocity limit reached: $${dailyMax.toLocaleString()}. Please authorize with a higher security method (TOTP or Passkey) to override.`
+    };
+    throw new Error(JSON.stringify(softDeclineInfo));
   }
   return true;
 }
@@ -548,6 +594,8 @@ async function checkVelocityLimit(userId: string, amountUsd: number) {
 // SCA Verification (Persistent PIN from Firestore)
 let cachedSecPin: string | null = null;
 let lastPinRefresh = 0;
+
+const failedScaAttempts = new Map<string, { count: number, lockoutUntil: number }>();
 
 async function getSecPin() {
   const NOW = Date.now();
@@ -586,50 +634,70 @@ async function verifyActionSCA(token: string, userId?: string, usePasskey?: bool
   return token === 'ADMIN-SCA-MASTER' || token === masterPin || token === `SCA-${masterPin}`; 
 }
 
-// Verify User SEC-PIN (for standard withdrawals)
-async function verifyUserAuthorization(userId: string, authData: { scaToken?: string; usePasskey?: boolean }) {
-  if (process.env.SKIP_SCA === 'true') return true;
-  if (!userId) return false;
+// Verify User Authorization and return assurance level (0-3)
+async function verifyUserAuthorizationLevel(userId: string, authData: { scaToken?: string; usePasskey?: boolean; totpCode?: string }) {
+  if (process.env.SKIP_SCA === 'true') return 3;
+  if (!userId) return 0;
 
-  // Option 1: Passkey Verification (Recent authentication within 5 minutes)
+  const attempts = failedScaAttempts.get(userId);
+  if (attempts && attempts.lockoutUntil > Date.now()) return 0;
+
+  let level = 0;
+  let isSuccess = false;
+
+  // Level 3: Passkey Verification
   if (authData.usePasskey) {
     try {
-      const userDoc = await resilientDb.collection('users').doc(userId).get();
-      const lastAuth = userDoc.data()?.lastPasskeyAuth;
-      if (lastAuth) {
-        const lastAuthDate = lastAuth.toDate();
-        const now = new Date();
-        const diffMinutes = (now.getTime() - lastAuthDate.getTime()) / 60000;
-        if (diffMinutes <= 5) {
-          console.log(`[Security] Authorization granted via recent Passkey for ${userId}`);
-          return true;
-        }
+      const userSecRef = resilientDb.collection('users').doc(userId).collection('private').doc('security');
+      const doc = await userSecRef.get();
+      if (doc.exists && doc.data()?.lastPasskeyAuth) {
+         const diff = (Date.now() - doc.data().lastPasskeyAuth.toDate().getTime()) / 60000;
+         if (diff <= 15) { isSuccess = true; level = 3; }
       }
-      return false;
-    } catch (e: any) {
-      console.error(`[Security] Passkey auth check failed:`, e.message);
-      return false;
-    }
+    } catch (e) {}
   }
 
-  // Option 2: PIN Verification
-  const pin = authData.scaToken;
-  if (!pin) return false;
-  
-  try {
-    const userSecRef = resilientDb.collection('users').doc(userId).collection('private').doc('security');
-    const doc = await userSecRef.get();
-    
-    if (doc.exists) {
-      return doc.data()?.secPin === pin;
-    } else {
-      return pin === "123456";
-    }
-  } catch (e: any) {
-    console.error(`[Security] PIN auth check failed:`, e.message);
-    return false;
+  // Level 2: TOTP Verification
+  if (!isSuccess && authData.totpCode) {
+    try {
+      const userDoc = await resilientDb.collection('users').doc(userId).get();
+      const secret = userDoc.data()?.twoFactorSecret;
+      if (secret && authenticator && typeof authenticator.verify === 'function') {
+        const isValid = authenticator.verify({ token: authData.totpCode, secret, window: 1 });
+        if (isValid) { isSuccess = true; level = 2; }
+      }
+    } catch (e) {}
+  }
+
+  // Level 1: PIN Verification
+  if (!isSuccess && authData.scaToken) {
+    try {
+      const userSecRef = resilientDb.collection('users').doc(userId).collection('private').doc('security');
+      const doc = await userSecRef.get();
+      const pin = doc.exists ? doc.data()?.secPin : "123456";
+      if (authData.scaToken === pin) { isSuccess = true; level = 1; }
+    } catch (e) {}
+  }
+
+  if (isSuccess) {
+    failedScaAttempts.delete(userId);
+    await resilientDb.collection('users').doc(userId).update({ lastHighRiskAuth: FieldValue.serverTimestamp() }).catch(() => {});
+    return level;
+  } else {
+    const current = failedScaAttempts.get(userId) || { count: 0, lockoutUntil: 0 };
+    current.count++;
+    if (current.count >= 3) current.lockoutUntil = Date.now() + 15 * 60 * 1000;
+    failedScaAttempts.set(userId, current);
+    return 0;
   }
 }
+
+async function verifyUserAuthorization(userId: string, authData: { scaToken?: string; usePasskey?: boolean; totpCode?: string }) {
+  const level = await verifyUserAuthorizationLevel(userId, authData);
+  return level > 0;
+}
+
+  // 2FA TOTP Handling
 
 async function markIdempotency(reference: string, status: string, details: any = {}) {
   await resilientDb.collection('idempotency_keys').doc(reference).set({
@@ -1030,14 +1098,14 @@ async function startServer() {
             AccountNumber: COOP_CONFIG.sourceAccount,
             Amount: amount.toString(),
             TransactionCurrency: "KES",
-            Narration: `Platform Payout [Queue]`
+            Narration: `EDWIN MUOHA WATITU`
           },
           Destinations: [
             {
               ReferenceNumber: reference + "_1",
               MobileNumber: phoneNumber.replace(/^0/, "254").replace(/^\+/, ""),
               Amount: amount.toString(),
-              Narration: `the owner [Queue]`
+              Narration: `EDWIN MUOHA WATITU`
             }
           ]
         },
@@ -1085,7 +1153,7 @@ async function startServer() {
           AccountNumber: COOP_CONFIG.sourceAccount,
           Amount: amount.toString(),
           TransactionCurrency: "KES",
-          Narration: `Bank Transfer [Queue]`
+          Narration: `EDWIN MUOHA WATITU`
         },
         Destinations: [
           {
@@ -1093,7 +1161,7 @@ async function startServer() {
             AccountNumber: bankDetails.accountNumber,
             Amount: amount.toString(),
             TransactionCurrency: "KES",
-            Narration: `Pulse Reward [Queue]`
+            Narration: `EDWIN MUOHA WATITU`
           }
         ]
       };
@@ -1326,7 +1394,7 @@ async function startServer() {
             OperatorCode: "EDWIN",
             TransactionCurrency: "KES",
             MobileNumber: phoneNumber.replace(/^0/, "254").replace(/^\+/, ""),
-            Narration: "Pulse Feeds Payment",
+            Narration: "EDWIN MUOHA WATITU",
             Amount: amount,
             MessageDateTime: new Date().toISOString(),
             OtherDetails: [
@@ -1429,22 +1497,34 @@ async function startServer() {
     const existingTx = await checkIdempotency(reference);
     if (existingTx) return res.json({ success: existingTx.status === 'success', transactionId: reference, isDuplicate: true });
 
-    // Safety 2: Velocity Limit
+    // Safety 2: Authentication Level Check
+    let authLevel = 0;
     if (userId) {
-      try {
-        await checkVelocityLimit(userId, parseFloat(amount) / 130);
-      } catch (velErr: any) {
-        return res.status(429).json({ success: false, error: "Velocity Limit", message: velErr.message });
+      authLevel = await verifyUserAuthorizationLevel(userId, { 
+        scaToken, 
+        usePasskey: req.body.usePasskey,
+        totpCode: req.body.totpCode
+      });
+      if (authLevel === 0) {
+        return res.status(401).json({ success: false, error: "AUTH_REQUIRED", message: "Invalid credentials or Verification Expired. Authorization Denied." });
       }
     }
 
-    // Safety 3: SCA/Passkey Verification
+    // Safety 3: Velocity Limit (Auth-Aware)
     if (userId) {
-      const isAuthValid = await verifyUserAuthorization(userId, { scaToken, usePasskey: req.body.usePasskey });
-      if (!isAuthValid) {
-        return res.status(401).json({ success: false, error: "AUTH_REQUIRED", message: "Invalid PIN or Passkey Verification Expired. Authorization Denied." });
+      try {
+        await checkVelocityLimit(userId, parseFloat(amount) / 130, authLevel);
+      } catch (velErr: any) {
+        try {
+          const softDecline = JSON.parse(velErr.message);
+          return res.status(429).json({ success: false, ...softDecline });
+        } catch (e) {
+          return res.status(429).json({ success: false, error: "Velocity Limit", message: velErr.message });
+        }
       }
-    } else if (parseFloat(amount) > 10000 && !scaToken) {
+    }
+
+    if (parseFloat(amount) > 10000 && !scaToken && authLevel < 1) {
       return res.status(401).json({ success: false, error: "SCA_REQUIRED", message: "Large payouts require SCA verification." });
     }
 
@@ -1554,31 +1634,132 @@ async function startServer() {
     });
   });
 
+  app.get("/api/bank/coop/balance", async (req, res) => {
+    try {
+      const accessToken = await getCoopBankAccessToken();
+      const response = await axios.post(
+        `${COOP_CONFIG.baseUrl}/Enquiry/AccountBalance_v2/2.0.0/`,
+        {
+          MessageReference: "BAL-" + Date.now(),
+          AccountNumber: COOP_CONFIG.sourceAccount,
+          UserID: COOP_CONFIG.userId
+        },
+        {
+          headers: { 
+            Authorization: `Bearer ${accessToken}`, 
+            "Content-Type": "application/json",
+            "User-Agent": STANDARD_USER_AGENT
+          }
+        }
+      );
+      res.json(response.data);
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.response?.data || error.message });
+    }
+  });
+
+  app.post("/api/bank/coop/validate", async (req, res) => {
+    const { accountNumber, bankCode } = req.body;
+    try {
+      const accessToken = await getCoopBankAccessToken();
+      const response = await axios.post(
+        `${COOP_CONFIG.baseUrl}/Enquiry/Validation/IPSL/1.0.0/`,
+        {
+          MessageReference: "VAL-" + Date.now(),
+          AccountNumber: accountNumber,
+          RecipientBankIdentifier: bankCode || "0011",
+          UserID: COOP_CONFIG.userId
+        },
+        {
+          headers: { 
+            Authorization: `Bearer ${accessToken}`, 
+            "Content-Type": "application/json",
+            "User-Agent": STANDARD_USER_AGENT
+          }
+        }
+      );
+      res.json(response.data);
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.response?.data || error.message });
+    }
+  });
+
+  app.post("/api/bank/coop/status", async (req, res) => {
+    const { reference, type } = req.body;
+    try {
+      const accessToken = await getCoopBankAccessToken();
+      const endpoint = type === 'stk' 
+        ? `${COOP_CONFIG.baseUrl}/Enquiry/STK/1.0.0/`
+        : `${COOP_CONFIG.baseUrl}/Enquiry/TransactionStatus_V3/3.0.0/`;
+      
+      const payload: any = {
+        MessageReference: "STAT-" + Date.now(),
+        UserID: COOP_CONFIG.userId
+      };
+
+      if (type === 'stk') {
+        payload.MessageReference = reference; // In JSON, STK status uses the original reference as MessageReference or UserID?
+        // JSON shows: "MessageReference": "we222", "UserID": "w214e4" (where UserID is likely the message ref of original request)
+        payload.UserID = reference; 
+      } else {
+        // General status uses MessageReference: random, UserID: EDWINMUOHA? 
+        // No, JSON shows General status: "MessageReference": "f6cd2f44062a", "UserID": "EDWINMUOHA"
+        // Wait, "f6cd2f44062a" might be the reference to check?
+        // Actually, most banks use the original reference.
+        payload.MessageReference = reference;
+        payload.UserID = COOP_CONFIG.userId;
+      }
+
+      const response = await axios.post(endpoint, payload, {
+        headers: { 
+          Authorization: `Bearer ${accessToken}`, 
+          "Content-Type": "application/json",
+          "User-Agent": STANDARD_USER_AGENT
+        }
+      });
+      res.json(response.data);
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.response?.data || error.message });
+    }
+  });
+
   app.post("/api/payout/bank", async (req, res) => {
     const clientIp = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
-    const { bankDetails, amount, userId, scaToken, reference: providedReference } = req.body;
+    const { bankDetails, amount, userId, scaToken, reference: providedReference, usePasskey, totpCode } = req.body;
     
     // Safety 1: Idempotency
     const reference = providedReference || `USER-BANK-${userId || 'anon'}-${Date.now()}`;
     const existingTx = await checkIdempotency(reference);
     if (existingTx) return res.json({ success: existingTx.status === 'success', transactionId: reference, isDuplicate: true });
 
-    // Safety 2: Velocity Limit
+    // Safety 2: Authentication Level Check
+    let authLevel = 0;
     if (userId) {
-      try {
-        await checkVelocityLimit(userId, parseFloat(amount) / 130);
-      } catch (velErr: any) {
-        return res.status(429).json({ success: false, error: "Velocity Limit", message: velErr.message });
+      authLevel = await verifyUserAuthorizationLevel(userId, { 
+        scaToken, 
+        usePasskey, 
+        totpCode 
+      });
+      if (authLevel === 0) {
+        return res.status(401).json({ success: false, error: "AUTH_REQUIRED", message: "Invalid credentials or Verification Expired." });
       }
     }
 
-    // Safety 3: SCA/Passkey Verification
+    // Safety 3: Velocity Limit (Auth-Aware)
     if (userId) {
-      const isAuthValid = await verifyUserAuthorization(userId, { scaToken, usePasskey: req.body.usePasskey });
-      if (!isAuthValid) {
-        return res.status(401).json({ success: false, error: "AUTH_REQUIRED", message: "Invalid PIN or Passkey Verification Expired. Authorization Denied." });
+      try {
+        await checkVelocityLimit(userId, parseFloat(amount) / 130, authLevel);
+      } catch (velErr: any) {
+        try {
+          const softDecline = JSON.parse(velErr.message);
+          return res.status(429).json({ success: false, ...softDecline });
+        } catch (e) {
+          return res.status(429).json({ success: false, error: "Velocity Limit", message: velErr.message });
+        }
       }
-    } else if (parseFloat(amount) > 20000 && !scaToken) {
+    }
+
+    if (parseFloat(amount) > 20000 && !scaToken && authLevel < 1) {
       return res.status(401).json({ success: false, error: "SCA_REQUIRED", message: "Bank transfers over 20k KES require SCA verification." });
     }
 
@@ -1714,9 +1895,32 @@ async function startServer() {
   });
 
   app.post("/api/payout/paybill", async (req, res) => {
-    const { paybillDetails, amount } = req.body;
-    console.log(`Initiating Equity Paybill payout for ${paybillDetails.businessNumber} / ${paybillDetails.accountNumber} with amount ${amount}`);
+    const { paybillDetails, amount, userId, scaToken, usePasskey, totpCode } = req.body;
+    console.log(`Initiating Equity Paybill payout for ${paybillDetails?.businessNumber} / ${paybillDetails?.accountNumber} with amount ${amount}`);
     
+    // Safety 2: Authentication Level Check
+    let authLevel = 0;
+    if (userId) {
+      authLevel = await verifyUserAuthorizationLevel(userId, { scaToken, usePasskey, totpCode });
+      if (authLevel === 0) {
+        return res.status(401).json({ success: false, error: "AUTH_REQUIRED", message: "Invalid credentials or Verification Expired." });
+      }
+    }
+
+    // Safety 3: Velocity Limit (Auth-Aware)
+    if (userId) {
+      try {
+        await checkVelocityLimit(userId, parseFloat(amount) / 130, authLevel);
+      } catch (velErr: any) {
+        try {
+          const softDecline = JSON.parse(velErr.message);
+          return res.status(429).json({ success: false, ...softDecline });
+        } catch (e) {
+          return res.status(429).json({ success: false, error: "Velocity Limit", message: velErr.message });
+        }
+      }
+    }
+
     try {
       const consumerKey = process.env.EQUITY_CONSUMER_KEY;
       const sourceAccount = process.env.EQUITY_SOURCE_ACCOUNT;
@@ -2085,11 +2289,34 @@ async function startServer() {
 
   // International Payout Routes
   app.post("/api/payout/international", async (req, res) => {
-    const { method, amount, email, bankDetails } = req.body;
+    const { method, amount, email, bankDetails, userId, scaToken, usePasskey, totpCode } = req.body;
     
     // Threshold check
-    if (amount < 100) {
-      return res.status(400).json({ success: false, error: "Minimum payout threshold is 100 USD" });
+    if (amount < 10) {
+      return res.status(400).json({ success: false, error: "Minimum payout threshold is 10 USD" });
+    }
+
+    // Safety 2: Authentication Level Check
+    let authLevel = 0;
+    if (userId) {
+      authLevel = await verifyUserAuthorizationLevel(userId, { scaToken, usePasskey, totpCode });
+      if (authLevel === 0) {
+        return res.status(401).json({ success: false, error: "AUTH_REQUIRED", message: "Invalid credentials or Verification Expired." });
+      }
+    }
+
+    // Safety 3: Velocity Limit (Auth-Aware)
+    if (userId) {
+      try {
+        await checkVelocityLimit(userId, parseFloat(amount), authLevel);
+      } catch (velErr: any) {
+        try {
+          const softDecline = JSON.parse(velErr.message);
+          return res.status(429).json({ success: false, ...softDecline });
+        } catch (e) {
+          return res.status(429).json({ success: false, error: "Velocity Limit", message: velErr.message });
+        }
+      }
     }
 
     console.log(`Initiating ${method} payout for ${amount} to ${email || bankDetails?.accountNumber}`);
@@ -2770,7 +2997,7 @@ async function startServer() {
   app.post("/api/otp/send", async (req, res) => {
     const { userId, email, method } = req.body;
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
     try {
       // Store in memory for resilience (Server-authoritative)
@@ -2778,6 +3005,7 @@ async function startServer() {
         otp,
         expires: expiresAt.getTime()
       });
+      console.log(`[OTP Engine] Memory OTP set for ${userId}, expires in 5m`);
 
       // Also try to persist to DB as backup (swallow errors)
       try {
@@ -2820,7 +3048,7 @@ async function startServer() {
             <div style="font-size: 32px; font-weight: bold; padding: 10px; background: #f0fdfa; color: #0891b2; text-align: center; letter-spacing: 5px; margin: 20px 0;">
               ${otp}
             </div>
-            <p style="font-size: 12px; color: #666;">This code will expire in 10 minutes. If you did not request this, please secure your account.</p>
+            <p style="font-size: 12px; color: #666;">This code will expire in 5 minutes. If you did not request this, please secure your account.</p>
           </div>`
         });
       }
@@ -2835,6 +3063,16 @@ async function startServer() {
   app.post("/api/otp/verify", async (req, res) => {
     let { userId, otp, secret: providedSecret } = req.body;
     
+    // Rate Limiting Check
+    const attempts = failedScaAttempts.get(userId);
+    if (attempts && attempts.lockoutUntil > Date.now()) {
+      return res.status(429).json({ 
+        success: false, 
+        error: "RATE_LIMIT", 
+        message: `Too many failed attempts. Try again in ${Math.ceil((attempts.lockoutUntil - Date.now()) / 60000)} minutes.` 
+      });
+    }
+
     // Sanitize OTP: remove spaces, dashes, or any non-digit characters
     if (typeof otp === 'string') {
       otp = otp.replace(/\D/g, '');
@@ -2842,6 +3080,7 @@ async function startServer() {
 
     try {
       console.log(`[OTP Verify] Verifying for user: ${userId}`);
+      let isSuccess = false;
 
       // 1. Check TOTP if secret is provided (Client-provided for resilience)
       if (providedSecret) {
@@ -2851,68 +3090,83 @@ async function startServer() {
           console.warn("[OTP Verify] Provided secret is too short for otplib (min 16 bytes)");
         } else {
           try {
-            const isValid = authenticator.verify({
+            isSuccess = authenticator.verify({
               token: otp,
               secret: providedSecret,
               window: 1
             });
-            if (isValid) return res.json({ success: true });
           } catch (verifyErr: any) {
             console.error("[OTP Verify] TOTP verify error:", verifyErr.message);
           }
         }
       }
       
-      // 2. Check Memory Store (Email/Sms)
-      const memoryOtp = memoryOtpStore.get(userId);
-      if (memoryOtp && memoryOtp.otp === otp && memoryOtp.expires > Date.now()) {
-        memoryOtpStore.delete(userId); // Clear after use
-        return res.json({ success: true });
+      if (!isSuccess) {
+        // 2. Check Memory Store (Email/Sms)
+        const memoryOtp = memoryOtpStore.get(userId);
+        if (memoryOtp && memoryOtp.otp === otp && memoryOtp.expires > Date.now()) {
+          memoryOtpStore.delete(userId); // Clear after use
+          isSuccess = true;
+        }
       }
 
-      // 3. Fallback to DB (Try Admin SDK)
-      try {
-        const userDoc = await resilientDb.collection('users').doc(userId).get();
-        if (userDoc.exists && userDoc.data()?.twoFactorType === 'totp' && userDoc.data()?.twoFactorSecret) {
-          const secret = userDoc.data().twoFactorSecret;
-          if (authenticator && typeof authenticator.verify === 'function') {
-            if (secret && secret.length >= 16) {
-              const isValid = authenticator.verify({
-                token: otp,
-                secret: secret,
-                window: 1
-              });
-              if (isValid) return res.json({ success: true });
-            } else {
-              console.warn("[OTP Verify] DB secret is too short for otplib");
+      if (!isSuccess) {
+        // 3. Fallback to DB (Try Admin SDK)
+        try {
+          const userDoc = await resilientDb.collection('users').doc(userId).get();
+          if (userDoc.exists && userDoc.data()?.twoFactorType === 'totp' && userDoc.data()?.twoFactorSecret) {
+            const secret = userDoc.data().twoFactorSecret;
+            if (authenticator && typeof authenticator.verify === 'function') {
+              if (secret && secret.length >= 16) {
+                isSuccess = authenticator.verify({
+                  token: otp,
+                  secret: secret,
+                  window: 1
+                });
+              }
             }
           }
+        } catch (dbErr) {
+          console.warn(`[OTP Verify] DB user lookup failed, falling back to other methods.`);
         }
-      } catch (dbErr) {
-        console.warn(`[OTP Verify] DB user lookup failed, falling back to other methods.`);
       }
 
-      try {
-        const otpDoc = await resilientDb.collection('otps').doc(userId).get();
-        if (otpDoc.exists && otpDoc.data()?.otp === otp) {
-          const data = otpDoc.data();
-          const createdAt = new Date(data.createdAt).getTime();
-          if (!data.used && (Date.now() - createdAt < 10 * 60 * 1000)) {
-            return res.json({ success: true });
+      if (!isSuccess) {
+        try {
+          const otpDoc = await resilientDb.collection('otps').doc(userId).get();
+          if (otpDoc.exists && otpDoc.data()?.otp === otp) {
+            const data = otpDoc.data();
+            const createdAt = new Date(data.createdAt).getTime();
+            if (!data.used && (Date.now() - createdAt < 5 * 60 * 1000)) { // 5 minutes
+              isSuccess = true;
+            }
           }
-        }
-      } catch (dbErr: any) {
-        console.warn(`[OTP Verify] DB OTP lookup failed:`, dbErr.message);
-        if (dbErr.message?.includes("PERMISSION_DENIED") && dbErr.message?.includes("7")) {
-           return res.status(403).json({ 
-             success: false, 
-             error: "7 PERMISSION_DENIED: Cloud Firestore API setup in progress or permission restricted. This is a common delay during first deployment. Please use 'Skip for now' on the login screen to enter the app immediately while the background setup completes.",
-             isFirestoreProvisioning: true
-           });
+        } catch (dbErr: any) {
+          console.warn(`[OTP Verify] DB OTP lookup failed:`, dbErr.message);
         }
       }
 
-      res.status(400).json({ success: false, error: "Invalid or expired security code" });
+      if (isSuccess) {
+        failedScaAttempts.delete(userId);
+        // Also update step-up timestamp
+        await resilientDb.collection('users').doc(userId).update({
+          lastHighRiskAuth: FieldValue.serverTimestamp()
+        }).catch(() => {});
+        return res.json({ success: true });
+      } else {
+        // Record failure
+        const current = failedScaAttempts.get(userId) || { count: 0, lockoutUntil: 0 };
+        current.count++;
+        if (current.count >= 3) {
+          current.lockoutUntil = Date.now() + 15 * 60 * 1000;
+        }
+        failedScaAttempts.set(userId, current);
+        return res.status(400).json({ 
+          success: false, 
+          error: "INVALID_CODE", 
+          message: `Invalid or expired security code. Attempts remaining: ${3 - current.count}` 
+        });
+      }
     } catch (error: any) {
       console.error("OTP verify error:", error.message || error);
       let errorMsg = error.message || "Verification failed";

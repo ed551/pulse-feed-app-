@@ -27,6 +27,10 @@ interface UserData {
   activeTimeRevenue?: number;
   bio?: string;
   createdAt: any;
+  kycVerified?: boolean;
+  isKycVerified?: boolean;
+  tempVelocityOverride?: number;
+  tempOverrideExpires?: any;
   badges?: {
     name: string;
     date: string;

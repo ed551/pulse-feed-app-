@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Fingerprint, Activity, Heart, CheckCircle2, ShieldCheck, X, Sparkles, TrendingUp, Moon, ClipboardCheck, RefreshCcw, Play, Square, User, UserCheck, Settings2 } from 'lucide-react';
+import { Fingerprint, Activity, Heart, CheckCircle2, ShieldCheck, ShieldAlert, AlertTriangle, X, Sparkles, TrendingUp, Moon, ClipboardCheck, RefreshCcw, Play, Square, User, UserCheck, Settings2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { db } from '../lib/firebase';
 import { doc, updateDoc, increment, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -445,11 +445,14 @@ export default function HealthChecker() {
                 </div>
 
                 {/* AI Disclaimer Footer */}
-                <div className="bg-amber-50 dark:bg-amber-950/20 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/30 flex gap-3">
-                  <Sparkles className="w-5 h-5 text-amber-500 shrink-0" />
-                  <p className="text-[10px] font-bold text-amber-700 dark:text-amber-400 leading-relaxed">
-                    This AI-generated report is based on current bio-metrics and educational health data. Always consult with a medical professional for critical health decisions.
-                  </p>
+                <div className="bg-amber-50 dark:bg-amber-950/20 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/50 flex gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-tight">Medical Disclaimer</p>
+                    <p className="text-[10px] font-bold text-amber-700 dark:text-amber-500 leading-relaxed">
+                      This wellness check is for educational & gamification purposes only. It is NOT a medical diagnosis. Pulse Feeds AI analyzes bio-patterns but does not replace professional medical advice. If you are experiencing a medical emergency, call your local emergency services immediately.
+                    </p>
+                  </div>
                 </div>
 
                 <button

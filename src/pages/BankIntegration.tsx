@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 const BankingPortal: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'disbursement' | 'revenue' | 'security'>('disbursement');
+  const [activeTab, setActiveTab] = useState<any>('disbursement');
   const [testMode, setTestMode] = useState<'ift' | 'pesalink'>('ift');
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
@@ -121,6 +121,7 @@ const BankingPortal: React.FC = () => {
           <div className="flex gap-2 p-1 bg-slate-200/50 dark:bg-slate-800/50 backdrop-blur-md rounded-2xl mb-8 overflow-x-auto no-scrollbar">
             {[
               { id: 'disbursement', label: 'Disbursement (Payouts)', icon: ArrowRightLeft },
+              { id: 'tools', label: 'Bank Utilities', icon: Terminal },
               { id: 'revenue', label: 'Revenue Splitting', icon: Database },
               { id: 'security', label: 'Compliance & Security', icon: Lock }
             ].map((tab) => (
@@ -250,6 +251,94 @@ const BankingPortal: React.FC = () => {
                     <div>
                       <h3 className="text-xl font-black uppercase tracking-tighter">Compliance Notice</h3>
                       <p className="text-white/80 text-sm">All disbursements follow Central Bank of Kenya (CBK) reporting guidelines.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {(activeTab as string) === 'tools' && (
+              <div className="space-y-6">
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-200 dark:border-slate-800 shadow-xl">
+                  <h2 className="text-xl font-black text-slate-900 dark:text-white mb-6 uppercase tracking-tighter">
+                    Co-op Bank Utility Tools
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                      <h3 className="font-bold text-slate-900 dark:text-white mb-2">Account Balance Enquiry</h3>
+                      <p className="text-xs text-slate-500 mb-4">Checks the current operational balance of the source account (01100975259001).</p>
+                      <button 
+                        onClick={async () => {
+                          setIsTestRunning(true);
+                          setTestResult(null);
+                          try {
+                            const res = await fetch('/api/bank/coop/balance');
+                            const data = await res.json();
+                            setTestResult(data);
+                          } catch (e) {
+                            setTestResult({ error: "Failed to fetch balance" });
+                          } finally {
+                            setIsTestRunning(false);
+                          }
+                        }}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider"
+                      >
+                        Check Balance
+                      </button>
+                    </div>
+                    <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                      <h3 className="font-bold text-slate-900 dark:text-white mb-2">Account Validation (IPSL)</h3>
+                      <p className="text-xs text-slate-500 mb-4">Validates a recipient account number before initiating a PesaLink transfer.</p>
+                      <button 
+                         onClick={async () => {
+                          setIsTestRunning(true);
+                          setTestResult(null);
+                          try {
+                            const res = await fetch('/api/bank/coop/validate', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ accountNumber: "01100975259001", bankCode: "0011" })
+                            });
+                            const data = await res.json();
+                            setTestResult(data);
+                          } catch (e) {
+                            setTestResult({ error: "Validation failed" });
+                          } finally {
+                            setIsTestRunning(false);
+                          }
+                        }}
+                        className="px-4 py-2 border-2 border-indigo-600 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-bold uppercase tracking-wider"
+                      >
+                        Run Validation Test
+                      </button>
+                    </div>
+                    <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                      <h3 className="font-bold text-slate-900 dark:text-white mb-2">Transaction Status Enquiry</h3>
+                      <p className="text-xs text-slate-500 mb-4">Check the status of any initiated payout or STK push using its Message Reference.</p>
+                      <button 
+                         onClick={async () => {
+                          const ref = prompt("Enter Message Reference:");
+                          if (!ref) return;
+                          setIsTestRunning(true);
+                          setTestResult(null);
+                          try {
+                            const res = await fetch('/api/bank/coop/status', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ reference: ref, type: 'general' })
+                            });
+                            const data = await res.json();
+                            setTestResult(data);
+                          } catch (e) {
+                            setTestResult({ error: "Status check failed" });
+                          } finally {
+                            setIsTestRunning(false);
+                          }
+                        }}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider"
+                      >
+                        Enquire Status
+                      </button>
                     </div>
                   </div>
                 </div>

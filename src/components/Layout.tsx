@@ -642,9 +642,8 @@ export default function Layout() {
       const searchResponse = await generateContentWithRetry({
         model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ text: `What is the current weather in ${city}? Provide temperature in Celsius and general condition.` }] }],
-        config: {
-          tools: [{ googleSearch: {} }]
-        }
+        tools: [{ googleSearch: {} }],
+        toolConfig: { includeServerSideToolInvocations: true }
       });
       setWeatherHealProgress(60);
       

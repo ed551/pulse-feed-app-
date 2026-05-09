@@ -67,9 +67,8 @@ export default function NewsFeed() {
       const genResult = await generateContentWithRetry({
         model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: {
-          tools: [{ googleSearch: {} }]
-        }
+        tools: [{ googleSearch: {} }],
+        toolConfig: { includeServerSideToolInvocations: true }
       });
       
       const textResponse = genResult.text;

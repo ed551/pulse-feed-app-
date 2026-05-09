@@ -81,9 +81,8 @@ export default function GeminiLab() {
       const response = await generateContentWithRetry({
         model: selectedModel,
         contents: contents,
-        config: {
-          tools: [{ googleSearch: {} }] as any
-        }
+        tools: [{ googleSearch: {} }] as any,
+        toolConfig: { includeServerSideToolInvocations: true }
       });
 
       const modelMsg: LabMessage = {

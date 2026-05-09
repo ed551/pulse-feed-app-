@@ -148,11 +148,13 @@ service cloud.firestore {
       }
 
       match /passkeys/{passkeyId} {
-        allow read, write: if isOwner(userId) || (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
+        allow read: if isOwner(userId) || isAdmin() || (resource != null && resource.data.get('serverSecret', '') == "pulse-feeds-server-secret-2026");
+        allow write: if isOwner(userId) || (request.resource != null && request.resource.data.get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
       }
 
       match /currentChallenge/{challengeId} {
-        allow read, write: if isOwner(userId) || (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
+        allow read: if isOwner(userId) || isAdmin() || (resource != null && resource.data.get('serverSecret', '') == "pulse-feeds-server-secret-2026");
+        allow write: if isOwner(userId) || (request.resource != null && request.resource.data.get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
       }
     }
     

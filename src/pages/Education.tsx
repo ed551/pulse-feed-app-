@@ -398,6 +398,21 @@ export default function Education() {
 
   const [isDeepDiving, setIsDeepDiving] = useState(false);
   const [isTakingExam, setIsTakingExam] = useState(false);
+  const [isPlayingTTS, setIsPlayingTTS] = useState<string | null>(null);
+
+  const speak = (text: string, moduleName: string) => {
+    if (isPlayingTTS === moduleName) {
+      window.speechSynthesis.cancel();
+      setIsPlayingTTS(null);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.onend = () => setIsPlayingTTS(null);
+    setIsPlayingTTS(moduleName);
+    window.speechSynthesis.speak(utterance);
+  };
   const [examQuestions, setExamQuestions] = useState<any[]>([]);
   const [currentExamIndex, setCurrentExamIndex] = useState(0);
   const [examAnswers, setExamAnswers] = useState<string[]>([]);
@@ -790,9 +805,8 @@ export default function Education() {
       const response = await generateContentWithRetry({
         model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: {
-          tools: [{ googleSearch: {} }] as any
-        }
+        tools: [{ googleSearch: {} }] as any,
+        toolConfig: { includeServerSideToolInvocations: true }
       });
 
       setDeepDiveContent(response.text || 'Unable to generate deep dive content.');
@@ -1074,9 +1088,10 @@ export default function Education() {
       const response = await generateContentWithRetry({
         model: "gemini-3-flash-preview",
         contents: prompt,
+        tools: [{ googleSearch: {} }] as any,
+        toolConfig: { includeServerSideToolInvocations: true },
         config: {
-          responseMimeType: "application/json",
-          tools: [{ googleSearch: {} }] as any
+          responseMimeType: "application/json"
         }
       });
 
@@ -1586,6 +1601,17 @@ export default function Education() {
                                         Translate Video
                                       </button>
                                       
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); speak(`Module ${idx + 1}: ${module}. In this module, we will cover the core concepts of ${module}. This includes video content, interactive quizzes, and a practical professional project to solidify your learning.`, module); }}
+                                        className={cn(
+                                          "flex items-center gap-1 hover:underline py-0.5 transition-all",
+                                          isPlayingTTS === module ? "text-green-600 dark:text-green-400" : "text-gray-500 dark:text-gray-400"
+                                        )}
+                                      >
+                                        {isPlayingTTS === module ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+                                        {isPlayingTTS === module ? "Stop Listening" : "Listen to Overview"}
+                                      </button>
+
                                       <AnimatePresence>
                                         {showTranslateDropdown === module && (
                                           <motion.div 

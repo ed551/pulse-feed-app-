@@ -71,10 +71,9 @@ export default function AIAssistant() {
         model: "gemini-3-flash-preview", 
         contents: [{ role: "user", parts: [{ text: `Analyze this web page content: "${text}". 
         Provide a 3-bullet summary and 2 actionable insights for the user based on their current goals in Pulse Feeds.` }] }],
-        config: {
-          tools: [{ googleSearch: {} }] as any
-        }
-      });
+        tools: [{ googleSearch: {} }] as any,
+        toolConfig: { includeServerSideToolInvocations: true }
+      } as any);
 
       setMessages(prev => [...prev, {
         role: 'model',
@@ -300,11 +299,12 @@ export default function AIAssistant() {
       const response = await generateContentWithRetry({
         model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ text: `${context}\n\nUser: ${input}` }] }],
+        tools: [{ googleSearch: {} }] as any,
+        toolConfig: { includeServerSideToolInvocations: true },
         config: {
           systemInstruction,
-          tools: [{ googleSearch: {} }] as any
         }
-      });
+      } as any);
 
       let text = response.text || "I'm sorry, I couldn't process that request.";
       

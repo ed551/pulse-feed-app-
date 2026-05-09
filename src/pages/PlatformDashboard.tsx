@@ -130,9 +130,8 @@ export default function PlatformDashboard() {
         Compare Pulse Feeds performance to these global benchmarks.
         
         Platform Data: ${dataString}` }] }],
-        config: {
-          tools: [{ googleSearch: {} }] as any
-        }
+        tools: [{ googleSearch: {} }] as any,
+        toolConfig: { includeServerSideToolInvocations: true }
       });
 
       setAiReport(response.text || "No analysis available.");

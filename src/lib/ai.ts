@@ -13,7 +13,7 @@ async function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export async function generateContentWithRetry(params: GenerateContentParameters): Promise<GenerateContentResponse> {
+export async function generateContentWithRetry(params: any): Promise<GenerateContentResponse> {
   if (!ai) {
     throw new Error("Gemini API key is not configured. Please add GEMINI_API_KEY to your environment.");
   }
@@ -43,20 +43,20 @@ export async function generateContentWithRetry(params: GenerateContentParameters
         const isQuotaExceeded = error?.status === 429 || error?.message?.includes("quota") || error?.message?.includes("RESOURCE_EXHAUSTED") || error?.message?.includes("429");
         const isProxyError = error?.status === 404 || error?.status === 500 || error?.status === 503 || error?.message?.includes("404") || error?.message?.includes("xhr error");
         
-        // Model Fallback Logic: If a model fails with 404 or quota, try standard stable flash
-        if ((isQuotaExceeded || isProxyError || error?.status === 404) && (params.model?.includes('2.0') || params.model?.includes('3.0'))) {
-          console.warn(`Gemini series ${params.model} reported issues (404/Quota). Falling back to gemini-3-flash-preview for stability.`);
-          params.model = 'gemini-3-flash-preview';
-          // No retry increment for first model swap
-          continue; 
+        // Model Fallback Logic:
+        if ((isQuotaExceeded || isProxyError || error?.status === 404)) {
+          if (params.model === 'gemini-3-flash-preview') {
+            console.warn(`Gemini 3 Preview (${params.model}) reported issues (404/Quota). Falling back to gemini-flash-latest.`);
+            params.model = 'gemini-flash-latest';
+            continue;
+          }
+          if (params.model?.includes('2.0') || params.model?.includes('3.1')) {
+            console.warn(`Gemini series ${params.model} reported issues. Trying gemini-3-flash-preview.`);
+            params.model = 'gemini-3-flash-preview';
+            continue;
+          }
         }
 
-        // If fallback hits quota or 404, try last resort stable alias
-        if ((isQuotaExceeded || error?.status === 404) && params.model === 'gemini-3-flash-preview') {
-          console.warn("Gemini 3 Preview failed, trying gemini-flash-latest...");
-          params.model = 'gemini-flash-latest'; 
-          continue;
-        }
 
         if ((isQuotaExceeded || isProxyError) && retries < MAX_RETRIES) {
           retries++;

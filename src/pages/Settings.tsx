@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useNavigate } from "react-router-dom";
-import { startRegistration } from "@simplewebauthn/browser";
+import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
 import { useAuth } from "../contexts/AuthContext";
 import { useTranslation } from "../lib/i18n";
 import { db } from "../lib/firebase";
@@ -905,7 +905,7 @@ export default function Settings() {
                                   if (options.error) throw new Error(options.error);
 
                                   // 2. Start authentication
-                                  const authResp = await (window as any).SimpleWebAuthnBrowser.startAuthentication(options);
+                                  const authResp = await startAuthentication(options);
 
                                   // 3. Verify
                                   const verifyResp = await fetch('/api/auth/passkey/verify-authentication', {
