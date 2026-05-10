@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generateContentWithRetry } from '../lib/ai';
+import { startAuthentication } from '@simplewebauthn/browser';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, getDocs, query, doc, onSnapshot, updateDoc, increment, addDoc, serverTimestamp, getCountFromServer, orderBy, limit } from 'firebase/firestore';
 import { 
@@ -42,7 +43,7 @@ export default function PlatformDashboard() {
   const [isDevWithdrawing, setIsDevWithdrawing] = useState(false);
   const [isLoggingRevenue, setIsLoggingRevenue] = useState(false);
   const [isDevUnlocked, setIsDevUnlocked] = useState(false);
-  const [verificationStep, setVerificationStep] = useState<'email' | 'phone' | 'fingerprint'>('email');
+  const [verificationStep, setVerificationStep] = useState<'email' | 'passkey'>('email');
   const [emailInput, setEmailInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
@@ -520,37 +521,60 @@ export default function PlatformDashboard() {
     setVerificationError(null);
     // Using the credentials provided by the user
     if (emailInput === 'edwinmuoha@gmail.com' && passwordInput === 'Goslow123*') {
-      setVerificationStep('phone');
+      setVerificationStep('passkey');
     } else {
       setVerificationError("Invalid Gmail credentials. Please check your email and password.");
     }
   };
 
-  const handlePhoneVerification = (e: React.FormEvent) => {
-    e.preventDefault();
-    setVerificationError(null);
-    if (phoneInput === '+254728011174' || phoneInput === '0728011174') {
-      setVerificationStep('fingerprint');
-    } else {
-      setVerificationError("Invalid phone number for platform access.");
-    }
-  };
-
-  const startFingerprintScan = () => {
-    setIsScanning(true);
-    setScanProgress(0);
-    const interval = setInterval(() => {
-      setScanProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsScanning(false);
-          setIsDevUnlocked(true);
-          setShowSystemAuditPopup(true);
-          return 100;
-        }
-        return prev + 10;
+  const handlePasskeyVerification = async () => {
+    if (!currentUser) return;
+    try {
+      setIsScanning(true);
+      setVerificationError(null);
+      
+      // 1. Get options from server
+      const resp = await fetch('/api/auth/passkey/generate-authentication-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.uid }),
       });
-    }, 50);
+
+      const options = await resp.json();
+      if (options.error) throw new Error(options.error);
+
+      // 2. Start authentication in browser
+      const authResp = await startAuthentication(options);
+
+      // 3. Verify with server
+      const verifyResp = await fetch('/api/auth/passkey/verify-authentication', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.uid,
+          response: authResp,
+        }),
+      });
+
+      const verification = await verifyResp.json();
+      if (verification.verified) {
+        setIsDevUnlocked(true);
+        setShowSystemAuditPopup(true);
+      } else {
+        throw new Error(verification.error || "Verification failed");
+      }
+    } catch (err: any) {
+      console.error("[Passkey Platform Auth Error]", err);
+      if (err.name === 'NotAllowedError') {
+        setVerificationError("Authentication cancelled or timed out.");
+      } else if (err.name === 'SecurityError' || err.message?.includes('feature is not enabled')) {
+        setVerificationError("🔒 PREVIEW BLOCKED: Passkeys cannot be used inside this frame. Please click 'Open in New Tab' at the top of AI Studio.");
+      } else {
+        setVerificationError(err.message || 'Passkey authentication failed');
+      }
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   const handleReturnFunds = async () => {
@@ -834,16 +858,14 @@ export default function PlatformDashboard() {
           <div className="flex flex-col items-center text-center space-y-6">
             <div className="w-20 h-20 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center text-purple-600 dark:text-purple-400">
               {verificationStep === 'email' && <Mail className="w-10 h-10" />}
-              {verificationStep === 'phone' && <Smartphone className="w-10 h-10" />}
-              {verificationStep === 'fingerprint' && <Fingerprint className="w-10 h-10" />}
+              {verificationStep === 'passkey' && <ShieldCheck className="w-10 h-10" />}
             </div>
 
             <div className="space-y-2">
               <h2 className="text-2xl font-black text-gray-900 dark:text-white">Platform Access</h2>
               <p className="text-gray-500 dark:text-gray-400 text-sm">
                 {verificationStep === 'email' && "Verify your Gmail credentials to continue."}
-                {verificationStep === 'phone' && "Confirm your platform phone number."}
-                {verificationStep === 'fingerprint' && "Biometric scan required for treasury access."}
+                {verificationStep === 'passkey' && "Secure biometric Passkey (FIDO2) required."}
               </p>
             </div>
 
@@ -908,118 +930,46 @@ export default function PlatformDashboard() {
                 </motion.form>
               )}
 
-              {verificationStep === 'phone' && (
-                <motion.form 
-                  key="phone-step"
+              {verificationStep === 'passkey' && (
+                <motion.div 
+                  key="passkey-step"
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  onSubmit={handlePhoneVerification}
-                  className="w-full space-y-4"
+                  className="w-full flex flex-col items-center space-y-6"
                 >
-                  <div className="space-y-1 text-left">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-4">Phone Number</label>
-                    <input 
-                      type="tel"
-                      value={phoneInput}
-                      onChange={(e) => setPhoneInput(e.target.value)}
-                      placeholder="+254 728 011 174"
-                      className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:border-purple-500 outline-none transition-all font-bold"
-                      required
-                    />
+                  <div className="w-20 h-20 bg-indigo-100 dark:bg-indigo-900/30 rounded-3xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-xl shadow-indigo-500/10 rotate-3">
+                    <ShieldCheck className="w-10 h-10" />
                   </div>
-                  <button className="w-full py-4 bg-purple-600 text-white font-black rounded-2xl hover:bg-purple-700 transition-all shadow-lg shadow-purple-600/20">
-                    Verify Phone
+                  
+                  <div className="text-center space-y-2">
+                    <h3 className="text-lg font-black text-gray-900 dark:text-white">Biometric Challenge</h3>
+                    <p className="text-xs text-gray-500 max-w-[200px] mx-auto">Verify your identity using your device's secure passkey system.</p>
+                  </div>
+
+                  <button 
+                    onClick={handlePasskeyVerification}
+                    disabled={isScanning}
+                    className={cn(
+                      "w-full py-4 bg-indigo-600 text-white font-black rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-indigo-600/20 transition-all hover:bg-indigo-700 active:scale-95 disabled:opacity-50",
+                      isScanning && "animate-pulse"
+                    )}
+                  >
+                    {isScanning ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Fingerprint className="w-5 h-5" />
+                    )}
+                    Verify Passkey
                   </button>
+
                   <button 
                     type="button"
                     onClick={() => setVerificationStep('email')}
-                    className="w-full py-2 text-gray-400 text-xs font-bold hover:text-gray-600"
+                    className="text-gray-400 text-[10px] font-black uppercase tracking-widest hover:text-gray-600"
                   >
-                    Back to Email
+                    Back to Credentials
                   </button>
-                </motion.form>
-              )}
-
-              {verificationStep === 'fingerprint' && (
-                <motion.div 
-                  key="fingerprint-step"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className="w-full flex flex-col items-center space-y-8"
-                >
-                  <div className="relative">
-                    <button 
-                      onClick={startFingerprintScan}
-                      disabled={isScanning}
-                      className={cn(
-                        "w-24 h-24 rounded-full flex items-center justify-center transition-all relative z-10 active:scale-95",
-                        isScanning ? "bg-purple-100 dark:bg-purple-900/30" : "bg-gray-100 dark:bg-gray-700 hover:bg-purple-50 dark:hover:bg-purple-900/20 shadow-inner"
-                      )}
-                    >
-                      <Fingerprint className={cn(
-                        "w-12 h-12 transition-all",
-                        isScanning ? "text-purple-600 animate-pulse" : "text-gray-400"
-                      )} />
-                    </button>
-                    {isScanning && (
-                      <>
-                        <motion.div 
-                          initial={{ top: "0%" }}
-                          animate={{ top: "100%" }}
-                          transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                          className="absolute left-0 right-0 h-0.5 bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.8)] z-20 pointer-events-none"
-                        />
-                        <svg className="absolute inset-0 w-24 h-24 -rotate-90 pointer-events-none">
-                          <circle
-                            cx="48"
-                            cy="48"
-                            r="46"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                            fill="transparent"
-                            className="text-gray-100 dark:text-gray-800"
-                          />
-                          <circle
-                            cx="48"
-                            cy="48"
-                            r="46"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                            fill="transparent"
-                            strokeDasharray={289}
-                            strokeDashoffset={289 - (289 * scanProgress) / 100}
-                            className="text-purple-600 transition-all duration-100"
-                          />
-                        </svg>
-                      </>
-                    )}
-                  </div>
-
-                  <div className="text-center">
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">
-                      {isScanning ? `Scanning... ${scanProgress}%` : "Tap to scan fingerprint"}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">Place your finger on the sensor</p>
-                  </div>
-
-                  <div className="w-full space-y-3">
-                    <button 
-                      type="button"
-                      onClick={() => setIsDevUnlocked(true)}
-                      className="w-full py-3 bg-gray-50 dark:bg-gray-900/50 text-gray-400 text-[10px] font-black uppercase tracking-widest rounded-xl hover:text-purple-600 transition-colors"
-                    >
-                      Manual Override (Dev Only)
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={() => setVerificationStep('phone')}
-                      className="w-full py-2 text-gray-400 text-xs font-bold hover:text-gray-600"
-                    >
-                      Back to Phone
-                    </button>
-                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

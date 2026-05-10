@@ -347,6 +347,13 @@ const resilientDb = {
 function processFirestoreData(data: any): any {
   if (!data || typeof data !== 'object') return data;
   
+  // Exclude binary types from recursion - Firestore Client SDK handles these
+  if (data instanceof Uint8Array || 
+      data instanceof ArrayBuffer || 
+      (data && data.constructor && (data.constructor.name === 'Uint8Array' || data.constructor.name === 'ArrayBuffer' || data.constructor.name === 'Buffer'))) {
+    return data;
+  }
+
   if (Array.isArray(data)) {
     return data.map(item => processFirestoreData(item));
   }
@@ -2631,6 +2638,25 @@ async function startServer() {
   const rpID = new URL(APP_URL).hostname;
   const origin = APP_URL;
 
+  // Helper to convert SimpleWebAuthn options to JSON-safe format
+  const passkeyOptionsToJSON = (options: any) => {
+    try {
+      return JSON.parse(JSON.stringify(options, (key, value) => {
+        // Handle Uint8Arrays and Buffers which return in v10+
+        if (value && typeof value === 'object' && value.type === 'Buffer' && Array.isArray(value.data)) {
+          return Buffer.from(value.data).toString('base64url');
+        }
+        if (value instanceof Uint8Array || (value && value.constructor && value.constructor.name === 'Uint8Array')) {
+          return Buffer.from(value).toString('base64url');
+        }
+        return value;
+      }));
+    } catch (e) {
+      console.error('[WebAuthn] Serialization Error:', e);
+      return options;
+    }
+  };
+
   app.post("/api/auth/passkey/generate-registration-options", async (req, res) => {
     const { userId, userEmail, userName } = req.body;
     if (!userId) return res.status(400).json({ error: 'User ID is required' });
@@ -2638,21 +2664,30 @@ async function startServer() {
     // Dynamic RP ID and Origin for cross-environment compatibility
     const currentHost = req.get('host') || 'localhost:3000';
     const currentOrigin = `${req.protocol}://${currentHost}`;
-    const currentRpID = currentHost.split(':')[0];
+    const currentRpID = currentHost.split(':')[0].trim();
+
+    if (!currentRpID) {
+      return res.status(400).json({ error: 'Could not determine RP ID from host' });
+    }
+
+    console.log(`[WebAuthn] Generating Registration Options for ${userId} at ${currentRpID}`);
 
     try {
       // Get existing credentials to prevent re-registration of the same device
       const passkeysSnap = await resilientDb.collection('users').doc(userId).collection('passkeys').get();
-      const existingCredentials = passkeysSnap.docs.map((doc: any) => ({
-        id: Buffer.from(doc.id, 'base64url'),
-        type: 'public-key' as const,
-        transports: doc.data().transports,
-      }));
+      const existingCredentials = passkeysSnap.docs.map((doc: any) => {
+        const id = Uint8Array.from(Buffer.from(doc.id, 'base64url'));
+        return {
+          id,
+          type: 'public-key' as const,
+          transports: doc.data().transports || [],
+        };
+      });
 
       const options = await generateRegistrationOptions({
         rpName,
         rpID: currentRpID,
-        userID: Buffer.from(userId),
+        userID: Uint8Array.from(Buffer.from(userId)),
         userName: userEmail || userId,
         userDisplayName: userName || userEmail || userId,
         attestationType: 'none',
@@ -2666,16 +2701,16 @@ async function startServer() {
 
       // Store challenge in Firestore for verification
       await resilientDb.collection('users').doc(userId).collection('currentChallenge').doc('registration').set({
-        challenge: options.challenge,
+        challenge: Buffer.from(options.challenge).toString('base64url'),
         rpID: currentRpID,
         origin: currentOrigin,
         createdAt: FieldValue.serverTimestamp(),
       });
 
-      res.json(options);
+      res.json(passkeyOptionsToJSON(options));
     } catch (error: any) {
       console.error('[WebAuthn] Registration Options Error:', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: error.message, stack: error.stack });
     }
   });
 
@@ -2730,7 +2765,7 @@ async function startServer() {
       }
     } catch (error: any) {
       console.error('[WebAuthn] Registration Verification Error:', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: error.message, stack: error.stack });
     }
   });
 
@@ -2740,16 +2775,30 @@ async function startServer() {
 
     // Dynamic RP ID for cross-environment compatibility
     const currentHost = req.get('host') || 'localhost:3000';
-    const currentRpID = currentHost.split(':')[0];
+    const currentRpID = currentHost.split(':')[0].trim();
     const currentOrigin = `${req.protocol}://${currentHost}`;
+
+    if (!currentRpID) {
+      return res.status(400).json({ error: 'Could not determine RP ID from host' });
+    }
+
+    console.log(`[WebAuthn] Generating Auth Options for ${userId} at ${currentRpID}`);
 
     try {
       const passkeysSnap = await resilientDb.collection('users').doc(userId).collection('passkeys').get();
-      const allowCredentials = passkeysSnap.docs.map((doc: any) => ({
-        id: Buffer.from(doc.id, 'base64url'),
-        type: 'public-key' as const,
-        transports: doc.data().transports,
-      }));
+      const allowCredentials = passkeysSnap.docs.map((doc: any) => {
+        const data = doc.data();
+        const id = Uint8Array.from(Buffer.from(doc.id, 'base64url'));
+        console.log(`[WebAuthn] Processing passkey ${doc.id} (Uint8Array size: ${id.length})`);
+        return {
+          id,
+          type: 'public-key' as const,
+          transports: data.transports || [],
+        };
+      });
+
+      console.log(`[WebAuthn] allowCredentials count: ${allowCredentials.length}`);
+      console.log(`[WebAuthn] generateAuthenticationOptions for rpID: "${currentRpID}"`);
 
       const options = await generateAuthenticationOptions({
         rpID: currentRpID,
@@ -2757,18 +2806,23 @@ async function startServer() {
         userVerification: 'preferred',
       });
 
+      console.log(`[WebAuthn] Auth Options generated. Challenge type: ${typeof options.challenge}`);
+      if (options.challenge instanceof Uint8Array) {
+        console.log(`[WebAuthn] Challenge successfully generated as Uint8Array(${options.challenge.length})`);
+      }
+
       // Store challenge
       await resilientDb.collection('users').doc(userId).collection('currentChallenge').doc('authentication').set({
-        challenge: options.challenge,
+        challenge: Buffer.from(options.challenge).toString('base64url'),
         rpID: currentRpID,
         origin: currentOrigin,
         createdAt: FieldValue.serverTimestamp(),
       });
 
-      res.json(options);
+      res.json(passkeyOptionsToJSON(options));
     } catch (error: any) {
       console.error('[WebAuthn] Authentication Options Error:', error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: error.message, stack: error.stack });
     }
   });
 
@@ -2795,8 +2849,9 @@ async function startServer() {
         expectedRPID,
         credential: {
           id: passkey.credentialID,
-          publicKey: Buffer.from(passkey.credentialPublicKey, 'base64'),
+          publicKey: Uint8Array.from(Buffer.from(passkey.credentialPublicKey, 'base64')),
           counter: passkey.counter,
+          transports: passkey.transports || [],
         },
       });
 
