@@ -4,6 +4,7 @@ import { mpesa_handler, unified_participant_payout, rewards_policy, equal_distri
 import { useCurrencyConverter } from "../hooks/useCurrencyConverter";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";
+import { isIframe, getPasskeyErrorLinkMessage, checkPasskeyCapability } from "../lib/iframeUtils";
 import { useAuth } from "../contexts/AuthContext";
 import { useRevenue } from "../contexts/RevenueContext";
 import { db, handleFirestoreError, OperationType } from "../lib/firebase";
@@ -40,6 +41,17 @@ export default function Rewards() {
   const [totpCode, setTotpCode] = useState("");
   const [scaError, setScaError] = useState<string | null>(null);
   const [scaPendingAction, setScaPendingAction] = useState<((pin: string, usePasskey?: boolean, totp?: string) => void) | null>(null);
+  const [passkeyBlocked, setPasskeyBlocked] = useState(false);
+
+  useEffect(() => {
+    const checkCap = async () => {
+      const cap = await checkPasskeyCapability();
+      if (!cap.supported && cap.reason === 'blocked_by_iframe') {
+        setPasskeyBlocked(true);
+      }
+    };
+    checkCap();
+  }, []);
   const [localMethod, setLocalMethod] = useState<'mpesa' | 'bank' | 'paybill'>('mpesa');
   const [paybillDetails, setPaybillDetails] = useState({
     businessNumber: "",
@@ -741,6 +753,9 @@ export default function Rewards() {
                                  setIsPasskeyAuthenticating(true);
                                  setScaError(null);
                                  try {
+                                   if (isIframe() && !window.PublicKeyCredential) {
+                                     throw new Error(getPasskeyErrorLinkMessage());
+                                   }
                                    const resp = await fetch('/api/auth/passkey/generate-authentication-options', {
                                      method: 'POST',
                                      headers: { 'Content-Type': 'application/json' },

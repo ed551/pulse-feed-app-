@@ -2635,6 +2635,11 @@ async function startServer() {
     const { userId, userEmail, userName } = req.body;
     if (!userId) return res.status(400).json({ error: 'User ID is required' });
 
+    // Dynamic RP ID and Origin for cross-environment compatibility
+    const currentHost = req.get('host') || 'localhost:3000';
+    const currentOrigin = `${req.protocol}://${currentHost}`;
+    const currentRpID = currentHost.split(':')[0];
+
     try {
       // Get existing credentials to prevent re-registration of the same device
       const passkeysSnap = await resilientDb.collection('users').doc(userId).collection('passkeys').get();
@@ -2646,7 +2651,7 @@ async function startServer() {
 
       const options = await generateRegistrationOptions({
         rpName,
-        rpID,
+        rpID: currentRpID,
         userID: Buffer.from(userId),
         userName: userEmail || userId,
         userDisplayName: userName || userEmail || userId,
@@ -2662,6 +2667,8 @@ async function startServer() {
       // Store challenge in Firestore for verification
       await resilientDb.collection('users').doc(userId).collection('currentChallenge').doc('registration').set({
         challenge: options.challenge,
+        rpID: currentRpID,
+        origin: currentOrigin,
         createdAt: FieldValue.serverTimestamp(),
       });
 
@@ -2680,13 +2687,13 @@ async function startServer() {
       const challengeDoc = await resilientDb.collection('users').doc(userId).collection('currentChallenge').doc('registration').get();
       if (!challengeDoc.exists) return res.status(400).json({ error: 'Registration challenge not found' });
       
-      const expectedChallenge = challengeDoc.data().challenge;
+      const { challenge: expectedChallenge, rpID: expectedRPID, origin: expectedOrigin } = challengeDoc.data();
 
       const verification = await verifyRegistrationResponse({
         response,
         expectedChallenge,
-        expectedOrigin: origin,
-        expectedRPID: rpID,
+        expectedOrigin,
+        expectedRPID,
       });
 
       if (verification.verified && verification.registrationInfo) {
@@ -2731,6 +2738,11 @@ async function startServer() {
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'User ID is required' });
 
+    // Dynamic RP ID for cross-environment compatibility
+    const currentHost = req.get('host') || 'localhost:3000';
+    const currentRpID = currentHost.split(':')[0];
+    const currentOrigin = `${req.protocol}://${currentHost}`;
+
     try {
       const passkeysSnap = await resilientDb.collection('users').doc(userId).collection('passkeys').get();
       const allowCredentials = passkeysSnap.docs.map((doc: any) => ({
@@ -2740,7 +2752,7 @@ async function startServer() {
       }));
 
       const options = await generateAuthenticationOptions({
-        rpID,
+        rpID: currentRpID,
         allowCredentials,
         userVerification: 'preferred',
       });
@@ -2748,6 +2760,8 @@ async function startServer() {
       // Store challenge
       await resilientDb.collection('users').doc(userId).collection('currentChallenge').doc('authentication').set({
         challenge: options.challenge,
+        rpID: currentRpID,
+        origin: currentOrigin,
         createdAt: FieldValue.serverTimestamp(),
       });
 
@@ -2766,7 +2780,7 @@ async function startServer() {
       const challengeDoc = await resilientDb.collection('users').doc(userId).collection('currentChallenge').doc('authentication').get();
       if (!challengeDoc.exists) return res.status(400).json({ error: 'Authentication challenge not found' });
       
-      const expectedChallenge = challengeDoc.data().challenge;
+      const { challenge: expectedChallenge, rpID: expectedRPID, origin: expectedOrigin } = challengeDoc.data();
       
       const credIdBase64 = response.id; // Usually base64url encoded
       const passkeyDoc = await resilientDb.collection('users').doc(userId).collection('passkeys').doc(credIdBase64).get();
@@ -2777,8 +2791,8 @@ async function startServer() {
       const verification = await verifyAuthenticationResponse({
         response,
         expectedChallenge,
-        expectedOrigin: origin,
-        expectedRPID: rpID,
+        expectedOrigin,
+        expectedRPID,
         credential: {
           id: passkey.credentialID,
           publicKey: Buffer.from(passkey.credentialPublicKey, 'base64'),

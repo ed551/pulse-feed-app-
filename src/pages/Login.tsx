@@ -561,21 +561,15 @@ To fix this:
             <>
               <button
                 type="button"
-                onClick={() => {
-                  if (passkeyBlocked) {
-                    setError(getPasskeyErrorLinkMessage());
-                    return;
-                  }
-                  setMfaType('passkey');
-                }}
-                className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${mfaType === 'passkey' ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-500' : 'bg-gray-50 dark:bg-gray-900 border-gray-100 dark:border-gray-700'} ${passkeyBlocked ? 'opacity-50' : ''}`}
+                onClick={() => setMfaType('passkey')}
+                className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${mfaType === 'passkey' ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-500' : 'bg-gray-50 dark:bg-gray-900 border-gray-100 dark:border-gray-700'}`}
               >
                 <div className={`p-2 rounded-lg ${mfaType === 'passkey' ? 'bg-orange-500 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-500'}`}>
                   <ShieldCheck className="w-4 h-4" />
                 </div>
                 <div className="text-left">
-                  <p className="text-xs font-bold text-gray-900 dark:text-white">Passkey (FIDO2) {passkeyBlocked && "🔒"}</p>
-                  <p className="text-[10px] text-gray-500">{passkeyBlocked ? 'Blocked in Preview' : 'Fastest biometric security'}</p>
+                  <p className="text-xs font-bold text-gray-900 dark:text-white">Passkey (FIDO2)</p>
+                  <p className="text-[10px] text-gray-500">Fastest biometric security</p>
                 </div>
               </button>
 

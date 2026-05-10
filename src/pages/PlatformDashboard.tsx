@@ -16,7 +16,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRevenue } from '../contexts/RevenueContext';
 import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 import { cn } from '../lib/utils';
-import { isIframe, getPasskeyErrorLinkMessage } from '../lib/iframeUtils';
+import { isIframe, getPasskeyErrorLinkMessage, checkPasskeyCapability } from "../lib/iframeUtils";
 import { getModerationSettings, saveModerationSettings, ModerationSettings } from "../services/moderationService";
 import { admin_logic, integrity_audit_engine, global_kill_switch } from "../lib/engines";
 
@@ -771,6 +771,17 @@ export default function PlatformDashboard() {
   const [isPasskeyAuthenticating, setIsPasskeyAuthenticating] = useState(false);
   const [scaPendingAction, setScaPendingAction] = useState<((pin: string, usePasskey?: boolean) => void) | null>(null);
   const [scaToken, setScaToken] = useState("");
+  const [passkeyBlocked, setPasskeyBlocked] = useState(false);
+
+  useEffect(() => {
+    const checkCap = async () => {
+      const cap = await checkPasskeyCapability();
+      if (!cap.supported && cap.reason === 'blocked_by_iframe') {
+        setPasskeyBlocked(true);
+      }
+    };
+    checkCap();
+  }, []);
 
   const verifySCA = (pin?: string, usePasskey?: boolean) => {
     if (!pin && !usePasskey) return;
@@ -3110,6 +3121,10 @@ export default function PlatformDashboard() {
                         <button
                           onClick={async () => {
                             if (!currentUser) return;
+                            if (isIframe() && !window.PublicKeyCredential) {
+                              setError(getPasskeyErrorLinkMessage());
+                              return;
+                            }
                             setIsPasskeyAuthenticating(true);
                             try {
                               const resp = await fetch('/api/auth/passkey/generate-authentication-options', {

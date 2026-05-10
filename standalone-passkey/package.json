@@ -1,0 +1,13 @@
+{
+  "name": "standalone-passkey-auth",
+  "version": "1.0.0",
+  "description": "Standalone FIDO2 Passkey implementation",
+  "main": "server.js",
+  "type": "module",
+  "dependencies": {
+    "express": "^4.21.2",
+    "@simplewebauthn/server": "^13.3.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7"
+  }
+}
