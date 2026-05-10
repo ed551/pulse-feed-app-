@@ -227,8 +227,8 @@ export default function Settings() {
   const handleUpdate2FA = async (type: string) => {
     if (!currentUser) return;
     
-    // If it's a passkey, we handle registration first
-    if (type === 'passkey') {
+    // If it's a passkey and not registered, we handle registration first
+    if (type === 'passkey' && !userData?.passkeyRegistered) {
       await handleRegisterPasskey();
       return;
     }
@@ -292,6 +292,10 @@ export default function Settings() {
 
       const verification = await verifyResp.json();
       if (verification.verified) {
+        await updateDoc(doc(db, 'users', currentUser.uid), {
+          twoFactorType: 'passkey',
+          passkeyRegistered: true
+        });
         alert("Passkey Registered Successfully! Your 2FA is now set to Passkey.");
       } else {
         throw new Error(verification.error || "Verification failed");
@@ -879,35 +883,6 @@ export default function Settings() {
             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('two_factor_auth')}</h4>
             
             <div className="grid grid-cols-1 gap-2">
-              {/* Passkey Fast Action */}
-              <div className="p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100 dark:border-indigo-900/30 flex items-center justify-between mb-2">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-600/20">
-                    <ShieldCheck className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">
-                      Passkey (FIDO2)
-                    </p>
-                    <p className="text-[10px] text-gray-500">
-                      {userData?.passkeyRegistered ? 'Safe & Biometric Secure' : 'Recommended: Secure biometric login.'}
-                    </p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => handleRegisterPasskey()}
-                  disabled={isSaving}
-                  className={cn(
-                    "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
-                    userData?.passkeyRegistered 
-                      ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
-                      : "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 active:scale-95"
-                  )}
-                >
-                  {userData?.passkeyRegistered ? "Registered" : "Register"}
-                </button>
-              </div>
-
               <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
@@ -1070,15 +1045,14 @@ export default function Settings() {
               </div>
 
               {[
+                { id: 'passkey', icon: ShieldCheck, label: 'Passkey (FIDO2)', desc: 'Secure biometric login', color: 'text-indigo-500' },
                 { id: 'biometric', icon: Fingerprint, label: t('biometric_scanner'), desc: t('biometric_desc'), color: 'text-cyan-500' },
                 { id: 'email_otp', icon: Mail, label: t('email_otp'), desc: t('email_otp_desc'), color: 'text-blue-500' },
                 { id: 'totp', icon: Shield, label: t('google_auth'), desc: t('totp_desc'), color: 'text-orange-500' }
               ].map(method => (
                 <div key={`mfa-${method.id}`} className="space-y-2">
                   <button
-                    onClick={() => {
-                      handleUpdate2FA(method.id);
-                    }}
+                    onClick={() => handleUpdate2FA(method.id)}
                     className={cn(
                       "w-full flex items-center justify-between p-3 rounded-xl border transition-all",
                       userData?.twoFactorType === method.id 
