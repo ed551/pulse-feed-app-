@@ -65,6 +65,12 @@ export function usePosts() {
   const { currentUser } = useAuth();
 
   useEffect(() => {
+    if (!db) {
+      console.warn("Firestore db not available for usePosts hook.");
+      setLoading(false);
+      return;
+    }
+
     const q = query(collection(db, 'posts'));
     console.log("Setting up onSnapshot for posts");
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -87,6 +93,7 @@ export function usePosts() {
   }, []);
 
   const addPost = async (post: Omit<Post, 'id' | 'createdAt' | 'isUserAdded'>) => {
+    if (!db) return;
     try {
       await addDoc(collection(db, 'posts'), {
         ...post,
@@ -99,6 +106,7 @@ export function usePosts() {
   };
 
   const updatePost = async (postId: string, data: Partial<Post>) => {
+    if (!db) return;
     try {
       await updateDoc(doc(db, 'posts', postId), data);
     } catch (error) {
@@ -107,6 +115,7 @@ export function usePosts() {
   };
 
   const deletePost = async (postId: string) => {
+    if (!db) return;
     try {
       await deleteDoc(doc(db, 'posts', postId));
     } catch (error) {

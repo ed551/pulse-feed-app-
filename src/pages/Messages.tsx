@@ -55,7 +55,7 @@ export default function Messages() {
 
   // Fetch Chats
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
 
     const q = query(
       collection(db, "chats"),
@@ -115,7 +115,7 @@ export default function Messages() {
 
   // Fetch Messages for active chat
   useEffect(() => {
-    if (!activeChat || activeChat.id === "new") {
+    if (!activeChat || activeChat.id === "new" || !db) {
       setMessages([]);
       return;
     }
@@ -155,7 +155,7 @@ export default function Messages() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser || !activeChat || !newMessage.trim() || isSending) return;
+    if (!currentUser || !activeChat || !newMessage.trim() || isSending || !db) return;
 
     setIsSending(true);
     const text = newMessage.trim();

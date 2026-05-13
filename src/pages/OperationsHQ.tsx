@@ -21,6 +21,8 @@ export default function OperationsHQ() {
   });
 
   useEffect(() => {
+    if (!db) return;
+
     // Listen for system logs
     const q = query(collection(db, 'system_alerts'), orderBy('timestamp', 'desc'), limit(50));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -149,6 +151,7 @@ export default function OperationsHQ() {
                         <button 
                           onClick={async () => {
                             if (window.confirm("CRITICAL: This will freeze all financial transactions across the entire platform. PROCEED?")) {
+                              if (!db) return;
                               const monRef = doc(db, 'system', 'monitoring');
                               const snap = await getDoc(monRef);
                               const current = snap.data()?.safetyLocked;

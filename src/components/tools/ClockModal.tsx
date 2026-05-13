@@ -22,7 +22,7 @@ export default function ClockModal({ activeTab, onTabChange }: ClockModalProps) 
   ];
 
   const updateAlarmsInDb = async (newAlarms: { id: string, time: string, active: boolean }[]) => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     try {
       await updateDoc(doc(db, 'users', currentUser.uid), {
         alarms: newAlarms

@@ -10,6 +10,8 @@ import { useRevenue } from "../contexts/RevenueContext";
 import { db, handleFirestoreError, OperationType } from "../lib/firebase";
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, getDocs } from "firebase/firestore";
 
+import { useNavigate } from "react-router-dom";
+
 interface Transaction {
   id: string;
   amount: number;
@@ -22,20 +24,24 @@ interface Transaction {
   type?: string;
   source?: string;
   details?: string;
-  revenueSource?: 'ad' | 'education';
+  revenueSource?: 'ad' | 'commission';
   pointsDeducted?: number;
   pointsAdded?: number;
   remainingPoints?: number;
 }
 
 export default function Rewards() {
+  const navigate = useNavigate();
   const { currentUser, userData } = useAuth();
   const isDeveloper = currentUser?.email === 'edwinmuoha@gmail.com';
   const { isIdle, activeSeconds, totalEarnedToday, addPlatformRevenue, syncActiveTimeRewards } = useRevenue();
   const { currency, availableCurrencies, changeCurrency, convert, loading, rates } = useCurrencyConverter();
-  const [activeTab, setActiveTab] = useState<'overview' | 'local' | 'international'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'local' | 'international' | 'history'>('overview');
   const [showSCAModal, setShowSCAModal] = useState(false);
-  const [authMethod, setAuthMethod] = useState<'pin' | 'passkey' | 'totp'>('pin');
+  const [authMethod, setAuthMethod] = useState<'pin' | 'passkey' | 'totp' | 'sms' | 'password'>('pin');
+  const [passwordInput, setPasswordInput] = useState("");
+  const [smsCode, setSmsCode] = useState("");
+  const [isSendingSms, setIsSendingSms] = useState(false);
   const [isPasskeyAuthenticating, setIsPasskeyAuthenticating] = useState(false);
   const [scaToken, setScaToken] = useState("");
   const [totpCode, setTotpCode] = useState("");
@@ -130,7 +136,7 @@ export default function Rewards() {
   }, [isDeveloper, membershipLevel]);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     const q = query(
       collection(db, 'users', currentUser.uid, 'transactions'),
       orderBy('timestamp', 'desc')
@@ -141,7 +147,7 @@ export default function Rewards() {
       const uniqueData = data.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
       setTransactions(uniqueData);
     }, (err) => handleFirestoreError(err, OperationType.GET, `users/${currentUser.uid}/transactions`));
-  }, [currentUser]);
+  }, [currentUser, db]);
 
   // Calculate user audit totals (Normalized to USD for integrity)
   const userAuditTotals = useMemo(() => {
@@ -173,6 +179,14 @@ export default function Rewards() {
     setIsLoading(true);
     setError(null);
     try {
+      // Security Check: Email & Phone Verification
+      if (!currentUser?.emailVerified && currentUser?.email) {
+        throw new Error("Please verify your email address before making a withdrawal.");
+      }
+      if (!userData?.phoneNumber) {
+        throw new Error("Please link and verify locally your phone number in Settings before making a withdrawal.");
+      }
+
       const numAmount = parseFloat(amount);
       const minAmount = isDeveloper ? 1 : 100;
       if (numAmount < minAmount) throw new Error(`Minimum withdrawal is KES ${minAmount}`);
@@ -242,7 +256,7 @@ export default function Rewards() {
         setAmount("");
         
             // Log transaction to Firestore
-            if (currentUser) {
+            if (currentUser && db) {
               const txRef = collection(db, 'users', currentUser.uid, 'transactions');
               const currentRate = rates['KES'] || 135;
               const usdAmount = numAmount / currentRate;
@@ -282,6 +296,8 @@ export default function Rewards() {
               reason: `Local Payout (${localMethod})`,
               timestamp: serverTimestamp()
             }).catch(err => console.error("Error logging points ledger:", err));
+          } else if (currentUser && !db) {
+            console.warn("Firestore not available for payout logging.");
           }
       } else {
         throw new Error(result.error || "Payout failed. Please verify your details or check back later.");
@@ -307,6 +323,14 @@ export default function Rewards() {
     setIsLoading(true);
     setError(null);
     try {
+      // Security Check: Email & Phone Verification
+      if (!currentUser?.emailVerified && currentUser?.email) {
+        throw new Error("Please verify your email address before making a withdrawal.");
+      }
+      if (!userData?.phoneNumber) {
+        throw new Error("Please link and verify locally your phone number in Settings before making a withdrawal.");
+      }
+
       const numAmount = parseFloat(payoutAmount);
       const minAmount = isDeveloper ? 0.01 : 10;
       if (numAmount < minAmount) throw new Error(`Minimum withdrawal is $${minAmount.toFixed(2)} USD`); 
@@ -362,55 +386,59 @@ export default function Rewards() {
           throw new Error(result.message || "Payout initiation failed");
         }
 
-        const txRef = collection(db, 'users', currentUser.uid, 'transactions');
-        const userRef = doc(db, 'users', currentUser.uid);
-        
-        const reference = result.transactionId || `INT-${Date.now()}`;
-        const pointsToDeduct = Math.floor(numAmount * 100);
-        
-        const txData = {
-          amount: numAmount,
-          currency: 'USD',
-          type: payoutMethod,
-          status: 'pending',
-          email: payoutEmail,
-          bankDetails: payoutMethod === 'bank' ? bankDetails : null,
-          timestamp: serverTimestamp(),
-          reference,
-          details: `International ${payoutMethod} payout request`,
-          pointsDeducted: pointsToDeduct,
-          previousPoints: points,
-          remainingPoints: points - pointsToDeduct,
-          userId: currentUser.uid,
-          userEmail: currentUser.email,
-          scaToken: pin,
-          usePasskey,
-          totpCode: totp
-        };
+        if (currentUser && db) {
+          const txRef = collection(db, 'users', currentUser.uid, 'transactions');
+          const userRef = doc(db, 'users', currentUser.uid);
+          
+          const reference = result.transactionId || `INT-${Date.now()}`;
+          const pointsToDeduct = Math.floor(numAmount * 100);
+          
+          const txData = {
+            amount: numAmount,
+            currency: 'USD',
+            type: payoutMethod,
+            status: 'pending',
+            email: payoutEmail,
+            bankDetails: payoutMethod === 'bank' ? bankDetails : null,
+            timestamp: serverTimestamp(),
+            reference,
+            details: `International ${payoutMethod} payout request`,
+            pointsDeducted: pointsToDeduct,
+            previousPoints: points,
+            remainingPoints: points - pointsToDeduct,
+            userId: currentUser.uid,
+            userEmail: currentUser.email,
+            scaToken: pin,
+            usePasskey,
+            totpCode: totp
+          };
 
-        await addDoc(txRef, txData);
+          await addDoc(txRef, txData);
 
-        // Also log to the central withdrawals collection for admin visibility
-        await addDoc(collection(db, 'withdrawals'), {
-          ...txData,
-          userName: userData?.displayName || 'Anonymous',
-        }).catch(err => console.error("Central withdrawal logging failed:", err));
+          // Also log to the central withdrawals collection for admin visibility
+          await addDoc(collection(db, 'withdrawals'), {
+            ...txData,
+            userName: userData?.displayName || 'Anonymous',
+          }).catch(err => console.error("Central withdrawal logging failed:", err));
 
-        await updateDoc(userRef, {
-          points: increment(-pointsToDeduct),
-          balance: increment(-numAmount),
-          totalWithdrawals: increment(numAmount)
-        });
+          await updateDoc(userRef, {
+            points: increment(-pointsToDeduct),
+            balance: increment(-numAmount),
+            totalWithdrawals: increment(numAmount)
+          });
 
-        // Audit Ledger Entry
-        await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
-          amount: -pointsToDeduct,
-          balanceAfter: points - pointsToDeduct,
-          type: 'deduction',
-          source: 'withdrawal',
-          reason: `International Payout (${payoutMethod})`,
-          timestamp: serverTimestamp()
-        }).catch(err => console.error("Error logging points ledger:", err));
+          // Audit Ledger Entry
+          await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
+            amount: -pointsToDeduct,
+            balanceAfter: points - pointsToDeduct,
+            type: 'deduction',
+            source: 'withdrawal',
+            reason: `International Payout (${payoutMethod})`,
+            timestamp: serverTimestamp()
+          }).catch(err => console.error("Error logging points ledger:", err));
+        } else if (currentUser && !db) {
+          console.warn("Firestore not available for international payout logging.");
+        }
         
         setSuccess(`International payout request of $${numAmount} submitted successfully!`);
         setPayoutAmount("");
@@ -454,7 +482,7 @@ export default function Rewards() {
   };
 
   const handleSyncWallet = async () => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     setIsSyncing(true);
     try {
       // 0. Self Update Engine: Flush pending memory points to Firestore before sync
@@ -491,7 +519,7 @@ export default function Rewards() {
   };
 
   const handleRestorePoints = async () => {
-    if (!currentUser || isRecovering) return;
+    if (!currentUser || !db || isRecovering) return;
     setIsRecovering(true);
     try {
       const userRef = doc(db, 'users', currentUser.uid);
@@ -539,7 +567,7 @@ export default function Rewards() {
   };
 
   const handlePurgeAuditGhosts = async () => {
-    if (!currentUser || !isDeveloper) return;
+    if (!currentUser || !isDeveloper || !db) return;
     if (!window.confirm("This will permanently delete all withdrawal records from your account to fix audit discrepancies. Continue?")) return;
     
     setIsResetting(true);
@@ -567,7 +595,7 @@ export default function Rewards() {
   };
 
   const handleResetTesting = async () => {
-    if (!currentUser || isResetting) return;
+    if (!currentUser || !db || isResetting) return;
     setIsResetting(true);
     try {
       const userRef = doc(db, 'users', currentUser.uid);
@@ -636,11 +664,11 @@ export default function Rewards() {
                  </div>
 
                  {/* Auth Method Toggle */}
-                 <div className="flex p-1 bg-gray-100 dark:bg-gray-900 rounded-xl mb-4">
+                 <div className="flex flex-wrap p-1 bg-gray-100 dark:bg-gray-900 rounded-xl mb-4 gap-1">
                    <button 
                      onClick={() => { setAuthMethod('pin'); setScaError(null); }}
                      className={cn(
-                       "flex-1 py-2 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all",
+                       "flex-1 py-1.5 px-1 text-[7px] font-black uppercase tracking-widest rounded-lg transition-all",
                        authMethod === 'pin' ? "bg-white dark:bg-gray-800 text-orange-600 shadow-sm" : "text-gray-400"
                      )}
                    >
@@ -649,27 +677,46 @@ export default function Rewards() {
                    <button 
                      onClick={() => { setAuthMethod('totp'); setScaError(null); }}
                      className={cn(
-                       "flex-1 py-2 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all",
+                       "flex-1 py-1.5 px-1 text-[7px] font-black uppercase tracking-widest rounded-lg transition-all",
                        authMethod === 'totp' ? "bg-white dark:bg-gray-800 text-orange-600 shadow-sm" : "text-gray-400"
                      )}
                    >
-                     Code
+                     TOTP
+                   </button>
+                   <button 
+                     onClick={() => { setAuthMethod('sms'); setScaError(null); }}
+                     className={cn(
+                       "flex-1 py-1.5 px-1 text-[7px] font-black uppercase tracking-widest rounded-lg transition-all",
+                       authMethod === 'sms' ? "bg-white dark:bg-gray-800 text-orange-600 shadow-sm" : "text-gray-400"
+                     )}
+                   >
+                     SMS
+                   </button>
+                   <button 
+                     onClick={() => { setAuthMethod('password'); setScaError(null); }}
+                     className={cn(
+                       "flex-1 py-1.5 px-1 text-[7px] font-black uppercase tracking-widest rounded-lg transition-all",
+                       authMethod === 'password' ? "bg-white dark:bg-gray-800 text-orange-600 shadow-sm" : "text-gray-400"
+                     )}
+                   >
+                     Pass
                    </button>
                    <button 
                      onClick={() => { setAuthMethod('passkey'); setScaError(null); }}
                      className={cn(
-                       "flex-1 py-2 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all",
+                       "flex-1 py-1.5 px-1 text-[7px] font-black uppercase tracking-widest rounded-lg transition-all",
                        authMethod === 'passkey' ? "bg-white dark:bg-gray-800 text-orange-600 shadow-sm" : "text-gray-400"
                      )}
                    >
-                     Passkey
+                     Key
                    </button>
                  </div>
 
+                 {/* Error Display */}
                  {scaError && (
                    <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-xl flex items-center gap-2">
                       <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-                      <p className="text-[10px] text-red-600 dark:text-red-400 font-bold">{scaError}</p>
+                      <p className="text-[10px] text-red-600 dark:text-red-400 font-bold leading-tight">{scaError}</p>
                    </div>
                  )}
 
@@ -710,13 +757,13 @@ export default function Rewards() {
                      <>
                         <div className="relative">
                           <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-                            <Smartphone className="w-5 h-5" />
+                            <ShieldCheck className="w-5 h-5" />
                           </div>
                           <input 
                             type="text"
                             inputMode="numeric"
                             maxLength={6}
-                            placeholder="6-digit Code"
+                            placeholder="6-digit TOTP"
                             value={totpCode}
                             onChange={(e) => { setTotpCode(e.target.value.replace(/\D/g, '')); setScaError(null); }}
                             className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl pl-12 pr-4 py-4 text-sm font-mono tracking-[0.5em] text-center focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm"
@@ -736,8 +783,152 @@ export default function Rewards() {
                           disabled={totpCode.length !== 6}
                           className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/30 active:scale-95 disabled:opacity-50"
                         >
-                          Authorize with Code
+                          Authorize with TOTP
                         </button>
+                     </>
+                   ) : authMethod === 'sms' ? (
+                     <>
+                        <div className="space-y-3">
+                          <div className="relative">
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                              <Smartphone className="w-5 h-5" />
+                            </div>
+                            <input 
+                              type="text"
+                              inputMode="numeric"
+                              maxLength={6}
+                              placeholder="SMS Code"
+                              value={smsCode}
+                              onChange={(e) => { setSmsCode(e.target.value.replace(/\D/g, '')); setScaError(null); }}
+                              className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl pl-12 pr-4 py-4 text-sm font-mono tracking-[0.5em] text-center focus:ring-2 focus:ring-emerald-500 outline-none transition-all shadow-sm"
+                              autoFocus
+                            />
+                          </div>
+
+                          <button 
+                            type="button"
+                            onClick={async () => {
+                              const pNum = userData?.phoneNumber || (userData as any)?.phone;
+                              if (!pNum) {
+                                setScaError("No phone number linked. Please add in Settings.");
+                                return;
+                              }
+                              setIsSendingSms(true);
+                              try {
+                                const resp = await fetch('/api/otp/send', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ 
+                                    userId: currentUser?.uid, 
+                                    phoneNumber: pNum, 
+                                    method: 'sms' 
+                                  })
+                                });
+                                const data = await resp.json();
+                                if (!data.success) throw new Error(data.error);
+                                if (data.devOtp) {
+                                  setScaError(`[PREVIEW] SMS Code: ${data.devOtp}`);
+                                } else {
+                                  setScaError("Code sent successfully!");
+                                }
+                              } catch (e: any) {
+                                setScaError(e.message);
+                              } finally {
+                                setIsSendingSms(false);
+                              }
+                            }}
+                            disabled={isSendingSms}
+                            className="w-full text-[10px] font-black uppercase text-emerald-600 hover:text-emerald-700 py-1"
+                          >
+                            {isSendingSms ? "Sending..." : "Send SMS Code"}
+                          </button>
+
+                          <button 
+                            onClick={async () => {
+                               if (smsCode.length !== 6) return;
+                               setIsPasskeyAuthenticating(true);
+                               try {
+                                 const resp = await fetch('/api/otp/verify', {
+                                   method: 'POST',
+                                   headers: { 'Content-Type': 'application/json' },
+                                   body: JSON.stringify({ 
+                                     userId: currentUser?.uid, 
+                                     otp: smsCode,
+                                     email: currentUser?.email 
+                                   })
+                                 });
+                                 const data = await resp.json();
+                                 if (!data.success) throw new Error(data.error || "Invalid code");
+                                 
+                                 if (scaPendingAction) scaPendingAction("", false, smsCode);
+                                 setShowSCAModal(false);
+                                 setScaPendingAction(null);
+                                 setSmsCode("");
+                                 setScaError(null);
+                               } catch (e: any) {
+                                 setScaError(e.message);
+                               } finally {
+                                 setIsPasskeyAuthenticating(false);
+                               }
+                            }}
+                            disabled={smsCode.length !== 6 || isPasskeyAuthenticating}
+                            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-600/30 active:scale-95 disabled:opacity-50"
+                          >
+                            {isPasskeyAuthenticating ? "Verifying..." : "Authorize with SMS"}
+                          </button>
+                        </div>
+                     </>
+                   ) : authMethod === 'password' ? (
+                     <>
+                        <div className="space-y-4">
+                          <div className="relative">
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                              <Lock className="w-5 h-5" />
+                            </div>
+                            <input 
+                              type="password"
+                              placeholder="Account Password"
+                              value={passwordInput}
+                              onChange={(e) => { setPasswordInput(e.target.value); setScaError(null); }}
+                              className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl pl-12 pr-4 py-4 text-sm focus:ring-2 focus:ring-purple-500 outline-none transition-all shadow-sm"
+                              autoFocus
+                            />
+                          </div>
+
+                          <button 
+                            onClick={async () => {
+                               if (!passwordInput) return;
+                               setIsPasskeyAuthenticating(true);
+                               try {
+                                 const resp = await fetch('/api/auth/verify-password', {
+                                   method: 'POST',
+                                   headers: { 'Content-Type': 'application/json' },
+                                   body: JSON.stringify({ 
+                                     userId: currentUser?.uid, 
+                                     email: currentUser?.email,
+                                     password: passwordInput 
+                                   })
+                                 });
+                                 const data = await resp.json();
+                                 if (!data.success) throw new Error(data.error || "Incorrect password");
+                                 
+                                 if (scaPendingAction) scaPendingAction("", false, "password-verified");
+                                 setShowSCAModal(false);
+                                 setScaPendingAction(null);
+                                 setPasswordInput("");
+                                 setScaError(null);
+                               } catch (e: any) {
+                                 setScaError(e.message);
+                               } finally {
+                                 setIsPasskeyAuthenticating(false);
+                               }
+                            }}
+                            disabled={!passwordInput || isPasskeyAuthenticating}
+                            className="w-full py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-purple-600/30 active:scale-95 disabled:opacity-50"
+                          >
+                            {isPasskeyAuthenticating ? "Checking..." : "Authorize with Password"}
+                          </button>
+                        </div>
                      </>
                    ) : (
                      <div className="text-center space-y-4 py-2">
@@ -746,7 +937,7 @@ export default function Rewards() {
                              <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center text-indigo-600 mx-auto">
                                <ShieldCheck className="w-6 h-6" />
                              </div>
-                             <p className="text-[10px] text-gray-500 font-medium">Verify identity via your device biometrics.</p>
+                             <p className="text-[10px] text-gray-500 font-medium leading-tight px-4">Verify identity via your device biometrics.</p>
                              <button
                                onClick={async () => {
                                  if (!currentUser) return;
@@ -812,6 +1003,8 @@ export default function Rewards() {
                        setScaToken("");
                        setScaPendingAction(null);
                        setIsPasskeyAuthenticating(false);
+                       setPasswordInput("");
+                       setSmsCode("");
                      }}
                      className="w-full py-3 bg-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-[10px] font-black uppercase tracking-widest transition-colors"
                    >
@@ -878,6 +1071,16 @@ export default function Rewards() {
         >
           <Globe className="w-4 h-4" />
           <span>International</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('history')}
+          className={cn(
+            "flex-1 py-2.5 px-4 text-sm font-bold rounded-xl transition-all flex items-center justify-center space-x-2 whitespace-nowrap",
+            activeTab === 'history' ? "bg-white dark:bg-gray-700 text-green-600 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+          )}
+        >
+          <Clock className="w-4 h-4" />
+          <span>History</span>
         </button>
       </div>
 
@@ -1113,9 +1316,9 @@ export default function Rewards() {
                   <br/><br/>
                   <strong>1. User Engagement:</strong> For general platform activity, including social interactions, active time, and community participation, your revenue share is determined by your <strong>Membership Level</strong> (Bronze: 20%, Silver: 50%, Gold: 80%).
                   <br/><br/>
-                  <strong>2. Exclusions:</strong> Membership level benefits do <strong>not</strong> apply to Ads revenue (fixed 50/50 split) or Education Hub revenue (fixed 80/20 platform-to-user split).
+                  <strong>2. Exclusions:</strong> Membership level benefits do <strong>not</strong> apply to Ads revenue (fixed 50/50 split).
                   <br/><br/>
-                  <strong>3. Platform Payments:</strong> To ensure the long-term sustainability of our high-performance AI infrastructure, all direct platform payments—including Course Enrollments, AI Training fees, Certificate purchases, Event tickets, and Marketplace transactions—belong 100% to the platform treasury.
+                  <strong>3. Platform Payments:</strong> To ensure the long-term sustainability of our high-performance AI infrastructure, all direct platform payments—including Advanced AI Lab access, Event tickets, and Marketplace transactions—belong 100% to the platform treasury.
                   <br/><br/>
                   <strong>3. Withdrawals:</strong> {isDeveloper ? "Developer accounts are exempt from all minimum limits and time restrictions. Access is instant and absolute." : 
                     membershipLevel === 'gold' 

@@ -46,7 +46,7 @@ export default function AIAssistant() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'model',
-      text: "Hello! I'm your Pulse Feeds Master AI & Life Coach. I'm here to help you navigate the app, improve your health, and even train custom courses for you in the Education Hub. How can I assist today?",
+      text: "Hello! I'm your Pulse Feeds Master AI & Life Coach. I'm here to help you navigate the app and improve your health. How can I assist today?",
       timestamp: Date.now()
     }
   ]);

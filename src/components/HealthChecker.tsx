@@ -149,7 +149,7 @@ export default function HealthChecker() {
     
     speak(speechText);
     
-    if (currentUser) {
+    if (currentUser && db) {
       try {
         const userRef = doc(db, 'users', currentUser.uid);
         await updateDoc(userRef, {
@@ -166,6 +166,8 @@ export default function HealthChecker() {
       } catch (err) {
         console.error("Failed to update health check:", err);
       }
+    } else if (currentUser && !db) {
+      console.warn("Firestore not available for health points. Skipping update.");
     }
 
     localStorage.setItem('pulse_last_health_scan_ts', Date.now().toString());

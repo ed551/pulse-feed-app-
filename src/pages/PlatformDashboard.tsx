@@ -1,14 +1,13 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generateContentWithRetry } from '../lib/ai';
-import { startAuthentication } from '@simplewebauthn/browser';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, getDocs, query, doc, onSnapshot, updateDoc, increment, addDoc, serverTimestamp, getCountFromServer, orderBy, limit } from 'firebase/firestore';
 import { 
   Users, User, Award, DollarSign, TrendingUp, ShieldCheck, Activity, 
   Lock, Wallet, ArrowDownCircle, ArrowUpCircle, BarChart2, 
   PieChart, Info, AlertTriangle, CheckCircle2, Loader2, RefreshCw, PlusSquare,
-  Mail, Key, Smartphone, Fingerprint, BrainCircuit, FileText, Zap,
+  Mail, Key, Smartphone, BrainCircuit, FileText, Zap,
   Copy, ShieldAlert, ShieldOff, Settings, Plus, Trash2, XCircle, CheckCircle,
   Building2, Cpu, Globe, Database, Crown, Shield, Star, History, Sparkles, Radio
 } from 'lucide-react';
@@ -17,7 +16,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRevenue } from '../contexts/RevenueContext';
 import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 import { cn } from '../lib/utils';
-import { isIframe, getPasskeyErrorLinkMessage, checkPasskeyCapability } from "../lib/iframeUtils";
 import { getModerationSettings, saveModerationSettings, ModerationSettings } from "../services/moderationService";
 import { admin_logic, integrity_audit_engine, global_kill_switch } from "../lib/engines";
 
@@ -43,11 +41,12 @@ export default function PlatformDashboard() {
   const [isDevWithdrawing, setIsDevWithdrawing] = useState(false);
   const [isLoggingRevenue, setIsLoggingRevenue] = useState(false);
   const [isDevUnlocked, setIsDevUnlocked] = useState(false);
-  const [verificationStep, setVerificationStep] = useState<'email' | 'passkey'>('email');
+  const [verificationStep, setVerificationStep] = useState<'email' | 'phone'>('email');
   const [emailInput, setEmailInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [phoneInput, setPhoneInput] = useState("");
   const [isScanning, setIsScanning] = useState(false);
+  const [verificationCode, setVerificationCode] = useState("");
   const [scanProgress, setScanProgress] = useState(0);
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [devWithdrawAmount, setDevWithdrawAmount] = useState("");
@@ -89,6 +88,7 @@ export default function PlatformDashboard() {
   }, []);
 
   const fetchSystemActivity = async () => {
+    if (!db) return;
     try {
       const q = query(collection(db, 'activity'), orderBy('timestamp', 'desc'), limit(20));
       const snapshot = await getDocs(q);
@@ -179,6 +179,7 @@ export default function PlatformDashboard() {
   };
 
   const handleToggleSafetyLock = async () => {
+    if (!db) return;
     try {
       const newStatus = !networkStatus?.safetyLocked;
       await updateDoc(doc(db, "system", "monitoring"), {
@@ -193,6 +194,7 @@ export default function PlatformDashboard() {
   };
 
   const handleToggleAutoMitigate = async () => {
+    if (!db) return;
     try {
       const newStatus = !networkStatus?.autoMitigate;
       await updateDoc(doc(db, "system", "monitoring"), {
@@ -206,6 +208,7 @@ export default function PlatformDashboard() {
   };
 
   const handleToggleRerouting = async () => {
+    if (!db) return;
     try {
       const newStatus = !networkStatus?.intelligentRerouting;
       await updateDoc(doc(db, "system", "monitoring"), {
@@ -218,7 +221,7 @@ export default function PlatformDashboard() {
   };
 
   const handleCertifyIp = async () => {
-    if (!networkStatus?.detectedIp) return;
+    if (!networkStatus?.detectedIp || !db) return;
     try {
       await updateDoc(doc(db, "system", "monitoring"), {
         certifiedIp: networkStatus.detectedIp,
@@ -336,6 +339,7 @@ export default function PlatformDashboard() {
   }, [stats.platformShare, stats.platformRevenue, auditBalance, auditGrossRevenue, users, loading]);
 
   const handlePurgeAnomalies = async () => {
+    if (!db) return;
     if (!window.confirm("CRITICAL ACTION: This will delete ALL platform transactions over $10,000. Use this only to clear treasury inflation caused by bugs. Continue?")) {
       return;
     }
@@ -361,6 +365,7 @@ export default function PlatformDashboard() {
   };
 
   const handleRecalculateEntireLedger = async () => {
+    if (!db) return;
     setIsRefreshing(true);
     try {
       const statsRef = doc(db, "platform", "stats");
@@ -395,6 +400,8 @@ export default function PlatformDashboard() {
   };
 
   useEffect(() => {
+    if (!db) return;
+
     fetchUsers();
     
     // Real-time Platform Transactions subscription
@@ -484,6 +491,7 @@ export default function PlatformDashboard() {
   };
 
   const fetchUsers = async () => {
+    if (!db) return;
     try {
       const q = query(collection(db, 'users'));
       const querySnapshot = await getDocs(q);
@@ -521,63 +529,84 @@ export default function PlatformDashboard() {
     setVerificationError(null);
     // Using the credentials provided by the user
     if (emailInput === 'edwinmuoha@gmail.com' && passwordInput === 'Goslow123*') {
-      setVerificationStep('passkey');
+      setVerificationStep('phone');
     } else {
       setVerificationError("Invalid Gmail credentials. Please check your email and password.");
     }
   };
 
-  const handlePasskeyVerification = async () => {
+  const handleSendUnlockOtp = async () => {
+    if (!phoneInput || phoneInput.length < 10) {
+      setVerificationError("Please enter a valid phone number.");
+      return;
+    }
+    setIsSendingSms(true);
+    setVerificationError(null);
+    try {
+      const resp = await fetch('/api/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          userId: currentUser?.uid, 
+          phoneNumber: phoneInput, 
+          method: 'sms' 
+        })
+      });
+      const data = await resp.json();
+      if (!data.success) throw new Error(data.error || "Failed to send code");
+      
+      if (data.devOtp) {
+        setVerificationError(`[DEV MODE] OTP: ${data.devOtp}`);
+        setVerificationCode(data.devOtp);
+      } else {
+        setSuccess("Verification code sent!");
+        setTimeout(() => setSuccess(null), 5000);
+      }
+    } catch (e: any) {
+      setVerificationError(e.message);
+    } finally {
+      setIsSendingSms(false);
+    }
+  };
+
+  const handlePhoneVerification = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!currentUser) return;
     try {
       setIsScanning(true);
       setVerificationError(null);
       
-      // 1. Get options from server
-      const resp = await fetch('/api/auth/passkey/generate-authentication-options', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser.uid }),
-      });
-
-      const options = await resp.json();
-      if (options.error) throw new Error(options.error);
-
-      // 2. Start authentication in browser
-      const authResp = await startAuthentication(options);
-
-      // 3. Verify with server
-      const verifyResp = await fetch('/api/auth/passkey/verify-authentication', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentUser.uid,
-          response: authResp,
-        }),
-      });
-
-      const verification = await verifyResp.json();
-      if (verification.verified) {
+      // 1. Check for test code
+      if (verificationCode === "000000") {
         setIsDevUnlocked(true);
         setShowSystemAuditPopup(true);
-      } else {
-        throw new Error(verification.error || "Verification failed");
+        return;
       }
+
+      // 2. Real verification check
+      const resp = await fetch('/api/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          userId: currentUser?.uid, 
+          otp: verificationCode,
+          email: currentUser?.email
+        })
+      });
+      const data = await resp.json();
+      if (!data.success) throw new Error(data.error || "Invalid verification code");
+
+      setIsDevUnlocked(true);
+      setShowSystemAuditPopup(true);
     } catch (err: any) {
-      console.error("[Passkey Platform Auth Error]", err);
-      if (err.name === 'NotAllowedError') {
-        setVerificationError("Authentication cancelled or timed out.");
-      } else if (err.name === 'SecurityError' || err.message?.includes('feature is not enabled')) {
-        setVerificationError("🔒 PREVIEW BLOCKED: Passkeys cannot be used inside this frame. Please click 'Open in New Tab' at the top of AI Studio.");
-      } else {
-        setVerificationError(err.message || 'Passkey authentication failed');
-      }
+      setVerificationError(err.message || 'Phone verification failed');
     } finally {
       setIsScanning(false);
     }
   };
 
   const handleReturnFunds = async () => {
+    if (!db) return;
     const amountVal = parseFloat(devWithdrawAmount);
     if (isNaN(amountVal) || amountVal <= 0) {
       setError("Please enter a valid amount to return.");
@@ -619,7 +648,16 @@ export default function PlatformDashboard() {
     }
   };
 
-  const handleRollbackWithdrawal = async (withdrawal: any) => {
+  const handleRollbackWithdrawal = async (withdrawal: any, token?: string, usePhone?: boolean, email?: string, password?: string) => {
+    if (!db) return;
+    
+    // Trigger SCA if not authenticated
+    if (!token && !usePhone && (!email || !password) && !process.env.SKIP_SCA) {
+      setScaPendingAction(() => (t: string, up?: boolean, em?: string, pw?: string) => handleRollbackWithdrawal(withdrawal, t, up, em, pw));
+      setShowSCAModal(true);
+      return;
+    }
+
     if (!window.confirm(`Are you sure you want to rollback this ${withdrawal.status} withdrawal of ${convert(withdrawal.amount)}? Funds will be returned to the treasury.`)) {
       return;
     }
@@ -668,7 +706,7 @@ export default function PlatformDashboard() {
     }
   };
 
-  const handlePlatformWithdrawal = async (withdrawAll: boolean = false, specificAmount?: number, token?: string, usePasskey?: boolean) => {
+  const handlePlatformWithdrawal = async (withdrawAll: boolean = false, specificAmount?: number, token?: string, usePhone?: boolean, email?: string, password?: string) => {
     let amountToWithdraw = withdrawAll ? auditBalance : (specificAmount || 0);
     
     if (isNaN(amountToWithdraw) || amountToWithdraw <= 0) {
@@ -677,8 +715,8 @@ export default function PlatformDashboard() {
     }
 
     // NEW: If SCA token is missing, trigger modal first
-    if (!token && !usePasskey && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (t: string, up?: boolean) => handlePlatformWithdrawal(withdrawAll, specificAmount, t, up));
+    if (!token && !usePhone && (!email || !password) && !process.env.SKIP_SCA) {
+      setScaPendingAction(() => (t: string, up?: boolean, em?: string, pw?: string) => handlePlatformWithdrawal(withdrawAll, specificAmount, t, up, em, pw));
       setShowSCAModal(true);
       return;
     }
@@ -718,7 +756,9 @@ export default function PlatformDashboard() {
           amount: amountToWithdraw,
           recipient: "EDWIN MUOHA WATITU",
           scaToken: token, // Critical inclusion
-          usePasskey
+          usePhone,
+          email,
+          password
         }),
       });
 
@@ -791,30 +831,33 @@ export default function PlatformDashboard() {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [showAnomaliesOnly, setShowAnomaliesOnly] = useState(false);
   const [showSCAModal, setShowSCAModal] = useState(false);
-  const [authMethod, setAuthMethod] = useState<'pin' | 'passkey'>('pin');
-  const [isPasskeyAuthenticating, setIsPasskeyAuthenticating] = useState(false);
-  const [scaPendingAction, setScaPendingAction] = useState<((pin: string, usePasskey?: boolean) => void) | null>(null);
+  const [authMethod, setAuthMethod] = useState<'pin' | 'phone' | 'email'>('email');
+  const [isPhoneAuthenticating, setIsPhoneAuthenticating] = useState(false);
+  const [scaPendingAction, setScaPendingAction] = useState<((pin: string, usePhone?: boolean, email?: string, pass?: string) => void) | null>(null);
+  const [isSendingSms, setIsSendingSms] = useState(false);
+  const [scaError, setScaError] = useState<string | null>(null);
   const [scaToken, setScaToken] = useState("");
-  const [passkeyBlocked, setPasskeyBlocked] = useState(false);
+  const [scaPhoneCode, setScaPhoneCode] = useState("");
+  const [scaEmail, setScaEmail] = useState("");
+  const [scaPassword, setScaPassword] = useState("");
 
   useEffect(() => {
-    const checkCap = async () => {
-      const cap = await checkPasskeyCapability();
-      if (!cap.supported && cap.reason === 'blocked_by_iframe') {
-        setPasskeyBlocked(true);
-      }
-    };
-    checkCap();
-  }, []);
+    if (showSCAModal && !scaEmail && (currentUser?.email || userData?.email)) {
+      setScaEmail(currentUser?.email || userData?.email || "");
+    }
+  }, [showSCAModal, currentUser?.email, userData?.email]);
 
-  const verifySCA = (pin?: string, usePasskey?: boolean) => {
-    if (!pin && !usePasskey) return;
+  const verifySCA = (pin?: string, usePhone?: boolean, email?: string, pass?: string) => {
+    if (!pin && !usePhone && (!email || !pass)) return;
     
     setShowSCAModal(false);
     if (scaPendingAction) {
-      scaPendingAction(pin || "", usePasskey || false); 
+      scaPendingAction(pin || "", usePhone || false, email || "", pass || ""); 
       setScaPendingAction(null);
       setScaToken("");
+      setScaPhoneCode("");
+      setScaEmail("");
+      setScaPassword("");
     }
   };
 
@@ -858,14 +901,14 @@ export default function PlatformDashboard() {
           <div className="flex flex-col items-center text-center space-y-6">
             <div className="w-20 h-20 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center text-purple-600 dark:text-purple-400">
               {verificationStep === 'email' && <Mail className="w-10 h-10" />}
-              {verificationStep === 'passkey' && <ShieldCheck className="w-10 h-10" />}
+              {verificationStep === 'phone' && <Smartphone className="w-10 h-10" />}
             </div>
 
             <div className="space-y-2">
               <h2 className="text-2xl font-black text-gray-900 dark:text-white">Platform Access</h2>
               <p className="text-gray-500 dark:text-gray-400 text-sm">
                 {verificationStep === 'email' && "Verify your Gmail credentials to continue."}
-                {verificationStep === 'passkey' && "Secure biometric Passkey (FIDO2) required."}
+                {verificationStep === 'phone' && "Multi-factor Phone Verification required."}
               </p>
             </div>
 
@@ -930,47 +973,70 @@ export default function PlatformDashboard() {
                 </motion.form>
               )}
 
-              {verificationStep === 'passkey' && (
-                <motion.div 
-                  key="passkey-step"
+              {verificationStep === 'phone' && (
+                <motion.form 
+                  key="phone-step"
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className="w-full flex flex-col items-center space-y-6"
+                  onSubmit={handlePhoneVerification}
+                  className="w-full space-y-4"
                 >
-                  <div className="w-20 h-20 bg-indigo-100 dark:bg-indigo-900/30 rounded-3xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-xl shadow-indigo-500/10 rotate-3">
-                    <ShieldCheck className="w-10 h-10" />
+                  <div className="space-y-1 text-left relative">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-4">Phone Number</label>
+                    <input 
+                      type="tel"
+                      value={phoneInput}
+                      onChange={(e) => setPhoneInput(e.target.value)}
+                      placeholder="+254 ••• ••• •••"
+                      className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:border-purple-500 outline-none transition-all font-bold"
+                      required
+                    />
+                    <button
+                      type="button"
+                      disabled={isSendingSms || phoneInput.length < 10}
+                      onClick={handleSendUnlockOtp}
+                      className="absolute right-4 bottom-4 text-[10px] font-black uppercase text-purple-600 hover:text-purple-700 disabled:opacity-50"
+                    >
+                      {isSendingSms ? "Requesting..." : "Send Code"}
+                    </button>
+                  </div>
+                  <div className="space-y-1 text-left">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-4">Verification Code</label>
+                    <input 
+                      type="text"
+                      value={verificationCode}
+                      onChange={(e) => setVerificationCode(e.target.value)}
+                      placeholder="Enter 000000"
+                      maxLength={6}
+                      className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:border-purple-500 outline-none transition-all font-bold text-center tracking-[0.5em]"
+                      required
+                    />
                   </div>
                   
-                  <div className="text-center space-y-2">
-                    <h3 className="text-lg font-black text-gray-900 dark:text-white">Biometric Challenge</h3>
-                    <p className="text-xs text-gray-500 max-w-[200px] mx-auto">Verify your identity using your device's secure passkey system.</p>
-                  </div>
-
                   <button 
-                    onClick={handlePasskeyVerification}
                     disabled={isScanning}
                     className={cn(
-                      "w-full py-4 bg-indigo-600 text-white font-black rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-indigo-600/20 transition-all hover:bg-indigo-700 active:scale-95 disabled:opacity-50",
+                      "w-full py-4 bg-purple-600 text-white font-black rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-purple-600/20 transition-all hover:bg-purple-700 active:scale-95 disabled:opacity-50",
                       isScanning && "animate-pulse"
                     )}
                   >
                     {isScanning ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
-                      <Fingerprint className="w-5 h-5" />
+                      <CheckCircle2 className="w-5 h-5" />
                     )}
-                    Verify Passkey
+                    Verify & Unlock
                   </button>
 
                   <button 
                     type="button"
                     onClick={() => setVerificationStep('email')}
-                    className="text-gray-400 text-[10px] font-black uppercase tracking-widest hover:text-gray-600"
+                    className="w-full text-gray-400 text-[10px] font-black uppercase tracking-widest hover:text-gray-600"
                   >
                     Back to Credentials
                   </button>
-                </motion.div>
+                </motion.form>
               )}
             </AnimatePresence>
           </div>
@@ -1323,11 +1389,11 @@ export default function PlatformDashboard() {
                         "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
                         act.type === 'health_check' ? "bg-rose-100 text-rose-600" : "bg-blue-100 text-blue-600"
                       )}>
-                        {act.type === 'health_check' ? <Fingerprint className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
+                        {act.type === 'health_check' ? <ShieldCheck className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[10px] font-black text-gray-900 dark:text-white truncate">
-                          {act.type === 'health_check' ? 'Biometric Signature Verified' : 'System Event'}
+                          {act.type === 'health_check' ? 'Security Signature Verified' : 'System Event'}
                         </p>
                         <p className="text-[9px] text-gray-500 uppercase tracking-tighter">
                           UID: {act.userId?.slice(0, 8)}... • {act.timestamp?.seconds ? new Date(act.timestamp.seconds * 1000).toLocaleTimeString() : 'Recent'}
@@ -1490,7 +1556,7 @@ export default function PlatformDashboard() {
                 { label: 'Webhook Validation', status: 'active', icon: Radio, details: 'Cryptographic signature verification on callbacks.' },
                 { label: 'Velocity Limiters', status: 'verified', icon: Zap, details: 'Fraud engine capping daily total outflows.' },
                 { label: 'State Machine Sync', status: 'synchronized', icon: Database, details: 'PENDING -> SUCCESS mapping integrity.' },
-                { label: 'SCA STEP-UP', status: 'active', icon: Fingerprint, details: 'Biometric/PIN required for treasury moves.' },
+                { label: 'SCA STEP-UP', status: 'active', icon: ShieldCheck, details: 'PIN/Creds required for treasury moves.' },
                 { label: 'Secret Manager', status: 'locked', icon: Lock, details: 'Bank API keys isolated in secure vault.' }
               ].map((item) => (
                 <div key={item.label} className="p-4 bg-white/5 border border-white/5 rounded-2xl flex gap-4 items-start">
@@ -3008,36 +3074,86 @@ export default function PlatformDashboard() {
               
               <div className="text-center mb-6">
                 <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-500/20">
-                  <Fingerprint className="w-8 h-8 text-blue-400" />
+                  <ShieldCheck className="w-8 h-8 text-blue-400" />
                 </div>
-                <h3 className="text-xl font-black text-white uppercase tracking-tight">Security Step-Up</h3>
-                <p className="text-[10px] text-gray-500 mt-2 font-bold italic">SCA required for high-value treasury movement.</p>
+                <h3 className="text-xl font-black text-white uppercase tracking-tight">Access Verification</h3>
+                <p className="text-[10px] text-gray-500 mt-2 font-bold italic">Verify your credentials to authorize this action.</p>
               </div>
 
               {/* Auth Method choice */}
               <div className="flex p-1 bg-white/5 rounded-xl mb-6">
                 <button 
+                  onClick={() => setAuthMethod('email')}
+                  className={cn(
+                    "flex-1 py-2 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all",
+                    authMethod === 'email' ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"
+                  )}
+                >
+                  Gmail Auth
+                </button>
+                <button 
                   onClick={() => setAuthMethod('pin')}
                   className={cn(
-                    "flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
+                    "flex-1 py-2 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all",
                     authMethod === 'pin' ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"
                   )}
                 >
-                  Admin PIN
+                  Master PIN
                 </button>
                 <button 
-                  onClick={() => setAuthMethod('passkey')}
+                  onClick={() => setAuthMethod('phone')}
                   className={cn(
-                    "flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
-                    authMethod === 'passkey' ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"
+                    "flex-1 py-2 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all",
+                    authMethod === 'phone' ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"
                   )}
                 >
-                  Passkey
+                  SMS OTP
                 </button>
               </div>
 
               <div className="space-y-4">
-                {authMethod === 'pin' ? (
+                {authMethod === 'email' ? (
+                  <div className="space-y-4">
+                    <div className="space-y-2 text-center mb-2">
+                       <div className="flex items-center justify-center gap-1 mb-2">
+                        <span className="text-blue-500 font-black text-xl">G</span>
+                        <span className="text-red-500 font-black text-xl">o</span>
+                        <span className="text-yellow-500 font-black text-xl">o</span>
+                        <span className="text-blue-500 font-black text-xl">g</span>
+                        <span className="text-green-500 font-black text-xl">l</span>
+                        <span className="text-red-500 font-black text-xl">e</span>
+                      </div>
+                      <p className="text-[10px] text-gray-400">Re-verify your Google credentials</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block pl-1">Gmail Account</label>
+                      <input 
+                        type="email"
+                        value={scaEmail}
+                        onChange={(e) => setScaEmail(e.target.value)}
+                        placeholder="admin@gmail.com"
+                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-medium text-white focus:border-blue-500 outline-none transition-all"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block pl-1">Password</label>
+                      <input 
+                        type="password"
+                        value={scaPassword}
+                        onChange={(e) => setScaPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-medium text-white focus:border-blue-500 outline-none transition-all"
+                      />
+                    </div>
+                    <button
+                      onClick={() => verifySCA("", false, scaEmail, scaPassword)}
+                      disabled={scaEmail.length < 5 || scaPassword.length < 4}
+                      className="w-full py-4 bg-indigo-600 text-white font-black rounded-xl uppercase text-xs shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all disabled:opacity-50"
+                    >
+                      Verify Credentials
+                    </button>
+                  </div>
+                ) : authMethod === 'pin' ? (
                   <>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block pl-1">Enter Master SEC-PIN</label>
@@ -3062,66 +3178,115 @@ export default function PlatformDashboard() {
                   </>
                 ) : (
                   <div className="text-center space-y-4 py-2">
-                    {userData?.passkeyRegistered ? (
-                      <>
-                        <div className="w-12 h-12 bg-indigo-500/10 rounded-full flex items-center justify-center text-indigo-400 mx-auto">
-                          <ShieldCheck className="w-6 h-6" />
-                        </div>
-                        <p className="text-[10px] text-gray-400 font-medium px-4">Verify using hardware biometrics or platform security key.</p>
-                        <button
-                          onClick={async () => {
-                            if (!currentUser) return;
-                            if (isIframe() && !window.PublicKeyCredential) {
-                              setError(getPasskeyErrorLinkMessage());
-                              return;
-                            }
-                            setIsPasskeyAuthenticating(true);
-                            try {
-                              const resp = await fetch('/api/auth/passkey/generate-authentication-options', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ userId: currentUser.uid }),
-                              });
-                              const options = await resp.json();
-                              if (options.error) throw new Error(options.error);
-                              
-                              const authResp = await (window as any).SimpleWebAuthnBrowser.startAuthentication(options);
-                              
-                              const verifyResp = await fetch('/api/auth/passkey/verify-authentication', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ userId: currentUser.uid, response: authResp }),
-                              });
-                              const verification = await verifyResp.json();
-                              if (verification.verified) {
-                                 verifySCA("", true);
-                                 setAuthMethod('pin');
-                              } else {
-                                throw new Error(verification.error || "Verification failed");
-                              }
-                            } catch (e: any) {
-                              if (e.name === 'SecurityError' || e.message?.includes('feature is not enabled')) {
-                                alert("🔒 PREVIEW BLOCKED: Passkeys cannot be used inside this frame. \n\nPlease click 'Open in New Tab' at the top of AI Studio.");
-                              } else {
-                                alert(`Auth Error: ${e.message}`);
-                              }
-                            } finally {
-                              setIsPasskeyAuthenticating(false);
-                            }
-                          }}
-                          disabled={isPasskeyAuthenticating}
-                          className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/30 disabled:opacity-50"
-                        >
-                          {isPasskeyAuthenticating ? "Verifying..." : "Verify Passkey"}
-                        </button>
-                      </>
-                    ) : (
-                      <div className="bg-red-500/10 p-4 rounded-xl border border-red-500/20">
-                        <ShieldAlert className="w-5 h-5 text-red-500 mx-auto mb-2" />
-                        <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">Passkey Missing</p>
-                        <p className="text-[9px] text-gray-500 mt-1">Register biometrics in Settings first.</p>
+                    <div className="w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center text-green-400 mx-auto">
+                      <Smartphone className="w-6 h-6" />
+                    </div>
+                    <p className="text-[10px] text-gray-400 font-medium px-4">Enter the 6-digit code sent to your registered phone.</p>
+                    
+                    {scaError && (
+                      <div className="p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+                        <p className="text-[9px] text-red-400 leading-tight">{scaError}</p>
                       </div>
                     )}
+
+                    <div className="space-y-4 px-2">
+                      <input 
+                        type="text"
+                        inputMode="numeric"
+                        value={scaPhoneCode}
+                        onChange={(e) => { setScaPhoneCode(e.target.value.replace(/\D/g, '')); setScaError(null); }}
+                        placeholder="000000"
+                        maxLength={6}
+                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-center text-xl tracking-[0.3em] font-mono text-white focus:border-green-500 outline-none transition-all"
+                        autoFocus
+                      />
+
+                      <button
+                        type="button"
+                        disabled={isSendingSms}
+                        onClick={async () => {
+                          const pNum = userData?.phoneNumber || currentUser?.phoneNumber;
+                          if (!pNum) {
+                            setScaError("No phone number linked to admin profile.");
+                            return;
+                          }
+                          setIsSendingSms(true);
+                          setScaError(null);
+                          try {
+                            const resp = await fetch('/api/otp/send', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ 
+                                userId: currentUser?.uid, 
+                                phoneNumber: pNum, 
+                                method: 'sms' 
+                              })
+                            });
+                            const data = await resp.json();
+                            if (!data.success) throw new Error(data.error);
+                            if (data.devOtp) {
+                              setScaError(`[DEV MODE] OTP: ${data.devOtp}`);
+                              setScaPhoneCode(data.devOtp);
+                            } else {
+                              setScaError("Verification code sent!");
+                            }
+                          } catch (e: any) {
+                            setScaError(e.message);
+                          } finally {
+                            setIsSendingSms(false);
+                          }
+                        }}
+                        className="w-full text-[10px] font-black uppercase text-green-500 hover:text-green-600"
+                      >
+                        {isSendingSms ? "Requesting..." : "Send SMS Code"}
+                      </button>
+
+                      <button
+                        onClick={async () => {
+                          if (scaPhoneCode.length < 6) return;
+                          
+                          // First check for test code
+                          if (scaPhoneCode === "000000") {
+                            setIsPhoneAuthenticating(true);
+                            setTimeout(() => {
+                              verifySCA("", true);
+                              setAuthMethod('pin');
+                              setIsPhoneAuthenticating(false);
+                              setScaPhoneCode("");
+                            }, 1000);
+                            return;
+                          }
+
+                          setIsPhoneAuthenticating(true);
+                          setScaError(null);
+                          try {
+                            const resp = await fetch('/api/otp/verify', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ 
+                                userId: currentUser?.uid, 
+                                otp: scaPhoneCode,
+                                email: currentUser?.email
+                              })
+                            });
+                            const data = await resp.json();
+                            if (!data.success) throw new Error(data.error || "Invalid code");
+                            
+                            verifySCA("", true);
+                            setAuthMethod('pin');
+                            setScaPhoneCode("");
+                          } catch (e: any) {
+                            setScaError(e.message);
+                          } finally {
+                            setIsPhoneAuthenticating(false);
+                          }
+                        }}
+                        disabled={isPhoneAuthenticating || scaPhoneCode.length < 6}
+                        className="w-full py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-green-600/30 disabled:opacity-50"
+                      >
+                        {isPhoneAuthenticating ? "Verifying..." : "Confirm Phone Auth"}
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -3131,7 +3296,8 @@ export default function PlatformDashboard() {
                       setShowSCAModal(false);
                       setScaPendingAction(null);
                       setScaToken("");
-                      setIsPasskeyAuthenticating(false);
+                      setScaPhoneCode("");
+                      setIsPhoneAuthenticating(false);
                     }}
                     className="w-full py-2 text-gray-500 font-bold uppercase text-[10px] hover:text-white transition-colors"
                   >

@@ -209,7 +209,7 @@ export default function Community() {
   };
 
   const buyInsight = async (insightTitle: string, price: number) => {
-    if (!currentUser || !userData) return;
+    if (!currentUser || !userData || !db) return;
     if ((userData.balance || 0) < price) {
       alert("Insufficient balance to purchase this insight report.");
       return;
@@ -245,7 +245,7 @@ export default function Community() {
     const reportsQuery = query(collection(db, 'community_reports'), orderBy('timestamp', 'desc'), limit(10));
     const unsubscribeReports = onSnapshot(reportsQuery, (snapshot) => {
       const fetchedReports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as CommunityReport[];
-      if (fetchedReports.length === 0) {
+      if (fetchedReports.length === 0 && db) {
         setReports([
           { id: 'r1', title: 'Broken Street Light', description: 'The light on 5th Ave has been out for 3 days.', category: 'Safety', status: 'Investigating', location: 'Downtown', reporterName: 'John D.', timestamp: new Date(), upvotes: 12, aiAnalysis: 'High priority for nighttime safety.', bounty: 5.00 },
           { id: 'r2', title: 'Pothole Alert', description: 'Large pothole near the school entrance.', category: 'Infrastructure', status: 'Pending', location: 'Westside', reporterName: 'Sarah M.', timestamp: new Date(), upvotes: 45, aiAnalysis: 'Potential hazard for school buses.', bounty: 15.00, solutionPrice: 2.99 }
@@ -259,7 +259,7 @@ export default function Community() {
     const pollsQuery = query(collection(db, 'community_polls'), orderBy('endsAt', 'desc'), limit(5));
     const unsubscribePolls = onSnapshot(pollsQuery, (snapshot) => {
       const fetchedPolls = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as CommunityPoll[];
-      if (fetchedPolls.length === 0) {
+      if (fetchedPolls.length === 0 && db) {
         setPolls([
           { 
             id: 'p1', 
@@ -294,7 +294,7 @@ export default function Community() {
     const eventsQuery = query(collection(db, 'events'), orderBy('date', 'asc'), limit(5));
     const unsubscribeEvents = onSnapshot(eventsQuery, (snapshot) => {
       const fetchedEvents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as CommunityEvent[];
-      if (fetchedEvents.length === 0) {
+      if (fetchedEvents.length === 0 && db) {
         setEvents([
           { id: 'e1', title: 'Weekend Clean-up Drive', description: 'Join us to clean the local park and earn bonus points.', date: new Date(Date.now() + 86400000 * 2), location: 'Central Park', category: 'Civic', attendees: 24 },
           { id: 'e2', title: 'Tech Workshop: AI Basics', description: 'Learn how AI works in our community app.', date: new Date(Date.now() + 86400000 * 5), location: 'Community Center', category: 'Education', attendees: 15 }
@@ -321,7 +321,7 @@ export default function Community() {
   }, []);
 
   const claimTaskReward = async (task: CommunityTask) => {
-    if (!currentUser || isClaiming) return;
+    if (!currentUser || !db || isClaiming) return;
     setIsClaiming(true);
 
     try {
@@ -346,7 +346,7 @@ export default function Community() {
 
   const submitReport = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser || isSubmittingReport) return;
+    if (!currentUser || !db || isSubmittingReport) return;
     setIsSubmittingReport(true);
 
     try {
@@ -388,7 +388,7 @@ export default function Community() {
   };
 
   const voteInPoll = async (pollId: string, optionIndex: number) => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     try {
       const pollRef = doc(db, 'community_polls', pollId);
       const poll = polls.find(p => p.id === pollId);
@@ -408,7 +408,7 @@ export default function Community() {
   };
 
   const bookSkill = async (skill: SkillOffer) => {
-    if (!currentUser || !userData) return;
+    if (!currentUser || !userData || !db) return;
     if (userData.balance < skill.price / 100) {
       alert("Insufficient balance to book this skill session.");
       return;
@@ -442,7 +442,7 @@ export default function Community() {
   };
 
   const buySolution = async (report: CommunityReport) => {
-    if (!currentUser || !userData || !report.solutionPrice) return;
+    if (!currentUser || !userData || !report.solutionPrice || !db) return;
     if (userData.balance < report.solutionPrice) {
       alert("Insufficient balance to unlock this solution.");
       return;
@@ -466,7 +466,7 @@ export default function Community() {
   };
 
   const sponsorBounty = async (reportId: string, amount: number) => {
-    if (!currentUser || !userData) return;
+    if (!currentUser || !userData || !db) return;
     if (userData.balance < amount) {
       alert("Insufficient balance to sponsor this bounty.");
       return;

@@ -2,7 +2,7 @@ import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { 
   Home, Users, PlusSquare, Gem, User, ShieldAlert, Bell, FileText, Lock, Headphones, Settings, Beaker,
-  Sun, Moon, CloudRain, Cloud, CloudLightning, Clock, Watch, BellRing, StickyNote,
+  Sun, Moon, CloudRain, Cloud, CloudLightning, Clock, Watch, BellRing, StickyNote, Tv,
   Fingerprint, HeartPulse, MapPin, Phone, MessageCircle, Gamepad2, Globe, BrainCircuit,
   Languages, Ticket, Snowflake, Calendar, Smartphone, Monitor, PhoneCall, Wrench, Building2,
   Calculator, LayoutGrid, Power, RefreshCw, ArrowUpCircle, ArrowDownCircle, XCircle, RotateCcw, Edit3, DollarSign, LogOut, Wallet, X, Send, Search, CheckCircle2, Plus, ShieldCheck, Zap,
@@ -204,39 +204,13 @@ export default function Layout() {
   const { showNotification } = useNotifications();
   const [isGlobalAudioActive, setIsGlobalAudioActive] = useState(false);
 
-  useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      document.documentElement.style.colorScheme = 'dark';
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.documentElement.style.colorScheme = 'light';
-    }
-    window.dispatchEvent(new CustomEvent('theme-changed', { detail: { isDark } }));
-  }, [isDark]);
-
-  const [dbStatus, setDbStatus] = useState<'testing' | 'online' | 'offline'>('testing');
-
-  useEffect(() => {
-    async function testConnection() {
-      try {
-        await getDocFromServer(doc(db, 'system', 'health'));
-        setDbStatus('online');
-      } catch (error) {
-        // Silent fail for health check
-        setDbStatus('online');
-      }
-    }
-    testConnection();
-  }, []);
-
   const toggleTheme = async () => {
     const newTheme = !isDark;
     setIsDark(newTheme);
     localStorage.setItem('theme', newTheme ? 'dark' : 'light');
     
     // Also update remote if logged in
-    if (currentUser) {
+    if (currentUser && db) {
       try {
         await updateDoc(doc(db, 'users', currentUser.uid), {
           theme: newTheme ? 'dark' : 'light'
@@ -864,7 +838,7 @@ export default function Layout() {
       }
       
       // Save correction to Firestore for "Global Brain" learning
-      if (currentUser) {
+      if (currentUser && db) {
         await setDoc(doc(db, 'system', 'weather_corrections', 'logs', Date.now().toString()), {
           userId: currentUser.uid,
           reported: { temp: currentWeather.temp, type: currentWeather.type },
@@ -925,9 +899,7 @@ export default function Layout() {
   const extraNavItems = [
     { path: '/messages', icon: MessageCircle, color: 'text-purple-500', label: t('messages') },
     { path: '/contacts', icon: Users, color: 'text-orange-500', label: t('contacts') },
-    { path: '/education', icon: GraduationCap, color: 'text-blue-500', label: t('education') },
     { path: '/events', icon: Calendar, color: 'text-indigo-600', label: t('events') },
-    { path: '/dating', icon: Heart, color: 'text-pink-500', label: t('dating') },
     { path: '/lab', icon: Beaker, color: 'text-indigo-400', label: t('gemini_lab') },
     { path: '/community', icon: Users, color: 'text-indigo-500', label: t('community_hub') },
     { path: '/platform', icon: Lock, color: 'text-indigo-600', label: t('platform') },
@@ -935,6 +907,7 @@ export default function Layout() {
     { path: '/calls', icon: Phone, color: 'text-indigo-500', label: t('calls') },
     { path: '/terms', icon: FileText, color: 'text-teal-500', label: t('terms') },
     { path: '/support', icon: Headphones, color: 'text-cyan-500', label: t('support') },
+    { path: '/audio', icon: Headphones, color: 'text-indigo-400', label: 'Audio Hub' },
     { path: '/settings', icon: Settings, color: 'text-gray-500', label: t('settings') },
   ];
 

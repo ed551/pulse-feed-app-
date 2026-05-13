@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, getDocFromServer, doc, setLogLevel } from 'firebase/firestore';
+import { initializeFirestore, getDocFromServer, doc, setLogLevel, enableNetwork, disableNetwork, getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 // Import the Firebase configuration
@@ -16,40 +16,38 @@ const firestoreDatabaseId = firebaseConfig.firestoreDatabaseId;
 console.log('Initializing Firestore with database ID:', firestoreDatabaseId || '(default)');
 
 // Silence noisy non-fatal Firestore warnings (like idle stream timeouts) in the browser
-setLogLevel('error');
+setLogLevel('debug'); // Increased for diagnostic purposes
 
 // Use a factory-like initialization to prevent multiple initialization errors
-const getDb = (forceLongPolling = false) => {
+const getDb = () => {
+  const dbId = (firestoreDatabaseId && firestoreDatabaseId !== '(default)') ? firestoreDatabaseId : undefined;
+  
+  console.log(`[Firebase] Initializing Firestore with Database ID: ${dbId || '(default)'} in Project: ${firebaseConfig.projectId}`);
+  
   try {
-    const dbId = (firestoreDatabaseId && firestoreDatabaseId !== '(default)') ? firestoreDatabaseId : undefined;
-    
-    // We use initializeFirestore for persistent settings in proxied/IAB environments
-    // forcing long polling is essential for stability in the AI Studio preview
+    // We force long polling for maximum stability in restricted environments.
+    // Host is implicitly handled by the SDK for regional databases unless overridden.
     return initializeFirestore(app, {
-      experimentalAutoDetectLongPolling: !forceLongPolling,
-      experimentalForceLongPolling: forceLongPolling,
+      experimentalForceLongPolling: true,
     }, dbId);
   } catch (e: any) {
     if (e.message.includes('already exists')) {
-      return (app as any)._firestoreInst;
+      console.log('[Firebase] Firestore instance already exists, retrieving existing.');
+      return getFirestore(app, dbId);
     }
-    throw e;
+    console.error('[Firebase] Error during initializeFirestore:', e);
+    return undefined;
   }
 };
 
 let dbInstance: any;
 try {
-  // Try with auto-detect first (more modern)
-  dbInstance = getDb(false);
+  dbInstance = getDb();
 } catch (e) {
-  try {
-    // Fallback to forced long polling (often safer in sandboxes)
-    dbInstance = getDb(true);
-  } catch (inner) {
-    console.error("Firestore initialization failed completely:", inner);
-  }
+  console.error("Firestore initialization failed:", e);
 }
 
+// Export db with fallback to handle initialization failure gracefully
 export const db = dbInstance;
 
 // Initialize Storage
@@ -161,45 +159,81 @@ export async function reconnectFirestore() {
   }
 }
 
-async function testConnection(retries = 3) {
+async function testConnection(retries = 5) {
+  const attempt = 6 - retries;
   try {
     setConnectionStatus('testing');
-    console.log(`Testing Firebase connection (Attempt ${4 - retries}/3)...`);
-    console.log("Project ID:", firebaseConfig.projectId);
-    console.log("Database ID:", firestoreDatabaseId || "(default)");
+    console.log(`Testing Firebase connection (Attempt ${attempt}/5)...`);
     
-    // Attempt to fetch a non-existent document to test connectivity
-    // Using getDocFromServer to bypass cache and force a network check
+    // Using a more robust test: fetch a document that definitely exists and has public read
+    // or just fetch any path to trigger a network roundtrip. 
+    if (!db) {
+      console.warn("Firestore db instance is not available. Skipping connection test.");
+      setConnectionStatus('error');
+      return;
+    }
+    
     const testDocRef = doc(db, '_connection_test_', 'ping');
-    await getDocFromServer(testDocRef);
+    
+    // Timeout-wrapped fetch
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Local fetch timeout (15s)')), 15000)
+    );
+    
+    await Promise.race([
+      getDocFromServer(testDocRef),
+      timeoutPromise
+    ]);
+    
     console.log("Firebase connection confirmed (reached server).");
     setConnectionStatus('connected');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorCode = (error as any)?.code;
     
-    console.warn(`Firestore connection test result: [${errorCode || 'unknown'}] ${errorMessage}`);
+    console.warn(`Firestore connection test attempt failed: [${errorCode || 'unknown'}] ${errorMessage}`);
     
-    if (errorMessage.includes('the client is offline') || errorMessage.includes('unavailable') || errorCode === 'unavailable') {
-      if (retries > 1) {
-        console.warn(`Connection unavailable (Code: ${errorCode}). Retrying in 3s...`);
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        return testConnection(retries - 1);
-      }
-      
-      setConnectionStatus('error');
-      console.error("CRITICAL: Firestore connection failed after multiple attempts.");
-      console.error(`Last Error: [${errorCode}] ${errorMessage}`);
-      console.error(`Troubleshooting: 1. Check if the database '${firestoreDatabaseId || "(default)"}' exists in project '${firebaseConfig.projectId}'. 2. Ensure rules allow read access to '_connection_test_'.`);
-    } else {
-      // Other errors (like 404 or permission denied) actually confirm we ARE online and reaching the server
-      console.log("Firebase connection confirmed (received server response).");
+    // If it's permission-denied, it means WE ARE CONNECTED (otherwise we'd get unavailable)
+    if (errorCode === 'permission-denied') {
+      console.log("Firebase connection confirmed (received permission denial from server).");
       setConnectionStatus('connected');
+      return;
     }
+
+    if (retries > 1) {
+      console.warn(`Retrying in ${attempt * 2}s...`);
+      
+      try {
+        if (db) {
+          await disableNetwork(db);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          await enableNetwork(db);
+        }
+      } catch (e) {
+        console.error("Network reset failed:", e);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+      return testConnection(retries - 1);
+    }
+    
+    setConnectionStatus('error');
+    console.error("CRITICAL: Firestore connection failed after multiple attempts.");
+    console.error(`Diagnostic Info: Project=${firebaseConfig.projectId}, DB=${firestoreDatabaseId || "(default)"}`);
+    console.error(`Check your internet or if the database ID matches your console.`);
   }
 }
 
-// Run connection test in the background
+// Run connection test with a delay to ensure network is initialized
 setTimeout(() => {
+  window.addEventListener('online', () => {
+    console.log("[Network] Browser reports ONLINE");
+    testConnection();
+  });
+  window.addEventListener('offline', () => {
+    console.warn("[Network] Browser reports OFFLINE");
+    setConnectionStatus('error');
+  });
+  
   testConnection().catch(err => console.error("Background connection test failed:", err));
-}, 1000);
+}, 2000);

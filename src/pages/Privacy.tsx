@@ -36,7 +36,7 @@ export default function Privacy() {
           This policy applies to all users globally, with specific sections dedicated to regional regulations such as the General Data Protection Regulation (GDPR) in the European Economic Area (EEA), the California Consumer Privacy Act (CCPA) and California Privacy Rights Act (CPRA) in the United States, the Lei Geral de Proteção de Dados (LGPD) in Brazil, and the Personal Information Protection and Electronic Documents Act (PIPEDA) in Canada.
         </p>
         <p>
-          Pulse Feeds is a multi-dimensional ecosystem. Our privacy practices are designed to be as dynamic as our services, ensuring that whether you are using our AI Eye for community problem solving, engaging in our Education Hub, or interacting in our social feeds, your data is handled with the utmost care and legal precision.
+          Pulse Feeds is a multi-dimensional ecosystem. Our privacy practices are designed to be as dynamic as our services, ensuring that whether you are using our AI Eye for community problem solving, or interacting in our social feeds, your data is handled with the utmost care and legal precision.
         </p>
         <p>
           We are committed to protecting your privacy and ensuring that your personal information is handled in a safe and responsible manner. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our mobile application or website. Please read this privacy policy carefully. If you do not agree with the terms of this privacy policy, please do not access the application.
@@ -72,7 +72,6 @@ export default function Privacy() {
           <li><strong>Profile Data:</strong> Interests, preferences, feedback, and survey responses.</li>
           <li><strong>Social Data:</strong> Connections, followers, and interaction history within the community feeds.</li>
           <li><strong>Dating Data:</strong> Gender identity, sexual orientation (optional), relationship goals, and matching preferences.</li>
-          <li><strong>Educational Data:</strong> Enrolled courses, progress tracking, assessment results, and earned badges.</li>
         </ul>
 
         <h4>3.1.2 Usage and Technical Data</h4>
@@ -102,7 +101,7 @@ export default function Privacy() {
         <ul>
           <li><strong>Prompts:</strong> The text, images, or files you provide to the AI for analysis or generation.</li>
           <li><strong>AI Outputs:</strong> The content generated in response to your prompts.</li>
-          <li><strong>Contextual Metadata:</strong> Information about the session, such as the time of interaction and the specific tool used (e.g., AI Eye, Education Hub).</li>
+          <li><strong>Contextual Metadata:</strong> Information about the session, such as the time of interaction and the specific tool used (e.g., AI Eye).</li>
         </ul>
         <p>
           This data is used to personalize your experience. We may also use anonymized and aggregated interaction data to fine-tune our AI models and improve the accuracy of our community problem-solving algorithms.
@@ -128,7 +127,6 @@ export default function Privacy() {
         <h3>4.2 Feature-Specific Processing</h3>
         <ul>
           <li><strong>AI Eye:</strong> To analyze community reports, categorize real-world problems, and facilitate communication with community leaders.</li>
-          <li><strong>Education Hub:</strong> To personalize learning paths, track progress, and award digital badges.</li>
           <li><strong>Dating Hub:</strong> To facilitate matches based on your preferences and interaction history.</li>
           <li><strong>Reward System:</strong> To calculate Pulse Points, manage your wallet, and process monthly withdrawals.</li>
           <li><strong>Social Feeds:</strong> To curate content that matches your interests and facilitate community engagement.</li>
@@ -281,17 +279,7 @@ export default function Privacy() {
           This data is shared with verified community leaders in an aggregated and anonymized format to protect your specific identity while ensuring the problem is addressed.
         </p>
 
-        <h2>17. Detailed Data Processing for Education Hub</h2>
-        <p>
-          Our Education Hub tracks your learning journey to provide a personalized experience:
-        </p>
-        <ul>
-          <li><strong>Engagement Metrics:</strong> Time spent on modules, quiz scores, and interaction frequency are tracked.</li>
-          <li><strong>AI Personalization:</strong> The AI Brain uses your progress to suggest relevant courses and adjust difficulty.</li>
-          <li><strong>Credentialing:</strong> Your completion data is used to generate verifiable digital badges and certificates.</li>
-        </ul>
-
-        <h2>18. Detailed Data Processing for Dating Hub</h2>
+        <h2>17. Detailed Data Processing for Dating Hub</h2>
         <p>
           The Dating Hub requires sensitive data processing to facilitate meaningful connections:
         </p>
@@ -306,7 +294,7 @@ export default function Privacy() {
           Financial transparency and compliance are paramount:
         </p>
         <ul>
-          <li><strong>Wallet Activity:</strong> Every Pulse Point earned is logged with a detailed timestamp and source identifier. We maintain a transparent ledger of revenue splits (50/50 for general activity, 80/20 for education) to ensure users can verify their Salary accruals against platform metrics.</li>
+          <li><strong>Wallet Activity:</strong> Every Pulse Point earned is logged with a detailed timestamp and source identifier. We maintain a transparent ledger of revenue splits to ensure users can verify their Salary accruals against platform metrics.</li>
           <li><strong>KYC (Know Your Customer):</strong> For large withdrawals, we may require identity verification to comply with anti-money laundering (AML) laws.</li>
         </ul>
 

@@ -13,7 +13,7 @@ export interface Insight {
 }
 
 export async function saveInsight(type: InsightType, category: InsightCategory, content: string) {
-  if (!auth.currentUser) return;
+  if (!auth.currentUser || !db) return;
   
   try {
     // Generate a highly unique ID to prevent any potential collisions or "Already Exists" errors

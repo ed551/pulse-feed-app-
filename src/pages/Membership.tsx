@@ -94,7 +94,7 @@ export default function Membership() {
       // Since we center on "making money", let's simulate a checkout
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      if (currentUser) {
+      if (currentUser && db) {
         await updateDoc(doc(db, 'users', currentUser.uid), {
           membershipLevel: tierId,
           membershipStatus: 'active',

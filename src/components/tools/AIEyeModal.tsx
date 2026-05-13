@@ -99,7 +99,7 @@ export default function AIEyeModal({ onClose }: AIEyeModalProps) {
         setAiAdvice(advice);
         speakAdvice(advice);
 
-        if (advice.includes("BADGE:") && currentUser) {
+        if (advice.includes("BADGE:") && currentUser && db) {
           const badgeMatch = advice.match(/BADGE:\s*(.*)/i);
           const badgeName = badgeMatch ? badgeMatch[1].trim() : "Insight Seeker";
           

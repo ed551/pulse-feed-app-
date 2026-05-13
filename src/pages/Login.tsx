@@ -9,7 +9,7 @@ import { isBiometricsSupported, authenticateBiometric } from '../lib/biometrics'
 import { isIframe, getPasskeyErrorLinkMessage, checkPasskeyCapability } from '../lib/iframeUtils';
 
 export default function Login() {
-  const { loginWithGoogle, loginWithEmail, signupWithEmail, logout, isFacebookApp, currentUser, userData, isMfaVerified, setIsMfaVerified, sessionError, setSessionError } = useAuth();
+  const { loginWithGoogle, loginWithEmail, signupWithEmail, logout, isFacebookApp, currentUser, userData, isMfaVerified, setIsMfaVerified, sessionError, setSessionError, sendVerificationEmail } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState('');
@@ -44,12 +44,13 @@ export default function Login() {
   
   // 2FA states
   const [mfaStep, setMfaStep] = useState<'none' | 'challenge'>('none');
-  const [mfaType, setMfaType] = useState<'email_otp' | 'biometric' | 'totp' | 'passkey'>('email_otp');
+  const [mfaType, setMfaType] = useState<'email_otp' | 'biometric' | 'totp' | 'passkey' | 'sms_otp'>('email_otp');
   const [phone, setPhone] = useState('');
   const [totpSecret, setTotpSecret] = useState('');
   const [otp, setOtp] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
   const [isSendingOtp, setIsSendingOtp] = useState(false);
-  const [mfaMethod, setMfaMethod] = useState<'email' | 'biometric' | 'totp' | 'passkey'>('email');
+  const [mfaMethod, setMfaMethod] = useState<'email' | 'biometric' | 'totp' | 'passkey' | 'sms'>('email');
 
   useEffect(() => {
     setBiometricSupported(isBiometricsSupported());
@@ -65,7 +66,8 @@ export default function Login() {
       setMfaStep('challenge');
       const method = userData.twoFactorType === 'passkey' ? 'passkey' :
                      userData.twoFactorType === 'biometric' ? 'biometric' : 
-                     userData.twoFactorType === 'totp' ? 'totp' : 'email';
+                     userData.twoFactorType === 'totp' ? 'totp' : 
+                     userData.twoFactorType === 'sms_otp' ? 'sms' : 'email';
       setMfaMethod(method as any);
 
       // Auto-trigger passkey if selected
@@ -77,6 +79,31 @@ export default function Login() {
 
   const handleMfaPasskey = async () => {
     if (!currentUser) return;
+    
+    if (isIframe()) {
+      const width = 500;
+      const height = 600;
+      const left = window.screenX + (window.outerWidth - width) / 2;
+      const top = window.screenY + (window.outerHeight - height) / 2;
+      
+      const popup = window.open(
+        `#/passkey-auth?userId=${currentUser.uid}&type=auth`,
+        'Passkey Authentication',
+        `width=${width},height=${height},left=${left},top=${top},status=no,menubar=no,toolbar=no`
+      );
+
+      const handleMessage = (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        if (event.data?.type === 'passkey-success') {
+          setIsMfaVerified(true);
+          navigate(from, { replace: true });
+          window.removeEventListener('message', handleMessage);
+        }
+      };
+      window.addEventListener('message', handleMessage);
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
@@ -150,6 +177,7 @@ export default function Login() {
         body: JSON.stringify({
           userId: currentUser.uid,
           email: currentUser.email,
+          phoneNumber: userData?.phoneNumber || phoneInput,
           method: mfaMethod
         })
       });
@@ -243,6 +271,11 @@ export default function Login() {
       return;
     }
 
+    if (mode === 'signup' && signupStep === 2 && mfaType === 'sms_otp' && !phoneInput) {
+      setError('Please enter your phone number');
+      return;
+    }
+
     if (mode === 'signup' && signupStep === 2 && !mfaType) {
       setError('Please select a security method');
       return;
@@ -255,13 +288,17 @@ export default function Login() {
         const isSkipping = signupStep === 2 && !mfaType;
         await signupWithEmail(email, password, name, isSkipping ? undefined : { 
           type: mfaType as any, 
+          phone: phoneInput || undefined,
           secret: mfaType === 'totp' ? totpSecret : undefined
         });
+        
+        // After successful signup, send verification email if it's email signup
+        await sendVerificationEmail();
+        navigate('/verify-email');
       } else {
         await loginWithEmail(email, password);
       }
-      // Note: We no longer navigate here. The useEffect logic will detect if MFA is required
-      // or if it's already verified and then navigate.
+      // Note: For login, navigation is handled by useEffect
     } catch (err: any) {
       let displayError = err.message || 'Failed to authenticate';
       
@@ -384,6 +421,7 @@ To fix this:
                     {mfaMethod === 'biometric' ? 'Use face/fingerprint authentication' : 
                      mfaMethod === 'passkey' ? 'Use your Passkey (Biometrics/Security Key)' :
                      mfaMethod === 'totp' ? 'Enter the code from Google Authenticator' :
+                     mfaMethod === 'sms' ? 'Check your messages for a 6-digit code' : 
                      'Check your inbox for a 6-digit code'}
                   </p>
                 </div>
@@ -431,7 +469,7 @@ To fix this:
                   disabled={loading}
                   className="w-full py-4 bg-orange-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-orange-500/30 hover:bg-orange-700 transition-all flex items-center justify-center gap-2"
                 >
-                  {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <><ShieldCheck className="w-5 h-5" /> Authenticate with Passkey</>}
+                  {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : isIframe() ? "Complete Authentication" : <><ShieldCheck className="w-5 h-5" /> Authenticate with Passkey</>}
                 </button>
               ) : (
                 <button
@@ -556,6 +594,36 @@ To fix this:
                     <p className="text-[10px] text-gray-500">Fast & reliable via inbox</p>
                   </div>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMfaType('sms_otp')}
+                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${mfaType === 'sms_otp' ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-500' : 'bg-gray-50 dark:bg-gray-900 border-gray-100 dark:border-gray-700'}`}
+                >
+                  <div className={`p-2 rounded-lg ${mfaType === 'sms_otp' ? 'bg-orange-500 text-white' : 'bg-gray-200 dark:bg-gray-800 text-gray-500'}`}>
+                    <Smartphone className="w-4 h-4" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-xs font-bold text-gray-900 dark:text-white">SMS Verification</p>
+                    <p className="text-[10px] text-gray-500">Secure code via text message</p>
+                  </div>
+                </button>
+
+                {mfaType === 'sms_otp' && (
+                  <div className="px-1 animate-in fade-in slide-in-from-top-1">
+                    <div className="relative">
+                      <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="tel"
+                        placeholder="Phone Number (e.g. +254...)"
+                        value={phoneInput}
+                        onChange={(e) => setPhoneInput(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-900/30 rounded-xl text-sm focus:ring-2 focus:ring-orange-500 outline-none transition-all dark:text-white"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
 
           {biometricSupported && (
             <>

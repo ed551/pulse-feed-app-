@@ -253,5 +253,10 @@ service cloud.firestore {
         allow delete: if isAdmin();
       }
     }
+
+    // Diagnostics
+    match /_connection_test_/{docId} {
+      allow read: if true;
+    }
   }
 }

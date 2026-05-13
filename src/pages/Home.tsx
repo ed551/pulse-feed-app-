@@ -4,7 +4,7 @@ import {
   Send, Loader2, AlertTriangle, Search, Filter, X, TrendingUp, TrendingDown, Minus,
   LayoutGrid, Globe, Gem, Smartphone, FileText, Gamepad2, DollarSign, Calendar, Clock,
   Mail, Map, Youtube, Image, Languages, ExternalLink, Eye, Camera, Award, Sparkles, Volume2, VolumeX,
-  Home as HomeIcon, Flag, BarChart2, Megaphone, RefreshCw, Radio, Video, Type, Smile,
+  Home as HomeIcon, Flag, BarChart2, Megaphone, RefreshCw, Radio, Video, Type, Smile, Tv,
   PlusCircle, MinusCircle, Bookmark, EyeOff, Bell, Link, XCircle, AlertCircle, Copy, Crown,
   ThumbsUp, Pencil, Trash2, GraduationCap, ArrowUpRight, ShieldAlert
 } from "lucide-react";
@@ -48,26 +48,6 @@ export default function Home() {
   } = useOutletContext<any>();
   const { posts: firebasePosts, updatePost, deletePost, loading: postsLoading } = usePosts();
   const { currentUser, loading: authLoading } = useAuth();
-  const [dbStatus, setDbStatus] = useState<'testing' | 'online' | 'offline'>('testing');
-
-  useEffect(() => {
-    async function testConnection() {
-      try {
-        // Test connection to Firestore
-        await getDocFromServer(doc(db, 'system', 'health'));
-        setDbStatus('online');
-      } catch (error) {
-        // If it's just a missing doc or permission denied, that's fine, it means we're connected
-        if (error instanceof Error && error.message.includes('the client is offline')) {
-          console.error("Firebase Connection Test:", error);
-          setDbStatus('offline');
-        } else {
-          setDbStatus('online'); // Connected but doc doesn't exist or permission denied
-        }
-      }
-    }
-    testConnection();
-  }, []);
   const [activeCommentPostId, setActiveCommentPostId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [isPostingComment, setIsPostingComment] = useState(false);
@@ -219,6 +199,10 @@ export default function Home() {
       return;
     }
     try {
+      if (!db) {
+        alert("Firestore is not available. Please try again later.");
+        return;
+      }
       await setDoc(doc(db, 'users', currentUser.uid, 'saved_posts', postId), {
         postId,
         savedAt: serverTimestamp()
@@ -379,25 +363,6 @@ export default function Home() {
         <NewsFeed />
       </div>
 
-      {dbStatus === 'offline' && (
-        <div className="mx-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-2xl flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
-              <ShieldAlert className="w-5 h-5 text-red-600 dark:text-red-400" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-red-800 dark:text-red-300">Connection Interrupted</p>
-              <p className="text-xs text-red-600 dark:text-red-400">Cloud Firestore is currently unreachable. Some features may be limited.</p>
-            </div>
-          </div>
-          <button 
-            onClick={() => window.location.reload()}
-            className="px-3 py-1 bg-red-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-red-700 transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      )}
       <div className="px-6 pt-6">
         <AdUnit slotId="home-top-banner" />
       </div>
@@ -526,7 +491,6 @@ export default function Home() {
           {[
             { label: t('watch_ads'), icon: PlayCircle, path: '/ads', color: 'bg-indigo-400/30' },
             { label: t('complete_task'), icon: CheckCircle2, path: '/rewards', color: 'bg-purple-400/30' },
-            { label: t('study_ai'), icon: GraduationCap, path: '/education', color: 'bg-pink-400/30' },
             { label: t('daily_bonus'), icon: Gem, path: '/rewards', color: 'bg-white/20' }
           ].map((item, i) => (
             <button 

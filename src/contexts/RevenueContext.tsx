@@ -49,7 +49,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const POINTS_PER_INTERVAL = 2.5; // Adjusted for 30s
 
   const syncPendingToFirestore = async () => {
-    if (!currentUser || pendingUserPointsRef.current <= 0) return;
+    if (!currentUser || !db || pendingUserPointsRef.current <= 0) return;
     
     const userPts = pendingUserPointsRef.current;
     const userVal = pendingUserValueRef.current;
@@ -150,6 +150,11 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       console.warn("[API Revenue] Server log failed, falling back to client-side direct Firestore update.");
 
+      if (!db) {
+        console.warn("Firestore not available for revenue fallback logging.");
+        return;
+      }
+
       // 2. Fallback to direct Firestore if API fails
       const userRef = doc(db, 'users', currentUser.uid);
       const statsRef = doc(db, 'platform', 'stats');
@@ -236,6 +241,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const addPlatformRevenue = async (amount: number, reason: string) => {
+    if (!db) return;
     try {
       const statsRef = doc(db, 'platform', 'stats');
       await updateDoc(statsRef, {
@@ -273,6 +279,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const addPlatformExpense = async (amount: number, reason: string) => {
+    if (!db) return;
     try {
       const statsRef = doc(db, 'platform', 'stats');
       await updateDoc(statsRef, {

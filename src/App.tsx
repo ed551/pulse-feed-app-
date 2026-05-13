@@ -19,9 +19,7 @@ const Profile = lazy(() => import("./pages/Profile"));
 const Contacts = lazy(() => import("./pages/Contacts"));
 const Messages = lazy(() => import("./pages/Messages"));
 const Login = lazy(() => import("./pages/Login"));
-const Education = lazy(() => import("./pages/Education"));
 const Events = lazy(() => import("./pages/Events"));
-const Dating = lazy(() => import("./pages/Dating"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const Calls = lazy(() => import("./pages/Calls"));
@@ -34,6 +32,8 @@ const AdsDashboard = lazy(() => import("./pages/AdsDashboard"));
 const GeminiLab = lazy(() => import("./pages/GeminiLab"));
 const Membership = lazy(() => import("./pages/Membership"));
 const AudioHub = lazy(() => import("./pages/AudioHub"));
+const PasskeyAuth = lazy(() => import("./pages/PasskeyAuth"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 
 import HealthChecker from "./components/HealthChecker";
 import { IdleAILock } from "./components/IdleAILock";
@@ -127,19 +127,9 @@ export default function App() {
                       <PlatformDashboard />
                     </AdminRoute>
                   } />
-                  <Route path="education" element={
-                    <ProtectedRoute>
-                      <Education />
-                    </ProtectedRoute>
-                  } />
                   <Route path="events" element={
                     <ProtectedRoute>
                       <Events />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="dating" element={
-                    <ProtectedRoute>
-                      <Dating />
                     </ProtectedRoute>
                   } />
                   <Route path="community" element={
@@ -207,6 +197,8 @@ export default function App() {
                       <AudioHub />
                     </ProtectedRoute>
                   } />
+                  <Route path="passkey-auth" element={<PasskeyAuth />} />
+                  <Route path="verify-email" element={<VerifyEmail />} />
                 </Route>
               </Routes>
             </Suspense>

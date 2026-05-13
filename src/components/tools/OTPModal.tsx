@@ -6,16 +6,18 @@ import { cn } from '../../lib/utils';
 interface OTPModalProps {
   userId: string;
   email?: string;
-  method: 'email' | 'totp' | 'sms'; // Keep sms in type for legacy if needed, or remove it
+  phoneNumber?: string;
+  method: 'email' | 'totp' | 'sms'; 
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export default function OTPModal({ userId, email, method, onClose, onSuccess }: OTPModalProps) {
+export default function OTPModal({ userId, email, phoneNumber, method, onClose, onSuccess }: OTPModalProps) {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [devOtp, setDevOtp] = useState<string | null>(null);
   const [timer, setTimer] = useState(method === 'totp' ? 0 : 60);
   const [canResend, setCanResend] = useState(method === 'totp');
   const inputRefs = React.useRef<(HTMLInputElement | null)[]>([]);
@@ -47,11 +49,17 @@ export default function OTPModal({ userId, email, method, onClose, onSuccess }: 
       const res = await fetch('/api/otp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, email, method })
+        body: JSON.stringify({ userId, email, phoneNumber, method })
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || "Failed to send code");
       
+      if (data.devOtp) {
+        setDevOtp(data.devOtp);
+      } else {
+        setDevOtp(null);
+      }
+
       setTimer(60);
       setCanResend(false);
     } catch (err: any) {
@@ -134,6 +142,25 @@ export default function OTPModal({ userId, email, method, onClose, onSuccess }: 
           )}
         </p>
       </div>
+      
+      {devOtp && (
+        <div className="p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/20 rounded-xl w-full animate-in zoom-in-95">
+          <p className="text-[10px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest mb-1">Preview Environment Code</p>
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-2xl font-mono font-black text-amber-600 dark:text-amber-500 tracking-[0.2em]">{devOtp}</span>
+            <button 
+              onClick={() => {
+                setOtp(devOtp.split(''));
+                verifyOTP(devOtp);
+              }}
+              className="px-3 py-1 bg-amber-600 text-white rounded-lg text-[9px] font-black uppercase tracking-tighter"
+            >
+              Auto-Fill
+            </button>
+          </div>
+          <p className="text-[9px] text-amber-700/60 dark:text-amber-400/60 mt-1 italic">This shows only in the preview/test environment.</p>
+        </div>
+      )}
 
       <div className="flex gap-2 justify-center">
         {otp.map((digit, i) => (

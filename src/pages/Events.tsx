@@ -40,7 +40,7 @@ export default function Events() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleBuyTicket = async (event: Event) => {
-    if (!auth.currentUser || !userData || !event.price) return;
+    if (!auth.currentUser || !userData || !event.price || !db) return;
     setIsProcessing(true);
 
     if ((userData.balance || 0) < event.price) {
@@ -76,7 +76,7 @@ export default function Events() {
   };
 
   const handleSponsorEvent = async (event: Event) => {
-    if (!auth.currentUser || !userData) return;
+    if (!auth.currentUser || !userData || !db) return;
     // Sponsorship Fee: $100.00
     // 100% Platform revenue
     const fee = 100.00;
@@ -100,6 +100,10 @@ export default function Events() {
   };
 
   useEffect(() => {
+    if (!db) {
+        setLoading(false);
+        return;
+    }
     const q = query(collection(db, 'events'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       if (snapshot.empty) {
@@ -164,10 +168,10 @@ export default function Events() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [db]);
 
   const handleRSVP = async (eventId: string) => {
-    if (!auth.currentUser || !userData) return;
+    if (!auth.currentUser || !userData || !db) return;
     
     const eventRef = doc(db, 'events', eventId);
     const event = events.find(e => e.id === eventId);
@@ -206,7 +210,7 @@ export default function Events() {
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth.currentUser) return;
+    if (!auth.currentUser || !db) return;
 
     try {
       await addDoc(collection(db, 'events'), {

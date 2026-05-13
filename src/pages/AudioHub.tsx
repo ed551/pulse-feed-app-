@@ -35,6 +35,10 @@ export default function AudioHub() {
   useEffect(() => {
     // Generate the platform briefing text
     const generateBriefing = async () => {
+      if (!db) {
+        setBriefingText("Welcome to Pulse Audio. Connection established. Stay tuned for platform updates.");
+        return;
+      }
       try {
         const statsSnap = await getDoc(doc(db, "platform", "stats"));
         const data = statsSnap.data();

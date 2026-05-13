@@ -14,7 +14,40 @@ export default function PasskeyModal({ userId, onClose, onSuccess }: PasskeyModa
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [isIframe, setIsIframe] = useState(false);
+
+  useEffect(() => {
+    setIsIframe(window.self !== window.top);
+    
+    // Listen for success message from popup
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'passkey-success') {
+        onSuccess();
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  const handleOpenPopup = () => {
+    const width = 500;
+    const height = 600;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+    
+    window.open(
+      `#/passkey-auth?userId=${userId}&type=auth`,
+      'Passkey Authentication',
+      `width=${width},height=${height},left=${left},top=${top},status=no,menubar=no,toolbar=no`
+    );
+  };
+
   const handleAuthenticate = async () => {
+    if (isIframe) {
+      setError("This security prompt requires top-level access. Please use the button below.");
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
@@ -104,13 +137,22 @@ export default function PasskeyModal({ userId, onClose, onSuccess }: PasskeyModa
       </AnimatePresence>
 
       <div className="w-full space-y-3">
-        <button
-          onClick={handleAuthenticate}
-          disabled={isLoading}
-          className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold transition-all shadow-lg shadow-indigo-500/20 active:scale-95 disabled:opacity-50"
-        >
-          {isLoading ? "Verrifying..." : "Try Again"}
-        </button>
+        {isIframe ? (
+          <button
+            onClick={handleOpenPopup}
+            className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
+          >
+            Complete Authentication
+          </button>
+        ) : (
+          <button
+            onClick={handleAuthenticate}
+            disabled={isLoading}
+            className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold transition-all shadow-lg shadow-indigo-500/20 active:scale-95 disabled:opacity-50"
+          >
+            {isLoading ? "Verifying..." : "Try Again"}
+          </button>
+        )}
         
         <button
           onClick={onClose}

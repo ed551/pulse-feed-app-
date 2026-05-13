@@ -31,7 +31,7 @@ export default function Contacts() {
   const [activeMenuContactId, setActiveMenuContactId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
 
     // Fetch Pulse Feeds community members
     const q = query(
@@ -101,7 +101,7 @@ export default function Contacts() {
   };
 
   const handleBlockContact = async (contactId: string) => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     try {
       await updateDoc(doc(db, 'users', currentUser.uid), {
         blockedUsers: arrayUnion(contactId)

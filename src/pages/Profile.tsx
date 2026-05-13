@@ -99,7 +99,7 @@ export default function Profile() {
   };
 
   const handleRecoverPoints = async () => {
-    if (!currentUser || isRecovering) return;
+    if (!currentUser || !db || isRecovering) return;
     
     setIsRecovering(true);
     try {
@@ -226,7 +226,7 @@ export default function Profile() {
 
     const base64Image = canvas.toDataURL('image/jpeg');
     
-    if (currentUser) {
+    if (currentUser && db) {
       try {
         // Upload to Firebase Storage
         const storageRef = ref(storage, `avatars/${currentUser.uid}`);
@@ -282,7 +282,7 @@ export default function Profile() {
       }
 
       // If approved, save
-      if (currentUser) {
+      if (currentUser && db) {
         await updateDoc(doc(db, 'users', currentUser.uid), {
           bio: tempBio
         });

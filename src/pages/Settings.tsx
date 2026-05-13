@@ -63,26 +63,13 @@ export default function Settings() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isPasskeyAuthenticating, setIsPasskeyAuthenticating] = useState(false);
   const [passkeyAuthorized, setPasskeyAuthorized] = useState(false);
-
-  // Dating states
-  const [isDatingActive, setIsDatingActive] = useState(userData?.isDatingActive || false);
-  const [datingTribe, setDatingTribe] = useState(userData?.tribe || "");
-  const [datingRadius, setDatingRadius] = useState(userData?.radius || 50);
-  const [datingAge, setDatingAge] = useState(userData?.age || 18);
-  const [datingGender, setDatingGender] = useState(userData?.gender || "Male");
-  const [datingLocation, setDatingLocation] = useState(userData?.location || "");
-  const [datingHobbies, setDatingHobbies] = useState(userData?.hobbies?.join(", ") || "");
-  const [datingJob, setDatingJob] = useState(userData?.job || "");
-  const [datingReligion, setDatingReligion] = useState(userData?.religion || "");
-  const [datingFoods, setDatingFoods] = useState(userData?.foods?.join(", ") || "");
-  const [datingEducation, setDatingEducation] = useState(userData?.education || "");
-  const [datingStatus, setDatingStatus] = useState(userData?.status || "Single");
-  const [datingSports, setDatingSports] = useState(userData?.sports?.join(", ") || "");
   const [language, setLanguage] = useState(userData?.language || "en");
   const [timezone, setTimezone] = useState(userData?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [timeFormat, setTimeFormat] = useState(userData?.timeFormat || "24h");
   const [dateFormat, setDateFormat] = useState(userData?.dateFormat || "DD/MM/YYYY");
   const [isSportsWatchPrecise, setIsSportsWatchPrecise] = useState(userData?.isSportsWatchPrecise ?? true);
+  const [phoneNumber, setPhoneNumber] = useState(userData?.phoneNumber || "");
+  const [isVerifyingPhone, setIsVerifyingPhone] = useState(false);
   const [healthInterval, setHealthInterval] = useState(() => localStorage.getItem('pulse_health_interval') || 'daily');
   const [newsInterval, setNewsInterval] = useState(() => localStorage.getItem('pulse_news_interval') || '1h');
 
@@ -118,7 +105,7 @@ export default function Settings() {
   }, [userData?.activeSessions]);
 
   const clearOtherSessions = async () => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     try {
       const userRef = doc(db, 'users', currentUser.uid);
       const mySessionId = sessionStorage.getItem('pulse_session_id');
@@ -143,29 +130,17 @@ export default function Settings() {
     if (currentUser?.email) setEmail(currentUser.email);
     
     if (userData) {
-      setIsDatingActive(userData.isDatingActive || false);
-      setDatingTribe(userData.tribe || "");
-      setDatingRadius(userData.radius || 50);
-      setDatingAge(userData.age || 18);
-      setDatingGender(userData.gender || "Male");
-      setDatingLocation(userData.location || "");
-      setDatingHobbies(userData.hobbies?.join(", ") || "");
-      setDatingJob(userData.job || "");
-      setDatingReligion(userData.religion || "");
-      setDatingFoods(userData.foods?.join(", ") || "");
-      setDatingEducation(userData.education || "");
-      setDatingStatus(userData.status || "Single");
-      setDatingSports(userData.sports?.join(", ") || "");
       setLanguage(userData.language || "en");
       setTimezone(userData.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
       setTimeFormat(userData.timeFormat || "24h");
       setDateFormat(userData.dateFormat || "DD/MM/YYYY");
       setIsSportsWatchPrecise(userData.isSportsWatchPrecise ?? true);
+      setPhoneNumber(userData.phoneNumber || "");
     }
   }, [currentUser, userData]);
 
   const handleSaveProfile = async () => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     setIsSaving(true);
     try {
       await updateDoc(doc(db, 'users', currentUser.uid), {
@@ -185,51 +160,40 @@ export default function Settings() {
     setShowFingerprintModal(true);
   };
 
-  const handleFingerprintSuccess = () => {
+  const handleFingerprintSuccess = async () => {
     setShowFingerprintModal(false);
     if (pendingAction === 'delete') {
       alert("Identity verified. Account deletion process initiated. You will be logged out shortly.");
       // In a real app, you'd call a backend function to delete the account
     } else if (pendingAction === 'security') {
       setActiveSection('security-details');
+    } else if (pendingAction === 'verify_phone') {
+      if (!currentUser || !db) return;
+      try {
+        await updateDoc(doc(db, 'users', currentUser.uid), {
+          phoneNumber: phoneNumber,
+          phoneNumberVerified: true
+        });
+        alert("Phone number verified and linked!");
+      } catch (err) {
+        console.error(err);
+        alert("Failed to link phone number.");
+      }
     }
     setPendingAction(null);
   };
 
-  const handleSaveDatingProfile = async () => {
-    if (!currentUser) return;
-    setIsSaving(true);
-    try {
-      await updateDoc(doc(db, 'users', currentUser.uid), {
-        isDatingActive,
-        tribe: datingTribe,
-        radius: Number(datingRadius),
-        age: Number(datingAge),
-        gender: datingGender,
-        location: datingLocation,
-        hobbies: datingHobbies.split(",").map(s => s.trim()).filter(s => s !== ""),
-        job: datingJob,
-        religion: datingReligion,
-        foods: datingFoods.split(",").map(s => s.trim()).filter(s => s !== ""),
-        education: datingEducation,
-        status: datingStatus,
-        sports: datingSports.split(",").map(s => s.trim()).filter(s => s !== "")
-      });
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (error) {
-      console.error("Error updating dating profile:", error);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const handleUpdate2FA = async (type: string) => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     
     // If it's a passkey and not registered, we handle registration first
     if (type === 'passkey' && !userData?.passkeyRegistered) {
       await handleRegisterPasskey();
+      return;
+    }
+
+    if (type === 'sms' && !userData?.phoneNumber) {
+      alert("Please provide and verify your phone number before enabling SMS 2FA.");
       return;
     }
 
@@ -255,12 +219,35 @@ export default function Settings() {
   const handleRegisterPasskey = async () => {
     if (!currentUser) return;
     
-    if (isIframe() && !window.PublicKeyCredential) {
-      alert(getPasskeyErrorLinkMessage());
+    if (isIframe()) {
+      const width = 500;
+      const height = 600;
+      const left = window.screenX + (window.outerWidth - width) / 2;
+      const top = window.screenY + (window.outerHeight - height) / 2;
+      
+      const popup = window.open(
+        `#/passkey-auth?userId=${currentUser.uid}&type=reg`,
+        'Passkey Registration',
+        `width=${width},height=${height},left=${left},top=${top},status=no,menubar=no,toolbar=no`
+      );
+
+      const handleMessage = (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        if (event.data?.type === 'passkey-success' && event.data?.flow === 'registration') {
+          window.removeEventListener('message', handleMessage);
+          // Refresh user data is handled by Firestore listeners usually, 
+          // but we can manually trigger a small alert or state change
+          alert("Passkey Registered Successfully!");
+        }
+      };
+      window.addEventListener('message', handleMessage);
       return;
     }
 
-    setIsSaving(true);
+    if (!window.PublicKeyCredential) {
+      alert("Biometric authentication is not supported by this browser.");
+      return;
+    }
     try {
       // 1. Get options from server
       const resp = await fetch('/api/auth/passkey/generate-registration-options', {
@@ -291,12 +278,14 @@ export default function Settings() {
       });
 
       const verification = await verifyResp.json();
-      if (verification.verified) {
+      if (verification.verified && db) {
         await updateDoc(doc(db, 'users', currentUser.uid), {
           twoFactorType: 'passkey',
           passkeyRegistered: true
         });
         alert("Passkey Registered Successfully! Your 2FA is now set to Passkey.");
+      } else if (verification.verified && !db) {
+        alert("Passkey verified but database is unavailable. Please try again later.");
       } else {
         throw new Error(verification.error || "Verification failed");
       }
@@ -315,7 +304,7 @@ export default function Settings() {
   };
 
   const handleToggle2FA = async (enabled: boolean) => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     try {
       await updateDoc(doc(db, 'users', currentUser.uid), {
         twoFactorEnabled: enabled
@@ -326,7 +315,7 @@ export default function Settings() {
   };
 
   const handleUpdateTheme = async (newTheme: 'light' | 'dark' | 'system') => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     setTheme(newTheme);
     try {
       await updateDoc(doc(db, 'users', currentUser.uid), {
@@ -347,7 +336,7 @@ export default function Settings() {
   };
 
   const handleUpdateFilters = async (key: string, value: any) => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     const newFilters = { ...contentFilters, [key]: value };
     setContentFilters(newFilters);
     try {
@@ -360,7 +349,7 @@ export default function Settings() {
   };
 
   const handleUpdateLocale = async (key: 'language' | 'timezone' | 'timeFormat' | 'dateFormat' | 'isSportsWatchPrecise', value: any) => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     if (key === 'language') setLanguage(value);
     if (key === 'timezone') setTimezone(value);
     if (key === 'timeFormat') setTimeFormat(value as string);
@@ -377,7 +366,7 @@ export default function Settings() {
   };
 
   const handleUnblock = async (id: string, type: 'user' | 'group') => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     try {
       const field = type === 'user' ? 'blockedUsers' : 'blockedGroups';
       const currentList = userData?.[field] || [];
@@ -708,171 +697,6 @@ export default function Settings() {
       )
     },
     {
-      id: 'dating',
-      title: t('dating_profile'),
-      description: t('dating_profile_desc'),
-      icon: <Heart className="w-5 h-5 text-pink-500" />,
-      content: (
-        <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-          <div className="flex items-center justify-between p-3 bg-pink-50 dark:bg-pink-900/10 rounded-xl border border-pink-100 dark:border-pink-900/30 mb-4">
-            <div>
-              <p className="text-sm font-bold text-pink-900 dark:text-pink-300">{t('dating_hub_active')}</p>
-              <p className="text-[10px] text-pink-700/70 dark:text-pink-400/70">{t('dating_hub_desc')}</p>
-            </div>
-            <button 
-              onClick={() => setIsDatingActive(!isDatingActive)}
-              className={cn(
-                "w-12 h-6 rounded-full relative transition-colors",
-                isDatingActive ? "bg-pink-500" : "bg-gray-300 dark:bg-gray-600"
-              )}
-            >
-              <div className={cn(
-                "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
-                isDatingActive ? "right-1" : "left-1"
-              )} />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('tribe')}</label>
-              <input 
-                type="text" 
-                value={datingTribe}
-                onChange={(e) => setDatingTribe(e.target.value)}
-                placeholder="e.g. Kikuyu"
-                className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('radius_km')}</label>
-              <input 
-                type="number" 
-                value={datingRadius}
-                onChange={(e) => setDatingRadius(Number(e.target.value))}
-                className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('age')}</label>
-              <input 
-                type="number" 
-                value={datingAge}
-                onChange={(e) => setDatingAge(Number(e.target.value))}
-                className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('sex')}</label>
-              <select 
-                value={datingGender}
-                onChange={(e) => setDatingGender(e.target.value)}
-                className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
-              >
-                <option value="Male">{t('male')}</option>
-                <option value="Female">{t('female')}</option>
-                <option value="Other">{t('other')}</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('location')}</label>
-              <input 
-                type="text" 
-                value={datingLocation}
-                onChange={(e) => setDatingLocation(e.target.value)}
-                placeholder="City, Country"
-                className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('favourite_job')}</label>
-              <input 
-                type="text" 
-                value={datingJob}
-                onChange={(e) => setDatingJob(e.target.value)}
-                placeholder="Software Engineer"
-                className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('religion')}</label>
-              <input 
-                type="text" 
-                value={datingReligion}
-                onChange={(e) => setDatingReligion(e.target.value)}
-                placeholder="Christian"
-                className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('education')}</label>
-              <input 
-                type="text" 
-                value={datingEducation}
-                onChange={(e) => setDatingEducation(e.target.value)}
-                placeholder="University Degree"
-                className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('status')}</label>
-              <select 
-                value={datingStatus}
-                onChange={(e) => setDatingStatus(e.target.value)}
-                className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
-              >
-                <option value="Single">{t('single')}</option>
-                <option value="Married">{t('married')}</option>
-                <option value="Divorced">{t('divorced')}</option>
-                <option value="Widower">{t('widower')}</option>
-                <option value="Widowee">{t('widowee')}</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('hobbies_comma')}</label>
-            <input 
-              type="text" 
-              value={datingHobbies}
-              onChange={(e) => setDatingHobbies(e.target.value)}
-              placeholder="Reading, Travel, Music"
-              className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('foods_comma')}</label>
-            <input 
-              type="text" 
-              value={datingFoods}
-              onChange={(e) => setDatingFoods(e.target.value)}
-              placeholder="Pizza, Sushi, Pasta"
-              className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('sports_comma')}</label>
-            <input 
-              type="text" 
-              value={datingSports}
-              onChange={(e) => setDatingSports(e.target.value)}
-              placeholder="Football, Basketball, Tennis"
-              className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-2 text-xs text-gray-900 dark:text-white outline-none"
-            />
-          </div>
-
-          <button 
-            onClick={handleSaveDatingProfile}
-            disabled={isSaving}
-            className="w-full py-3 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-sm font-bold transition-all flex items-center justify-center disabled:opacity-50"
-          >
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : saveSuccess ? <Check className="w-4 h-4 mr-2" /> : null}
-            {saveSuccess ? t('saved_successfully') : t('save_dating_profile')}
-          </button>
-        </div>
-      )
-    },
-    {
       id: 'security',
       title: t('security_privacy'),
       description: t('security_privacy_desc'),
@@ -918,8 +742,26 @@ export default function Settings() {
                               onClick={async () => {
                                 if (!currentUser) return;
                                 
-                                if (isIframe() && !window.PublicKeyCredential) {
-                                  alert(getPasskeyErrorLinkMessage());
+                                if (isIframe()) {
+                                  const width = 500;
+                                  const height = 600;
+                                  const left = window.screenX + (window.outerWidth - width) / 2;
+                                  const top = window.screenY + (window.outerHeight - height) / 2;
+                                  
+                                  const popup = window.open(
+                                    `#/passkey-auth?userId=${currentUser.uid}&type=auth`,
+                                    'Passkey Authentication',
+                                    `width=${width},height=${height},left=${left},top=${top},status=no,menubar=no,toolbar=no`
+                                  );
+
+                                  const handleMessage = (event: MessageEvent) => {
+                                    if (event.origin !== window.location.origin) return;
+                                    if (event.data?.type === 'passkey-success') {
+                                      setPasskeyAuthorized(true);
+                                      window.removeEventListener('message', handleMessage);
+                                    }
+                                  };
+                                  window.addEventListener('message', handleMessage);
                                   return;
                                 }
 
@@ -1047,6 +889,7 @@ export default function Settings() {
               {[
                 { id: 'passkey', icon: ShieldCheck, label: 'Passkey (FIDO2)', desc: 'Secure biometric login', color: 'text-indigo-500' },
                 { id: 'biometric', icon: Fingerprint, label: t('biometric_scanner'), desc: t('biometric_desc'), color: 'text-cyan-500' },
+                { id: 'sms', icon: Smartphone, label: 'SMS Verification', desc: 'Verify via text message', color: 'text-emerald-500' },
                 { id: 'email_otp', icon: Mail, label: t('email_otp'), desc: t('email_otp_desc'), color: 'text-blue-500' },
                 { id: 'totp', icon: Shield, label: t('google_auth'), desc: t('totp_desc'), color: 'text-orange-500' }
               ].map(method => (
@@ -1118,6 +961,42 @@ export default function Settings() {
                             </button>
                           </div>
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {method.id === 'sms' && (
+                    <div className="mx-2 mt-2 p-4 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/20 rounded-xl animate-in fade-in slide-in-from-top-1">
+                      <div className="space-y-4">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-400 tracking-widest pl-1">Phone Number</label>
+                          <div className="flex gap-2">
+                            <input 
+                              type="tel"
+                              value={phoneNumber}
+                              onChange={(e) => setPhoneNumber(e.target.value)}
+                              placeholder="+254 7..."
+                              className="flex-1 bg-white dark:bg-gray-900 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-2 text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+                            />
+                            <button 
+                              onClick={() => {
+                                if (!phoneNumber) return alert("Please enter a phone number.");
+                                setPendingAction('verify_phone');
+                                setShowFingerprintModal(true);
+                              }}
+                              disabled={isVerifyingPhone || phoneNumber === userData?.phoneNumber}
+                              className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                            >
+                              {isVerifyingPhone ? "Sending..." : userData?.phoneNumber ? "Change" : "Verify"}
+                            </button>
+                          </div>
+                        </div>
+                        {userData?.phoneNumber && (
+                          <div className="flex items-center gap-2 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-white dark:bg-emerald-900/20 p-2 rounded-lg border border-emerald-100 dark:border-emerald-800">
+                            <Check className="w-3 h-3" />
+                            Linked to: {userData.phoneNumber}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1556,7 +1435,15 @@ export default function Settings() {
             >
               <X className="w-5 h-5" />
             </button>
-            {userData?.twoFactorType === 'passkey' && userData?.twoFactorEnabled ? (
+            {pendingAction === 'verify_phone' ? (
+              <OTPModal 
+                userId={currentUser?.uid || ''} 
+                phoneNumber={phoneNumber}
+                method="sms"
+                onClose={() => setShowFingerprintModal(false)}
+                onSuccess={handleFingerprintSuccess}
+              />
+            ) : userData?.twoFactorType === 'passkey' && userData?.twoFactorEnabled ? (
               <PasskeyModal 
                 userId={currentUser?.uid || ''}
                 onClose={() => setShowFingerprintModal(false)}

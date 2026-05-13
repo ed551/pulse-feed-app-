@@ -9,7 +9,8 @@ import {
   signOut,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  updateProfile
+  updateProfile,
+  sendEmailVerification as firebaseSendEmailVerification
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, onSnapshot, serverTimestamp, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType, onConnectionStatusChange, ConnectionStatus } from '../lib/firebase';
@@ -63,7 +64,7 @@ interface UserData {
   membershipLevel?: 'bronze' | 'silver' | 'gold';
   membershipStatus?: 'active' | 'expired' | 'canceled';
   twoFactorEnabled?: boolean;
-  twoFactorType?: 'biometric' | 'email_otp' | 'totp' | 'passkey';
+  twoFactorType?: 'biometric' | 'email_otp' | 'totp' | 'passkey' | 'sms_otp';
   twoFactorSecret?: string;
   phoneNumber?: string;
   language?: string;
@@ -97,9 +98,11 @@ interface AuthContextType {
   setSessionError: (val: string | null) => void;
   loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
-  signupWithEmail: (email: string, pass: string, name: string, mfaOptions?: { type: 'biometric' | 'email_otp' | 'totp' | 'passkey', phone?: string, secret?: string }) => Promise<void>;
+  signupWithEmail: (email: string, pass: string, name: string, mfaOptions?: { type: 'biometric' | 'email_otp' | 'sms_otp' | 'totp' | 'passkey', phone?: string, secret?: string }) => Promise<void>;
   logout: () => Promise<void>;
   isFacebookApp: boolean;
+  sendVerificationEmail: () => Promise<void>;
+  checkEmailVerification: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -201,6 +204,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setIsMfaVerified(false);
           }
 
+          if (!db) {
+            console.error("Firestore DB not available. Cannot fetch user data.");
+            setLoading(false);
+            return;
+          }
+
           // Fetch user data from Firestore
           const userRef = doc(db, 'users', user.uid);
           unsubscribeUser = onSnapshot(userRef, async (docSnap) => {
@@ -264,6 +273,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 };
                 
                 try {
+                  if (!db) throw new Error("Firestore not initialized");
+
                   await setDoc(userRef, initialData, { merge: true });
                   
                   // Also initialize public profile
@@ -332,6 +343,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (result.user) {
         await updateProfile(result.user, { displayName: name });
         
+        if (!db) {
+          console.error("Firestore not available for signup document creation");
+          return;
+        }
+
         // Proactively create the document to ensure settings are captured
         const userRef = doc(db, 'users', result.user.uid);
         const initialData = {
@@ -375,15 +391,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (currentUser && currentSessionId) {
       try {
         sessionStorage.removeItem(`pulse_mfa_verified_${currentSessionId}`);
-        const userRef = doc(db, 'users', currentUser.uid);
-        await updateDoc(userRef, {
-          activeSessions: arrayRemove(currentSessionId)
-        });
+        if (db) {
+          const userRef = doc(db, 'users', currentUser.uid);
+          await updateDoc(userRef, {
+            activeSessions: arrayRemove(currentSessionId)
+          });
+        }
       } catch (error) {
         handleFirestoreError(error, OperationType.WRITE, `users/${currentUser.uid}`);
       }
     }
     return signOut(auth);
+  };
+
+  const sendVerificationEmail = async () => {
+    if (!currentUser) return;
+    try {
+      await firebaseSendEmailVerification(currentUser);
+    } catch (error) {
+      console.error("Error sending verification email:", error);
+      throw error;
+    }
+  };
+
+  const checkEmailVerification = async () => {
+    if (!currentUser) return false;
+    await currentUser.reload();
+    return !!auth.currentUser?.emailVerified;
   };
 
   const value = {
@@ -398,7 +432,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loginWithEmail,
     signupWithEmail,
     logout,
-    isFacebookApp
+    isFacebookApp,
+    sendVerificationEmail,
+    checkEmailVerification
   };
 
   return (
