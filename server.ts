@@ -34,8 +34,54 @@ import fs from "fs";
 import nodemailer from 'nodemailer';
 import * as otplibPkg from 'otplib';
 import africastalking from 'africastalking';
+import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
+
+const apiKey = process.env.GEMINI_API_KEY;
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+const MIN_REQUEST_INTERVAL = 2000;
+const MAX_RETRIES = 3;
+const INITIAL_DELAY = 1000;
+let requestQueue: Promise<void> = Promise.resolve();
+
+async function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function generateContentWithRetry(params: any): Promise<any> {
+  if (!ai) {
+    throw new Error("Gemini API key is not configured in server environment.");
+  }
+  
+  const currentQueue = requestQueue;
+  let releaseQueue: () => void;
+  requestQueue = new Promise(resolve => { releaseQueue = resolve; });
+  await currentQueue;
+  
+  try {
+    let retries = 0;
+    while (retries <= MAX_RETRIES) {
+      try {
+        const response = await ai.models.generateContent(params);
+        await delay(MIN_REQUEST_INTERVAL);
+        return response;
+      } catch (error: any) {
+        const isQuotaExceeded = error?.status === 429 || error?.message?.includes("429");
+        if (isQuotaExceeded && retries < MAX_RETRIES) {
+          retries++;
+          const backoffDelay = (INITIAL_DELAY * Math.pow(2, retries)) + (Math.random() * 1000); 
+          await delay(backoffDelay);
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new Error("AI service unavailable after retries.");
+  } finally {
+    releaseQueue!();
+  }
+}
 
 const APP_URL = process.env.APP_URL || 'https://pulse-feeds.web.app';
 
@@ -831,6 +877,32 @@ async function startServer() {
   
   // Run IP monitor in background so it doesn't block startup
   monitorIP().catch(err => console.error("Initial IP check failed:", err));
+
+  // Ensure system users exist for high-security operations
+  const initSystemUsers = async () => {
+    try {
+      const systemUsers = ['system', 'user-system', 'platform-admin', 'system-maintenance'];
+      for (const uid of systemUsers) {
+        const ref = resilientDb.collection('users').doc(uid);
+        const snap = await ref.get();
+        if (!snap.exists) {
+          console.log(`[Init] Creating system user doc: ${uid}`);
+          await ref.set({
+            uid,
+            role: 'admin',
+            email: `${uid}@pulsefeeds.system`,
+            displayName: `Pulse ${uid.replace(/-/g, ' ')}`,
+            createdAt: FieldValue.serverTimestamp(),
+            isSystem: true,
+            serverSecret: SERVER_SECRET
+          });
+        }
+      }
+    } catch (e: any) {
+      console.warn("[Init] Failed to initialize system users:", e.message);
+    }
+  };
+  initSystemUsers().catch(() => {});
   
   setInterval(monitorIP, 1000 * 60 * 5); // Check every 5 minutes in production
   setInterval(reconcilePendingTransactions, 1000 * 60 * 2); // Poll status every 2 minutes

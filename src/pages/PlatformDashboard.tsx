@@ -2040,7 +2040,7 @@ export default function PlatformDashboard() {
                     </button>
                   )}
                   <p className="text-[10px] text-center opacity-50 font-bold uppercase tracking-widest">
-                    Last Verified: {auditReport.lastRan.toLocaleTimeString()}
+                    Last Verified: {auditReport.lastRan?.toLocaleTimeString?.() || 'Just now'}
                   </p>
                 </div>
               </motion.div>
@@ -3085,10 +3085,10 @@ export default function PlatformDashboard() {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-gray-900 dark:text-white font-black text-sm">
-                    {user.points.toLocaleString()}
+                    {(user.points || 0).toLocaleString()}
                   </td>
                   <td className="px-6 py-4 text-green-600 dark:text-green-400 font-black text-sm">
-                    {convert(user.balance)}
+                    {convert(user.balance || 0)}
                   </td>
                   <td className="px-6 py-4">
                     <span className={cn(
