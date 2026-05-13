@@ -765,6 +765,15 @@ export default function PlatformDashboard() {
 
       const data = await response.json();
       if (!response.ok) {
+        if (data.error === "VELOCITY_LIMIT") {
+          try {
+            const info = JSON.parse(data.message);
+            if (info.status === 'SOFT_DECLINE') {
+              setVelocityLimitInfo(info);
+              setRequestedLimit((amountToWithdraw * 1.5).toFixed(0)); // Suggest 1.5x
+            }
+          } catch (e) {}
+        }
         const errorMsg = data.details ? `${data.error} (${data.details})` : (data.error || "Failed to process Platform payout");
         throw new Error(errorMsg);
       }
@@ -829,6 +838,53 @@ export default function PlatformDashboard() {
     }
   };
 
+  const handleNeuralBypassRequest = async (token?: string, up?: boolean, em?: string, pw?: string) => {
+    if (!currentUser) return;
+    
+    // Trigger SCA if not authenticated
+    if (!token && !up && (!em || !pw)) {
+      setScaPendingAction(() => (t: string, u?: boolean, e?: string, p?: string) => handleNeuralBypassRequest(t, u, e, p));
+      setShowSCAModal(true);
+      return;
+    }
+
+    if (!aiBypassReason.trim() || !requestedLimit) {
+      setError("Please provide a reason and requested limit for AI analysis.");
+      return;
+    }
+
+    setIsBypassing(true);
+    setScaError(null);
+    try {
+      const resp = await fetch('/api/admin/velocity/override', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.uid,
+          reason: aiBypassReason,
+          requestedLimit: parseFloat(requestedLimit),
+          scaToken: token,
+          usePhone: up,
+          email: em,
+          password: pw
+        })
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.message || "Bypass declined");
+
+      setSuccess(data.message);
+      setAiReport(`Neural Insight: ${data.analysis}`);
+      setShowAIBypassModal(false);
+      setVelocityLimitInfo(null);
+      handleRefresh();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsBypassing(false);
+    }
+  };
+
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [showAnomaliesOnly, setShowAnomaliesOnly] = useState(false);
   const [showSCAModal, setShowSCAModal] = useState(false);
@@ -841,6 +897,16 @@ export default function PlatformDashboard() {
   const [scaPhoneCode, setScaPhoneCode] = useState("");
   const [scaEmail, setScaEmail] = useState("");
   const [scaPassword, setScaPassword] = useState("");
+  const [velocityLimitInfo, setVelocityLimitInfo] = useState<{
+    limit: number;
+    current: number;
+    message: string;
+    requiredLevel: number;
+  } | null>(null);
+  const [showAIBypassModal, setShowAIBypassModal] = useState(false);
+  const [aiBypassReason, setAiBypassReason] = useState("");
+  const [isBypassing, setIsBypassing] = useState(false);
+  const [requestedLimit, setRequestedLimit] = useState("");
 
   useEffect(() => {
     if (showSCAModal && !scaEmail && (currentUser?.email || userData?.email)) {
@@ -1263,8 +1329,22 @@ export default function PlatformDashboard() {
             className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 p-4 rounded-xl flex items-start space-x-3"
           >
             <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 ml-auto">
+            <div className="flex-1">
+              <p className="text-sm text-red-600 dark:text-red-400 font-medium">{error}</p>
+              {velocityLimitInfo && (
+                <div className="mt-3 flex items-center gap-3">
+                  <button 
+                    onClick={() => setShowAIBypassModal(true)}
+                    className="px-3 py-1.5 bg-red-600 text-white text-[10px] font-black uppercase rounded-lg hover:bg-red-700 transition-all shadow-lg shadow-red-600/20 flex items-center gap-2"
+                  >
+                    <BrainCircuit className="w-3.5 h-3.5" />
+                    Request Neural Bypass
+                  </button>
+                  <p className="text-[10px] text-red-500 italic font-medium">AI Risk analysis required to override platform limits.</p>
+                </div>
+              )}
+            </div>
+            <button onClick={() => { setError(null); setVelocityLimitInfo(null); }} className="text-red-400 hover:text-red-600 ml-auto shrink-0">
               <RefreshCw className="w-4 h-4" />
             </button>
           </motion.div>
@@ -3075,6 +3155,95 @@ export default function PlatformDashboard() {
                 >
                   {auditReport.health === 'critical' ? "Treasury Locked" : "Confirm"}
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showAIBypassModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAIBypassModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-white dark:bg-gray-900 rounded-[2.5rem] shadow-2xl overflow-hidden border border-indigo-500/20"
+            >
+              <div className="bg-indigo-600 p-8 text-white relative">
+                <div className="absolute top-0 right-0 p-8 opacity-10">
+                  <BrainCircuit className="w-32 h-32 rotate-12" />
+                </div>
+                <h3 className="text-2xl font-black tracking-tighter uppercase italic mb-2">Neural Sentry</h3>
+                <p className="text-indigo-100 text-xs font-bold uppercase tracking-widest opacity-80">AI Risk Arbitrator Override</p>
+              </div>
+
+              <div className="p-8 space-y-6">
+                <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-2xl">
+                  <div className="flex justify-between text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400 mb-4 tracking-widest">
+                    <span>Target Override</span>
+                    <span>System Health: Nominal</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-bold text-gray-400 uppercase">Current Usage</p>
+                      <p className="text-xl font-black text-gray-900 dark:text-white">{convert(velocityLimitInfo?.current || 0)}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-bold text-gray-400 uppercase">Daily Limit</p>
+                      <p className="text-xl font-black text-red-500">{convert(velocityLimitInfo?.limit || 0)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">New Proposed Limit (USD)</label>
+                    <input 
+                      type="number"
+                      value={requestedLimit}
+                      onChange={(e) => setRequestedLimit(e.target.value)}
+                      placeholder="e.g. 5000"
+                      className="w-full bg-gray-50 dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl px-5 py-3 text-sm font-bold focus:border-indigo-500 outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Justification for AI Analysis</label>
+                    <textarea 
+                      value={aiBypassReason}
+                      onChange={(e) => setAiBypassReason(e.target.value)}
+                      placeholder="Explain why this treasury movement is necessary..."
+                      className="w-full h-32 bg-gray-50 dark:bg-gray-800 border-2 border-gray-100 dark:border-gray-700 rounded-2xl px-5 py-3 text-sm font-bold focus:border-indigo-500 outline-none transition-all resize-none"
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  disabled={isBypassing || !aiBypassReason.trim() || !requestedLimit}
+                  onClick={() => handleNeuralBypassRequest()}
+                  className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl flex items-center justify-center gap-3 shadow-xl shadow-indigo-600/20 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {isBypassing ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Zap className="w-5 h-5" />
+                  )}
+                  {isBypassing ? "AI Analysis in Progress..." : "Authorize Neural Bypass"}
+                </button>
+
+                <p className="text-center text-[10px] text-gray-400 italic">
+                  "Neural bypass requests are audited by the Gemini Flash Security Engine. 
+                  Malicious overrides may result in permanent administrative lockout."
+                </p>
               </div>
             </motion.div>
           </div>

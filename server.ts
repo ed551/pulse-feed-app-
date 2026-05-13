@@ -2359,6 +2359,90 @@ async function startServer() {
   let exchangeRatesCache: { data: any; timestamp: number } | null = null;
   const RATES_CACHE_DURATION = 3600000; // 1 hour
 
+  app.post("/api/admin/velocity/override", async (req, res) => {
+    const { userId, reason, requestedLimit, scaToken } = req.body;
+    
+    // 1. Critical SCA Check
+    const isAuthValid = await verifyActionSCA({ scaToken, userId });
+    if (!isAuthValid) {
+      return res.status(401).json({ error: "SCA_REQUIRED", message: "Master SEC-PIN or Authenticated session required for Neural Bypass." });
+    }
+
+    try {
+      console.log(`[Neural Bypass] Initiating risk analysis for ${userId}. Requested Limit: $${requestedLimit}`);
+      
+      // 2. Fetch System Health for AI Context
+      const statsDoc = await resilientDb.collection("platform").doc("stats").get();
+      const stats = statsDoc.data();
+      
+      // 3. AI Risk Analysis
+      const aiResponse = await generateContentWithRetry({
+        model: "gemini-3-flash-preview",
+        contents: [{
+          role: "user",
+          parts: [{ text: `
+            You are the "Pulse Neural Sentry", a high-level financial risk arbitrator for a community rewards platform.
+            An administrator is requesting a "Velocity Limit Bypass" (Neural Override).
+            
+            USER REASON: "${reason}"
+            REQUESTED LIMIT: $${requestedLimit}
+            SYSTEM HEALTH:
+            - Net Platform Share: $${stats?.platformShare}
+            - Total User Obligations: $${stats?.totalUserBalances}
+            - Gross Revenue: $${stats?.platformRevenue}
+            
+            Analyze if this request is sane. If the platform has enough liquidity and the reason isn't suspicious, approve it.
+            OUTPUT FORMAT (JSON ONLY):
+            {
+              "approved": boolean,
+              "riskLevel": "lo" | "med" | "hi",
+              "reasoning": "string",
+              "expiryHours": number (default 2)
+            }
+          `}]
+        }]
+      });
+
+      let decision;
+      try {
+        const text = aiResponse.text?.replace(/```json|```/g, '').trim() || "{}";
+        decision = JSON.parse(text);
+      } catch (e) {
+        console.error("[Neural Bypass] AI JSON Parse Failed:", aiResponse.text);
+        decision = { approved: false, reasoning: "Security Intelligence Engine returned malformed data." };
+      }
+
+      if (decision.approved) {
+        console.log(`[Neural Bypass] AI APPROVED: ${decision.reasoning}`);
+        const expiry = new Date(Date.now() + (decision.expiryHours || 2) * 60 * 60 * 1000);
+        
+        await resilientDb.collection('users').doc(userId).update({
+          tempVelocityOverride: Number(requestedLimit),
+          tempOverrideExpires: expiry,
+          lastAIBypassReason: decision.reasoning,
+          lastHighRiskAuth: FieldValue.serverTimestamp()
+        });
+
+        res.json({
+          success: true,
+          message: `Neural Bypass Authorized. Limit temporarily increased to $${requestedLimit} until ${expiry.toLocaleTimeString()}.`,
+          analysis: decision.reasoning
+        });
+      } else {
+        console.warn(`[Neural Bypass] AI REJECTED: ${decision.reasoning}`);
+        res.status(403).json({
+          success: false,
+          error: "NEURAL_REJECTION",
+          message: `The Security Intelligence Engine has declined this override request.`,
+          analysis: decision.reasoning
+        });
+      }
+    } catch (error: any) {
+      console.error("[Neural Bypass] Critical Error:", error.message);
+      res.status(500).json({ success: false, error: "Neural Engine Offline" });
+    }
+  });
+
   app.get("/api/rates", async (req, res) => {
     const now = Date.now();
     if (exchangeRatesCache && (now - exchangeRatesCache.timestamp < RATES_CACHE_DURATION)) {
