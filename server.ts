@@ -2893,26 +2893,34 @@ async function startServer() {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
+    // Create a stable key for the in-memory store
+    const storeKey = userId || email || phoneNumber;
+    if (!storeKey) {
+      return res.status(400).json({ success: false, error: "Identification (UID, Email, or Phone) required" });
+    }
+
     try {
       // Store in memory for resilience (Server-authoritative)
-      memoryOtpStore.set(userId, {
+      memoryOtpStore.set(storeKey, {
         otp,
         expires: expiresAt.getTime()
       });
-      console.log(`[OTP Engine] Memory OTP set for ${userId}, expires in 5m`);
+      console.log(`[OTP Engine] Memory OTP set for ${storeKey}, expires in 5m`);
 
       // Also try to persist to DB as backup (swallow errors)
-      try {
-        await resilientDb.collection('otps').doc(userId).set({
-          otp,
-          expiresAt: expiresAt.toISOString(),
-          userId,
-          method,
-          timestamp: FieldValue.serverTimestamp(),
-          serverSecret: SERVER_SECRET
-        });
-      } catch (e) {
-        console.warn("[ResilientDB] Could not backup OTP to Firestore, using memory store.");
+      if (userId) {
+        try {
+          await resilientDb.collection('otps').doc(userId).set({
+            otp,
+            expiresAt: expiresAt.toISOString(),
+            userId,
+            method,
+            timestamp: FieldValue.serverTimestamp(),
+            serverSecret: SERVER_SECRET
+          });
+        } catch (e) {
+          console.warn("[ResilientDB] Could not backup OTP to Firestore, using memory store.");
+        }
       }
 
       if (method === 'email' && email) {
@@ -3020,10 +3028,10 @@ async function startServer() {
   });
 
   app.post("/api/otp/verify", async (req, res) => {
-    let { userId, otp, secret: providedSecret } = req.body;
+    let { userId, otp, email, secret: providedSecret } = req.body;
     
     // Rate Limiting Check
-    const attempts = failedScaAttempts.get(userId);
+    const attempts = failedScaAttempts.get(userId || email);
     if (attempts && attempts.lockoutUntil > Date.now()) {
       return res.status(429).json({ 
         success: false, 
@@ -3038,8 +3046,11 @@ async function startServer() {
     }
 
     try {
-      console.log(`[OTP Verify] Verifying for user: ${userId}`);
+      console.log(`[OTP Verify] Verifying for user: ${userId || email}`);
       let isSuccess = false;
+
+      // Identify store key used during send
+      const storeKey = userId || email || req.body.phoneNumber || req.body.phone;
 
       // 1. Check TOTP if secret is provided (Client-provided for resilience)
       if (providedSecret) {
@@ -3060,11 +3071,11 @@ async function startServer() {
         }
       }
       
-      if (!isSuccess) {
+      if (!isSuccess && storeKey) {
         // 2. Check Memory Store (Email/Sms)
-        const memoryOtp = memoryOtpStore.get(userId);
+        const memoryOtp = memoryOtpStore.get(storeKey);
         if (memoryOtp && memoryOtp.otp === otp && memoryOtp.expires > Date.now()) {
-          memoryOtpStore.delete(userId); // Clear after use
+          memoryOtpStore.delete(storeKey); // Clear after use
           isSuccess = true;
         }
       }

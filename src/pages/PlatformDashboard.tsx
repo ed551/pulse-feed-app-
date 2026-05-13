@@ -548,6 +548,7 @@ export default function PlatformDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           userId: currentUser?.uid, 
+          email: emailInput,
           phoneNumber: phoneInput, 
           method: 'sms' 
         })
@@ -590,7 +591,7 @@ export default function PlatformDashboard() {
         body: JSON.stringify({ 
           userId: currentUser?.uid, 
           otp: verificationCode,
-          email: currentUser?.email
+          email: emailInput || currentUser?.email
         })
       });
       const data = await resp.json();
@@ -974,60 +975,79 @@ export default function PlatformDashboard() {
               )}
 
               {verificationStep === 'phone' && (
-                <motion.form 
+                <motion.div 
                   key="phone-step"
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  onSubmit={handlePhoneVerification}
-                  className="w-full space-y-4"
+                  className="w-full space-y-6"
                 >
-                  <div className="space-y-1 text-left relative">
+                  <div className="space-y-3 text-left">
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-4">Phone Number</label>
-                    <input 
-                      type="tel"
-                      value={phoneInput}
-                      onChange={(e) => setPhoneInput(e.target.value)}
-                      placeholder="+254 ••• ••• •••"
-                      className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:border-purple-500 outline-none transition-all font-bold"
-                      required
-                    />
-                    <button
-                      type="button"
-                      disabled={isSendingSms || phoneInput.length < 10}
-                      onClick={handleSendUnlockOtp}
-                      className="absolute right-4 bottom-4 text-[10px] font-black uppercase text-purple-600 hover:text-purple-700 disabled:opacity-50"
-                    >
-                      {isSendingSms ? "Requesting..." : "Send Code"}
-                    </button>
-                  </div>
-                  <div className="space-y-1 text-left">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-4">Verification Code</label>
-                    <input 
-                      type="text"
-                      value={verificationCode}
-                      onChange={(e) => setVerificationCode(e.target.value)}
-                      placeholder="Enter 000000"
-                      maxLength={6}
-                      className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:border-purple-500 outline-none transition-all font-bold text-center tracking-[0.5em]"
-                      required
-                    />
-                  </div>
-                  
-                  <button 
-                    disabled={isScanning}
-                    className={cn(
-                      "w-full py-4 bg-purple-600 text-white font-black rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-purple-600/20 transition-all hover:bg-purple-700 active:scale-95 disabled:opacity-50",
-                      isScanning && "animate-pulse"
+                    <div className="relative">
+                      <input 
+                        type="tel"
+                        value={phoneInput}
+                        onChange={(e) => setPhoneInput(e.target.value)}
+                        placeholder="+254 ••• ••• •••"
+                        className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:border-purple-500 outline-none transition-all font-bold"
+                      />
+                    </div>
+                    {!verificationCode && (
+                       <button
+                        type="button"
+                        disabled={isSendingSms}
+                        onClick={handleSendUnlockOtp}
+                        className="w-full py-4 bg-purple-600 text-white font-black rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-purple-600/20 transition-all hover:bg-purple-700 active:scale-95 disabled:opacity-50"
+                      >
+                        {isSendingSms ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <Smartphone className="w-5 h-5" />
+                        )}
+                        {isSendingSms ? "Sending SMS..." : "Send Verification Code"}
+                      </button>
                     )}
-                  >
-                    {isScanning ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="w-5 h-5" />
-                    )}
-                    Verify & Unlock
-                  </button>
+                  </div>
+
+                  {success && (
+                    <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-2xl text-[10px] font-bold flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 shrink-0" />
+                      <span>{success}</span>
+                    </div>
+                  )}
+
+                  {verificationCode !== undefined && (
+                    <form onSubmit={handlePhoneVerification} className="space-y-6">
+                      <div className="space-y-1 text-left">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-4">Verification Code</label>
+                        <input 
+                          type="text"
+                          value={verificationCode}
+                          onChange={(e) => setVerificationCode(e.target.value)}
+                          placeholder="Enter 6-digit code"
+                          maxLength={6}
+                          className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:border-purple-500 outline-none transition-all font-bold text-center tracking-[0.5em]"
+                          required
+                        />
+                      </div>
+                      
+                      <button 
+                        disabled={isScanning || !verificationCode}
+                        className={cn(
+                          "w-full py-4 bg-gray-900 dark:bg-white dark:text-gray-900 text-white font-black rounded-2xl flex items-center justify-center gap-3 shadow-lg transition-all hover:bg-black active:scale-95 disabled:opacity-50",
+                          isScanning && "animate-pulse"
+                        )}
+                      >
+                        {isScanning ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <ShieldCheck className="w-5 h-5" />
+                        )}
+                        Verify & Unlock
+                      </button>
+                    </form>
+                  )}
 
                   <button 
                     type="button"
@@ -1036,7 +1056,7 @@ export default function PlatformDashboard() {
                   >
                     Back to Credentials
                   </button>
-                </motion.form>
+                </motion.div>
               )}
             </AnimatePresence>
           </div>
