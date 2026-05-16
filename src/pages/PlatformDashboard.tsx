@@ -68,6 +68,7 @@ export default function PlatformDashboard() {
   const [networkAlerts, setNetworkAlerts] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showSystemAuditPopup, setShowSystemAuditPopup] = useState(false);
+  const [withdrawalFilter, setWithdrawalFilter] = useState<'all' | 'user' | 'operational' | 'pending' | 'success'>('user');
   const [systemHealth, setSystemHealth] = useState({
     cpu: 18,
     memory: 42,
@@ -110,6 +111,45 @@ export default function PlatformDashboard() {
   const [activeTab, setActiveTab] = useState<'financial' | 'withdrawals' | 'moderation' | 'infrastructure' | 'mitigation' | 'membership' | 'audit' | 'intelligence'>('financial');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiReport, setAiReport] = useState<string | null>(null);
+
+  const filteredWithdrawals = useMemo(() => {
+    return userWithdrawals.filter(w => {
+      if (withdrawalFilter === 'user') return w.category === 'user' || !w.category;
+      if (withdrawalFilter === 'operational') return w.category === 'operational';
+      if (withdrawalFilter === 'pending') return w.status === 'pending';
+      if (withdrawalFilter === 'success') return w.status === 'success';
+      return true;
+    });
+  }, [userWithdrawals, withdrawalFilter]);
+
+  const handlePurgeAllSystemLogs = async () => {
+    if (!db || !isDevUnlocked) return;
+    if (!window.confirm("CRITICAL: This will permanently delete ALL 'Operational' and 'Simulated' withdrawal history. User payouts remain untouched. This action is irreversible. Continue?")) return;
+    
+    setIsRefreshing(true);
+    try {
+      const { writeBatch } = await import('firebase/firestore');
+      const batch = writeBatch(db);
+      
+      const operationalDocs = userWithdrawals.filter(w => w.category === 'operational' || w.status === 'simulated');
+      
+      if (operationalDocs.length === 0) {
+        setSuccess("No system logs found to purge.");
+        return;
+      }
+
+      operationalDocs.forEach(d => {
+        batch.delete(doc(db, 'withdrawals', d.id));
+      });
+      
+      await batch.commit();
+      setSuccess(`Purged ${operationalDocs.length} system/operational logs.`);
+    } catch (err: any) {
+      setError(`Purge failed: ${err.message}`);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const runGeminiAnalysis = async () => {
     setIsAnalyzing(true);
@@ -1680,24 +1720,55 @@ export default function PlatformDashboard() {
 
       {activeTab === 'withdrawals' && (
         <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl font-bold flex items-center gap-2">
+              <h2 className="text-xl font-bold flex items-center gap-2 text-gray-900 dark:text-white">
                 <Wallet className="w-6 h-6 text-purple-500" />
                 User Payout Requests
               </h2>
               <p className="text-sm text-gray-500">Aggregate list of all pending and past user reward redemptions</p>
             </div>
-            <button 
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className={cn(
-                "p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 transition-all",
-                isRefreshing && "animate-spin"
+            
+            <div className="flex items-center gap-2">
+              <div className="flex bg-gray-100 dark:bg-gray-900 p-1 rounded-xl border border-gray-100 dark:border-gray-800">
+                {(['user', 'operational', 'pending', 'all'] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setWithdrawalFilter(f)}
+                    className={cn(
+                      "px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
+                      withdrawalFilter === f 
+                        ? "bg-white dark:bg-gray-800 text-purple-600 shadow-sm" 
+                        : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    )}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+
+              {isDevUnlocked && (
+                <button 
+                  onClick={handlePurgeAllSystemLogs}
+                  disabled={isRefreshing}
+                  title="Purge Operational/Simulated Noise"
+                  className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl border border-red-500/20 transition-all"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
               )}
-            >
-              <RefreshCw className="w-5 h-5 text-gray-500" />
-            </button>
+
+              <button 
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className={cn(
+                  "p-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 transition-all",
+                  isRefreshing && "animate-spin"
+                )}
+              >
+                <RefreshCw className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
           </div>
 
           <div className="bg-white dark:bg-gray-800 rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-700 shadow-xl">
@@ -1712,18 +1783,18 @@ export default function PlatformDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700 font-sans">
-                  {userWithdrawals.length === 0 ? (
+                  {filteredWithdrawals.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-6 py-20 text-center">
                         <div className="w-16 h-16 bg-gray-50 dark:bg-gray-900/50 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-100 dark:border-gray-800">
                           <History className="w-8 h-8 text-gray-300" />
                         </div>
-                        <p className="text-gray-400 font-medium">No withdrawal requests found</p>
-                        <p className="text-xs text-gray-500 mt-1 italic">Requests are logged centrally once initiated by users.</p>
+                        <p className="text-gray-400 font-medium">No {withdrawalFilter !== 'all' ? withdrawalFilter : ''} withdrawal requests found</p>
+                        <p className="text-xs text-gray-500 mt-1 italic">Try changing the filter or manually initiating a payout.</p>
                       </td>
                     </tr>
                   ) : (
-                    userWithdrawals.map((w) => (
+                    filteredWithdrawals.map((w) => (
                       <tr key={w.id} className="hover:bg-gray-50/30 dark:hover:bg-gray-900/30 transition-colors">
                         <td className="px-6 py-4">
                           <div className="text-sm font-bold uppercase tracking-tighter">

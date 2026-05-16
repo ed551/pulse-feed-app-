@@ -14,6 +14,28 @@ async function delay(ms: number) {
 }
 
 export async function generateContentWithRetry(params: any): Promise<GenerateContentResponse> {
+  // 1. Detect Environment & Proxy if needed
+  const isBrowser = typeof window !== 'undefined';
+  
+  if (isBrowser) {
+    try {
+      const response = await fetch("/api/gemini/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ params })
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server proxy failed with status ${response.status}`);
+      }
+      return await response.json();
+    } catch (proxyError: any) {
+      console.warn("[AI Proxy] Attempt failed, falling back to local simulation if appropriate...", proxyError);
+      throw proxyError;
+    }
+  }
+
+  // 2. Server-side implementation (existing logic)
   if (!ai) {
     throw new Error("Gemini API key is not configured. Please add GEMINI_API_KEY to your environment.");
   }

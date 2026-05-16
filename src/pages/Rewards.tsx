@@ -209,7 +209,7 @@ export default function Rewards() {
       else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitUSD = 500;
           
       if (recentWithdrawalsUSD + requestedUSD > limitUSD && !totp && !usePasskey) {
-        setScaError(`Daily limit of $${limitUSD} reached with PIN. Use TOTP or Passkey to authorize up to $5,000.`);
+        setScaError(`Daily velocity limit of $${limitUSD} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is $5,000.`);
       }
 
       if (!isDeveloper && numAmount > kesBalance) throw new Error("Insufficient balance");
@@ -355,7 +355,7 @@ export default function Rewards() {
       else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitUSD = 500;
           
       if (recentWithdrawalsUSD + numAmount > limitUSD && !totp && !usePasskey) {
-        setScaError(`Daily limit of $${limitUSD} reached with PIN. Use TOTP or Passkey to authorize up to $5,000.`);
+        setScaError(`Daily velocity limit of $${limitUSD} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is $5,000.`);
       }
 
       if (!isDeveloper && numAmount > balance) throw new Error("Insufficient balance");

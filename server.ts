@@ -782,7 +782,7 @@ async function markIdempotency(reference: string, status: string, details: any =
 }
 
 // Helper to log platform-level payouts to the audit trail
-async function logPlatformPayout(amountUsd: number, type: string, destination: string, clientIp: string, isUserWithdrawal: boolean = true, status: string = 'success', existingReference?: string) {
+async function logPlatformPayout(amountUsd: number, type: string, destination: string, clientIp: string, isUserWithdrawal: boolean = true, status: string = 'success', existingReference?: string, triggeredBy?: string) {
 try {
   // Check System Safety Lock before writing ANY financial logs
   const monDoc = await resilientDb.collection("system").doc("monitoring").get();
@@ -800,7 +800,7 @@ try {
     const kesRate = 135; // Standard operational rate
     const amountKes = amountUsd * kesRate;
 
-    console.log(`[Audit] Logging ${isUserWithdrawal ? 'User' : 'Platform'} payout: $${amountUsd} (KES ${amountKes}) to ${destination} with status: ${status}`);
+    console.log(`[Audit] Logging ${isUserWithdrawal ? 'User' : 'Platform'} payout: $${amountUsd} (KES ${amountKes}) to ${destination} with status: ${status} [TriggeredBy: ${triggeredBy || 'unknown'}]`);
     
     const reference = existingReference || `SYS-${Date.now().toString(36).toUpperCase()}`;
     
@@ -829,7 +829,9 @@ try {
       method: type,
       details: `${isUserWithdrawal ? 'User' : 'Operational'} ${type} ${status === 'simulated' ? 'simulated' : 'payout'} to ${destination} (Value: KES ${amountKes.toLocaleString()})`,
       serverSecret: SERVER_SECRET,
-      category: isUserWithdrawal ? 'user' : 'operational'
+      category: isUserWithdrawal ? 'user' : 'operational',
+      triggeredBy: triggeredBy || (isUserWithdrawal ? 'User Interaction' : 'System Engine'),
+      source: isUserWithdrawal ? 'User Wallet' : 'Platform Treasury'
     }).catch(err => console.error("[Audit] Failed to log to central withdrawals:", err.message));
 
     // 1. Log to platform_transactions for the Recent Activity list
@@ -844,7 +846,8 @@ try {
       userId: isUserWithdrawal ? 'user-system' : 'system',
       clientIp: clientIp,
       timestamp: FieldValue.serverTimestamp(),
-      serverSecret: SERVER_SECRET
+      serverSecret: SERVER_SECRET,
+      triggeredBy: triggeredBy || (isUserWithdrawal ? 'User Interaction' : 'System Engine')
     });
 
     // 3. Mark Idempotency
@@ -1220,7 +1223,16 @@ async function startServer() {
       );
       // Log to platform audit
       const isUserWithdrawal = payout.isUserWithdrawal !== false;
-      await logPlatformPayout(parseFloat(amount) / 130, payout.method || 'mpesa', phoneNumber, clientIp || '0.0.0.0', isUserWithdrawal, 'success', reference);
+      await logPlatformPayout(
+        parseFloat(amount) / 130, 
+        payout.method || 'mpesa', 
+        phoneNumber, 
+        clientIp || '0.0.0.0', 
+        isUserWithdrawal, 
+        'success', 
+        reference,
+        isUserWithdrawal ? 'User Withdrawal' : (payout.source || 'Automated Queue Process')
+      );
       return { success: true, details: response.data };
     } catch (error: any) {
       const errorData = error.response?.data;
@@ -1280,7 +1292,16 @@ async function startServer() {
       });
 
       const isUserWithdrawal = payout.isUserWithdrawal !== false;
-      await logPlatformPayout(parseFloat(amount) / 130, payout.method || 'bank_coop', bankDetails.accountNumber, clientIp || '0.0.0.0', isUserWithdrawal, 'success', reference);
+      await logPlatformPayout(
+        parseFloat(amount) / 130, 
+        payout.method || 'bank_coop', 
+        bankDetails.accountNumber, 
+        clientIp || '0.0.0.0', 
+        isUserWithdrawal, 
+        'success', 
+        reference,
+        isUserWithdrawal ? 'User Withdrawal' : (payout.source || 'Automated Queue Process')
+      );
       return { success: true, details: response.data };
     } catch (error: any) {
       const errorData = error.response?.data;
@@ -2334,7 +2355,7 @@ async function startServer() {
           console.warn("[Platform Payout] No active bank providers found. Falling back to simulation.");
         }
 
-        await logPlatformPayout(amount, method || 'payout', `${recipient} (${destination})`, clientIp, false, isSimulated ? 'simulated' : 'success');
+        await logPlatformPayout(amount, method || 'payout', `${recipient} (${destination})`, clientIp, false, isSimulated ? 'simulated' : 'success', undefined, req.body.adminId || 'Admin Dashboard');
       } catch (updateErr: any) {
         console.error(`[Platform Payout] Error in post-payout logic:`, updateErr.message);
       }
@@ -3186,6 +3207,31 @@ async function startServer() {
       res.status(401).json({ success: false, error: "Authentication failed" });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // Server-side AI Proxy for security and routing stability
+  app.post("/api/gemini/generate", async (req, res) => {
+    try {
+      const { params } = req.body;
+      if (!params) return res.status(400).json({ error: "Missing parameters" });
+      
+      const genAI = new GoogleGenAI({ 
+        apiKey: process.env.GEMINI_API_KEY!,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+      });
+      
+      const response = await genAI.models.generateContent(params);
+      res.json(response);
+    } catch (err: any) {
+      console.error("[Gemini Proxy] Failed:", err);
+      // Fallback model name check in error
+      const status = err.status || 500;
+      res.status(status).json({ 
+        error: err.message, 
+        status: status,
+        suggestedFallback: true 
+      });
     }
   });
 
