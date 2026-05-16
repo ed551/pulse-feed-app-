@@ -38,8 +38,20 @@ import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
 
-const apiKey = process.env.GEMINI_API_KEY;
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+const apiKeyFromEnv = process.env.GEMINI_API_KEY;
+// Basic check to prevent using the placeholder common in fresh remixed projects
+const isValidApiKey = apiKeyFromEnv && 
+                     apiKeyFromEnv !== "MY_GEMINI_API_KEY" && 
+                     apiKeyFromEnv.length > 10;
+
+const ai = isValidApiKey ? new GoogleGenAI({ 
+  apiKey: apiKeyFromEnv,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+}) : null;
 const MIN_REQUEST_INTERVAL = 2000;
 const MAX_RETRIES = 3;
 const INITIAL_DELAY = 1000;
@@ -814,7 +826,7 @@ try {
     }
 
     // 0. Log to withdrawals collection for the "Withdraw Request List" (Audit Trail)
-    await resilientDb.collection('withdrawals').add({
+    await resilientDb.collection('withdrawals').doc(reference).set({
       type: isUserWithdrawal ? type : 'operational_payout',
       amount: amountUsd, // Note: logPlatformPayout uses USD
       amountKes: amountKes,
@@ -823,16 +835,16 @@ try {
       isSimulated: status === 'simulated',
       timestamp: FieldValue.serverTimestamp(),
       reference: reference,
-      userId: isUserWithdrawal ? 'user-system' : 'platform-admin',
-      userEmail: destination,
-      userName: isUserWithdrawal ? 'Platform User' : `Operational: ${destination.split(' ')[0]}`,
+      userId: isUserWithdrawal ? (triggeredBy === 'User Action' ? 'user-system' : 'system') : 'EDWINMUOHA',
+      userEmail: isUserWithdrawal ? destination : 'Edwin (01100975259001)',
+      userName: isUserWithdrawal ? 'Platform User' : 'OPERATIONAL: EDWIN MUOHA WATITU',
       method: type,
       details: `${isUserWithdrawal ? 'User' : 'Operational'} ${type} ${status === 'simulated' ? 'simulated' : 'payout'} to ${destination} (Value: KES ${amountKes.toLocaleString()})`,
       serverSecret: SERVER_SECRET,
       category: isUserWithdrawal ? 'user' : 'operational',
       triggeredBy: triggeredBy || (isUserWithdrawal ? 'User Interaction' : 'System Engine'),
       source: isUserWithdrawal ? 'User Wallet' : 'Platform Treasury'
-    }).catch(err => console.error("[Audit] Failed to log to central withdrawals:", err.message));
+    }, { merge: true }).catch(err => console.error("[Audit] Failed to log to central withdrawals:", err.message));
 
     // 1. Log to platform_transactions for the Recent Activity list
     await resilientDb.collection('platform_transactions').add({
@@ -1004,13 +1016,14 @@ async function startServer() {
     return fallback;
   };
 
-  const COOP_CONFIG = {
-    clientId: getCoopEnv("CONSUMER_KEY", "kkCCerC5OxtNAAkbaWbUerrdo4ga"),
-    clientSecret: getCoopEnv("CONSUMER_SECRET", "KcWPlAT3x1l7ruMigikOHBhI9eoa"),
-    sourceAccount: getCoopEnv("SOURCE_ACCOUNT", "01100975259001"),
-    userId: getCoopEnv("USER_ID", "EDWINMUOHA"),
-    baseUrl: getCoopEnv("BASE_URL", "https://openapi.co-opbank.co.ke")
-  };
+    const COOP_CONFIG = {
+      clientId: getCoopEnv("CONSUMER_KEY", "kkCCerC5OxtNAAkbaWbUerrdo4ga"),
+      clientSecret: getCoopEnv("CONSUMER_SECRET", "KcWPlAT3x1l7ruMigikOHBhI9eoa"),
+      sourceAccount: getCoopEnv("SOURCE_ACCOUNT", "01100975259001"),
+      userId: getCoopEnv("USER_ID", "EDWINMUOHA"),
+      operatorCode: 'EDWIN',
+      baseUrl: getCoopEnv("BASE_URL", "https://openapi.co-opbank.co.ke")
+    };
 
   console.log(`[Coop Config] Initialized. Using Real Keys: ${COOP_CONFIG.clientId !== "kkCCerC5OxtNAAkbaWbUerrdo4ga"}, Source Account: ${COOP_CONFIG.sourceAccount}`);
   if (COOP_CONFIG.clientId === "kkCCerC5OxtNAAkbaWbUerrdo4ga") {
@@ -1689,7 +1702,8 @@ async function startServer() {
         userId,
         reference,
         clientIp,
-        source: 'user_mpesa_withdrawal'
+        source: 'user_mpesa_withdrawal',
+        isUserWithdrawal: true
       };
       
       await pushToPayoutQueue(payoutData);
@@ -1728,7 +1742,7 @@ async function startServer() {
         );
 
         // Log the successful payout to platform audit
-        await logPlatformPayout(parseFloat(amount) / 130, 'mpesa_equity', phoneNumber, clientIp, true);
+        await logPlatformPayout(parseFloat(amount) / 130, 'mpesa_equity', phoneNumber, clientIp, true, 'success', reference);
 
         return res.json({ success: true, transactionId: reference, message: "Real payout sent via Equity Bank", details: response.data });
       } catch (error: any) {
@@ -1913,7 +1927,8 @@ async function startServer() {
         userId,
         reference,
         clientIp,
-        source: 'user_bank_withdrawal'
+        source: 'user_bank_withdrawal',
+        isUserWithdrawal: true
       };
       
       await pushToPayoutQueue(payoutData);
@@ -1953,14 +1968,14 @@ async function startServer() {
           }
         );
         // Audit log for successful bank payout
-        await logPlatformPayout(parseFloat(amount) / 130, 'bank_equity', bankDetails.accountNumber, clientIp, true);
+        await logPlatformPayout(parseFloat(amount) / 130, 'bank_equity', bankDetails.accountNumber, clientIp, true, 'success', reference);
 
         return res.json({ success: true, transactionId: reference, message: "Real bank payout sent via Equity Bank", details: response.data });
       } catch (error: any) {
         console.error("Equity Bank Bank Error:", error.response?.data || error.message);
 
         // Audit log for initiated/simulated bank payout
-        await logPlatformPayout(parseFloat(amount) / 130, 'bank_equity_simulated', bankDetails.accountNumber, clientIp, true);
+        await logPlatformPayout(parseFloat(amount) / 130, 'bank_equity_simulated', bankDetails.accountNumber, clientIp, true, 'simulated', reference);
 
         if (isNetworkBlock(error)) {
           console.error("Bank payout blocked. Simulation is PERMANENTLY FROZEN.");
@@ -1999,7 +2014,8 @@ async function startServer() {
       userId: userId || 'portal-admin',
       reference: reference || "PORTAL-" + Date.now(),
       clientIp: '127.0.0.1',
-      source: 'portal_disbursement'
+      source: 'portal_disbursement',
+      isUserWithdrawal: false
     };
 
     await pushToPayoutQueue(payoutData);
@@ -3216,12 +3232,14 @@ async function startServer() {
       const { params } = req.body;
       if (!params) return res.status(400).json({ error: "Missing parameters" });
       
-      const genAI = new GoogleGenAI({ 
-        apiKey: process.env.GEMINI_API_KEY!,
-        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
-      });
+      if (!ai) {
+        return res.status(500).json({ 
+          error: "Gemini API key is not configured or invalid in server environment. Please check Secrets panel.",
+          status: 500
+        });
+      }
       
-      const response = await genAI.models.generateContent(params);
+      const response = await ai.models.generateContent(params);
       res.json(response);
     } catch (err: any) {
       console.error("[Gemini Proxy] Failed:", err);
@@ -3230,7 +3248,7 @@ async function startServer() {
       res.status(status).json({ 
         error: err.message, 
         status: status,
-        suggestedFallback: true 
+        details: err.details || null
       });
     }
   });

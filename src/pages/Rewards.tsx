@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Gem, Award, TrendingUp, DollarSign, Receipt, Landmark, CheckCircle, Globe, Wallet, Phone, ArrowUpRight, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Info, Smartphone, CreditCard, ShieldCheck, ShieldOff, Calendar, Lock, KeyRound, AlertTriangle, Building2, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
+import { Gem, Award, TrendingUp, DollarSign, Receipt, Landmark, CheckCircle, Globe, Wallet, Phone, ArrowUpRight, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Info, Smartphone, CreditCard, ShieldCheck, ShieldOff, Calendar, Lock, KeyRound, AlertTriangle, Building2, RefreshCw, RotateCcw, Trash2, ShieldAlert } from "lucide-react";
 import { mpesa_handler, unified_participant_payout, rewards_policy, equal_distribution_protocol, merchant_of_record_tax_remittance } from "../lib/engines";
 import { useCurrencyConverter } from "../hooks/useCurrencyConverter";
 import { motion, AnimatePresence } from "motion/react";
@@ -287,11 +287,14 @@ export default function Rewards() {
               await addDoc(txRef, txData);
               
               // Also log to the central withdrawals collection for admin visibility
-              await addDoc(collection(db, 'withdrawals'), {
-                ...txData,
-                userName: userData?.displayName || 'Anonymous',
-                processedAt: result.success ? serverTimestamp() : null
-              }).catch(err => console.error("Central withdrawal logging failed:", err));
+              // Use setDoc with reference as ID to ensure idempotency with server-side logs
+              import('firebase/firestore').then(({ doc, setDoc }) => {
+                setDoc(doc(db, 'withdrawals', txData.reference), {
+                  ...txData,
+                  userName: userData?.displayName || 'Anonymous',
+                  processedAt: result.success ? serverTimestamp() : null
+                }, { merge: true }).catch(err => console.error("Central withdrawal logging failed:", err));
+              });
 
             // Audit Ledger Entry
             await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {

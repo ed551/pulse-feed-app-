@@ -114,8 +114,8 @@ export default function PlatformDashboard() {
 
   const filteredWithdrawals = useMemo(() => {
     return userWithdrawals.filter(w => {
-      if (withdrawalFilter === 'user') return w.category === 'user' || !w.category;
-      if (withdrawalFilter === 'operational') return w.category === 'operational';
+      if (withdrawalFilter === 'user') return w.category === 'user';
+      if (withdrawalFilter === 'operational') return w.category === 'operational' || w.status === 'simulated' || !w.category;
       if (withdrawalFilter === 'pending') return w.status === 'pending';
       if (withdrawalFilter === 'success') return w.status === 'success';
       return true;

@@ -144,89 +144,11 @@ export default function AIAssistant() {
   };
 
   const startVoiceSession = async () => {
-    if (isConnecting || isLiveMode) return;
-    setIsConnecting(true);
-
-    try {
-      // 1. Setup Audio
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-      audioContextRef.current = audioContext;
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-
-      const source = audioContext.createMediaStreamSource(stream);
-      const processor = audioContext.createScriptProcessor(4096, 1, 1);
-      processorRef.current = processor;
-
-      // 2. Setup Gemini Live
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const session = await ai.live.connect({
-        model: "gemini-3.1-flash-live-preview",
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } }
-          },
-          systemInstruction: "You are the Pulse Feeds Master AI Coach. You are in a live voice conversation. Be concise, friendly, and helpful. Use a natural conversational tone."
-        },
-        callbacks: {
-          onopen: () => {
-            setIsConnecting(false);
-            setIsLiveMode(true);
-            setMessages(prev => [...prev, {
-              role: 'model',
-              text: "[Voice Session Started]",
-              timestamp: Date.now()
-            }]);
-          },
-          onmessage: async (message) => {
-            if (message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data) {
-              const base64Audio = message.serverContent.modelTurn.parts[0].inlineData.data;
-              const binaryString = atob(base64Audio);
-              const bytes = new Uint8Array(binaryString.length);
-              for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-              }
-              const pcmData = new Int16Array(bytes.buffer);
-              audioQueueRef.current.push(pcmData);
-              playNextInQueue();
-            }
-
-            if (message.serverContent?.interrupted) {
-              audioQueueRef.current = [];
-              isPlayingRef.current = false;
-            }
-          },
-          onclose: () => stopVoiceSession(),
-          onerror: (err) => {
-            console.error("Live API Error:", err);
-            stopVoiceSession();
-          }
-        }
-      });
-      sessionRef.current = session;
-
-      // 3. Audio Streaming Logic
-      processor.onaudioprocess = (e) => {
-        if (!isMuted && sessionRef.current) {
-          const inputData = e.inputBuffer.getChannelData(0);
-          const pcmData = floatTo16BitPCM(inputData);
-          const base64Data = btoa(String.fromCharCode(...new Uint8Array(pcmData.buffer)));
-          sessionRef.current.sendRealtimeInput({
-            audio: { data: base64Data, mimeType: 'audio/pcm;rate=16000' }
-          });
-        }
-      };
-
-      source.connect(processor);
-      processor.connect(audioContext.destination);
-
-    } catch (error) {
-      console.error("Failed to start voice session:", error);
-      stopVoiceSession();
-      alert("Could not access microphone or connect to AI. Please check permissions.");
-    }
+    // Live Voice requires a secure proxy for the Gemini Live API (WebSockets)
+    // or a browser-side API key (not recommended).
+    // For now, we use the standard generateContentWithRetry for chat interactions.
+    alert("Voice Conversation mode is currently under maintenance. Please use the text chat for now!");
+    setIsConnecting(false);
   };
 
   const playNextInQueue = () => {

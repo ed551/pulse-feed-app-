@@ -68,16 +68,32 @@ export default function NewsFeed() {
         model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         tools: [{ googleSearch: {} }],
-        toolConfig: { includeServerSideToolInvocations: true }
+        toolConfig: { includeServerSideToolInvocations: true },
+        generationConfig: {
+          responseMimeType: "application/json"
+        }
       });
       
       const textResponse = genResult.text;
-      const jsonMatch = textResponse?.match(/\[[\s\S]*\]/);
+      if (!textResponse) throw new Error("Empty response from AI");
+
+      let parsed: any[] = [];
+      try {
+        // Try direct parse first (if responseMimeType: application/json worked perfectly)
+        parsed = JSON.parse(textResponse);
+      } catch (e) {
+        // Fallback to regex extraction if it contains markdown or surrounding text
+        const jsonMatch = textResponse.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          parsed = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error("Invalid output format from AI");
+        }
+      }
       
-      if (jsonMatch) {
-        let parsed = JSON.parse(jsonMatch[0]);
+      if (Array.isArray(parsed)) {
         // Ensure every item has a real URL, fallback to search if missing or placeholder
-        parsed = parsed.map((item: any) => {
+        const processed = parsed.map((item: any) => {
           const url = item.url || '';
           const isPlaceholder = !url || url.includes('example.com') || url.includes('placeholder.com') || !url.startsWith('http');
           
@@ -87,10 +103,10 @@ export default function NewsFeed() {
           };
         });
         
-        setNews(parsed);
+        setNews(processed);
         setLastRefreshed(now);
         localStorage.setItem('pulse_last_news_fetch', now.toString());
-        localStorage.setItem('pulse_cached_news', JSON.stringify(parsed));
+        localStorage.setItem('pulse_cached_news', JSON.stringify(processed));
       } else {
         throw new Error("Invalid output format from AI");
       }

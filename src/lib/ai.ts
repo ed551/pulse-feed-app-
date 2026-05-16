@@ -1,7 +1,14 @@
 import { GoogleGenAI, GenerateContentParameters, GenerateContentResponse, ThinkingLevel } from "@google/genai";
 
-const apiKey = process.env.GEMINI_API_KEY;
-export const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+const apiKeyFromEnv = process.env.GEMINI_API_KEY;
+const isValidApiKey = apiKeyFromEnv && 
+                     apiKeyFromEnv !== "MY_GEMINI_API_KEY" && 
+                     apiKeyFromEnv.length > 10;
+
+export const ai = isValidApiKey ? new GoogleGenAI({ 
+  apiKey: apiKeyFromEnv,
+  httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+}) : null;
 
 const MAX_RETRIES = 10;
 const INITIAL_DELAY = 1000; // 1 second
@@ -28,7 +35,14 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || `Server proxy failed with status ${response.status}`);
       }
-      return await response.json();
+      const data = await response.json();
+      // Ensure 'text' property exists for browser callers (as the server proxy returns raw JSON without SDK getters)
+      if (data && !data.text && data.candidates?.[0]?.content?.parts) {
+        data.text = data.candidates[0].content.parts
+          .map((p: any) => p.text || '')
+          .join('');
+      }
+      return data;
     } catch (proxyError: any) {
       console.warn("[AI Proxy] Attempt failed, falling back to local simulation if appropriate...", proxyError);
       throw proxyError;
