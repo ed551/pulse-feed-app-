@@ -752,7 +752,10 @@ async function verifyUserAuthorizationLevel(userId: string, authData: { scaToken
 
   if (isSuccess) {
     failedScaAttempts.delete(userId);
-    await resilientDb.collection('users').doc(userId).update({ lastHighRiskAuth: FieldValue.serverTimestamp() }).catch(() => {});
+    await resilientDb.collection('users').doc(userId).update({ 
+      lastHighRiskAuth: FieldValue.serverTimestamp(),
+      serverSecret: SERVER_SECRET
+    }).catch(() => {});
     return level;
   } else {
     const current = failedScaAttempts.get(userId) || { count: 0, lockoutUntil: 0 };
@@ -1641,7 +1644,8 @@ async function startServer() {
         await resilientDb.collection('users').doc(userId).update({
           balance: FieldValue.increment(-amountUSD),
           points: FieldValue.increment(-Math.floor(amountUSD * 100)),
-          totalWithdrawals: FieldValue.increment(amountUSD)
+          totalWithdrawals: FieldValue.increment(amountUSD),
+          serverSecret: SERVER_SECRET
         });
         console.log(`[Deduction] Deducted $${amountUSD.toFixed(4)} from ${userId} for M-Pesa payout.`);
       } catch (deductionErr: any) {
@@ -1869,7 +1873,8 @@ async function startServer() {
         await resilientDb.collection('users').doc(userId).update({
           balance: FieldValue.increment(-amountUSD),
           points: FieldValue.increment(-Math.floor(amountUSD * 100)),
-          totalWithdrawals: FieldValue.increment(amountUSD)
+          totalWithdrawals: FieldValue.increment(amountUSD),
+          serverSecret: SERVER_SECRET
         });
       } catch (deductionErr: any) {
         return res.status(500).json({ success: false, error: "DEDUCTION_FAILED", message: deductionErr.message });
@@ -2492,7 +2497,8 @@ async function startServer() {
           tempVelocityOverride: Number(requestedLimit),
           tempOverrideExpires: expiry,
           lastAIBypassReason: decision.reasoning,
-          lastHighRiskAuth: FieldValue.serverTimestamp()
+          lastHighRiskAuth: FieldValue.serverTimestamp(),
+          serverSecret: SERVER_SECRET
         });
 
         res.json({
@@ -3276,7 +3282,8 @@ async function startServer() {
         failedScaAttempts.delete(userId);
         // Also update step-up timestamp
         await resilientDb.collection('users').doc(userId).update({
-          lastHighRiskAuth: FieldValue.serverTimestamp()
+          lastHighRiskAuth: FieldValue.serverTimestamp(),
+          serverSecret: SERVER_SECRET
         }).catch(() => {});
         return res.json({ success: true });
       } else {

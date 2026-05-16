@@ -246,6 +246,12 @@ export default function Rewards() {
       
       if (result.status === 'SOFT_DECLINE') {
         setScaError(result.message);
+        
+        // Auto-switch to a higher security method if requiredLevel is higher than current auth
+        if (result.requiredLevel >= 2 && authMethod === 'pin') {
+          setAuthMethod('totp');
+        }
+        
         setShowSCAModal(true);
         setScaPendingAction(() => (p: string, up?: boolean, t?: string) => handlePayment(undefined, p, up, t));
         return;
@@ -377,6 +383,12 @@ export default function Rewards() {
 
         if (result.status === 'SOFT_DECLINE') {
           setScaError(result.message);
+          
+          // Auto-switch to a higher security method if requiredLevel is higher than current auth
+          if (result.requiredLevel >= 2 && authMethod === 'pin') {
+            setAuthMethod('totp');
+          }
+
           setShowSCAModal(true);
           setScaPendingAction(() => (p: string, up?: boolean, t?: string) => handleInternationalPayout(undefined, p, up, t));
           return;
@@ -712,11 +724,33 @@ export default function Rewards() {
                    </button>
                  </div>
 
-                 {/* Error Display */}
+                 {/* Error Display / Velocity Prompt */}
                  {scaError && (
-                   <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-xl flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-                      <p className="text-[10px] text-red-600 dark:text-red-400 font-bold leading-tight">{scaError}</p>
+                   <div className={cn(
+                     "mb-4 p-3 rounded-xl flex flex-col gap-2 border",
+                     scaError.toLowerCase().includes('velocity') 
+                       ? "bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-900/30" 
+                       : "bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-900/30"
+                   )}>
+                      <div className="flex items-center gap-2">
+                        {scaError.toLowerCase().includes('velocity') ? (
+                          <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                        )}
+                        <p className={cn(
+                          "text-[10px] font-bold leading-tight",
+                          scaError.toLowerCase().includes('velocity') ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"
+                        )}>
+                          {scaError.toLowerCase().includes('velocity') ? "AUTHORIZE WITH HIGHER SECURITY" : "VERIFICATION ERROR"}
+                        </p>
+                      </div>
+                      <p className={cn(
+                        "text-[9px] font-medium leading-tight",
+                        scaError.toLowerCase().includes('velocity') ? "text-amber-700 dark:text-amber-300" : "text-red-700 dark:text-red-400"
+                      )}>
+                        {scaError}
+                      </p>
                    </div>
                  )}
 

@@ -500,10 +500,11 @@ export default function PlatformDashboard() {
       let cash = 0;
       
       querySnapshot.forEach((doc) => {
-        const data = doc.data() as UserData;
-        userData.push(data);
-        points += data.points || 0;
-        cash += data.balance || 0;
+        const data = doc.data();
+        const userDataItem = { uid: doc.id, ...data } as UserData;
+        userData.push(userDataItem);
+        points += userDataItem.points || 0;
+        cash += userDataItem.balance || 0;
       });
 
       setUsers(userData);
@@ -1230,7 +1231,7 @@ export default function PlatformDashboard() {
                   {auditReport.issues.length > 0 ? (
                     <div className="space-y-2">
                        {auditReport.issues.map((issue, idx) => (
-                         <div key={idx} className="flex gap-2 p-3 bg-red-50 dark:bg-red-950/20 rounded-xl border border-red-100 dark:border-red-900/30">
+                         <div key={`audit-issue-popup-${idx}-${issue.slice(0, 20)}`} className="flex gap-2 p-3 bg-red-50 dark:bg-red-950/20 rounded-xl border border-red-100 dark:border-red-900/30">
                            <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
                            <p className="text-[10px] font-bold text-red-800 dark:text-red-200 leading-relaxed">{issue}</p>
                          </div>
@@ -1451,7 +1452,7 @@ export default function PlatformDashboard() {
               { label: 'Neural Processing', value: Math.round(systemHealth.neuralLoad), color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
               { label: 'Uptime Integrity', value: 99.98, color: 'text-emerald-500', bg: 'bg-emerald-500/10' }
             ].map((stat, i) => (
-              <div key={i} className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden">
+              <div key={`system-health-stat-${i}-${stat.label}`} className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden">
                 <div className={cn("absolute bottom-0 left-0 h-1 transition-all duration-1000", stat.bg.replace('10', '40'))} style={{ width: `${stat.value}%` }} />
                 <p className="text-[10px] font-black uppercase text-gray-400 mb-1">{stat.label}</p>
                 <div className="flex items-baseline gap-1">
@@ -1961,7 +1962,7 @@ export default function PlatformDashboard() {
                     </div>
                     <div className="prose dark:prose-invert prose-p:text-sm prose-p:leading-relaxed prose-p:text-gray-600 dark:prose-p:text-gray-400">
                       {aiReport.split('\n\n').map((para, i) => (
-                        <p key={i}>{para}</p>
+                        <p key={`ai-para-${i}`}>{para}</p>
                       ))}
                     </div>
                   </div>
@@ -2009,7 +2010,7 @@ export default function PlatformDashboard() {
                   </h3>
                   <div className="space-y-1">
                     {auditReport.issues.map((issue, idx) => (
-                      <p key={idx} className="text-xs font-medium opacity-80 leading-relaxed">• {issue}</p>
+                      <p key={`audit-issue-inline-${idx}-${issue.slice(0, 20)}`} className="text-xs font-medium opacity-80 leading-relaxed">• {issue}</p>
                     ))}
                   </div>
                 </div>
@@ -2246,7 +2247,7 @@ export default function PlatformDashboard() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Custom Rules</label>
                 <div className="space-y-2 mb-4">
                   {modSettings.customRules.map((rule, idx) => (
-                    <div key={idx} className="flex items-center justify-between bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <div key={`rule-${idx}`} className="flex items-center justify-between bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
                       <span className="text-sm text-gray-700 dark:text-gray-300">{rule}</span>
                       <button onClick={() => removeRule(idx)} className="text-red-500 hover:text-red-700 p-1">
                         <Trash2 className="w-4 h-4" />
@@ -2612,7 +2613,7 @@ export default function PlatformDashboard() {
                 <div className="flex items-center justify-between">
                   <div className="flex -space-x-2">
                     {[1, 2, 3].map(i => (
-                      <div key={i} className="w-8 h-8 rounded-full bg-slate-800 border-2 border-slate-900 flex items-center justify-center">
+                      <div key={`shield-icon-locked-${i}`} className="w-8 h-8 rounded-full bg-slate-800 border-2 border-slate-900 flex items-center justify-center">
                         <Lock className="w-3 h-3 text-slate-500" />
                       </div>
                     ))}
@@ -3000,7 +3001,7 @@ export default function PlatformDashboard() {
               platformTransactions
                 .filter(tx => tx.type !== 'alert' && tx.source !== 'system_monitor')
                 .map((tx) => (
-                <div key={tx.id} className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800 flex items-center justify-between group hover:border-blue-500/30 transition-all">
+                <div key={`financial-tx-${tx.id}`} className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800 flex items-center justify-between group hover:border-blue-500/30 transition-all">
                   <div className="flex items-center gap-3">
                     <div className={cn(
                       "p-2 rounded-xl",

@@ -3,11 +3,11 @@ import { GoogleGenAI, GenerateContentParameters, GenerateContentResponse, Thinki
 const apiKey = process.env.GEMINI_API_KEY;
 export const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
-const MAX_RETRIES = 5;
+const MAX_RETRIES = 10;
 const INITIAL_DELAY = 1000; // 1 second
 
 let requestQueue: Promise<void> = Promise.resolve();
-const MIN_REQUEST_INTERVAL = 2000; // 2000ms between AI requests to prevent rate limits as per AGENTS.md
+const MIN_REQUEST_INTERVAL = 1500; // Slightly reduced while maintaining stability
 
 async function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -25,11 +25,6 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
   
   await currentQueue;
   
-  // Only enable High Thinking if explicitly requested to save time
-  if ((params.model?.startsWith('gemini-2.0') || params.model?.startsWith('gemini-3')) && !params.model.includes('tts') && params.config?.thinkingConfig === undefined) {
-    // thinkingLevel is withheld for standard use to keep it fast
-  }
-  
   try {
     let retries = 0;
     
@@ -40,19 +35,35 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
         await delay(MIN_REQUEST_INTERVAL);
         return response;
       } catch (error: any) {
-        const isQuotaExceeded = error?.status === 429 || error?.message?.includes("quota") || error?.message?.includes("RESOURCE_EXHAUSTED") || error?.message?.includes("429");
-        const isProxyError = error?.status === 404 || error?.status === 500 || error?.status === 503 || error?.message?.includes("404") || error?.message?.includes("xhr error");
+        const status = error?.status || 
+                       (error?.message?.includes("404") || error?.message?.includes("NOT_FOUND") ? 404 : 
+                        error?.message?.includes("429") || error?.message?.includes("QUOTA") ? 429 : 500);
+        
+        const isQuotaExceeded = status === 429 || error?.message?.toLowerCase().includes("quota") || error?.message?.toLowerCase().includes("resource_exhausted");
+        const isProxyError = status === 500 || status === 503 || status === 504 || error?.message?.toLowerCase().includes("xhr error") || error?.message?.toLowerCase().includes("failed to fetch");
+        const isNotFound = status === 404;
         
         // Model Fallback Logic:
-        if ((isQuotaExceeded || isProxyError || error?.status === 404)) {
-          if (params.model === 'gemini-3-flash-preview') {
-            console.warn(`Gemini 3 Preview (${params.model}) reported issues (404/Quota). Falling back to gemini-flash-latest.`);
+        if ((isQuotaExceeded || isProxyError || isNotFound)) {
+          const oldModel = params.model;
+          if (params.model === 'gemini-3-flash-preview' || params.model === 'gemini-3-flash') {
             params.model = 'gemini-flash-latest';
+            console.warn(`AI model ${oldModel} failed (${status}). Falling back to ${params.model} as per instructions.`);
             continue;
           }
-          if (params.model?.includes('2.0') || params.model?.includes('3.1')) {
-            console.warn(`Gemini series ${params.model} reported issues. Trying gemini-3-flash-preview.`);
-            params.model = 'gemini-3-flash-preview';
+          if (params.model === 'gemini-flash-latest' || params.model === 'gemini-1.5-flash-latest' || params.model === 'gemini-2.0-flash-exp') {
+            params.model = 'gemini-1.5-flash';
+            console.warn(`AI model ${oldModel} failed (${status}). Falling back to stable ${params.model}`);
+            // Disable tools as a last resort for broad compatibility
+            if (params.tools) {
+               delete params.tools;
+               delete params.toolConfig;
+            }
+            continue;
+          }
+          if (params.model === 'gemini-1.5-flash') {
+            params.model = 'gemini-1.5-pro';
+            console.warn(`AI model ${oldModel} failed (${status}). Falling back to pro ${params.model}`);
             continue;
           }
         }
@@ -60,15 +71,15 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
 
         if ((isQuotaExceeded || isProxyError) && retries < MAX_RETRIES) {
           retries++;
-          // Exponential backoff with jitter
-          const backoffDelay = (INITIAL_DELAY * Math.pow(2, retries)) + (Math.random() * 1000); 
-          console.warn(`AI service busy. Retrying in ${Math.round(backoffDelay)}ms... (Attempt ${retries}/${MAX_RETRIES})`);
+          // Exponential backoff with jitter and increased delay for higher retries
+          const backoffDelay = (INITIAL_DELAY * Math.pow(1.5, retries)) + (Math.random() * 2000); 
+          console.warn(`AI service under load (Status: ${status}). Retrying in ${Math.round(backoffDelay)}ms... (Attempt ${retries}/${MAX_RETRIES})`);
           await delay(backoffDelay);
           continue;
         }
         
         if (isQuotaExceeded) {
-          const cleanError = new Error(`The AI service is currently at peak capacity (Attempt ${retries}/${MAX_RETRIES}). We are retrying with increased delays to ensure your request completes.`);
+          const cleanError = new Error(`The AI service is currently at peak capacity. We are retrying with increased delays to ensure your request completes. (System load: ${retries}/${MAX_RETRIES})`);
           (cleanError as any).status = 429;
           (cleanError as any).originalError = error;
           throw cleanError;
@@ -77,7 +88,7 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
         throw error;
       }
     }
-    throw new Error("AI service unavailable after multiple retries.");
+    throw new Error("AI service unavailable after multiple retries across different models.");
   } finally {
     releaseQueue!();
   }
