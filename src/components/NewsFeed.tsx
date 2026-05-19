@@ -78,16 +78,30 @@ export default function NewsFeed() {
       if (!textResponse) throw new Error("Empty response from AI");
 
       let parsed: any[] = [];
+      const cleanText = textResponse.trim();
+      
       try {
-        // Try direct parse first (if responseMimeType: application/json worked perfectly)
-        parsed = JSON.parse(textResponse);
+        // Try direct parse first
+        parsed = JSON.parse(cleanText);
       } catch (e) {
-        // Fallback to regex extraction if it contains markdown or surrounding text
-        const jsonMatch = textResponse.match(/\[[\s\S]*\]/);
+        // Fallback to extraction if it contains markdown or surrounding text
+        const jsonMatch = cleanText.match(/\[\s*{[\s\S]*}\s*\]/);
         if (jsonMatch) {
-          parsed = JSON.parse(jsonMatch[0]);
-        } else {
-          throw new Error("Invalid output format from AI");
+          try {
+            parsed = JSON.parse(jsonMatch[0]);
+          } catch (innerErr) {
+            // Even more desperate extraction: find all objects
+            const objectsMatch = cleanText.match(/{[\s\S]*?}/g);
+            if (objectsMatch) {
+              parsed = objectsMatch.map(objStr => {
+                try { return JSON.parse(objStr); } catch (e) { return null; }
+              }).filter(o => o !== null);
+            }
+          }
+        }
+        
+        if (!parsed || parsed.length === 0) {
+           throw new Error("Invalid output format from AI (No JSON array found)");
         }
       }
       
@@ -112,9 +126,10 @@ export default function NewsFeed() {
       }
     } catch (error: any) {
       const isQuota = error?.status === 429 || error?.message?.includes("quota") || error?.message?.includes("RESOURCE_EXHAUSTED");
+      const isNotFound = error?.status === 404 || error?.message?.includes("404") || error?.message?.includes("NOT_FOUND");
       
-      if (isQuota) {
-        console.warn("News Feed: AI Quota exhausted, using local fallback content.");
+      if (isQuota || isNotFound) {
+        console.warn(`News Feed AI unavailable (${error?.status || (isNotFound ? '404' : '429')}). Using fallback.`);
       } else {
         console.error("News Fetch Error:", error);
       }

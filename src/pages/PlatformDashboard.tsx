@@ -1801,6 +1801,13 @@ export default function PlatformDashboard() {
                             {w.userName || 'Anonymous'}
                           </div>
                           <div className="text-[11px] text-gray-500 font-mono mt-0.5">{w.userEmail}</div>
+                          {/* JSON Style Account Integration */}
+                          <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-800">
+                            <p className="text-[8px] font-black text-gray-400 uppercase mb-1 tracking-widest">Platform JSON Identity</p>
+                            <p className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 break-all">
+                              {`{ "Account": "${w.userEmail}", "Name": "${w.userName}" }`}
+                            </p>
+                          </div>
                           <div className="text-[9px] text-gray-400 mt-1 uppercase font-bold tracking-widest">UID: {w.userId?.slice(-6)}</div>
                         </td>
                         <td className="px-6 py-4">
@@ -3153,6 +3160,12 @@ export default function PlatformDashboard() {
                       <div>
                         <p className="font-bold text-gray-900 dark:text-white text-sm">{user.displayName || 'Anonymous'}</p>
                         <p className="text-[10px] text-gray-500 dark:text-gray-400">{user.email}</p>
+                        {/* JSON Account View for transparency */}
+                        <div className="mt-1">
+                          <code className="text-[8px] bg-slate-100 dark:bg-slate-900 px-1 py-0.5 rounded text-blue-600 dark:text-blue-400">
+                             {`{ "Account": "01100975259001" }`}
+                          </code>
+                        </div>
                       </div>
                     </div>
                   </td>

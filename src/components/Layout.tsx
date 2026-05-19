@@ -364,19 +364,22 @@ export default function Layout() {
           }
         } catch (err: any) {
           const errorMsg = err?.message || JSON.stringify(err);
-          if (err?.status === 429) {
-            console.warn("Gold Smart Analysis Service busy (will retry).");
+          if (err?.status === 429 || err?.status === 404 || errorMsg.includes('404') || errorMsg.includes('NOT_FOUND')) {
+            console.warn(`Gold Smart Analysis Service unavailable (${err?.status || '404'}). Using cache/default.`);
             // Use cached text if available even if date is old
             const cachedText = localStorage.getItem('gold_analysis_text');
             if (cachedText) {
               goldBrain.updateAnalysis(effectiveDate, cachedText);
             }
-          } else if (errorMsg.includes('Rpc failed') || errorMsg.includes('xhr error')) {
+          } else if (errorMsg.includes('Rpc failed') || errorMsg.includes('xhr error') || errorMsg.includes('Failed to fetch')) {
             // Silent retry for transient network errors
+            console.warn("Gold Smart Analysis: Transient network error (Failed to fetch/RPC). Retrying...");
             const cachedText = localStorage.getItem('gold_analysis_text');
             if (cachedText) {
               goldBrain.updateAnalysis(effectiveDate, cachedText);
             }
+          } else if (err?.message?.includes("AbortError")) {
+             // Silent ignore for aborted requests
           } else {
             console.error("Gold Smart Analysis Error (will retry):", err);
           }

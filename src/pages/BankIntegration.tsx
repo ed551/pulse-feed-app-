@@ -50,7 +50,7 @@ const BankingPortal: React.FC = () => {
     Destinations: [
       {
         Reference: "WDL-77284",
-        AccountNumber: "+254728011174", // Verified recipient phone in JSON
+        AccountNumber: "01100975259001", // Verified recipient phone in JSON
         BankCode: "11", // Co-op Bank PesaLink code (11)
         Amount: 5000.00,
         TransactionCurrency: "KES",

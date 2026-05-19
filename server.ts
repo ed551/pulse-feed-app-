@@ -79,10 +79,48 @@ async function generateContentWithRetry(params: any): Promise<any> {
         await delay(MIN_REQUEST_INTERVAL);
         return response;
       } catch (error: any) {
-        const isQuotaExceeded = error?.status === 429 || error?.message?.includes("429");
+        const status = error?.status || 
+                       (error?.message?.includes("404") || error?.message?.includes("NOT_FOUND") ? 404 : 
+                        error?.message?.includes("429") || error?.message?.includes("QUOTA") ? 429 : 500);
+        
+        const isQuotaExceeded = status === 429 || error?.message?.toLowerCase().includes("quota") || error?.message?.toLowerCase().includes("resource_exhausted");
+        
+        // Model Fallback Logic on Server (Sync with src/lib/ai.ts)
+        if (isQuotaExceeded || status === 404) {
+          const oldModel = params.model;
+          
+          if (isQuotaExceeded) {
+            console.warn(`[Server AI] ${oldModel} quota hit (429). Waiting 1s before fallback...`);
+            await delay(1000);
+          }
+
+          if (params.model === 'gemini-3-flash-preview') {
+            params.model = 'gemini-2.0-flash';
+          } else if (params.model === 'gemini-2.0-flash') {
+            params.model = 'gemini-flash-latest';
+          } else if (params.model === 'gemini-flash-latest') {
+            params.model = 'gemini-3.1-flash-lite';
+          } else if (params.model === 'gemini-3.1-flash-lite') {
+            params.model = 'gemini-flash-lite-latest';
+          } else if (params.model === 'gemini-flash-lite-latest') {
+            params.model = 'gemini-2.0-flash-lite';
+          } else if (params.model === 'gemini-2.0-flash-lite') {
+            params.model = 'gemini-2.5-flash';
+          } else if (params.model === 'gemini-2.5-flash') {
+            params.model = 'gemini-3.1-pro-preview';
+          } else {
+            console.error(`[Server AI] All model fallbacks exhausted for ${oldModel}`);
+            throw error;
+          }
+          
+          console.warn(`[Server AI] Falling back from ${oldModel} to ${params.model}`);
+          continue;
+        }
+
         if (isQuotaExceeded && retries < MAX_RETRIES) {
           retries++;
           const backoffDelay = (INITIAL_DELAY * Math.pow(2, retries)) + (Math.random() * 1000); 
+          console.warn(`[Server AI] Quota exceeded. Retrying in ${Math.round(backoffDelay)}ms... (Attempt ${retries}/${MAX_RETRIES})`);
           await delay(backoffDelay);
           continue;
         }
@@ -836,8 +874,8 @@ try {
       timestamp: FieldValue.serverTimestamp(),
       reference: reference,
       userId: isUserWithdrawal ? (triggeredBy === 'User Action' ? 'user-system' : 'system') : 'EDWINMUOHA',
-      userEmail: isUserWithdrawal ? destination : 'Edwin (01100975259001)',
-      userName: isUserWithdrawal ? 'Platform User' : 'OPERATIONAL: EDWIN MUOHA WATITU',
+      userEmail: isUserWithdrawal ? destination : '01100975259001',
+      userName: isUserWithdrawal ? 'Platform User' : 'EDWIN MUOHA WATITU',
       method: type,
       details: `${isUserWithdrawal ? 'User' : 'Operational'} ${type} ${status === 'simulated' ? 'simulated' : 'payout'} to ${destination} (Value: KES ${amountKes.toLocaleString()})`,
       serverSecret: SERVER_SECRET,
@@ -3232,18 +3270,10 @@ async function startServer() {
       const { params } = req.body;
       if (!params) return res.status(400).json({ error: "Missing parameters" });
       
-      if (!ai) {
-        return res.status(500).json({ 
-          error: "Gemini API key is not configured or invalid in server environment. Please check Secrets panel.",
-          status: 500
-        });
-      }
-      
-      const response = await ai.models.generateContent(params);
+      const response = await generateContentWithRetry(params);
       res.json(response);
     } catch (err: any) {
       console.error("[Gemini Proxy] Failed:", err);
-      // Fallback model name check in error
       const status = err.status || 500;
       res.status(status).json({ 
         error: err.message, 

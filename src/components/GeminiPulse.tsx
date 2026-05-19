@@ -45,8 +45,12 @@ export default function GeminiPulse() {
           const data = JSON.parse(jsonMatch[0]);
           setInsights(data.map((d: any, i: number) => ({ ...d, id: `insight-${i}` })));
         }
-      } catch (err) {
-        console.error("Pulse error", err);
+      } catch (err: any) {
+        const isQuota = err?.status === 429 || err?.message?.includes("quota") || err?.message?.includes("RESOURCE_EXHAUSTED");
+        const isNotFound = err?.status === 404 || err?.message?.includes("404") || err?.message?.includes("NOT_FOUND");
+        if (!isQuota && !isNotFound) {
+          console.error("Pulse error", err);
+        }
       } finally {
         setLoading(false);
       }

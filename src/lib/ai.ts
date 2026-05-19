@@ -79,29 +79,42 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
         const isProxyError = status === 500 || status === 503 || status === 504 || error?.message?.toLowerCase().includes("xhr error") || error?.message?.toLowerCase().includes("failed to fetch");
         const isNotFound = status === 404;
         
-        // Model Fallback Logic:
+        // Model Fallback Logic (Sync with server.ts)
         if ((isQuotaExceeded || isProxyError || isNotFound)) {
           const oldModel = params.model;
-          if (params.model === 'gemini-3-flash-preview' || params.model === 'gemini-3-flash') {
+          
+          if (isQuotaExceeded) {
+            console.warn(`[Client AI] ${oldModel} quota hit (429). Waiting 1s before fallback...`);
+            await delay(1000);
+          }
+
+          if (params.model === 'gemini-3-flash-preview') {
+            params.model = 'gemini-2.0-flash';
+          } else if (params.model === 'gemini-2.0-flash') {
             params.model = 'gemini-flash-latest';
-            console.warn(`AI model ${oldModel} failed (${status}). Falling back to ${params.model} as per instructions.`);
-            continue;
+          } else if (params.model === 'gemini-flash-latest') {
+            params.model = 'gemini-3.1-flash-lite';
+          } else if (params.model === 'gemini-3.1-flash-lite') {
+            params.model = 'gemini-flash-lite-latest';
+          } else if (params.model === 'gemini-flash-lite-latest') {
+            params.model = 'gemini-2.0-flash-lite';
+          } else if (params.model === 'gemini-2.0-flash-lite') {
+            params.model = 'gemini-2.5-flash';
+          } else if (params.model === 'gemini-2.5-flash') {
+            params.model = 'gemini-3.1-pro-preview';
+          } else {
+            console.error(`[Client AI] All model fallbacks exhausted for ${oldModel}`);
+            throw error;
           }
-          if (params.model === 'gemini-flash-latest' || params.model === 'gemini-1.5-flash-latest' || params.model === 'gemini-2.0-flash-exp') {
-            params.model = 'gemini-1.5-flash';
-            console.warn(`AI model ${oldModel} failed (${status}). Falling back to stable ${params.model}`);
-            // Disable tools as a last resort for broad compatibility
-            if (params.tools) {
-               delete params.tools;
-               delete params.toolConfig;
-            }
-            continue;
+
+          // Disable tools as a last resort for broad compatibility if we reach this point in fallback
+          if (params.tools && (params.model.includes('lite') || params.model.includes('latest'))) {
+             delete params.tools;
+             delete params.toolConfig;
           }
-          if (params.model === 'gemini-1.5-flash') {
-            params.model = 'gemini-1.5-pro';
-            console.warn(`AI model ${oldModel} failed (${status}). Falling back to pro ${params.model}`);
-            continue;
-          }
+          
+          console.warn(`[Client AI] Falling back from ${oldModel} to ${params.model}`);
+          continue;
         }
 
 
