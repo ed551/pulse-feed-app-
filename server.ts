@@ -38,20 +38,39 @@ import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
 
-const apiKeyFromEnv = process.env.GEMINI_API_KEY;
-// Basic check to prevent using the placeholder common in fresh remixed projects
-const isValidApiKey = apiKeyFromEnv && 
-                     apiKeyFromEnv !== "MY_GEMINI_API_KEY" && 
-                     apiKeyFromEnv.length > 10;
+const rawKeys = [
+  process.env.GEMINI_AI,
+  process.env.GEMINI_API_KEY,
+  process.env.GOOGLE_API_KEY,
+  process.env.GEMINI_API
+].filter(k => k && k.length > 5 && k !== "MY_GEMINI_API_KEY").map(k => k!.trim());
 
-const ai = isValidApiKey ? new GoogleGenAI({ 
-  apiKey: apiKeyFromEnv,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
+const AVAILABLE_KEYS = [...new Set(rawKeys)];
+
+const isValidApiKey = AVAILABLE_KEYS.length > 0;
+let currentKeyIndex = 0;
+
+function createAIClient(key: string) {
+  return new GoogleGenAI({ 
+    apiKey: key,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
     }
-  }
-}) : null;
+  });
+}
+
+let ai = isValidApiKey ? createAIClient(AVAILABLE_KEYS[0]) : null;
+
+if (isValidApiKey) {
+  console.log(`[AI Init] ${AVAILABLE_KEYS.length} Gemini API Keys detected.`);
+  AVAILABLE_KEYS.forEach((k, i) => {
+    console.log(`[AI Init] Key ${i+1}: prefix ${k.substring(0, 4)}..., length ${k.length}`);
+  });
+} else {
+  console.warn("[AI Init] No valid Gemini API Key found in environment variables. Searched: GEMINI_AI, GEMINI_API_KEY, GOOGLE_API_KEY, GEMINI_API");
+}
 const MIN_REQUEST_INTERVAL = 2000;
 const MAX_RETRIES = 3;
 const INITIAL_DELAY = 1000;
@@ -79,21 +98,58 @@ async function generateContentWithRetry(params: any): Promise<any> {
         await delay(MIN_REQUEST_INTERVAL);
         return response;
       } catch (error: any) {
-        const status = error?.status || 
-                       (error?.message?.includes("404") || error?.message?.includes("NOT_FOUND") ? 404 : 
-                        error?.message?.includes("429") || error?.message?.includes("QUOTA") ? 429 : 
-                        error?.message?.includes("503") || error?.message?.includes("UNAVAILABLE") ? 503 : 500);
+        const errorString = error?.message || (error?.toString ? error.toString() : "");
+        const rawErrorString = JSON.stringify(error);
         
-        const isQuotaExceeded = status === 429 || error?.message?.toLowerCase().includes("quota") || error?.message?.toLowerCase().includes("resource_exhausted");
-        const isUnavailable = status === 503 || error?.message?.toLowerCase().includes("unavailable") || error?.message?.toLowerCase().includes("high demand");
+        const errorJson = (function() {
+          try {
+            if (errorString.includes("{")) {
+              const cleaned = errorString.substring(errorString.indexOf("{"));
+              return JSON.parse(cleaned);
+            }
+          } catch(e) {}
+          return null;
+        })();
+
+        const status = error?.status || errorJson?.error?.code ||
+                       (errorString.includes("404") || errorString.includes("NOT_FOUND") ? 404 : 
+                        errorString.includes("429") || errorString.includes("QUOTA") ? 429 : 
+                        errorString.includes("503") || errorString.includes("UNAVAILABLE") ? 503 : 500);
         
-        // Model Fallback Logic on Server (Sync with src/lib/ai.ts)
-        if (isQuotaExceeded || isUnavailable || status === 404) {
+        const combinedErrorText = (errorString + " " + rawErrorString).toLowerCase();
+        
+        const isDepleted = combinedErrorText.includes("prepayment credits are depleted") || 
+                          combinedErrorText.includes("billing") ||
+                          combinedErrorText.includes("credits are exhausted") ||
+                          combinedErrorText.includes("prepayment") ||
+                          errorJson?.error?.message?.toLowerCase().includes("prepayment") ||
+                          errorJson?.error?.message?.toLowerCase().includes("credits are depleted");
+
+        const isQuotaExceeded = status === 429 || 
+                               combinedErrorText.includes("quota") || 
+                               combinedErrorText.includes("resource_exhausted") ||
+                               errorJson?.error?.status === "RESOURCE_EXHAUSTED";
+
+        const isUnavailable = status === 503 || combinedErrorText.includes("unavailable") || status === 402 || status === 504;
+        
+        // Key Rotation on Billing/Quota failure
+        if ((isDepleted || status === 429 || status === 402 || isQuotaExceeded) && currentKeyIndex < AVAILABLE_KEYS.length - 1) {
+          const oldIndex = currentKeyIndex;
+          currentKeyIndex++;
+          console.warn(`[Server AI] Key ${oldIndex + 1} limited (${status}). Rotating to key ${currentKeyIndex + 1}/${AVAILABLE_KEYS.length}...`);
+          ai = createAIClient(AVAILABLE_KEYS[currentKeyIndex]);
+          await delay(1000); 
+          continue; 
+        }
+
+        // Final Model Fallback Logic on Server (Sync with src/lib/ai.ts)
+        if (isQuotaExceeded || isUnavailable || status === 404 || isDepleted) {
           const oldModel = params.model;
           
-          if (isQuotaExceeded || isUnavailable) {
-            console.warn(`[Server AI] ${oldModel} ${isUnavailable ? 'unavailable' : 'quota hit'} (${status}). Waiting 1.5s before fallback...`);
-            await delay(1500);
+          if (isQuotaExceeded || isUnavailable || isDepleted) {
+            const waitTime = isDepleted ? 3000 : 2000;
+            console.warn(`[Server AI] ${oldModel} error ${status}. Waiting ${waitTime/1000}s for cooldown...`);
+            await delay(waitTime);
           }
 
           if (params.model === 'gemini-3-flash-preview') {
@@ -101,6 +157,10 @@ async function generateContentWithRetry(params: any): Promise<any> {
           } else if (params.model === 'gemini-2.0-flash') {
             params.model = 'gemini-flash-latest';
           } else if (params.model === 'gemini-flash-latest') {
+            params.model = 'gemini-1.5-flash'; 
+          } else if (params.model === 'gemini-1.5-flash') {
+            params.model = 'gemini-1.5-flash-8b'; 
+          } else if (params.model === 'gemini-1.5-flash-8b') {
             params.model = 'gemini-3.1-flash-lite';
           } else if (params.model === 'gemini-3.1-flash-lite') {
             params.model = 'gemini-flash-lite-latest';
@@ -109,13 +169,22 @@ async function generateContentWithRetry(params: any): Promise<any> {
           } else if (params.model === 'gemini-2.0-flash-lite') {
             params.model = 'gemini-2.5-flash';
           } else if (params.model === 'gemini-2.5-flash') {
-            params.model = 'gemini-3.1-pro-preview';
+            params.model = 'gemini-1.5-pro';
+          } else if (params.model === 'gemini-1.5-pro') {
+            params.model = 'gemini-1.5-pro-latest';
           } else {
-            console.error(`[Server AI] All model fallbacks exhausted for ${oldModel}`);
+            console.error(`[Server AI] All model fallbacks exhausted for ${oldModel}.`);
+            // If it's a billing error and we tried everything, throw explicit error
+            if (isDepleted || status === 402) {
+              const billingError: any = new Error("Gemini API credits are depleted. All models and keys in your project are exhausted. Please check your billing at ai.studio.");
+              billingError.status = 402;
+              billingError.code = "BILLING_DEPLETED";
+              throw billingError;
+            }
             throw error;
           }
           
-          console.warn(`[Server AI] Falling back from ${oldModel} to ${params.model}`);
+          console.warn(`[Server AI] Retrying with model fallback: ${params.model}`);
           continue;
         }
 
@@ -971,6 +1040,28 @@ async function startServer() {
   
   const app = express();
   app.set('trust proxy', 1);
+
+  // Debug middleware for AI requests
+  app.use('/api/gemini', (req, res, next) => {
+    console.log(`[AI Request Monitor] ${req.method} ${req.path} - Headers: ${JSON.stringify(req.headers['content-type'])}`);
+    next();
+  });
+
+  app.get("/api/gemini/status", (req, res) => {
+    try {
+      res.json({ 
+        initialized: !!ai, 
+        isValid: !!isValidApiKey,
+        keyCount: AVAILABLE_KEYS.length,
+        currentKeyIndex: currentKeyIndex,
+        envVarsDetected: Object.keys(process.env).filter(k => (k.includes("GEMINI") || k.includes("GOOGLE_API")) && !k.includes("SECRET")),
+        mode: process.env.NODE_ENV || "development"
+      });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to check status" });
+    }
+  });
+
   // Security Enforcement: AI Studio/Cloud Run requires port 3000 for local proxy
   const PORT = 3000;
   const HOST = "0.0.0.0";
@@ -979,22 +1070,47 @@ async function startServer() {
 
   // High-Priority AI Proxy Route
   app.post("/api/gemini/generate", async (req, res) => {
+    // Force JSON response
+    res.setHeader('Content-Type', 'application/json');
+
     try {
       console.log(`[Gemini Proxy] HIT - Method: ${req.method}, Path: ${req.path}`);
+      
+      if (!isValidApiKey || !ai) {
+        console.error("[Gemini Proxy] CRITICAL: GoogleGenAI was NOT initialized correctly.");
+        return res.status(503).json({ 
+          error: "Gemini API is not configured on the server. Please ensure GEMINI_AI or GEMINI_API_KEY is properly set in AI Studio Secrets.",
+          status: 503,
+          code: "KEY_MISSING"
+        });
+      }
+
       const { params } = req.body;
       if (!params) {
-        console.warn("[Gemini Proxy] Missing params in body:", req.body);
-        return res.status(400).json({ error: "Missing parameters" });
+        return res.status(400).json({ error: "Missing parameters", status: 400 });
       }
       
       const response = await generateContentWithRetry(params);
-      res.json(response);
+      return res.json(response);
     } catch (err: any) {
-      console.error("[Gemini Proxy] ERROR:", err);
-      const status = typeof err.status === 'number' ? err.status : 500;
-      res.status(status).json({ 
-        error: err.message, 
+      const errorString = err?.message || (err?.toString ? err.toString() : "Unknown error");
+      const rawError = JSON.stringify(err);
+      const combinedText = (errorString + " " + rawError).toLowerCase();
+      
+      console.error("[Gemini Proxy] FINAL ERROR DETAILS:", errorString);
+      
+      const isDepleted = combinedText.includes("prepayment credits are depleted") || 
+                        combinedText.includes("billing") ||
+                        combinedText.includes("credits are exhausted") ||
+                        combinedText.includes("resource_exhausted") ||
+                        combinedText.includes("api_key_invalid");
+      
+      const status = isDepleted ? 402 : (typeof err.status === 'number' ? err.status : 500);
+      
+      return res.status(status).json({ 
+        error: isDepleted ? "Your Gemini API credits are depleted or the key is invalid. Please check your billing settings in AI Studio." : errorString,
         status: status,
+        code: isDepleted ? "BILLING_DEPLETED" : "AI_ERROR",
         details: err.details || null
       });
     }

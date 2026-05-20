@@ -151,11 +151,11 @@ export default function NewsFeed() {
   };
 
   const handleNewsError = (error: any) => {
-    const isQuota = error?.status === 429 || error?.message?.includes("quota") || error?.message?.includes("RESOURCE_EXHAUSTED");
-    const isNotFound = error?.status === 404 || error?.message?.includes("404") || error?.message?.includes("NOT_FOUND");
+    const isQuota = error?.status === 429 || error?.message?.toLowerCase().includes("quota") || error?.message?.toLowerCase().includes("resource_exhausted");
+    const isBilling = error?.message?.toLowerCase().includes("billing") || error?.message?.toLowerCase().includes("credit") || error?.message?.toLowerCase().includes("depleted");
     
-    if (isQuota || isNotFound) {
-      console.warn(`News Feed AI unavailable (${error?.status || (isNotFound ? '404' : '429')}). Using fallback.`);
+    if (isQuota || isBilling) {
+      console.warn(`News Feed AI locally restricted (${isBilling ? 'Billing/Depleted' : 'Quota Hit'}). Switching to curated regional feed.`);
     } else {
       console.error("News Fetch Error:", error);
     }

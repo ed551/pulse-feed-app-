@@ -1,9 +1,18 @@
 import { GoogleGenAI, GenerateContentParameters, GenerateContentResponse, ThinkingLevel } from "@google/genai";
 
-const apiKeyFromEnv = process.env.GEMINI_API_KEY;
-const isValidApiKey = apiKeyFromEnv && 
-                     apiKeyFromEnv !== "MY_GEMINI_API_KEY" && 
-                     apiKeyFromEnv.length > 10;
+const getEnv = (name: string) => {
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      return process.env[name];
+    }
+  } catch (e) {}
+  return undefined;
+};
+
+const apiKeyFromEnv = getEnv("GEMINI_AI") || getEnv("GEMINI_API_KEY") || getEnv("GOOGLE_API_KEY") || getEnv("GEMINI_API");
+const isValidApiKey = !!(apiKeyFromEnv && 
+                      apiKeyFromEnv !== "MY_GEMINI_API_KEY" && 
+                      apiKeyFromEnv.length > 5);
 
 export const ai = isValidApiKey ? new GoogleGenAI({ 
   apiKey: apiKeyFromEnv,
@@ -26,27 +35,37 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
   
   if (isBrowser) {
     let proxyRetries = 0;
-    const MAX_PROXY_RETRIES = 3;
+    const MAX_PROXY_RETRIES = 5; // Increased for slower boots
 
     while (proxyRetries <= MAX_PROXY_RETRIES) {
       try {
-        const response = await fetch("/api/gemini/generate", {
+        const targetUrl = `${window.location.origin}/api/gemini/generate`;
+        if (proxyRetries === 0) {
+          console.log(`[AI Proxy] Starting request to: ${targetUrl}`);
+        }
+        
+        const response = await fetch(targetUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ params })
+          headers: { 
+            "Content-Type": "application/json",
+            "X-Client-Retry": proxyRetries.toString()
+          },
+          cache: "no-cache",
+          body: JSON.stringify({ params }),
         });
 
         const responseText = await response.text();
         
+        // Detect HTML responses from infrastructure (indicates server booting or 404)
         if (responseText.includes("<!DOCTYPE html>") || responseText.includes("<html") || responseText.includes("Starting Server...")) {
           if (proxyRetries < MAX_PROXY_RETRIES) {
             proxyRetries++;
-            const backoff = 2000 * proxyRetries;
-            console.warn(`[AI Proxy] Received HTML (likely server starting). Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
+            const backoff = 3000 * proxyRetries; // Slower backoff
+            console.warn(`[AI Proxy] Server is booting (received HTML). Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
             await delay(backoff);
             continue;
           }
-          throw new Error("Server is still starting or returned HTML. Please try again in a few moments.");
+          throw new Error("The backend server is taking longer than expected to start. Please refresh the page in a few moments.");
         }
 
         let data;
@@ -55,19 +74,31 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
         } catch (parseError) {
           console.error("[AI Proxy] Failed to parse JSON response. Status:", response.status);
           console.error("[AI Proxy] Response snippet:", responseText.substring(0, 200));
-          throw new Error(`Invalid JSON response from server proxy (Status ${response.status}): ${responseText.substring(0, 50)}...`);
+          throw new Error(`Server returned an invalid response (Status ${response.status}). The backend might still be warming up.`);
         }
 
         if (!response.ok) {
-          const isRetryable = response.status === 503 || response.status === 429 || response.status === 504;
+          const combinedErrorText = (data.error || "" + JSON.stringify(data)).toLowerCase();
+          const isBilling = response.status === 402 || 
+                           data.code === "BILLING_DEPLETED" || 
+                           combinedErrorText.includes("prepayment credits are depleted") ||
+                           combinedErrorText.includes("billing") ||
+                           combinedErrorText.includes("credits are exhausted") ||
+                           combinedErrorText.includes("resource_exhausted");
+
+          if (isBilling) {
+            throw new Error("AI functionality is temporarily limited due to API credit depletion. Please verify your Gemini API billing setup in AI Studio.");
+          }
+          
+          const isRetryable = response.status === 503 || response.status === 429 || response.status === 504 || response.status === 502;
           if (isRetryable && proxyRetries < MAX_PROXY_RETRIES) {
             proxyRetries++;
-            const backoff = 1500 * proxyRetries;
+            const backoff = 2000 * proxyRetries;
             console.warn(`[AI Proxy] Server returned ${response.status}. Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
             await delay(backoff);
             continue;
           }
-          throw new Error(data.error || `Server proxy failed with status ${response.status}`);
+          throw new Error(data.error || `AI service returned error ${response.status}`);
         }
         
         // Robust 'text' property reconstruction for browser callers
@@ -81,19 +112,18 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
         
         return data;
       } catch (proxyError: any) {
-        if (proxyRetries >= MAX_PROXY_RETRIES) {
-          console.warn("[AI Proxy] Max retries exhausted:", proxyError);
-          throw proxyError;
-        }
-        // Connection errors
-        if (proxyError.name === 'TypeError' && proxyError.message === 'Failed to fetch') {
+        if (proxyRetries < MAX_PROXY_RETRIES) {
            proxyRetries++;
-           await delay(2000);
+           const backoff = 3000 * proxyRetries;
+           console.warn(`[AI Proxy] Network error (Failed to fetch). Possible server restart. Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
+           await delay(backoff);
            continue;
         }
-        throw proxyError;
+        console.error("[AI Proxy] Max retries exhausted for network error:", proxyError);
+        throw new Error("Unable to connect to the AI service. Please check your internet connection or try again in a minute.");
       }
     }
+    throw new Error("AI Request failed after multiple connection attempts.");
   }
 
   // 2. Server-side implementation (existing logic)
@@ -131,8 +161,8 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
           const oldModel = params.model;
           
           if (isQuotaExceeded) {
-            console.warn(`[Client AI] ${oldModel} quota hit (429). Waiting 1s before fallback...`);
-            await delay(1000);
+            console.warn(`[Client AI] ${oldModel} quota hit (429). Waiting 2s before fallback...`);
+            await delay(2000);
           }
 
           if (params.model === 'gemini-3-flash-preview') {
@@ -140,6 +170,10 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
           } else if (params.model === 'gemini-2.0-flash') {
             params.model = 'gemini-flash-latest';
           } else if (params.model === 'gemini-flash-latest') {
+            params.model = 'gemini-1.5-flash';
+          } else if (params.model === 'gemini-1.5-flash') {
+            params.model = 'gemini-1.5-flash-8b';
+          } else if (params.model === 'gemini-1.5-flash-8b') {
             params.model = 'gemini-3.1-flash-lite';
           } else if (params.model === 'gemini-3.1-flash-lite') {
             params.model = 'gemini-flash-lite-latest';
@@ -148,7 +182,9 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
           } else if (params.model === 'gemini-2.0-flash-lite') {
             params.model = 'gemini-2.5-flash';
           } else if (params.model === 'gemini-2.5-flash') {
-            params.model = 'gemini-3.1-pro-preview';
+            params.model = 'gemini-1.5-pro';
+          } else if (params.model === 'gemini-1.5-pro') {
+            params.model = 'gemini-1.5-pro-latest';
           } else {
             console.error(`[Client AI] All model fallbacks exhausted for ${oldModel}`);
             throw error;
