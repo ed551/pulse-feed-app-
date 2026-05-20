@@ -25,27 +25,74 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
   const isBrowser = typeof window !== 'undefined';
   
   if (isBrowser) {
-    try {
-      const response = await fetch("/api/gemini/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ params })
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server proxy failed with status ${response.status}`);
+    let proxyRetries = 0;
+    const MAX_PROXY_RETRIES = 3;
+
+    while (proxyRetries <= MAX_PROXY_RETRIES) {
+      try {
+        const response = await fetch("/api/gemini/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ params })
+        });
+
+        const responseText = await response.text();
+        
+        if (responseText.includes("<!DOCTYPE html>") || responseText.includes("<html") || responseText.includes("Starting Server...")) {
+          if (proxyRetries < MAX_PROXY_RETRIES) {
+            proxyRetries++;
+            const backoff = 2000 * proxyRetries;
+            console.warn(`[AI Proxy] Received HTML (likely server starting). Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
+            await delay(backoff);
+            continue;
+          }
+          throw new Error("Server is still starting or returned HTML. Please try again in a few moments.");
+        }
+
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error("[AI Proxy] Failed to parse JSON response. Status:", response.status);
+          console.error("[AI Proxy] Response snippet:", responseText.substring(0, 200));
+          throw new Error(`Invalid JSON response from server proxy (Status ${response.status}): ${responseText.substring(0, 50)}...`);
+        }
+
+        if (!response.ok) {
+          const isRetryable = response.status === 503 || response.status === 429 || response.status === 504;
+          if (isRetryable && proxyRetries < MAX_PROXY_RETRIES) {
+            proxyRetries++;
+            const backoff = 1500 * proxyRetries;
+            console.warn(`[AI Proxy] Server returned ${response.status}. Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
+            await delay(backoff);
+            continue;
+          }
+          throw new Error(data.error || `Server proxy failed with status ${response.status}`);
+        }
+        
+        // Robust 'text' property reconstruction for browser callers
+        if (!data.text) {
+          try {
+            const parts = data.candidates?.[0]?.content?.parts || [];
+            const textContent = parts.filter((p: any) => p.text).map((p: any) => p.text).join('');
+            if (textContent) data.text = textContent;
+          } catch (e) {}
+        }
+        
+        return data;
+      } catch (proxyError: any) {
+        if (proxyRetries >= MAX_PROXY_RETRIES) {
+          console.warn("[AI Proxy] Max retries exhausted:", proxyError);
+          throw proxyError;
+        }
+        // Connection errors
+        if (proxyError.name === 'TypeError' && proxyError.message === 'Failed to fetch') {
+           proxyRetries++;
+           await delay(2000);
+           continue;
+        }
+        throw proxyError;
       }
-      const data = await response.json();
-      // Ensure 'text' property exists for browser callers (as the server proxy returns raw JSON without SDK getters)
-      if (data && !data.text && data.candidates?.[0]?.content?.parts) {
-        data.text = data.candidates[0].content.parts
-          .map((p: any) => p.text || '')
-          .join('');
-      }
-      return data;
-    } catch (proxyError: any) {
-      console.warn("[AI Proxy] Attempt failed, falling back to local simulation if appropriate...", proxyError);
-      throw proxyError;
     }
   }
 

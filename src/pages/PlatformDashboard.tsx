@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generateContentWithRetry } from '../lib/ai';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, getDocs, query, doc, onSnapshot, updateDoc, increment, addDoc, serverTimestamp, getCountFromServer, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query, doc, onSnapshot, updateDoc, increment, addDoc, serverTimestamp, getCountFromServer, orderBy, limit, deleteDoc } from 'firebase/firestore';
 import { 
   Users, User, Award, DollarSign, TrendingUp, ShieldCheck, Activity, 
   Lock, Wallet, ArrowDownCircle, ArrowUpCircle, BarChart2, 
@@ -788,6 +788,8 @@ export default function PlatformDashboard() {
 
     try {
       const platformAccountNumber = "01100975259001";
+      const platformUserId = "EDWINMUOHA";
+      const platformAccountName = "EDWIN MUOHA WATITU";
       
       const response = await fetch("/api/payout/platform", {
         method: "POST",
@@ -796,7 +798,8 @@ export default function PlatformDashboard() {
           method: "coop_bank",
           accountNumber: platformAccountNumber,
           amount: amountToWithdraw,
-          recipient: "EDWIN MUOHA WATITU",
+          recipient: platformAccountName,
+          userId: platformUserId,
           scaToken: token, // Critical inclusion
           usePhone,
           email,
@@ -1797,65 +1800,98 @@ export default function PlatformDashboard() {
                     filteredWithdrawals.map((w) => (
                       <tr key={w.id} className="hover:bg-gray-50/30 dark:hover:bg-gray-900/30 transition-colors">
                         <td className="px-6 py-4">
-                          <div className="text-sm font-bold uppercase tracking-tighter">
-                            {w.userName || 'Anonymous'}
-                          </div>
-                          <div className="text-[11px] text-gray-500 font-mono mt-0.5">{w.userEmail}</div>
-                          {/* JSON Style Account Integration */}
-                          <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-800">
-                            <p className="text-[8px] font-black text-gray-400 uppercase mb-1 tracking-widest">Platform JSON Identity</p>
-                            <p className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 break-all">
-                              {`{ "Account": "${w.userEmail}", "Name": "${w.userName}" }`}
-                            </p>
-                          </div>
-                          <div className="text-[9px] text-gray-400 mt-1 uppercase font-bold tracking-widest">UID: {w.userId?.slice(-6)}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm font-black font-mono">
-                            {typeof w.amount === 'number' ? `$${w.amount.toFixed(2)}` : w.amount}
-                            <span className="ml-1.5 px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-[10px] text-gray-500 font-bold tracking-widest uppercase text-gray-900 dark:text-gray-100">
-                              USD
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">
+                              {w.category === 'operational' ? 'EDWIN MUOHA WATITU' : (w.userName || 'Anonymous')}
                             </span>
-                          </div>
-                          {w.amountKes && (
-                            <div className="text-[10px] text-green-600 font-bold mt-0.5">
-                              ≈ KES {w.amountKes.toLocaleString()}
+                            <span className="text-[11px] text-gray-500 font-mono flex items-center gap-1.5 leading-none">
+                              {w.category === 'operational' ? (
+                                <>
+                                  <ShieldCheck className="w-3 h-3 text-indigo-500" />
+                                  01100975259001
+                                </>
+                              ) : (
+                                <>
+                                  <User className="w-3 h-3 opacity-50" />
+                                  {w.userEmail}
+                                </>
+                              )}
+                            </span>
+                            <div className="flex items-center gap-2 mt-1.5 opacity-60">
+                              <span className="text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-1.5 py-0.5 rounded font-bold tracking-widest uppercase">
+                                ID: {w.category === 'operational' ? 'EDWINMUOHA' : w.userId?.slice(-6)}
+                              </span>
                             </div>
-                          )}
-                          <div className="flex items-center gap-1.5 mt-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase">via</span>
-                            <span className={cn(
-                              "px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border",
-                              w.category === 'operational' 
-                                ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border-indigo-100/50 dark:border-indigo-800/30"
-                                : "bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 border-purple-100/50 dark:border-purple-800/30"
-                            )}>
-                              {w.category === 'operational' ? 'Operational' : (w.type || 'payout')}
-                            </span>
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex flex-col items-center gap-1">
+                          <div className="flex flex-col">
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-sm font-black font-mono text-gray-900 dark:text-gray-100">
+                                {typeof w.amount === 'number' ? `$${w.amount.toFixed(2)}` : w.amount}
+                              </span>
+                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">USD</span>
+                            </div>
+                            {w.amountKes && (
+                              <div className="text-[10px] text-green-600 font-bold mt-0.5 flex items-center gap-1">
+                                <span className="opacity-50">≈</span>
+                                <span>KES {w.amountKes.toLocaleString()}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-1.5 mt-2">
+                              <span className={cn(
+                                "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border shadow-sm",
+                                w.category === 'operational' 
+                                  ? "bg-indigo-50/50 text-indigo-600 border-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 dark:border-indigo-800"
+                                  : "bg-purple-50/50 text-purple-600 border-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800"
+                              )}>
+                                {w.category === 'operational' ? 'System Fund' : (w.type || 'Standard')}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col items-center gap-1.5">
                             <span className={cn(
-                              "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1.5 border",
-                              w.status === 'success' ? "bg-green-100/50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800" :
-                              w.status === 'simulated' ? "bg-blue-100/50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800" :
-                              w.status === 'pending' ? "bg-amber-100/50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800" :
-                              w.status === 'rolled_back' ? "bg-gray-100/50 text-gray-500 border-gray-200" :
-                              "bg-red-100/50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800"
+                              "px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-[0.1em] inline-flex items-center gap-1.5 border shadow-sm",
+                              w.status === 'success' ? "bg-green-50 text-green-700 border-green-100 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800/50" :
+                              w.status === 'simulated' ? "bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800/50" :
+                              w.status === 'pending' ? "bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800/50" :
+                              w.status === 'rolled_back' ? "bg-gray-50 text-gray-500 border-gray-100 dark:border-gray-800" :
+                              "bg-red-50 text-red-700 border-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/50"
                             )}>
-                              {(w.status === 'success' || w.status === 'simulated') && <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", w.status === 'success' ? "bg-green-500" : "bg-blue-500")} />}
+                              {(w.status === 'success' || w.status === 'simulated') && (
+                                <div className={cn("w-1 h-1 rounded-full", w.status === 'success' ? "bg-green-500 animate-pulse" : "bg-blue-500")} />
+                              )}
                               {w.status}
                             </span>
-                            {(w.status === 'simulated' || (w.status === 'success' && w.category === 'operational')) && (
+                            
+                            <div className="flex items-center gap-2">
+                              {(w.status === 'simulated' || (w.status === 'success' && w.category === 'operational')) && (
+                                <button 
+                                  onClick={() => handleRollbackWithdrawal(w)}
+                                  disabled={isDevWithdrawing}
+                                  className="text-[8px] font-black text-red-500/80 uppercase hover:text-red-600 transition-colors tracking-widest border-b border-transparent hover:border-red-500/30"
+                                >
+                                  {isDevWithdrawing ? 'Processing...' : 'Rollback'}
+                                </button>
+                              )}
                               <button 
-                                onClick={() => handleRollbackWithdrawal(w)}
-                                disabled={isDevWithdrawing}
-                                className="text-[9px] font-black text-red-500 uppercase hover:underline mt-1"
+                                onClick={async () => {
+                                  if (!window.confirm("Permanently delete this record from the ledger?")) return;
+                                  try {
+                                    await deleteDoc(doc(db, 'withdrawals', w.id));
+                                    setSuccess("Record removed.");
+                                  } catch (err: any) {
+                                    setError("Failed: " + err.message);
+                                  }
+                                }}
+                                className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500/30 hover:text-red-500 transition-all rounded-md"
+                                title="Delete Record"
                               >
-                                {isDevWithdrawing ? '...' : 'Rollback/Return'}
+                                <Trash2 className="w-3 h-3" />
                               </button>
-                            )}
+                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 text-right">

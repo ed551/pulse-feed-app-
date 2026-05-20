@@ -64,7 +64,7 @@ export default function NewsFeed() {
       - Format: JSON array of objects with: id (string), title (string), summary (string), category (string), timestamp (string), impactLevel ('high'|'medium'|'low'), scope ('local'|'international'), url (string).
       - Categories should be specific like 'Science', 'Environment', 'Co-op', 'Edu', 'Tech', 'Social'.`;
 
-      const genResult = await generateContentWithRetry({
+      const response = await generateContentWithRetry({
         model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         tools: [{ googleSearch: {} }],
@@ -74,75 +74,99 @@ export default function NewsFeed() {
         }
       });
       
-      const textResponse = genResult.text;
-      if (!textResponse) throw new Error("Empty response from AI");
-
-      let parsed: any[] = [];
-      const cleanText = textResponse.trim();
-      
-      try {
-        // Try direct parse first
-        parsed = JSON.parse(cleanText);
-      } catch (e) {
-        // Fallback to extraction if it contains markdown or surrounding text
-        const jsonMatch = cleanText.match(/\[\s*{[\s\S]*}\s*\]/);
-        if (jsonMatch) {
-          try {
-            parsed = JSON.parse(jsonMatch[0]);
-          } catch (innerErr) {
-            // Even more desperate extraction: find all objects
-            const objectsMatch = cleanText.match(/{[\s\S]*?}/g);
-            if (objectsMatch) {
-              parsed = objectsMatch.map(objStr => {
-                try { return JSON.parse(objStr); } catch (e) { return null; }
-              }).filter(o => o !== null);
-            }
-          }
-        }
-        
-        if (!parsed || parsed.length === 0) {
-           throw new Error("Invalid output format from AI (No JSON array found)");
-        }
-      }
-      
-      if (Array.isArray(parsed)) {
-        // Ensure every item has a real URL, fallback to search if missing or placeholder
-        const processed = parsed.map((item: any) => {
-          const url = item.url || '';
-          const isPlaceholder = !url || url.includes('example.com') || url.includes('placeholder.com') || !url.startsWith('http');
-          
-          return {
-            ...item,
-            url: isPlaceholder ? `https://www.google.com/search?q=${encodeURIComponent(item.title)}` : url
-          };
+      const textResponse = response.text;
+      if (!textResponse || textResponse.trim().length < 5) {
+        console.warn("Empty or too short AI response for news. Retrying with fallback model...");
+        // Secondary attempt without search if search failed
+        const retryResponse = await generateContentWithRetry({
+          model: "gemini-flash-latest", 
+          contents: [{ role: "user", parts: [{ text: prompt + " (Fallback mode: Keep it very simple)" }] }],
+          generationConfig: { responseMimeType: "application/json" }
         });
         
-        setNews(processed);
-        setLastRefreshed(now);
-        localStorage.setItem('pulse_last_news_fetch', now.toString());
-        localStorage.setItem('pulse_cached_news', JSON.stringify(processed));
-      } else {
-        throw new Error("Invalid output format from AI");
-      }
-    } catch (error: any) {
-      const isQuota = error?.status === 429 || error?.message?.includes("quota") || error?.message?.includes("RESOURCE_EXHAUSTED");
-      const isNotFound = error?.status === 404 || error?.message?.includes("404") || error?.message?.includes("NOT_FOUND");
-      
-      if (isQuota || isNotFound) {
-        console.warn(`News Feed AI unavailable (${error?.status || (isNotFound ? '404' : '429')}). Using fallback.`);
-      } else {
-        console.error("News Fetch Error:", error);
+        if (!retryResponse.text) throw new Error("AI returned empty response after fallback retry.");
+        return handleParsedNews(retryResponse.text, now);
       }
 
-      // Fallback to static if AI fails
-      const fallback = [
-        { id: '1', title: 'Global Climate Summit Reaches Accord', summary: 'International leaders agree on a new framework for community-led carbon reduction projects.', category: 'Social', timestamp: '1h ago', impactLevel: 'high', scope: 'international', url: 'https://www.google.com/search?q=Global+Climate+Summit+Accord' },
-        { id: '2', title: 'Local Co-op Program Expands', summary: 'Community-run agricultural cooperative in your region expands its reach to five new districts.', category: 'Co-op', timestamp: '3h ago', impactLevel: 'medium', scope: 'local', url: 'https://www.google.com/search?q=Local+Co-op+Program+Expansion' }
-      ] as NewsItem[];
-      setNews(fallback);
+      await handleParsedNews(textResponse, now);
+    } catch (error: any) {
+      handleNewsError(error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleParsedNews = async (textResponse: string, now: number) => {
+    let parsed: any[] = [];
+    const cleanText = textResponse.trim();
+    
+    console.log("[NewsFeed] AI Response length:", cleanText.length);
+    if (cleanText.startsWith("<!doctype") || cleanText.startsWith("<html")) {
+       console.error("[NewsFeed] AI Response appears to be HTML. First 200 chars:", cleanText.substring(0, 200));
+       throw new Error("Received HTML from server instead of JSON. Server proxy might be misconfigured.");
+    }
+
+    try {
+      // Try direct parse first
+      parsed = JSON.parse(cleanText);
+    } catch (e) {
+      console.warn("[NewsFeed] Direct JSON parse failed, attempting extraction...", e);
+      // Fallback to extraction if it contains markdown or surrounding text
+      const jsonMatch = cleanText.match(/\[\s*{[\s\S]*}\s*\]/);
+      if (jsonMatch) {
+        try {
+          parsed = JSON.parse(jsonMatch[0]);
+        } catch (innerErr) {
+          console.error("[NewsFeed] Extraction parse failed:", innerErr);
+          // Even more desperate extraction: find all objects
+          const objectsMatch = cleanText.match(/{[\s\S]*?}/g);
+          if (objectsMatch) {
+            parsed = objectsMatch.map(objStr => {
+              try { return JSON.parse(objStr); } catch (e) { return null; }
+            }).filter(o => o !== null);
+          }
+        }
+      }
+    }
+    
+    if (!parsed || !Array.isArray(parsed) || parsed.length === 0) {
+      throw new Error("Invalid output format from AI (No JSON array found)");
+    }
+    
+    // Ensure every item has a real URL, fallback to search if missing or placeholder
+    const processed = parsed.map((item: any) => {
+      const url = item.url || '';
+      const isPlaceholder = !url || url.includes('example.com') || url.includes('placeholder.com') || !url.startsWith('http');
+      
+      return {
+        ...item,
+        url: isPlaceholder ? `https://www.google.com/search?q=${encodeURIComponent(item.title)}` : url
+      };
+    });
+    
+    setNews(processed);
+    setLastRefreshed(now);
+    localStorage.setItem('pulse_last_news_fetch', now.toString());
+    localStorage.setItem('pulse_cached_news', JSON.stringify(processed));
+  };
+
+  const handleNewsError = (error: any) => {
+    const isQuota = error?.status === 429 || error?.message?.includes("quota") || error?.message?.includes("RESOURCE_EXHAUSTED");
+    const isNotFound = error?.status === 404 || error?.message?.includes("404") || error?.message?.includes("NOT_FOUND");
+    
+    if (isQuota || isNotFound) {
+      console.warn(`News Feed AI unavailable (${error?.status || (isNotFound ? '404' : '429')}). Using fallback.`);
+    } else {
+      console.error("News Fetch Error:", error);
+    }
+
+    // Fallback to static if AI fails
+    const fallbackItems = [
+      { id: '1', title: 'Global Climate Summit Reaches Accord', summary: 'International leaders agree on a new framework for community-led carbon reduction projects.', category: 'Social', timestamp: '1h ago', impactLevel: 'high', scope: 'international', url: 'https://www.google.com/search?q=Global+Climate+Summit+Accord' },
+      { id: '2', title: 'Local Co-op Program Expands', summary: 'Community-run agricultural cooperative in your region expands its reach to five new districts.', category: 'Co-op', timestamp: '3h ago', impactLevel: 'medium', scope: 'local', url: 'https://www.google.com/search?q=Local+Co-op+Program+Expansion' },
+      { id: '3', title: 'New Educational Milestone Achieved', summary: 'The latest community-driven education initiative shows 40% improvement in peer-to-peer learning outcomes.', category: 'Edu', timestamp: '5h ago', impactLevel: 'medium', scope: 'local', url: 'https://www.google.com/search?q=Community+Education+Achievement' }
+    ] as NewsItem[];
+    setNews(fallbackItems);
   };
 
   useEffect(() => {

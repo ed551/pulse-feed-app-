@@ -105,6 +105,14 @@ export default function SelfHealing() {
   const attemptHeal = async (message: string) => {
     setHealStatus('healing');
     try {
+      // Check for offline status first
+      if (!navigator.onLine) {
+         setLastDiagnosis("DIAGNOSIS: Network connection lost. | HEAL: Please check your internet connection.");
+         setHealStatus('complete');
+         setTimeout(() => setHealStatus('idle'), 5000);
+         return;
+      }
+
       // AI Diagnosis
       const prompt = `A system issue has occurred in the Pulse Feeds app: "${message}". 
       Provide a brief diagnostic explanation of what might have caused this and a "healing" suggestion (e.g., "Clear local cache", "Check network connection", "Verify Firestore permissions").
@@ -116,7 +124,7 @@ export default function SelfHealing() {
         contents: prompt
       });
 
-      const diagnosis = response.text || "DIAGNOSIS: Unknown system anomaly. | HEAL: System restart recommended.";
+      const diagnosis = response.text || "DIAGNOSIS: API returned no analysis. | HEAL: System stability check recommended.";
       setLastDiagnosis(diagnosis);
       
       // Simulate healing process
@@ -127,9 +135,15 @@ export default function SelfHealing() {
       setHealStatus('complete');
       setTimeout(() => setHealStatus('idle'), 5000);
 
-    } catch (err) {
+    } catch (err: any) {
       console.error("Healing failed:", err);
-      setHealStatus('idle');
+      if (err.message?.includes("Failed to fetch")) {
+        setLastDiagnosis("DIAGNOSIS: System connection interrupted. | HEAL: Retrying background stability protocols...");
+      } else {
+        setLastDiagnosis(`DIAGNOSIS: Unhandled anomaly (${err.message}). | HEAL: Refresh recommended.`);
+      }
+      setHealStatus('complete');
+      setTimeout(() => setHealStatus('idle'), 5000);
     }
   };
 

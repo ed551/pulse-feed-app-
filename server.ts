@@ -81,17 +81,19 @@ async function generateContentWithRetry(params: any): Promise<any> {
       } catch (error: any) {
         const status = error?.status || 
                        (error?.message?.includes("404") || error?.message?.includes("NOT_FOUND") ? 404 : 
-                        error?.message?.includes("429") || error?.message?.includes("QUOTA") ? 429 : 500);
+                        error?.message?.includes("429") || error?.message?.includes("QUOTA") ? 429 : 
+                        error?.message?.includes("503") || error?.message?.includes("UNAVAILABLE") ? 503 : 500);
         
         const isQuotaExceeded = status === 429 || error?.message?.toLowerCase().includes("quota") || error?.message?.toLowerCase().includes("resource_exhausted");
+        const isUnavailable = status === 503 || error?.message?.toLowerCase().includes("unavailable") || error?.message?.toLowerCase().includes("high demand");
         
         // Model Fallback Logic on Server (Sync with src/lib/ai.ts)
-        if (isQuotaExceeded || status === 404) {
+        if (isQuotaExceeded || isUnavailable || status === 404) {
           const oldModel = params.model;
           
-          if (isQuotaExceeded) {
-            console.warn(`[Server AI] ${oldModel} quota hit (429). Waiting 1s before fallback...`);
-            await delay(1000);
+          if (isQuotaExceeded || isUnavailable) {
+            console.warn(`[Server AI] ${oldModel} ${isUnavailable ? 'unavailable' : 'quota hit'} (${status}). Waiting 1.5s before fallback...`);
+            await delay(1500);
           }
 
           if (params.model === 'gemini-3-flash-preview') {
@@ -972,7 +974,31 @@ async function startServer() {
   // Security Enforcement: AI Studio/Cloud Run requires port 3000 for local proxy
   const PORT = 3000;
   const HOST = "0.0.0.0";
-  app.use(express.json());
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+  // High-Priority AI Proxy Route
+  app.post("/api/gemini/generate", async (req, res) => {
+    try {
+      console.log(`[Gemini Proxy] HIT - Method: ${req.method}, Path: ${req.path}`);
+      const { params } = req.body;
+      if (!params) {
+        console.warn("[Gemini Proxy] Missing params in body:", req.body);
+        return res.status(400).json({ error: "Missing parameters" });
+      }
+      
+      const response = await generateContentWithRetry(params);
+      res.json(response);
+    } catch (err: any) {
+      console.error("[Gemini Proxy] ERROR:", err);
+      const status = typeof err.status === 'number' ? err.status : 500;
+      res.status(status).json({ 
+        error: err.message, 
+        status: status,
+        details: err.details || null
+      });
+    }
+  });
 
   // Equity Bank Access Token Helper (EazzyAPI)
   async function getEquityAccessToken() {
@@ -3261,25 +3287,6 @@ async function startServer() {
       res.status(401).json({ success: false, error: "Authentication failed" });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
-    }
-  });
-
-  // Server-side AI Proxy for security and routing stability
-  app.post("/api/gemini/generate", async (req, res) => {
-    try {
-      const { params } = req.body;
-      if (!params) return res.status(400).json({ error: "Missing parameters" });
-      
-      const response = await generateContentWithRetry(params);
-      res.json(response);
-    } catch (err: any) {
-      console.error("[Gemini Proxy] Failed:", err);
-      const status = err.status || 500;
-      res.status(status).json({ 
-        error: err.message, 
-        status: status,
-        details: err.details || null
-      });
     }
   });
 
