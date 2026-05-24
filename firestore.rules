@@ -119,6 +119,11 @@ service cloud.firestore {
       allow create: if (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
       allow update, delete: if isAdmin();
     }
+
+    match /education_courses/{courseId} {
+      allow read: if true;
+      allow write: if (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
+    }
     
     match /users/{userId} {
       allow get: if isOwner(userId) || isAdmin() || (isSignedIn() && existing().get('isDatingActive', false) == true);

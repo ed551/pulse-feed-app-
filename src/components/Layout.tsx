@@ -136,6 +136,7 @@ export default function Layout() {
     { path: '/groups', icon: Users, label: t('groups') },
     { path: '/rewards', icon: Gem, label: t('rewards') },
     { path: '/audio', icon: Headphones, label: 'Audio' },
+    { path: '/education', icon: GraduationCap, label: 'Education' },
     { path: '/notifications', icon: Bell, label: t('alerts') },
     { path: '/profile', icon: User, label: t('profile') },
   ];
@@ -911,6 +912,7 @@ export default function Layout() {
     { path: '/terms', icon: FileText, color: 'text-teal-500', label: t('terms') },
     { path: '/support', icon: Headphones, color: 'text-cyan-500', label: t('support') },
     { path: '/audio', icon: Headphones, color: 'text-indigo-400', label: 'Audio Hub' },
+    { path: '/education', icon: GraduationCap, color: 'text-purple-600', label: 'Education Hub' },
     { path: '/settings', icon: Settings, color: 'text-gray-500', label: t('settings') },
   ];
 
@@ -1306,6 +1308,7 @@ export default function Layout() {
               </div>
             </div>
           </main>
+
         </div>
 
         {/* Floating Sidebars (Desktop Only) */}

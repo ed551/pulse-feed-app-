@@ -32,6 +32,7 @@ const AdsDashboard = lazy(() => import("./pages/AdsDashboard"));
 const GeminiLab = lazy(() => import("./pages/GeminiLab"));
 const Membership = lazy(() => import("./pages/Membership"));
 const AudioHub = lazy(() => import("./pages/AudioHub"));
+const EducationHub = lazy(() => import("./pages/EducationHub"));
 const PasskeyAuth = lazy(() => import("./pages/PasskeyAuth"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 
@@ -195,6 +196,11 @@ export default function App() {
                   <Route path="audio" element={
                     <ProtectedRoute>
                       <AudioHub />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="education" element={
+                    <ProtectedRoute>
+                      <EducationHub />
                     </ProtectedRoute>
                   } />
                   <Route path="passkey-auth" element={<PasskeyAuth />} />

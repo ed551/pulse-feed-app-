@@ -19,11 +19,11 @@ export const ai = isValidApiKey ? new GoogleGenAI({
   httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
 }) : null;
 
-const MAX_RETRIES = 10;
-const INITIAL_DELAY = 1000; // 1 second
+const MAX_RETRIES = 100;
+const INITIAL_DELAY = 20000;
 
 let requestQueue: Promise<void> = Promise.resolve();
-const MIN_REQUEST_INTERVAL = 1500; // Slightly reduced while maintaining stability
+const MIN_REQUEST_INTERVAL = 15000; 
 
 async function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -77,28 +77,32 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
           throw new Error(`Server returned an invalid response (Status ${response.status}). The backend might still be warming up.`);
         }
 
-        if (!response.ok) {
+        if (response.ok) {
+          // Success!
+        } else {
           const combinedErrorText = (data.error || "" + JSON.stringify(data)).toLowerCase();
           const isBilling = response.status === 402 || 
                            data.code === "BILLING_DEPLETED" || 
                            combinedErrorText.includes("prepayment credits are depleted") ||
                            combinedErrorText.includes("billing") ||
                            combinedErrorText.includes("credits are exhausted") ||
+                           combinedErrorText.includes("depleted") ||
+                           combinedErrorText.includes("credit") ||
                            combinedErrorText.includes("resource_exhausted");
 
           if (isBilling) {
-            throw new Error("AI functionality is temporarily limited due to API credit depletion. Please verify your Gemini API billing setup in AI Studio.");
+            console.error("[AI Proxy] Billing Depleted. Service will be limited.");
           }
           
           const isRetryable = response.status === 503 || response.status === 429 || response.status === 504 || response.status === 502;
           if (isRetryable && proxyRetries < MAX_PROXY_RETRIES) {
             proxyRetries++;
-            const backoff = 2000 * proxyRetries;
-            console.warn(`[AI Proxy] Server returned ${response.status}. Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
+            const backoff = (isBilling ? 5000 : 2500) * proxyRetries;
+            console.warn(`[AI Proxy] Server returned ${response.status}${isBilling ? ' (BILLING)' : ''}. Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
             await delay(backoff);
             continue;
           }
-          throw new Error(data.error || `AI service returned error ${response.status}`);
+          throw new Error(data.error || `AI service returned error ${response.status}${isBilling ? ' (Billing Exhausted)' : ''}`);
         }
         
         // Robust 'text' property reconstruction for browser callers
@@ -148,52 +152,76 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
         await delay(MIN_REQUEST_INTERVAL);
         return response;
       } catch (error: any) {
+        const errorString = error?.message || (error?.toString ? error.toString() : "");
         const status = error?.status || 
-                       (error?.message?.includes("404") || error?.message?.includes("NOT_FOUND") ? 404 : 
-                        error?.message?.includes("429") || error?.message?.includes("QUOTA") ? 429 : 500);
-        
-        const isQuotaExceeded = status === 429 || error?.message?.toLowerCase().includes("quota") || error?.message?.toLowerCase().includes("resource_exhausted");
-        const isProxyError = status === 500 || status === 503 || status === 504 || error?.message?.toLowerCase().includes("xhr error") || error?.message?.toLowerCase().includes("failed to fetch");
+                       (errorString.includes("404") || errorString.includes("NOT_FOUND") ? 404 : 
+                        errorString.includes("429") || errorString.includes("QUOTA") ? 429 : 
+                        errorString.includes("503") || errorString.includes("UNAVAILABLE") ? 503 : 500);
+
+        const combinedErrorText = (errorString + " " + JSON.stringify(error)).toLowerCase();
+        const isDepleted = combinedErrorText.includes("prepayment credits are depleted") || 
+                          combinedErrorText.includes("billing") ||
+                          combinedErrorText.includes("credits are exhausted") ||
+                          combinedErrorText.includes("depleted") ||
+                          combinedErrorText.includes("insufficient balance") ||
+                          combinedErrorText.includes("credit") ||
+                          status === 402;
+
+        const isQuotaExceeded = status === 429 || combinedErrorText.includes("quota") || combinedErrorText.includes("resource_exhausted");
+        const isProxyError = status === 500 || status === 503 || status === 504 || combinedErrorText.includes("xhr error") || combinedErrorText.includes("failed to fetch") || status === 502;
         const isNotFound = status === 404;
         
         // Model Fallback Logic (Sync with server.ts)
-        if ((isQuotaExceeded || isProxyError || isNotFound)) {
+        if ((isQuotaExceeded || isProxyError || isNotFound || isDepleted)) {
           const oldModel = params.model;
           
-          if (isQuotaExceeded) {
-            console.warn(`[Client AI] ${oldModel} quota hit (429). Waiting 2s before fallback...`);
-            await delay(2000);
+          if (isQuotaExceeded || isDepleted) {
+            const waitTime = isDepleted ? 300000 : 60000;
+            console.warn(`[Client AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Waiting ${waitTime/1000}s before fallback...`);
+            await delay(waitTime);
           }
 
-          if (params.model === 'gemini-3-flash-preview') {
-            params.model = 'gemini-2.0-flash';
-          } else if (params.model === 'gemini-2.0-flash') {
+          // If billing is depleted, strictly use free tier candidates ONLY
+          if (isDepleted) {
+            if (params.model === 'gemini-3-flash-preview' || params.model === 'gemini-2.0-flash') {
+              params.model = 'gemini-3.5-flash';
+              console.warn(`[Client AI] Billing issue. Switching to free tier: ${params.model}`);
+              continue;
+            } else if (params.model === 'gemini-3.5-flash') {
+              params.model = 'gemini-3.1-flash-lite';
+              console.warn(`[Client AI] Trying lite free tier: ${params.model}`);
+              continue;
+            } else if (params.model === 'gemini-3.1-flash-lite') {
+              params.model = 'gemini-1.5-flash';
+              console.warn(`[Client AI] Trying legacy flash free tier: ${params.model}`);
+              continue;
+            } else if (params.model === 'gemini-1.5-flash') {
+              params.model = 'gemini-1.5-flash-8b';
+              console.warn(`[Client AI] Trying ultra-low cost free tier: ${params.model}`);
+              continue;
+            } else {
+              console.error("[Client AI] All free-tier candidates exhausted during billing depletion.");
+              throw error;
+            }
+          }
+
+          if (params.model === 'gemini-3-flash-preview' || params.model === 'gemini-2.0-flash' || params.model === 'gemini-1.5-flash') {
+            params.model = 'gemini-3.5-flash';
+          } else if (params.model === 'gemini-3.5-flash') {
             params.model = 'gemini-flash-latest';
           } else if (params.model === 'gemini-flash-latest') {
-            params.model = 'gemini-1.5-flash';
-          } else if (params.model === 'gemini-1.5-flash') {
-            params.model = 'gemini-1.5-flash-8b';
-          } else if (params.model === 'gemini-1.5-flash-8b') {
             params.model = 'gemini-3.1-flash-lite';
-          } else if (params.model === 'gemini-3.1-flash-lite') {
-            params.model = 'gemini-flash-lite-latest';
-          } else if (params.model === 'gemini-flash-lite-latest') {
-            params.model = 'gemini-2.0-flash-lite';
-          } else if (params.model === 'gemini-2.0-flash-lite') {
-            params.model = 'gemini-2.5-flash';
-          } else if (params.model === 'gemini-2.5-flash') {
-            params.model = 'gemini-1.5-pro';
-          } else if (params.model === 'gemini-1.5-pro') {
-            params.model = 'gemini-1.5-pro-latest';
+          } else if (params.model === 'gemini-3.1-flash-lite' || params.model === 'gemini-1.5-flash-8b') {
+            params.model = 'gemini-3.1-pro-preview';
+          } else if (params.model.includes('pro')) {
+            params.model = 'gemini-3.1-pro-preview';
           } else {
+            params.model = 'gemini-3.1-flash-lite';
+          }
+          
+          if (params.model === oldModel) {
             console.error(`[Client AI] All model fallbacks exhausted for ${oldModel}`);
             throw error;
-          }
-
-          // Disable tools as a last resort for broad compatibility if we reach this point in fallback
-          if (params.tools && (params.model.includes('lite') || params.model.includes('latest'))) {
-             delete params.tools;
-             delete params.toolConfig;
           }
           
           console.warn(`[Client AI] Falling back from ${oldModel} to ${params.model}`);

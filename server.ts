@@ -71,9 +71,9 @@ if (isValidApiKey) {
 } else {
   console.warn("[AI Init] No valid Gemini API Key found in environment variables. Searched: GEMINI_AI, GEMINI_API_KEY, GOOGLE_API_KEY, GEMINI_API");
 }
-const MIN_REQUEST_INTERVAL = 2000;
-const MAX_RETRIES = 3;
-const INITIAL_DELAY = 1000;
+const MIN_REQUEST_INTERVAL = 15000;
+const MAX_RETRIES = 100;
+const INITIAL_DELAY = 20000;
 let requestQueue: Promise<void> = Promise.resolve();
 
 async function delay(ms: number) {
@@ -122,23 +122,29 @@ async function generateContentWithRetry(params: any): Promise<any> {
                           combinedErrorText.includes("billing") ||
                           combinedErrorText.includes("credits are exhausted") ||
                           combinedErrorText.includes("prepayment") ||
+                          combinedErrorText.includes("depleted") ||
+                          combinedErrorText.includes("insufficient balance") ||
+                          combinedErrorText.includes("credit") ||
                           errorJson?.error?.message?.toLowerCase().includes("prepayment") ||
-                          errorJson?.error?.message?.toLowerCase().includes("credits are depleted");
+                          errorJson?.error?.message?.toLowerCase().includes("credits are depleted") ||
+                          errorJson?.error?.message?.toLowerCase().includes("insufficient balance") ||
+                          (status === 429 && combinedErrorText.includes("billing")) ||
+                          (status === 402);
 
         const isQuotaExceeded = status === 429 || 
-                               combinedErrorText.includes("quota") || 
-                               combinedErrorText.includes("resource_exhausted") ||
-                               errorJson?.error?.status === "RESOURCE_EXHAUSTED";
+                                combinedErrorText.includes("quota") || 
+                                combinedErrorText.includes("resource_exhausted") ||
+                                errorJson?.error?.status === "RESOURCE_EXHAUSTED";
 
-        const isUnavailable = status === 503 || combinedErrorText.includes("unavailable") || status === 402 || status === 504;
+        const isUnavailable = status === 503 || combinedErrorText.includes("unavailable") || status === 402 || status === 504 || status === 502;
         
         // Key Rotation on Billing/Quota failure
         if ((isDepleted || status === 429 || status === 402 || isQuotaExceeded) && currentKeyIndex < AVAILABLE_KEYS.length - 1) {
           const oldIndex = currentKeyIndex;
           currentKeyIndex++;
-          console.warn(`[Server AI] Key ${oldIndex + 1} limited (${status}). Rotating to key ${currentKeyIndex + 1}/${AVAILABLE_KEYS.length}...`);
+          console.warn(`[Server AI] Key ${oldIndex + 1} limited/exhausted (${status}${isDepleted ? '-BILLING' : ''}). Rotating to next key ${currentKeyIndex + 1}/${AVAILABLE_KEYS.length}...`);
           ai = createAIClient(AVAILABLE_KEYS[currentKeyIndex]);
-          await delay(1000); 
+          await delay(2000); 
           continue; 
         }
 
@@ -147,41 +153,59 @@ async function generateContentWithRetry(params: any): Promise<any> {
           const oldModel = params.model;
           
           if (isQuotaExceeded || isUnavailable || isDepleted) {
-            const waitTime = isDepleted ? 3000 : 2000;
-            console.warn(`[Server AI] ${oldModel} error ${status}. Waiting ${waitTime/1000}s for cooldown...`);
+            const waitTime = isDepleted ? 300000 : 60000;
+            console.warn(`[Server AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Waiting ${waitTime/1000}s for cooldown...`);
             await delay(waitTime);
           }
 
-          if (params.model === 'gemini-3-flash-preview') {
-            params.model = 'gemini-2.0-flash';
-          } else if (params.model === 'gemini-2.0-flash') {
+          // If billing is depleted, strictly use free tier candidates ONLY
+          if (isDepleted) {
+            if (params.model === 'gemini-3-flash-preview' || params.model === 'gemini-2.0-flash') {
+              params.model = 'gemini-3.5-flash';
+              console.warn(`[Server AI] Billing issue. Switching to free tier: ${params.model}`);
+              continue;
+            } else if (params.model === 'gemini-3.5-flash') {
+              params.model = 'gemini-3.1-flash-lite';
+              console.warn(`[Server AI] Trying lite free tier: ${params.model}`);
+              continue;
+            } else if (params.model === 'gemini-3.1-flash-lite') {
+              params.model = 'gemini-1.5-flash';
+              console.warn(`[Server AI] Trying legacy flash free tier: ${params.model}`);
+              continue;
+            } else if (params.model === 'gemini-1.5-flash') {
+              params.model = 'gemini-1.5-flash-8b';
+              console.warn(`[Server AI] Trying ultra-low cost free tier: ${params.model}`);
+              continue;
+            } else {
+              console.error("[Server AI] All free-tier candidates exhausted during billing depletion.");
+              throw error;
+            }
+          }
+
+          if (params.model === 'gemini-3-flash-preview' || params.model === 'gemini-2.0-flash' || params.model === 'gemini-1.5-flash') {
+            params.model = 'gemini-3.5-flash';
+          } else if (params.model === 'gemini-3.5-flash') {
             params.model = 'gemini-flash-latest';
           } else if (params.model === 'gemini-flash-latest') {
-            params.model = 'gemini-1.5-flash'; 
-          } else if (params.model === 'gemini-1.5-flash') {
-            params.model = 'gemini-1.5-flash-8b'; 
-          } else if (params.model === 'gemini-1.5-flash-8b') {
-            params.model = 'gemini-3.1-flash-lite';
-          } else if (params.model === 'gemini-3.1-flash-lite') {
-            params.model = 'gemini-flash-lite-latest';
-          } else if (params.model === 'gemini-flash-lite-latest') {
-            params.model = 'gemini-2.0-flash-lite';
-          } else if (params.model === 'gemini-2.0-flash-lite') {
-            params.model = 'gemini-2.5-flash';
-          } else if (params.model === 'gemini-2.5-flash') {
-            params.model = 'gemini-1.5-pro';
-          } else if (params.model === 'gemini-1.5-pro') {
-            params.model = 'gemini-1.5-pro-latest';
+            params.model = 'gemini-3.1-flash-lite'; 
+          } else if (params.model === 'gemini-3.1-flash-lite' || params.model === 'gemini-1.5-flash-8b') {
+            params.model = 'gemini-3.1-pro-preview';
+          } else if (params.model.includes('pro')) {
+            params.model = 'gemini-3.1-pro-preview'; // Prevent 'latest' suffix error
           } else {
-            console.error(`[Server AI] All model fallbacks exhausted for ${oldModel}.`);
-            // If it's a billing error and we tried everything, throw explicit error
-            if (isDepleted || status === 402) {
-              const billingError: any = new Error("Gemini API credits are depleted. All models and keys in your project are exhausted. Please check your billing at ai.studio.");
-              billingError.status = 402;
-              billingError.code = "BILLING_DEPLETED";
-              throw billingError;
-            }
-            throw error;
+            params.model = 'gemini-3.1-flash-lite';
+          }
+          
+          if (params.model === oldModel) {
+             console.error(`[Server AI] All model fallbacks exhausted for ${oldModel}.`);
+             // If it's a billing error and we tried everything, throw explicit error
+             if (isDepleted || status === 402) {
+               const billingError: any = new Error("Gemini API credits are depleted across all models. Please check your billing at ai.studio or wait for free-tier resets.");
+               billingError.status = 402;
+               billingError.code = "BILLING_DEPLETED";
+               throw billingError;
+             }
+             throw error;
           }
           
           console.warn(`[Server AI] Retrying with model fallback: ${params.model}`);
@@ -1034,6 +1058,10 @@ async function startServer() {
   setInterval(monitorIP, 1000 * 60 * 5); // Check every 5 minutes in production
   setInterval(reconcilePendingTransactions, 1000 * 60 * 2); // Poll status every 2 minutes
   setInterval(processPayoutQueue, 5000); // Process payout queue every 5 seconds
+  setInterval(syncEducationCourses, 1000 * 60 * 60 * 24); // Daily automated research
+  
+  // Initial background tasks
+  syncEducationCourses().catch(() => {}); // Initial population if empty or stale
   console.log("NODE_ENV:", process.env.NODE_ENV);
   console.log("Monitor Interval: 5m (Production-Ready)");
   console.log("Reconciliation Interval: 2m (Bank Status Polling Active)");
@@ -2371,6 +2399,86 @@ async function startServer() {
       console.error(`[Recon] Status check for ${reference} failed:`, error.response?.data || error.message);
     }
   }
+
+/**
+ * Automated Education Hub Sync
+ * Researches trending online courses daily
+ */
+async function syncEducationCourses() {
+  console.log("[EducationHub] Starting automated daily academic research...");
+  try {
+    const prompt = `Research and curate a list of 5 diverse, high-quality online educational courses currently popular or trending across platforms like Coursera, edX, Udemy, and university portals.
+    Focus on themes like: Artificial Intelligence, Business Strategy, Finance, Personal Growth, and Creative Arts.
+    
+    For each course, provide:
+    1. A catchy title
+    2. A professional subtitle
+    3. A detailed 2-sentence description
+    4. Duration (e.g., "12 Hours", "4 Weeks")
+    5. Number of lessons
+    6. Difficulty (Beginner, Intermediate, or Advanced)
+    7. Category
+    8. A detailed curriculum of at least 4 key lessons with individual durations.
+    
+    Format the response strictly as a JSON array of Course objects.
+    Each course should have this structure:
+    {
+      "title": string,
+      "subtitle": string,
+      "description": string,
+      "duration": string,
+      "lessons": number,
+      "difficulty": "Beginner" | "Intermediate" | "Advanced",
+      "category": string,
+      "curriculum": [{ "title": string, "duration": string }]
+    }`;
+
+    const response = await generateContentWithRetry({
+      model: "gemini-3-flash-preview",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      tools: [{ googleSearch: {} }] // Support for online research
+    });
+
+    const text = response.response?.candidates?.[0]?.content?.parts?.[0]?.text || response.text || "";
+    if (!text) {
+       console.error("[EducationHub] AI response was empty.");
+       return;
+    }
+
+    // Extract JSON from response
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+       console.error("[EducationHub] No JSON found in AI response.");
+       return;
+    }
+
+    const rawCourses = JSON.parse(jsonMatch[0]);
+    const COURSES_COLLECTION = 'education_courses';
+    
+    // Process and save to Firestore
+    for (const [index, c] of rawCourses.entries()) {
+      const courseId = `sync-${Date.now()}-${index}`;
+      await resilientDb.collection(COURSES_COLLECTION).doc(courseId).set({
+        ...c,
+        id: courseId,
+        lastUpdated: Date.now(),
+        lastUpdatedServer: FieldValue.serverTimestamp(),
+        serverSecret: SERVER_SECRET
+      });
+    }
+    
+    // Update global sync status tracking
+    await resilientDb.collection('system').doc('education_sync').set({
+      lastSuccessfulSync: FieldValue.serverTimestamp(),
+      coursesFound: rawCourses.length,
+      serverSecret: SERVER_SECRET
+    }, { merge: true });
+
+    console.log(`[EducationHub] Automated sync successful. ${rawCourses.length} courses curated.`);
+  } catch (error: any) {
+    console.error("[EducationHub] Automated sync failed:", error.message);
+  }
+}
 
   async function reconcilePendingTransactions() {
     try {

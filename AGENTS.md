@@ -6,9 +6,9 @@ Pulse Feeds is a multi-functional community platform designed for social interac
 ## Key Features & Guidelines
 
 ### 1. AI Model Consistency
-- **Primary Model:** Use **Gemini 3 Flash** (`gemini-3-flash-preview`) for all standard AI interactions to ensure maximum speed and stability.
-- **Fallback Logic:** If `gemini-3-flash-preview` is unavailable, fall back to a sequence of models including **Gemini 2.0 Flash**, **Gemini Flash Latest**, **Gemini 3.1 Flash Lite**, **Gemini Flash Lite Latest**, **Gemini 2.0 Flash Lite**, **Gemini 2.5 Flash**, and **Gemini 3.1 Pro Preview**. This logic includes mandatory delays on quota errors to prevent rate-limit loops. Logic is centralized in `src/lib/ai.ts` and `server.ts`.
-- **Request Interval:** To prevent API rate limits, a minimum request interval of 2000ms is enforced between AI calls via `generateContentWithRetry`.
+- **Primary Model:** Use **Gemini 3 Flash** (`gemini-3-flash-preview`) for all standard AI interactions.
+- **Fallback Logic:** If `gemini-3-flash-preview` is unavailable, fall back to a sequence of models including **Gemini 3.5 Flash**, **Gemini Flash Latest**, **Gemini 3.1 Flash Lite**, and **Gemini 3.1 Pro Preview**. This logic includes mandatory delays on quota/billing errors to prevent rate-limit loops. Logic is centralized in `src/lib/ai.ts` and `server.ts`.
+- **Request Interval:** To prevent API rate limits, a minimum request interval of 15000ms is enforced between AI calls via `generateContentWithRetry`.
 - **Prompt Structure:** Always use the structured `contents: [{ role: "user", parts: [{ text: "..." }] }]` format for all AI requests.
 - **Reasoning:** These measures ensure high reliability, handle quota limits gracefully, and provide a consistent user experience during peak usage.
 
