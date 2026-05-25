@@ -35,7 +35,7 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
   
   if (isBrowser) {
     let proxyRetries = 0;
-    const MAX_PROXY_RETRIES = 5; // Increased for slower boots
+    const MAX_PROXY_RETRIES = 30; // High resilience for infrastructure scaling/warmup
 
     while (proxyRetries <= MAX_PROXY_RETRIES) {
       try {
@@ -48,32 +48,49 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
           method: "POST",
           headers: { 
             "Content-Type": "application/json",
-            "X-Client-Retry": proxyRetries.toString()
+            "X-Client-Retry": proxyRetries.toString(),
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache"
           },
-          cache: "no-cache",
           body: JSON.stringify({ params }),
         });
 
+        // 503/502/504 Handling before text conversion
+        if (response.status === 503 || response.status === 502 || response.status === 504) {
+           if (proxyRetries < MAX_PROXY_RETRIES) {
+              proxyRetries++;
+              const backoff = 5000 * proxyRetries;
+              console.warn(`[AI Proxy] Infrastructure warmup (${response.status}). Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
+              await delay(backoff);
+              continue;
+           }
+        }
+
         const responseText = await response.text();
         
-        // Detect HTML responses from infrastructure (indicates server booting or 404)
-        if (responseText.includes("<!DOCTYPE html>") || responseText.includes("<html") || responseText.includes("Starting Server...")) {
+        // Detect HTML responses from infrastructure (indicates server booting or proxy overload)
+        if (responseText.includes("<!DOCTYPE html>") || responseText.includes("<html") || responseText.includes("Starting Server...") || responseText.includes("Service Unavailable")) {
           if (proxyRetries < MAX_PROXY_RETRIES) {
             proxyRetries++;
-            const backoff = 3000 * proxyRetries; // Slower backoff
-            console.warn(`[AI Proxy] Server is booting (received HTML). Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
+            const backoff = 5000 * proxyRetries; 
+            console.warn(`[AI Proxy] Infrastructure block (Node warmup). Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
             await delay(backoff);
             continue;
           }
-          throw new Error("The backend server is taking longer than expected to start. Please refresh the page in a few moments.");
+          throw new Error("The infrastructure is warming up. Please wait a moment for the AI engine to initialize.");
         }
 
         let data;
         try {
           data = JSON.parse(responseText);
         } catch (parseError) {
-          console.error("[AI Proxy] Failed to parse JSON response. Status:", response.status);
-          console.error("[AI Proxy] Response snippet:", responseText.substring(0, 200));
+          if (proxyRetries < MAX_PROXY_RETRIES) {
+            proxyRetries++;
+            const backoff = 2000 * proxyRetries;
+            console.warn(`[AI Proxy] Invalid JSON response. Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
+            await delay(backoff);
+            continue;
+          }
           throw new Error(`Server returned an invalid response (Status ${response.status}). The backend might still be warming up.`);
         }
 
@@ -81,24 +98,13 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
           // Success!
         } else {
           const combinedErrorText = (data.error || "" + JSON.stringify(data)).toLowerCase();
-          const isBilling = response.status === 402 || 
-                           data.code === "BILLING_DEPLETED" || 
-                           combinedErrorText.includes("prepayment credits are depleted") ||
-                           combinedErrorText.includes("billing") ||
-                           combinedErrorText.includes("credits are exhausted") ||
-                           combinedErrorText.includes("depleted") ||
-                           combinedErrorText.includes("credit") ||
-                           combinedErrorText.includes("resource_exhausted");
-
-          if (isBilling) {
-            console.error("[AI Proxy] Billing Depleted. Service will be limited.");
-          }
+          const isBilling = response.status === 402 || data.code === "BILLING_DEPLETED";
+          const isRetryable = response.status === 503 || response.status === 429 || response.status === 504 || response.status === 502 || response.status === 500;
           
-          const isRetryable = response.status === 503 || response.status === 429 || response.status === 504 || response.status === 502;
           if (isRetryable && proxyRetries < MAX_PROXY_RETRIES) {
             proxyRetries++;
-            const backoff = (isBilling ? 5000 : 2500) * proxyRetries;
-            console.warn(`[AI Proxy] Server returned ${response.status}${isBilling ? ' (BILLING)' : ''}. Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
+            const backoff = (isBilling ? 6000 : 3000) * proxyRetries;
+            console.warn(`[AI Proxy] Service under load (${response.status}). Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
             await delay(backoff);
             continue;
           }
@@ -118,13 +124,13 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
       } catch (proxyError: any) {
         if (proxyRetries < MAX_PROXY_RETRIES) {
            proxyRetries++;
-           const backoff = 3000 * proxyRetries;
-           console.warn(`[AI Proxy] Network error (Failed to fetch). Possible server restart. Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
+           const backoff = 5000 * proxyRetries;
+           console.warn(`[AI Proxy] Network connection failed. Retrying with adaptive backoff in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
            await delay(backoff);
            continue;
         }
         console.error("[AI Proxy] Max retries exhausted for network error:", proxyError);
-        throw new Error("Unable to connect to the AI service. Please check your internet connection or try again in a minute.");
+        throw new Error("Unable to establish a secure connection to the AI engine. This usually means the server is scaling up. Please wait 10 seconds.");
       }
     }
     throw new Error("AI Request failed after multiple connection attempts.");

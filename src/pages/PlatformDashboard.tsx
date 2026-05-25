@@ -8,7 +8,7 @@ import {
   Lock, Wallet, ArrowDownCircle, ArrowUpCircle, BarChart2, 
   PieChart, Info, AlertTriangle, CheckCircle2, Loader2, RefreshCw, PlusSquare,
   Mail, Key, Smartphone, BrainCircuit, FileText, Zap,
-  Copy, ShieldAlert, ShieldOff, Settings, Plus, Trash2, XCircle, CheckCircle, Calendar,
+  Copy, ShieldAlert, ShieldOff, Settings, Plus, Trash2, XCircle, CheckCircle, Calendar, Clock,
   Building2, Cpu, Globe, Database, Crown, Shield, Star, History, Sparkles, Radio
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -1872,27 +1872,39 @@ export default function PlatformDashboard() {
                             <span className={cn(
                               "px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-[0.1em] inline-flex items-center gap-1.5 border shadow-sm",
                               w.status === 'success' ? "bg-green-50 text-green-700 border-green-100 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800/50" :
-                              w.status === 'simulated' ? "bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800/50" :
-                              w.status === 'blocked' ? "bg-red-50 text-red-700 border-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/50" :
+                              w.status === 'simulated' || w.status === 'blocked' ? "bg-red-50 text-red-700 border-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/50" :
                               w.status === 'pending' ? "bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800/50" :
                               w.status === 'rolled_back' ? "bg-gray-50 text-gray-500 border-gray-100 dark:border-gray-800" :
                               "bg-red-50 text-red-700 border-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/50"
                             )}>
-                              {(w.status === 'success' || w.status === 'simulated') && (
-                                <div className={cn("w-1 h-1 rounded-full", w.status === 'success' ? "bg-green-500 animate-pulse" : "bg-blue-500")} />
+                              {w.status === 'simulated' || w.status === 'blocked' ? (
+                                <ShieldAlert className="w-3 h-3 animate-pulse" />
+                              ) : (w.status === 'success' || w.status === 'completed') ? (
+                                <CheckCircle className="w-3 h-3" />
+                              ) : (
+                                <Clock className="w-3 h-3" />
                               )}
-                              {w.status}
+                              {w.status === 'simulated' ? 'Bypass' : 
+                               w.status === 'blocked' ? 'Firewall' : 
+                               w.status.toUpperCase()}
                             </span>
                             
                             <div className="flex items-center gap-2">
-                              {(w.status === 'simulated' || (w.status === 'success' && w.category === 'operational')) && (
-                                <button 
-                                  onClick={() => handleRollbackWithdrawal(w)}
-                                  disabled={isDevWithdrawing}
-                                  className="text-[8px] font-black text-red-500/80 uppercase hover:text-red-600 transition-colors tracking-widest border-b border-transparent hover:border-red-500/30"
-                                >
-                                  {isDevWithdrawing ? 'Processing...' : 'Rollback'}
-                                </button>
+                              {(w.status === 'simulated' || w.status === 'blocked' || (w.status === 'success' && w.category === 'operational')) && (
+                                <div className="flex flex-col items-center gap-1">
+                                  {(w.status === 'simulated' || w.status === 'blocked') && (
+                                    <p className="text-[7px] text-red-600 font-black uppercase tracking-tighter bg-red-100/50 px-1.5 py-0.5 rounded leading-none">
+                                      Funds Unmoved
+                                    </p>
+                                  )}
+                                  <button 
+                                    onClick={() => handleRollbackWithdrawal(w)}
+                                    disabled={isDevWithdrawing}
+                                    className="text-[8px] font-black text-red-500 hover:text-red-700 transition-colors tracking-widest border-b border-red-500/20"
+                                  >
+                                    {isDevWithdrawing ? '...' : 'Rollback'}
+                                  </button>
+                                </div>
                               )}
                               <button 
                                 onClick={async () => {

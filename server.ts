@@ -71,9 +71,9 @@ if (isValidApiKey) {
 } else {
   console.warn("[AI Init] No valid Gemini API Key found in environment variables. Searched: GEMINI_AI, GEMINI_API_KEY, GOOGLE_API_KEY, GEMINI_API");
 }
-const MIN_REQUEST_INTERVAL = 15000;
+const MIN_REQUEST_INTERVAL = 5000;
 const MAX_RETRIES = 100;
-const INITIAL_DELAY = 20000;
+const INITIAL_DELAY = 5000;
 let requestQueue: Promise<void> = Promise.resolve();
 
 async function delay(ms: number) {
@@ -153,8 +153,8 @@ async function generateContentWithRetry(params: any): Promise<any> {
           const oldModel = params.model;
           
           if (isQuotaExceeded || isUnavailable || isDepleted) {
-            const waitTime = isDepleted ? 300000 : 60000;
-            console.warn(`[Server AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Waiting ${waitTime/1000}s for cooldown...`);
+            const waitTime = isDepleted ? 120000 : 15000; // Faster cooldown for standard errors
+            console.warn(`[Server AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Waiting ${waitTime/1000}s for quick recovery...`);
             await delay(waitTime);
           }
 
@@ -1133,12 +1133,15 @@ async function startServer() {
                         combinedText.includes("resource_exhausted") ||
                         combinedText.includes("api_key_invalid");
       
-      const status = isDepleted ? 402 : (typeof err.status === 'number' ? err.status : 500);
+      const isWarmup = combinedText.includes("503") || combinedText.includes("unavailable") || combinedText.includes("overloaded") || combinedText.includes("502") || combinedText.includes("504");
+
+      const status = isDepleted ? 402 : (isWarmup ? 503 : (typeof err.status === 'number' ? err.status : 500));
       
       return res.status(status).json({ 
-        error: isDepleted ? "Your Gemini API credits are depleted or the key is invalid. Please check your billing settings in AI Studio." : errorString,
+        error: isDepleted ? "Your Gemini API credits are depleted or the key is invalid. Please check your billing settings in AI Studio." : 
+               isWarmup ? "The AI engine is currently warming up or overloaded. We are automatically retrying with optimized backoff..." : errorString,
         status: status,
-        code: isDepleted ? "BILLING_DEPLETED" : "AI_ERROR",
+        code: isDepleted ? "BILLING_DEPLETED" : (isWarmup ? "AI_WARMUP" : "AI_ERROR"),
         details: err.details || null
       });
     }
@@ -1560,6 +1563,20 @@ async function startServer() {
       const payout = sortedQueue[0];
       const reference = payout.id;
 
+      // ENFORCE MONTHLY BATCHING: Only process on the 1st of the month OR if it's a Platform Treasury move
+      const today = new Date();
+      const isFirstOfMonth = today.getDate() === 1;
+      const isInternalPlatformMove = payout.source === 'platform_treasury_movement' || 
+                                     payout.userId === 'platform-admin' || 
+                                     payout.userId === 'portal-admin' ||
+                                     payout.userId === 'EDWINMUOHA';
+      
+      if (!isFirstOfMonth && !isInternalPlatformMove) {
+        console.log(`[Queue] Skipping ${reference} - Monthly batching active. (Next cycle: 1st of next month)`);
+        isPayoutProcessing = false;
+        return;
+      }
+
       console.log(`[Queue] Processing payout: ${reference} (Type: ${payout.type})`);
 
       // Mark as processing immediately
@@ -1575,30 +1592,38 @@ async function startServer() {
         result = await executeCoopBankTransfer(payout);
       }
 
-      if (result.success) {
-        await resilientDb.collection('payout_queue').doc(reference).update({
-          status: result.isBridge ? 'simulated' : 'completed',
-          completedAt: FieldValue.serverTimestamp(),
-          bankResponse: result.details || result.message
-        });
+        if (result.success && !result.isBridge) {
+          await resilientDb.collection('payout_queue').doc(reference).update({
+            status: 'completed',
+            completedAt: FieldValue.serverTimestamp(),
+            bankResponse: result.details || result.message
+          });
 
-        // IF PLATFORM PAYOUT, UPDATE TREASURY STATS
-        if (payout.source === 'platform_treasury_movement' || payout.userId === 'platform-admin' || payout.userId === 'portal-admin') {
-           try {
-             const amountUSD = (payout.amount / 130); // Approx back to USD
-             const statsRef = resilientDb.collection('platform').doc('stats');
-             await statsRef.update({
-               platformShare: FieldValue.increment(-amountUSD),
-               lastUpdated: new Date().toISOString()
-             });
-             console.log(`[Queue] Platform treasury updated for ${reference} (-$${amountUSD.toFixed(4)}) status: ${result.isBridge ? 'simulated' : 'completed'}`);
-           } catch (statsErr: any) {
-             console.error(`[Queue] Failed to update platform stats for ${reference}:`, statsErr.message);
-           }
-        }
-
-        console.log(`[Queue] Payout ${reference} ${result.isBridge ? 'SIMULATED (Bridge)' : 'COMPLETED'} successfully.`);
-      } else {
+          // IF REAL SUCCESSFUL PLATFORM PAYOUT, UPDATE TREASURY STATS
+          if (payout.source === 'platform_treasury_movement' || payout.userId === 'platform-admin' || payout.userId === 'portal-admin') {
+             try {
+               const amountUSD = (payout.amount / 130); // Approx back to USD
+               const statsRef = resilientDb.collection('platform').doc('stats');
+               await statsRef.update({
+                 platformShare: FieldValue.increment(-amountUSD),
+                 lastUpdated: new Date().toISOString()
+               });
+               console.log(`[Queue] REAL Platform treasury updated for ${reference} (-$${amountUSD.toFixed(4)})`);
+             } catch (statsErr: any) {
+               console.error(`[Queue] Failed to update platform stats for ${reference}:`, statsErr.message);
+             }
+          }
+          console.log(`[Queue] Payout ${reference} COMPLETED successfully.`);
+        } else if (result.success && result.isBridge) {
+          // If it was bridged/simulated, mark as blocked/simulated and DO NOT deduct from stats
+          await resilientDb.collection('payout_queue').doc(reference).update({
+            status: 'blocked', // Using 'blocked' instead of 'simulated' to be more 'truthful'
+            blockedAt: FieldValue.serverTimestamp(),
+            lastError: "Bank firewall blocked the request. Connection was simulated. No funds moved.",
+            isSimulated: true
+          });
+          console.warn(`[Queue] Payout ${reference} was BLOCKED by firewall. Logged for manual review.`);
+        } else {
         const attempts = (payout.attempts || 0) + 1;
         const isTerminal = attempts >= 3 ; // Fail after 3 attempts
         
