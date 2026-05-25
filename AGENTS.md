@@ -19,6 +19,7 @@ Pulse Feeds is a multi-functional community platform designed for social interac
 
 ### 3. Education Hub
 - **Online Integration:** Use AI to research and gather educational content from the web to generate custom course curricula.
+- **Update Cycle:** Courses are automatically refreshed on a **quarterly (3-month)** cycle to ensure depth and relevance.
 - **Certification:** Award badges and certificates upon course completion.
 - **Revenue Split:** Implement an 80/20 revenue split (80% to developer, 20% to user as a reward) for course enrollments and AI training.
 

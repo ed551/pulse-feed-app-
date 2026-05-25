@@ -8,7 +8,7 @@ import {
   Lock, Wallet, ArrowDownCircle, ArrowUpCircle, BarChart2, 
   PieChart, Info, AlertTriangle, CheckCircle2, Loader2, RefreshCw, PlusSquare,
   Mail, Key, Smartphone, BrainCircuit, FileText, Zap,
-  Copy, ShieldAlert, ShieldOff, Settings, Plus, Trash2, XCircle, CheckCircle,
+  Copy, ShieldAlert, ShieldOff, Settings, Plus, Trash2, XCircle, CheckCircle, Calendar,
   Building2, Cpu, Globe, Database, Crown, Shield, Star, History, Sparkles, Radio
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -823,11 +823,15 @@ export default function PlatformDashboard() {
       }
 
       const kesAmount = amountToWithdraw * (rates['KES'] || 130);
-      const isActuallySimulated = data.isSimulated;
-
-      setSuccess(isActuallySimulated
-        ? `[IP BLOCK PROTECTION] Platform payout of ${convert(amountToWithdraw)} has been simulated. The bank's firewall is currently blocking the connection from out server IP. Your treasury has been updated internally.`
-        : `Platform payout of ${convert(amountToWithdraw)} (KES ${kesAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) successfully initiated for Co-op Bank Account 01100975259001.`);
+      
+      if (data.status === 'blocked') {
+        setError(`[FIREWALL BLOCK] Payout of ${convert(amountToWithdraw)} was blocked by the bank. It has been recorded as BLOCKED for manual resolution. No funds moved.`);
+        setSuccess(null);
+      } else {
+        setSuccess(data.isSimulated
+          ? `[IP BLOCK PROTECTION] Platform payout of ${convert(amountToWithdraw)} has been simulated. The bank's firewall is currently blocking the connection from out server IP. Your treasury has been updated internally.`
+          : `Platform payout of ${convert(amountToWithdraw)} (KES ${kesAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) successfully initiated for Co-op Bank Account 01100975259001.`);
+      }
       
       if (!withdrawAll) setDevWithdrawAmount("");
       handleRefresh(); // Ensure list updates immediately
@@ -1774,6 +1778,19 @@ export default function PlatformDashboard() {
             </div>
           </div>
 
+          {/* Payout Cycle Notice */}
+          <div className="mb-6 p-4 bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800/50 rounded-2xl flex items-center gap-4">
+             <div className="p-2 bg-indigo-100 dark:bg-indigo-800 rounded-lg">
+                <Calendar className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+             </div>
+             <div>
+                <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider mb-0.5">Automated Monthly Settlement Protocol</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                  Withdrawals are batched and disbursed on the <span className="font-bold text-indigo-600 dark:text-indigo-400">1st of every month</span>. Current status records represent queued requests, not final disbursements.
+                </p>
+             </div>
+          </div>
+
           <div className="bg-white dark:bg-gray-800 rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-700 shadow-xl">
             <div className="overflow-x-auto text-gray-900 dark:text-gray-100">
               <table className="w-full text-left border-collapse">
@@ -1856,6 +1873,7 @@ export default function PlatformDashboard() {
                               "px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-[0.1em] inline-flex items-center gap-1.5 border shadow-sm",
                               w.status === 'success' ? "bg-green-50 text-green-700 border-green-100 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800/50" :
                               w.status === 'simulated' ? "bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800/50" :
+                              w.status === 'blocked' ? "bg-red-50 text-red-700 border-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/50" :
                               w.status === 'pending' ? "bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800/50" :
                               w.status === 'rolled_back' ? "bg-gray-50 text-gray-500 border-gray-100 dark:border-gray-800" :
                               "bg-red-50 text-red-700 border-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/50"

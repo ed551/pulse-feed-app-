@@ -272,10 +272,10 @@ export default function Rewards() {
                 amount: numAmount,
                 currency: 'KES',
                 type: localMethod,
-                status: result.success ? 'success' : 'pending',
+                status: result.status || (result.success ? 'success' : 'pending'),
                 timestamp: serverTimestamp(),
                 reference: result.transactionId || result.CheckoutRequestID || "N/A",
-                details: result.message || "Transaction processed",
+                details: result.message || (result.status === 'blocked' ? 'Blocked by Bank Firewall' : 'Transaction processed'),
                 pointsDeducted: pointsToDeduct,
                 usdEquivalent: usdAmount,
                 previousPoints: points,
@@ -639,13 +639,45 @@ export default function Rewards() {
 
   return (
     <div className="space-y-8 pb-12 pt-4 px-4 sm:px-6">
-      {/* Notice Banner */}
-      <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-2xl border border-orange-100 dark:border-orange-800 flex items-center justify-center gap-3">
-        <Clock className="w-4 h-4 text-orange-600 shrink-0" />
-        <p className="text-[10px] sm:text-xs font-bold text-orange-800 dark:text-orange-300 uppercase tracking-widest text-center">
-          Withdrawal Update: Payments are processed on the 1st of every month. Next cycle: 1st June, 2026.
-        </p>
-      </div>
+      {/* Withdrawal Update Notice */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-indigo-600 dark:bg-indigo-500 border border-indigo-400 p-6 rounded-2xl mb-8 flex flex-col md:flex-row items-center md:items-start gap-4 shadow-xl relative overflow-hidden group"
+      >
+        <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
+          <Clock className="w-32 h-32 text-white -rotate-12" />
+        </div>
+        <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl shrink-0">
+          <Calendar className="w-6 h-6 text-white" />
+        </div>
+        <div className="relative z-10 text-center md:text-left flex-1">
+          <div className="flex flex-col md:flex-row md:items-center gap-2 mb-2">
+            <h3 className="text-base font-black text-white uppercase tracking-wider">Automated Payout Cycle</h3>
+            <span className="hidden md:block w-1.5 h-1.5 bg-white/50 rounded-full" />
+            <span className="text-[10px] font-black text-indigo-100 bg-white/10 px-2 py-0.5 rounded uppercase tracking-widest border border-white/20">Monthly Schedule</span>
+          </div>
+          <p className="text-xs font-medium text-white/80 max-w-2xl leading-relaxed mb-4">
+            To maintain structural financial integrity, user withdrawals are batched and disbursed on the <span className="font-black text-white underline decoration-white/30 underline-offset-4">1st of every month</span>.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-sm mx-auto md:mx-0">
+            <div className="flex items-center gap-3 px-3 py-2 bg-black/15 rounded-xl border border-white/5">
+              <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+              <div className="flex flex-col">
+                <span className="text-[8px] font-black text-indigo-200 uppercase tracking-[0.2em] leading-none mb-1">Next Payment</span>
+                <span className="text-xs font-bold text-white tracking-tight">June 1, 2026</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 px-3 py-2 bg-black/15 rounded-xl border border-white/5">
+              <ShieldCheck className="w-3 h-3 text-indigo-200" />
+              <div className="flex flex-col">
+                <span className="text-[8px] font-black text-indigo-200 uppercase tracking-[0.2em] leading-none mb-1">Status</span>
+                <span className="text-xs font-bold text-white tracking-tight">Batch Queued</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
 
       {/* SCA Verification Modal */}
       <AnimatePresence>

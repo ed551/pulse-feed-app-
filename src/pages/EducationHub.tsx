@@ -21,8 +21,24 @@ import {
   RefreshCw,
   Loader2,
   Sparkles,
-  History
+  History,
+  Megaphone,
+  Briefcase,
+  Code2,
+  Brain,
+  Cpu
 } from 'lucide-react';
+
+const badgeIcons: Record<string, React.ReactNode> = {
+  'ShieldCheck': <ShieldCheck className="w-4 h-4 text-emerald-500" />,
+  'Cpu': <Cpu className="w-4 h-4 text-purple-500" />,
+  'TrendingUp': <TrendingUp className="w-4 h-4 text-indigo-500" />,
+  'Code2': <Code2 className="w-4 h-4 text-blue-500" />,
+  'Megaphone': <Megaphone className="w-4 h-4 text-orange-500" />,
+  'Sparkles': <Sparkles className="w-4 h-4 text-pink-500" />,
+  'Brain': <Brain className="w-4 h-4 text-rose-500" />,
+  'Briefcase': <Briefcase className="w-4 h-4 text-amber-500" />,
+};
 import { getEducationCourses, getLastSyncInfo, Course } from '../lib/education';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../hooks/useNotifications';
@@ -140,10 +156,10 @@ export default function EducationHub() {
     return categoryIcons[category] || <BookOpen className="w-6 h-6 text-indigo-500" />;
   };
 
-  const formatTime = (timestamp: any) => {
+  const formatDate = (timestamp: any) => {
     if (!timestamp) return 'Recently';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   return (
@@ -157,7 +173,7 @@ export default function EducationHub() {
           </h1>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-gray-500 text-sm max-w-sm">
-              Automated AI Curator exploring global knowledge daily.
+              Automated AI Curator exploring global knowledge quarterly.
             </p>
             <div className="flex items-center gap-1 bg-emerald-50 text-emerald-600 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-100 animate-pulse">
               <Zap className="w-3 h-3 fill-emerald-600" />
@@ -171,8 +187,8 @@ export default function EducationHub() {
             <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl border border-indigo-100 shadow-sm flex items-center gap-2">
               <History className="w-4 h-4" />
               <div className="text-[10px] font-black">
-                <span className="block opacity-60 uppercase tracking-tighter">Last Sync</span>
-                <span>{formatTime(syncInfo.lastSuccessfulSync)}</span>
+                <span className="block opacity-60 uppercase tracking-tighter text-[8px]">Next Sync in 90 Days</span>
+                <span>{formatDate(syncInfo.lastSuccessfulSync)}</span>
               </div>
             </div>
           </div>
@@ -242,13 +258,21 @@ export default function EducationHub() {
                       {getIcon(course.category)}
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-tighter shadow-sm border ${
-                        course.difficulty === 'Advanced' ? 'bg-indigo-600 text-white border-indigo-700' :
-                        course.difficulty === 'Intermediate' ? 'bg-purple-600 text-white border-purple-700' :
-                        'bg-emerald-600 text-white border-emerald-700'
-                      }`}>
-                        {course.difficulty}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {course.badge && badgeIcons[course.badge] && (
+                          <div className="p-1 bg-white border border-gray-100 rounded-lg shadow-sm flex items-center gap-1.5 px-2">
+                            {badgeIcons[course.badge]}
+                            <span className="text-[8px] font-black text-gray-500 uppercase tracking-tighter">Verified Badge</span>
+                          </div>
+                        )}
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-tighter shadow-sm border ${
+                          course.difficulty === 'Advanced' ? 'bg-indigo-600 text-white border-indigo-700' :
+                          course.difficulty === 'Intermediate' ? 'bg-purple-600 text-white border-purple-700' :
+                          'bg-emerald-600 text-white border-emerald-700'
+                        }`}>
+                          {course.difficulty}
+                        </span>
+                      </div>
                       <div className="flex items-center gap-1 text-[10px] text-gray-400 font-medium">
                         <Clock className="w-3 h-3" />
                         {course.duration}
@@ -308,15 +332,22 @@ export default function EducationHub() {
             >
               {/* Header */}
               <div className="sticky top-0 bg-white p-6 pb-4 border-b border-gray-100 flex items-center justify-between z-10">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-gray-50 rounded-2xl">
-                    {getIcon(selectedCourse.category)}
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-gray-50 rounded-2xl">
+                      {getIcon(selectedCourse.category)}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-xl font-black text-gray-900 leading-tight">{selectedCourse.title}</h2>
+                        {selectedCourse.badge && badgeIcons[selectedCourse.badge] && (
+                          <div className="p-1 bg-indigo-50 border border-indigo-100 rounded-lg shadow-sm flex items-center justify-center" title="Verified Badge">
+                            {badgeIcons[selectedCourse.badge]}
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs font-bold text-indigo-600 italic">80/20 Knowledge Share • Verified Certification</p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-xl font-black text-gray-900 leading-tight">{selectedCourse.title}</h2>
-                    <p className="text-xs font-bold text-indigo-600 italic">80/20 Knowledge Share</p>
-                  </div>
-                </div>
                 <button 
                   onClick={() => setSelectedCourse(null)}
                   className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
