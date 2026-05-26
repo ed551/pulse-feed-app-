@@ -1260,7 +1260,7 @@ export default function Layout() {
               }} />
 
               {/* Floating Global Audio Narrator */}
-              <div className="fixed bottom-24 right-6 z-[80] flex flex-col items-center gap-3">
+              <div className="fixed bottom-24 right-6 z-[40] flex flex-col items-center gap-3">
                 <AnimatePresence>
                   {isGlobalAudioActive && (
                     <motion.div 

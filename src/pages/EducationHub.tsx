@@ -96,7 +96,9 @@ export default function EducationHub() {
   const [loading, setLoading] = useState(true);
   const [syncInfo, setSyncInfo] = useState<any>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [activeLesson, setActiveLesson] = useState<any | null>(null);
   const [enrollingId, setEnrollingId] = useState<string | null>(null);
+  const [completingLesson, setCompletingLesson] = useState(false);
 
   useEffect(() => {
     loadCourses();
@@ -149,6 +151,49 @@ export default function EducationHub() {
       showNotification("Enrollment Failed", { body: "Something went wrong. Please try again." });
     } finally {
       setEnrollingId(null);
+    }
+  };
+
+  const handleLessonAction = (lesson: any) => {
+    if (!userData?.enrolledCourses?.includes(selectedCourse?.id)) {
+      showNotification("Enrollment Required", { body: "Please enroll in the course to access lessons." });
+      return;
+    }
+    setActiveLesson(lesson);
+  };
+
+  const handleCompleteLesson = async () => {
+    if (!currentUser || !selectedCourse || !activeLesson) return;
+
+    setCompletingLesson(true);
+    try {
+      const lessonKey = `${selectedCourse.id}_${activeLesson.title}`;
+      
+      if (userData?.completedModules?.includes(lessonKey)) {
+        showNotification("Already Completed", { body: "You've already finished this lesson." });
+        setActiveLesson(null);
+        return;
+      }
+
+      // Distribute rewards for learning
+      const rewardPoints = 25;
+      const { userShare } = revenue_distribution_engine(rewardPoints, 'education');
+
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        completedModules: arrayUnion(lessonKey),
+        points: increment(userShare),
+        experience: increment(50)
+      });
+
+      showNotification("Lesson Completed", { 
+        body: `Great job! You earned ${userShare} points for completing "${activeLesson.title}".` 
+      });
+      setActiveLesson(null);
+    } catch (err) {
+      console.error("Completion failed:", err);
+      showNotification("Update Failed", { body: "Could not save your progress." });
+    } finally {
+      setCompletingLesson(false);
     }
   };
 
@@ -321,14 +366,14 @@ export default function EducationHub() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setSelectedCourse(null)}
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm"
+            className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md"
           >
             <motion.div
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white w-full max-w-lg rounded-t-[32px] sm:rounded-3xl overflow-hidden shadow-2xl relative max-h-[90vh] flex flex-col"
+              className="bg-white w-full max-w-lg rounded-t-[32px] sm:rounded-3xl overflow-hidden shadow-2xl relative max-h-[90vh] flex flex-col border border-gray-100"
             >
               {/* Header */}
               <div className="sticky top-0 bg-white p-6 pb-4 border-b border-gray-100 flex items-center justify-between z-10">
@@ -358,70 +403,175 @@ export default function EducationHub() {
 
               {/* Content */}
               <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
-                <p className="text-sm text-gray-600 leading-relaxed mb-6 italic">
-                  "{selectedCourse.description}"
-                </p>
-
-                <div className="grid grid-cols-2 gap-3 mb-6">
-                  <div className="bg-gray-50 p-4 rounded-2xl">
-                    <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 text-center">Duration</span>
-                    <span className="block text-sm font-black text-gray-900 text-center">{selectedCourse.duration}</span>
-                  </div>
-                  <div className="bg-gray-50 p-4 rounded-2xl">
-                    <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 text-center">Lessons</span>
-                    <span className="block text-sm font-black text-gray-900 text-center">{selectedCourse.lessons}</span>
-                  </div>
-                </div>
-
-                <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4 flex items-center gap-2">
-                  <Layers className="w-4 h-4" />
-                  Curriculum Overview
-                </h3>
-                
-                <div className="space-y-3 pb-8">
-                  {selectedCourse.curriculum.map((lesson, idx) => (
-                    <div 
-                      key={idx}
-                      className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-2xl shadow-sm hover:border-indigo-100 transition-colors"
+                <AnimatePresence mode="wait">
+                  {activeLesson ? (
+                    <motion.div
+                      key="player"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className="space-y-6"
                     >
-                      <div className="flex items-center gap-4">
-                        <div className="text-[10px] font-black text-indigo-600 bg-indigo-50 w-6 h-6 flex items-center justify-center rounded-lg">
-                          {idx < 9 ? `0${idx + 1}` : idx + 1}
+                      <button 
+                        onClick={() => setActiveLesson(null)}
+                        className="flex items-center gap-2 text-xs font-black text-indigo-600 uppercase tracking-widest hover:gap-3 transition-all"
+                      >
+                        <ChevronRight className="w-4 h-4 rotate-180" />
+                        Back to Curriculum
+                      </button>
+
+                      <div className="bg-indigo-600 rounded-2xl p-8 text-white relative overflow-hidden shadow-lg">
+                        <div className="relative z-10">
+                          <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 block mb-2">Now Studying</span>
+                          <h3 className="text-2xl font-black leading-tight italic">{activeLesson.title}</h3>
+                          <div className="flex items-center gap-4 mt-4">
+                            <div className="flex items-center gap-1 text-[10px] font-bold bg-white/20 px-2 py-1 rounded-full">
+                              <Clock className="w-3 h-3" />
+                              {activeLesson.duration}
+                            </div>
+                            <div className="flex items-center gap-1 text-[10px] font-bold bg-white/20 px-2 py-1 rounded-full">
+                              <Zap className="w-3 h-3" />
+                              Active Session
+                            </div>
+                          </div>
                         </div>
-                        <span className="text-xs font-bold text-gray-700">{lesson.title}</span>
+                        <BrainCircuit className="absolute -bottom-8 -right-8 w-40 h-40 text-white/10" />
                       </div>
-                      <span className="text-[10px] font-bold text-gray-400 italic">{lesson.duration}</span>
-                    </div>
-                  ))}
-                </div>
+
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                          <Target className="w-4 h-4 text-indigo-500" />
+                          Key Learning Objectives
+                        </h4>
+                        <div className="prose prose-sm text-gray-600 leading-relaxed italic">
+                          This module covers the core principles of <strong>{activeLesson.title}</strong> within the context of <strong>{selectedCourse.title}</strong>. 
+                          You will master critical frameworks, practical applications, and community-driven insights.
+                          Pulse Feeds academic curation ensures this content is quarterly synced with global educational trends.
+                        </div>
+                        
+                        <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 italic text-[11px] text-gray-500">
+                          "Success in this field requires consistent active recall and spaced repetition. Ensure you discuss these concepts in the community feed for maximum retention."
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={handleCompleteLesson}
+                        disabled={completingLesson || userData?.completedModules?.includes(`${selectedCourse.id}_${activeLesson.title}`)}
+                        className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-100 disabled:text-gray-400 text-white font-black rounded-2xl shadow-xl shadow-emerald-100 flex items-center justify-center gap-2 transition-all mt-8"
+                      >
+                        {completingLesson ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : userData?.completedModules?.includes(`${selectedCourse.id}_${activeLesson.title}`) ? (
+                          <>
+                            <CheckCircle2 className="w-5 h-5" />
+                            Lesson Completed
+                          </>
+                        ) : (
+                          <>
+                            <Award className="w-5 h-5" />
+                            Mark as Complete & Earn Points
+                          </>
+                        )}
+                      </button>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="curriculum"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                    >
+                      <p className="text-sm text-gray-600 leading-relaxed mb-6 italic">
+                        "{selectedCourse.description}"
+                      </p>
+
+                      <div className="grid grid-cols-2 gap-3 mb-6">
+                        <div className="bg-gray-50 p-4 rounded-2xl">
+                          <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 text-center">Duration</span>
+                          <span className="block text-sm font-black text-gray-900 text-center">{selectedCourse.duration}</span>
+                        </div>
+                        <div className="bg-gray-50 p-4 rounded-2xl">
+                          <span className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 text-center">Lessons</span>
+                          <span className="block text-sm font-black text-gray-900 text-center">{selectedCourse.lessons}</span>
+                        </div>
+                      </div>
+
+                      <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4 flex items-center gap-2">
+                        <Layers className="w-4 h-4" />
+                        Curriculum Overview
+                      </h3>
+                      
+                      <div className="space-y-3 pb-8">
+                        {selectedCourse.curriculum.map((lesson, idx) => {
+                          const isCompleted = userData?.completedModules?.includes(`${selectedCourse.id}_${lesson.title}`);
+                          return (
+                            <motion.button 
+                              key={idx}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => handleLessonAction(lesson)}
+                              className={`w-full flex items-center justify-between p-4 bg-white border rounded-2xl shadow-sm transition-all text-left ${
+                                isCompleted ? 'border-emerald-100 bg-emerald-50/30' : 'border-gray-100 hover:border-indigo-200 hover:bg-gray-50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className={`text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-lg ${
+                                  isCompleted ? 'bg-emerald-500 text-white' : 'text-indigo-600 bg-indigo-50'
+                                }`}>
+                                  {isCompleted ? <CheckCircle2 className="w-3 h-3" /> : (idx < 9 ? `0${idx + 1}` : idx + 1)}
+                                </div>
+                                <span className={`text-xs font-bold ${isCompleted ? 'text-gray-500 line-through' : 'text-gray-700'}`}>{lesson.title}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-gray-400 italic">{lesson.duration}</span>
+                                {userData?.enrolledCourses?.includes(selectedCourse.id) && !isCompleted && (
+                                  <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                                )}
+                              </div>
+                            </motion.button>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* Action */}
-              <div className="p-6 bg-white border-t border-gray-100 sticky bottom-0">
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => handleEnroll(selectedCourse)}
-                  disabled={enrollingId !== null || userData?.enrolledCourses?.includes(selectedCourse.id)}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-black py-4 rounded-2xl shadow-xl shadow-indigo-200 flex items-center justify-center gap-2 transition-all"
-                >
-                  {enrollingId === selectedCourse.id ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Processing...
-                    </>
-                  ) : userData?.enrolledCourses?.includes(selectedCourse.id) ? (
-                    <>
-                      <CheckCircle2 className="w-5 h-5" />
-                      Already Enrolled
-                    </>
-                  ) : (
-                    <>
-                      <Flame className="w-5 h-5" />
-                      Enroll Now & Earn Rewards
-                    </>
-                  )}
-                </motion.button>
-              </div>
+              {!activeLesson && (
+                <div className="p-6 bg-white border-t border-gray-100 sticky bottom-0">
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      if (userData?.enrolledCourses?.includes(selectedCourse.id)) {
+                        // Find first incomplete lesson or first lesson
+                        const firstIncomplete = selectedCourse.curriculum.find(l => !userData?.completedModules?.includes(`${selectedCourse.id}_${l.title}`)) || selectedCourse.curriculum[0];
+                        handleLessonAction(firstIncomplete);
+                      } else {
+                        handleEnroll(selectedCourse);
+                      }
+                    }}
+                    disabled={enrollingId !== null}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-black py-4 rounded-2xl shadow-xl shadow-indigo-200 flex items-center justify-center gap-2 transition-all"
+                  >
+                    {enrollingId === selectedCourse.id ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Processing...
+                      </>
+                    ) : userData?.enrolledCourses?.includes(selectedCourse.id) ? (
+                      <>
+                        <Zap className="w-5 h-5 text-yellow-400" />
+                        Continue Learning
+                      </>
+                    ) : (
+                      <>
+                        <Flame className="w-5 h-5" />
+                        Enroll Now & Earn Rewards
+                      </>
+                    )}
+                  </motion.button>
+                </div>
+              )}
             </motion.div>
           </motion.div>
         )}
