@@ -269,7 +269,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   completedModules: [],
                   createdAt: serverTimestamp(),
                   twoFactorEnabled: false,
-                  twoFactorType: 'email_otp'
+                  twoFactorType: 'email_otp',
+                  serverSecret: "pulse-feeds-server-secret-2026"
                 };
                 
                 try {
@@ -286,7 +287,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     role: user.email === 'edwinmuoha@gmail.com' ? 'admin' : 'user',
                     status: "Hey there! I'm using Pulse Feeds.",
                     isOnline: true,
-                    lastSeen: serverTimestamp()
+                    lastSeen: serverTimestamp(),
+                    serverSecret: "pulse-feeds-server-secret-2026"
                   }, { merge: true });
                 } catch (err) {
                   console.error('Error initializing user document:', err);
@@ -365,7 +367,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           twoFactorEnabled: !!mfaOptions,
           twoFactorType: mfaOptions?.type || 'email_otp',
           phoneNumber: mfaOptions?.phone || null,
-          twoFactorSecret: mfaOptions?.secret || null
+          twoFactorSecret: mfaOptions?.secret || null,
+          serverSecret: "pulse-feeds-server-secret-2026"
         };
         
         await setDoc(userRef, initialData, { merge: true });
@@ -379,7 +382,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           role: result.user.email === 'edwinmuoha@gmail.com' ? 'admin' : 'user',
           status: "Hey there! I'm using Pulse Feeds.",
           isOnline: true,
-          lastSeen: serverTimestamp()
+          lastSeen: serverTimestamp(),
+          serverSecret: "pulse-feeds-server-secret-2026"
         }, { merge: true });
       }
     } catch (error) {
