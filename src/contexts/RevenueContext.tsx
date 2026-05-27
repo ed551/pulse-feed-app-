@@ -6,6 +6,7 @@ import { db } from '../lib/firebase';
 interface RevenueContextType {
   isIdle: boolean;
   setIsIdle: (val: boolean) => void;
+  pointsLocked: boolean;
   activeSeconds: number;
   totalEarnedToday: number;
   addRevenue: (userAmount: number, platformAmount: number, reason: string, source: 'ad' | 'education' | 'active_time' | 'dating' | 'community' | 'events') => Promise<void>;
@@ -25,14 +26,17 @@ export const useRevenue = () => {
 export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser, userData } = useAuth();
   const [isIdle, setIsIdle] = useState(false);
+  const [pointsLocked, setPointsLocked] = useState(false);
   const [activeSeconds, setActiveSeconds] = useState(0);
   const [totalEarnedToday, setTotalEarnedToday] = useState(0);
+  const [isAnalyzingBehavior, setIsAnalyzingBehavior] = useState(false);
   
   // Self-Update Engine: Batched Synchronization
   const pendingUserPointsRef = useRef(0);
   const pendingUserValueRef = useRef(0);
   const pendingPlatformValueRef = useRef(0);
   const lastSyncRef = useRef<number>(Date.now());
+  const lastBehaviorCheckRef = useRef<number>(0);
   
   const idleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const earningIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -43,13 +47,83 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
     userDataRef.current = userData;
   }, [userData]);
   
-  const IDLE_THRESHOLD = 300000; // 5 minutes
+  const [idleThreshold, setIdleThreshold] = useState(() => {
+    const saved = localStorage.getItem('pulse_idle_threshold');
+    return saved ? parseInt(saved) : 300000; // Default 5 mins
+  });
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const saved = localStorage.getItem('pulse_idle_threshold');
+      if (saved) setIdleThreshold(parseInt(saved));
+    };
+    window.addEventListener('storage', handleStorageChange);
+    // Also listen for custom event for same-tab updates
+    window.addEventListener('pulse-idle-threshold-update', handleStorageChange as any);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('pulse-idle-threshold-update', handleStorageChange as any);
+    };
+  }, []);
+
+  const IDLE_THRESHOLD = idleThreshold;
   const EARNING_INTERVAL = 30000; // Check every 30s locally
   const SYNC_INTERVAL = 300000; // Sync to DB every 5 mins
   const POINTS_PER_INTERVAL = 2.5; // Adjusted for 30s
 
+  const monitorBehaviorWithAI = async () => {
+    if (!currentUser || isAnalyzingBehavior || Date.now() - lastBehaviorCheckRef.current < 60000) return;
+    
+    setIsAnalyzingBehavior(true);
+    lastBehaviorCheckRef.current = Date.now();
+    
+    try {
+      const { generateContentWithRetry } = await import('../lib/ai');
+      const { saveInsight } = await import('../lib/insights');
+      
+      const stats = {
+        activeSeconds,
+        earnedToday: totalEarnedToday,
+        idleTime: isIdle ? Date.now() - (lastSyncRef.current - IDLE_THRESHOLD) : 0,
+        platformStats: {
+          totalUsers: 1000 // Mock for context
+        }
+      };
+
+      const prompt = `Analyze user behavioral pattern for Pulse Feeds platform. 
+      User ID: ${currentUser.uid}
+      Session Persistence: ${activeSeconds}s
+      Points Accrual: ${totalEarnedToday}
+      Idle Status: ${isIdle}
+      
+      If the user is idle for more than 10 minutes OR has accrued more than 500 points in one session without significant movement, recommend a [LOCKOUT] action.
+      Otherwise return [STABLE].
+      Provide a 1-sentence insight for the user if locking.`;
+
+      const result = await generateContentWithRetry({
+        model: "gemini-3-flash-preview",
+        contents: [{ role: "user", parts: [{ text: prompt }] }]
+      });
+
+      const responseText = result.text || "";
+      
+      if (responseText.includes("[LOCKOUT]")) {
+        setPointsLocked(true);
+        const insight = responseText.replace("[LOCKOUT]", "").trim();
+        await saveInsight('user', 'security', `AI Lockout: ${insight || "Potential idle point farming detected."}`);
+        console.log("[AI Behavior] Points Locked due to inactivity/pattern detection.");
+      } else {
+        setPointsLocked(false);
+      }
+    } catch (err) {
+      console.error("Behavior analysis failed:", err);
+    } finally {
+      setIsAnalyzingBehavior(false);
+    }
+  };
+
   const syncPendingToFirestore = async () => {
-    if (!currentUser || !db || pendingUserPointsRef.current <= 0) return;
+    if (!currentUser || !db || pendingUserPointsRef.current <= 0 || pointsLocked) return;
     
     const userPts = pendingUserPointsRef.current;
     const userVal = pendingUserValueRef.current;
@@ -308,6 +382,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const resetIdleTimer = () => {
     setIsIdle(false);
+    setPointsLocked(false);
     if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current);
     idleTimeoutRef.current = setTimeout(() => {
       setIsIdle(true);
@@ -326,8 +401,10 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   useEffect(() => {
-    if (currentUser && !isIdle) {
+    if (currentUser && !isIdle && !pointsLocked) {
       earningIntervalRef.current = setInterval(() => {
+        if (pointsLocked) return;
+        
         // Accumulate locally
         const userPts = Math.floor(POINTS_PER_INTERVAL * 0.5);
         const userVal = userPts / 100;
@@ -368,8 +445,14 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => clearInterval(interval);
   }, [isIdle]);
 
+  useEffect(() => {
+    if (isIdle && currentUser) {
+      monitorBehaviorWithAI();
+    }
+  }, [isIdle, currentUser]);
+
   return (
-    <RevenueContext.Provider value={{ isIdle, setIsIdle, activeSeconds, totalEarnedToday, addRevenue, addPlatformRevenue, addPlatformExpense, syncActiveTimeRewards: syncPendingToFirestore }}>
+    <RevenueContext.Provider value={{ isIdle, setIsIdle, pointsLocked, activeSeconds, totalEarnedToday, addRevenue, addPlatformRevenue, addPlatformExpense, syncActiveTimeRewards: syncPendingToFirestore }}>
       {children}
     </RevenueContext.Provider>
   );

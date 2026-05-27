@@ -53,7 +53,7 @@ export default function Layout() {
     { type: t('weather_cloudy'), icon: Cloud, color: 'text-slate-400', bg: 'from-slate-500/20 to-gray-500/20', glow: 'drop-shadow-[0_0_8px_rgba(226,232,240,0.8)]', symbol: '⛅', temp: '--°C', tempValue: 20 },
     { type: t('weather_stormy'), icon: CloudLightning, color: 'text-purple-500', bg: 'from-purple-500/20 to-indigo-500/20', glow: 'drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]', symbol: '⛈️', temp: '--°C', tempValue: 18 }
   ];
-  const { isIdle, totalEarnedToday } = useRevenue();
+  const { isIdle, totalEarnedToday, pointsLocked } = useRevenue();
   const navigate = useNavigate();
   const [isDark, setIsDark] = useState(() => {
     // Check localStorage first for immediate flash prevention
@@ -991,6 +991,21 @@ export default function Layout() {
           ? "max-w-[375px] max-h-[812px] rounded-[3rem] border-[12px] border-gray-800 dark:border-gray-800 shadow-[0_0_50px_rgba(0,0,0,0.3)]" 
           : "rounded-none lg:rounded-2xl shadow-2xl"
       )}>
+        {/* AI Lockout Warning */}
+        <AnimatePresence>
+          {pointsLocked && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="bg-indigo-600 text-white py-1 px-4 text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2"
+            >
+              <BrainCircuit className="w-3 h-3 animate-pulse" />
+              AI Insight: Accumulation Paused Due to Prolonged Inactivity
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <ConnectivityBanner />
         {/* Mobile Notch Simulation */}
         {viewMode === 'mobile' && window.innerWidth >= 1024 && !(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) && (

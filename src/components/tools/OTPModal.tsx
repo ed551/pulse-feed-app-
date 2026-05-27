@@ -107,7 +107,7 @@ export default function OTPModal({ userId, email, phoneNumber, method, onClose, 
       const res = await fetch('/api/otp/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, otp: code })
+        body: JSON.stringify({ userId, otp: code, email })
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || "Verification failed");

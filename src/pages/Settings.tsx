@@ -72,6 +72,7 @@ export default function Settings() {
   const [isVerifyingPhone, setIsVerifyingPhone] = useState(false);
   const [healthInterval, setHealthInterval] = useState(() => localStorage.getItem('pulse_health_interval') || 'daily');
   const [newsInterval, setNewsInterval] = useState(() => localStorage.getItem('pulse_news_interval') || '1h');
+  const [idleThreshold, setIdleThreshold] = useState(() => localStorage.getItem('pulse_idle_threshold') || '300000');
 
   const updateHealthInterval = (val: string) => {
     setHealthInterval(val);
@@ -81,6 +82,12 @@ export default function Settings() {
   const updateNewsInterval = (val: string) => {
     setNewsInterval(val);
     localStorage.setItem('pulse_news_interval', val);
+  };
+
+  const updateIdleThreshold = (val: string) => {
+    setIdleThreshold(val);
+    localStorage.setItem('pulse_idle_threshold', val);
+    window.dispatchEvent(new CustomEvent('pulse-idle-threshold-update'));
   };
 
   // New settings states
@@ -382,8 +389,8 @@ export default function Settings() {
   const sections = [
     {
       id: 'health',
-      title: 'Health Engine',
-      description: 'Daily biometric wellness check-ins and community health.',
+      title: 'Health & Sessions',
+      description: 'Wellness check-ins, news delivery, and session timeout controls.',
       icon: <Activity className="w-5 h-5 text-rose-500" />,
       content: (
         <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -481,6 +488,27 @@ export default function Settings() {
                     )} />
                   ))}
                 </div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-sm">
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white">Session Timeout</h4>
+                  <p className="text-[10px] text-gray-500">Auto-lock after period of inactivity</p>
+                </div>
+                <select 
+                  value={idleThreshold}
+                  onChange={(e) => updateIdleThreshold(e.target.value)}
+                  className="bg-gray-50 dark:bg-gray-900 border-none rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="60000">1 Minute</option>
+                  <option value="300000">5 Minutes</option>
+                  <option value="900000">15 Minutes</option>
+                  <option value="1800000">30 Minutes</option>
+                  <option value="3600000">1 Hour</option>
+                  <option value="14400000">4 Hours</option>
+                  <option value="86400000">24 Hours</option>
+                  <option value="31536000000">Never (1 Year)</option>
+                </select>
               </div>
 
               {activeSessions.length > 1 && (
