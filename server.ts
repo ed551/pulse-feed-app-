@@ -1147,6 +1147,41 @@ async function startServer() {
     }
   });
 
+  app.post("/api/education/research-lesson", async (req, res) => {
+    try {
+      const { lessonTitle, courseTitle, courseDescription } = req.body;
+      
+      if (!lessonTitle || !courseTitle) {
+        return res.status(400).json({ error: "Missing lesson or course info" });
+      }
+
+      const prompt = `Research and provide deep academic content for a lesson titled "${lessonTitle}" within the course "${courseTitle}". 
+      Course Context: ${courseDescription}
+      
+      Format your response as a JSON object with these fields:
+      - overview: 1-2 powerful introductory sentences.
+      - objectives: An array of 3-4 specific learning goals.
+      - keyConcepts: An array of 3-4 detailed paragraphs or bullet points explaining core theories.
+      - communityImpact: One sentence on how this applies to community empowerment.
+      
+      Style: Academic, professional, yet inspiring. Use a "Pulse Feeds" editorial tone.`;
+
+      const response = await generateContentWithRetry({
+        model: 'gemini-3-flash-preview',
+        systemInstruction: "You are an elite academic curator for Pulse Feeds Education Hub. You specialize in deep research and clear communication of complex enterprise and technology topics.",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: "application/json" }
+      });
+
+      const contentText = response.response.text();
+      const content = JSON.parse(contentText);
+      res.json(content);
+    } catch (error: any) {
+      console.error("[Education Research] Error:", error.message);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Equity Bank Access Token Helper (EazzyAPI)
   async function getEquityAccessToken() {
     const consumerKey = process.env.EQUITY_CONSUMER_KEY;

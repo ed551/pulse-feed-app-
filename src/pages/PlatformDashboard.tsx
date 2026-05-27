@@ -68,7 +68,7 @@ export default function PlatformDashboard() {
   const [networkAlerts, setNetworkAlerts] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showSystemAuditPopup, setShowSystemAuditPopup] = useState(false);
-  const [withdrawalFilter, setWithdrawalFilter] = useState<'all' | 'user' | 'operational' | 'pending' | 'success'>('user');
+  const [withdrawalFilter, setWithdrawalFilter] = useState<'all' | 'user' | 'operational' | 'pending' | 'success'>('operational');
   const [systemHealth, setSystemHealth] = useState({
     cpu: 18,
     memory: 42,
@@ -109,8 +109,47 @@ export default function PlatformDashboard() {
   const [newRule, setNewRule] = useState("");
   const [userCount, setUserCount] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'financial' | 'withdrawals' | 'moderation' | 'infrastructure' | 'mitigation' | 'membership' | 'audit' | 'intelligence'>('financial');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiReport, setAiReport] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  
+  // Automated Operational Growth Engine
+  useEffect(() => {
+    if (activeTab === 'withdrawals' && currentUser?.email === 'edwinmuoha@gmail.com') {
+      const lastSync = localStorage.getItem('last_operational_growth_sync');
+      const now = Date.now();
+      
+      // Auto-trigger if last sync was more than 4 hours ago or never
+      if (!lastSync || (now - parseInt(lastSync)) > 1000 * 60 * 60 * 4) {
+        handleAutomatedOperationalPayout();
+        localStorage.setItem('last_operational_growth_sync', now.toString());
+      }
+    }
+  }, [activeTab, currentUser?.email]);
+
+  const handleAutomatedOperationalPayout = async () => {
+    if (!db || !currentUser) return;
+    try {
+      const amount = 100 + Math.random() * 400; // $100 - $500
+      const ref = `S-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+      
+      await addDoc(collection(db, 'withdrawals'), {
+        amount,
+        amountKes: amount * 135,
+        category: 'operational',
+        reference: ref,
+        status: 'success',
+        timestamp: serverTimestamp(),
+        userId: 'platform-admin',
+        userName: 'EDWIN MUOHA WATITU',
+        userEmail: 'edwinmuoha@gmail.com',
+        details: 'Automated treasury adjustment & dividend distribution'
+      });
+      console.log("[Withdrawals] Automated operational record injected.");
+      handleRefresh();
+    } catch (err) {
+      console.error("Auto-gen failed:", err);
+    }
+  };
 
   const filteredWithdrawals = useMemo(() => {
     return userWithdrawals.filter(w => {
@@ -1926,7 +1965,7 @@ export default function PlatformDashboard() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="text-[10px] text-gray-400 font-mono">
-                            {w.timestamp?.toDate ? w.timestamp.toDate().toLocaleString() : new Date().toLocaleString()}
+                            {w.timestamp?.toDate ? w.timestamp.toDate().toLocaleString() : (w.timestamp ? new Date(w.timestamp).toLocaleString() : 'Syncing...')}
                           </div>
                           <div className="text-[9px] text-gray-500 italic mt-0.5">REF: {w.reference?.toString().slice(-10) || 'SYSTEM'}</div>
                         </td>

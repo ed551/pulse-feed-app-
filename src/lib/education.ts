@@ -4,6 +4,7 @@ import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 export interface Lesson {
   title: string;
   duration: string;
+  researchContent?: string;
 }
 
 export interface Course {

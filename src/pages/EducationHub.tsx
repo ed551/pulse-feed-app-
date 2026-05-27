@@ -99,6 +99,8 @@ export default function EducationHub() {
   const [activeLesson, setActiveLesson] = useState<any | null>(null);
   const [enrollingId, setEnrollingId] = useState<string | null>(null);
   const [completingLesson, setCompletingLesson] = useState(false);
+  const [lessonResearch, setLessonResearch] = useState<any | null>(null);
+  const [researching, setResearching] = useState(false);
 
   useEffect(() => {
     loadCourses();
@@ -160,6 +162,68 @@ export default function EducationHub() {
       return;
     }
     setActiveLesson(lesson);
+    if (selectedCourse) {
+      fetchLessonResearch(lesson, selectedCourse);
+    }
+  };
+
+  const fetchLessonResearch = async (lesson: any, course: Course) => {
+    setResearching(true);
+    setLessonResearch(null);
+    let retries = 0;
+    const MAX_RETRIES = 10;
+
+    while (retries < MAX_RETRIES) {
+      try {
+        const response = await fetch('/api/education/research-lesson', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-Education-Retry': retries.toString()
+          },
+          body: JSON.stringify({
+            lessonTitle: lesson.title,
+            courseTitle: course.title,
+            courseDescription: course.description
+          })
+        });
+
+        const responseText = await response.text();
+        
+        // Detect HTML responses from infrastructure (indicates server booting or proxy error)
+        if (responseText.includes("<!doctype") || responseText.includes("<html") || responseText.includes("Starting Server...")) {
+          console.warn(`[Education Hub] Infrastructure warmup (${retries + 1}/${MAX_RETRIES}). Retrying...`);
+          retries++;
+          await new Promise(resolve => setTimeout(resolve, 3000 * retries));
+          continue;
+        }
+
+        if (!response.ok) {
+          throw new Error(`API returned ${response.status}`);
+        }
+
+        const data = JSON.parse(responseText);
+        setLessonResearch(data);
+        setResearching(false);
+        return;
+      } catch (error) {
+        console.error(`[Education Hub] Research attempt ${retries + 1} failed:`, error);
+        retries++;
+        if (retries < MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, 2000 * retries));
+          continue;
+        }
+      }
+    }
+
+    // Fallback if AI fails after all retries
+    setLessonResearch({
+      overview: `Master the core principles of ${lesson.title} as part of your ${course.title} curriculum.`,
+      objectives: ["Understand foundational concepts", "Practical application skills", "Strategic integration"],
+      keyConcepts: ["AI Research curation is currently taking longer than expected. Please proceed with the lesson and discuss these concepts in the community feed for peer insights."],
+      communityImpact: "This knowledge empowers you to lead with data and strategic insight."
+    });
+    setResearching(false);
   };
 
   const handleCompleteLesson = async () => {
@@ -443,15 +507,74 @@ export default function EducationHub() {
                           <Target className="w-4 h-4 text-indigo-500" />
                           Key Learning Objectives
                         </h4>
-                        <div className="prose prose-sm text-gray-600 leading-relaxed italic">
-                          This module covers the core principles of <strong>{activeLesson.title}</strong> within the context of <strong>{selectedCourse.title}</strong>. 
-                          You will master critical frameworks, practical applications, and community-driven insights.
-                          Pulse Feeds academic curation ensures this content is quarterly synced with global educational trends.
-                        </div>
                         
-                        <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 italic text-[11px] text-gray-500">
-                          "Success in this field requires consistent active recall and spaced repetition. Ensure you discuss these concepts in the community feed for maximum retention."
-                        </div>
+                        {researching ? (
+                          <div className="space-y-4 py-8">
+                            <div className="flex flex-col items-center justify-center gap-4 text-center">
+                              <div className="relative">
+                                <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+                                <Sparkles className="absolute inset-0 m-auto w-6 h-6 text-indigo-600 animate-pulse" />
+                              </div>
+                              <div>
+                                <h5 className="text-xs font-black text-indigo-600 uppercase tracking-widest mb-1">AI Research Active</h5>
+                                <p className="text-[10px] text-gray-400 font-bold italic">Curating academic insights for topic context...</p>
+                              </div>
+                            </div>
+                            <div className="space-y-3 mt-4">
+                              <div className="h-2 bg-gray-100 rounded-full w-full animate-pulse"></div>
+                              <div className="h-2 bg-gray-100 rounded-full w-[90%] animate-pulse delay-75"></div>
+                              <div className="h-2 bg-gray-100 rounded-full w-[95%] animate-pulse delay-150"></div>
+                            </div>
+                          </div>
+                        ) : lessonResearch ? (
+                          <motion.div 
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="space-y-6"
+                          >
+                            <p className="text-sm text-gray-600 italic leading-relaxed">
+                              "{lessonResearch.overview}"
+                            </p>
+                            
+                            <div className="grid grid-cols-1 gap-2">
+                              {lessonResearch.objectives.map((obj: string, i: number) => (
+                                <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 border border-gray-100 rounded-xl">
+                                  <div className="mt-0.5 w-1.5 h-1.5 rounded-full bg-indigo-500 flex-shrink-0" />
+                                  <span className="text-[11px] font-bold text-gray-700">{obj}</span>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="space-y-3">
+                              <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                <Lightbulb className="w-3 h-3" />
+                                Deep Insights
+                              </h5>
+                              {lessonResearch.keyConcepts.map((concept: string, i: number) => (
+                                <div key={i} className="p-4 bg-white border border-gray-100 rounded-2xl text-[11px] text-gray-600 leading-relaxed shadow-sm">
+                                  {concept}
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="p-4 bg-indigo-600 rounded-2xl flex items-start gap-4 shadow-lg shadow-indigo-100">
+                              <div className="p-2 bg-white/20 rounded-xl">
+                                <GraduationCap className="w-5 h-5 text-white" />
+                              </div>
+                              <div>
+                                <span className="block uppercase tracking-[0.2em] text-[9px] font-black text-white/70 mb-1">Community Empowerment</span>
+                                <p className="text-[10px] font-bold text-white leading-snug">
+                                  {lessonResearch.communityImpact}
+                                </p>
+                              </div>
+                            </div>
+                          </motion.div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                            <Loader2 className="w-8 h-8 animate-spin mb-4 opacity-20" />
+                            <p className="text-[10px] font-bold uppercase tracking-widest">Waiting for Research Engine...</p>
+                          </div>
+                        )}
                       </div>
 
                       <button
