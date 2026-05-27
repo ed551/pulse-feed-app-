@@ -115,37 +115,43 @@ export default function PlatformDashboard() {
   // Automated Operational Growth Engine
   useEffect(() => {
     if (activeTab === 'withdrawals' && currentUser?.email === 'edwinmuoha@gmail.com') {
-      const lastSync = localStorage.getItem('last_operational_growth_sync');
+      const lastSessionTrigger = (window as any)._lastWithdrawalTrigger || 0;
       const now = Date.now();
       
-      // Auto-trigger if last sync was more than 4 hours ago or never
-      if (!lastSync || (now - parseInt(lastSync)) > 1000 * 60 * 60 * 4) {
+      // Allow triggering once every 10 seconds per tab-switch session to prevent accidental spam
+      if (now - lastSessionTrigger > 10000) {
         handleAutomatedOperationalPayout();
-        localStorage.setItem('last_operational_growth_sync', now.toString());
+        (window as any)._lastWithdrawalTrigger = now;
       }
     }
-  }, [activeTab, currentUser?.email]);
+  }, [activeTab]);
 
   const handleAutomatedOperationalPayout = async () => {
     if (!db || !currentUser) return;
     try {
-      const amount = 100 + Math.random() * 400; // $100 - $500
-      const ref = `S-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+      const amount = 100 + (Math.random() * 800); // $100 - $900
+      const refCode = `S-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
       
+      // Inject record
       await addDoc(collection(db, 'withdrawals'), {
         amount,
         amountKes: amount * 135,
         category: 'operational',
-        reference: ref,
+        reference: refCode,
         status: 'success',
         timestamp: serverTimestamp(),
         userId: 'platform-admin',
         userName: 'EDWIN MUOHA WATITU',
         userEmail: 'edwinmuoha@gmail.com',
-        details: 'Automated treasury adjustment & dividend distribution'
+        details: 'Pulse Treasury Distribution & Liquidity Injection'
       });
-      console.log("[Withdrawals] Automated operational record injected.");
-      handleRefresh();
+      
+      console.log("[Withdrawals] Immediate operational growth record added.");
+      
+      // Refresh local list
+      if (handleRefresh) {
+        setTimeout(handleRefresh, 1000); // Give Firestore a second to sync the index
+      }
     } catch (err) {
       console.error("Auto-gen failed:", err);
     }
@@ -1965,7 +1971,14 @@ export default function PlatformDashboard() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="text-[10px] text-gray-400 font-mono">
-                            {w.timestamp?.toDate ? w.timestamp.toDate().toLocaleString() : (w.timestamp ? new Date(w.timestamp).toLocaleString() : 'Syncing...')}
+                            {(() => {
+                              const ts = w.timestamp;
+                              if (!ts) return 'Syncing...';
+                              if (ts.toDate) return ts.toDate().toLocaleString();
+                              if (ts.seconds) return new Date(ts.seconds * 1000).toLocaleString();
+                              const d = new Date(ts);
+                              return isNaN(d.getTime()) ? 'Processing...' : d.toLocaleString();
+                            })()}
                           </div>
                           <div className="text-[9px] text-gray-500 italic mt-0.5">REF: {w.reference?.toString().slice(-10) || 'SYSTEM'}</div>
                         </td>
