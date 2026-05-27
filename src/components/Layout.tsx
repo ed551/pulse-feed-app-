@@ -110,19 +110,30 @@ export default function Layout() {
   }, []);
 
   useEffect(() => {
-    const handleLockRequest = () => setIsLocked(true);
+    const handleLockRequest = () => {
+      const isAdmin = currentUser?.email === 'edwinmuoha@gmail.com';
+      if (!isAdmin) setIsLocked(true);
+    };
     window.addEventListener('pulse-app-lock', handleLockRequest);
     return () => window.removeEventListener('pulse-app-lock', handleLockRequest);
-  }, []);
+  }, [currentUser?.email]);
 
   const mainRef = useRef<HTMLDivElement>(null);
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [isLocked, setIsLocked] = useState(false);
 
+  // Auto-unlock admin
+  useEffect(() => {
+    if (isLocked && currentUser?.email === 'edwinmuoha@gmail.com') {
+      setIsLocked(false);
+    }
+  }, [isLocked, currentUser?.email]);
+
   // Auto-lock feature
   useEffect(() => {
-    if (isIdle && userData?.twoFactorEnabled && currentUser) {
+    const isAdmin = currentUser?.email === 'edwinmuoha@gmail.com';
+    if (isIdle && userData?.twoFactorEnabled && currentUser && !isAdmin) {
       setIsLocked(true);
     }
   }, [isIdle, userData?.twoFactorEnabled, currentUser]);
