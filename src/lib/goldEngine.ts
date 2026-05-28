@@ -19,6 +19,11 @@ export interface GoldPrediction {
   bestSeller: string;
   bestBuyer: string;
   analysis: string;
+  nextBullRun: {
+    expectedIn: string;
+    probability: number;
+    reasoning: string;
+  };
   lastUpdate: string;
   brainSteps: {
     input: string;
@@ -116,6 +121,7 @@ class GoldBrainUnit {
       bestSeller: this.sellers[sellerIndex],
       bestBuyer: this.buyers[buyerIndex],
       analysis: this.generateAnalysis(direction, confidence, seed),
+      nextBullRun: this.generateFutureProjection(seed),
       lastUpdate: new Date().toISOString(),
       brainSteps
     };
@@ -161,6 +167,22 @@ class GoldBrainUnit {
 
     const list = scenarios[direction as keyof typeof scenarios];
     return `${list[Math.abs(seed) % list.length]} Confidence: ${confidence}%`;
+  }
+
+  private generateFutureProjection(seed: number) {
+    const days = (Math.abs(seed) % 14) + 2; // 2-15 days
+    const prob = 65 + (Math.abs(seed * 3) % 25); // 65-90%
+    const reasons = [
+      "Projected Fed policy pivot expected in mid-session.",
+      "Oversold conditions indicating upcoming rebound.",
+      "Seasonal demand spikes historically recorded in this quadrille.",
+      "Institutional buy-orders detected in future-dated contracts."
+    ];
+    return {
+      expectedIn: `${days} Days`,
+      probability: prob,
+      reasoning: reasons[Math.abs(seed) % reasons.length]
+    };
   }
 }
 

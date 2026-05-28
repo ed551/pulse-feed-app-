@@ -3,7 +3,8 @@ import { motion } from 'motion/react';
 import { 
   Shield, Crown, Zap, Check, Star, Award, DollarSign, 
   Sparkles, TrendingUp, ArrowRight, ShieldCheck, Gem,
-  ZapOff, Lock, Unlock, BadgeCheck, Beaker, Heart, Users, Clock
+  ZapOff, Lock, Unlock, BadgeCheck, Beaker, Heart, Users, Clock,
+  GraduationCap
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
@@ -24,10 +25,11 @@ const TIERS = [
     btnBg: 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white',
     features: [
       '20% Revenue Share',
-      'Community Discussions',
-      'Standard AI Assistant',
+      'Standard Gold Analytics',
       'Daily Task Rewards',
-      'Basic Education Access'
+      'Basic AI Support',
+      'Community Discussions',
+      'Base Education Access'
     ],
     highlight: false,
     benefit: 'Perfect for getting started and earning from the community.'
@@ -41,13 +43,14 @@ const TIERS = [
     color: 'text-blue-500',
     bg: 'bg-blue-50 dark:bg-blue-900/10',
     borderColor: 'border-blue-100 dark:border-blue-900/20',
-    btnBg: 'bg-blue-600 text-white',
+    btnBg: 'bg-blue-600 text-white shadow-blue-500/20',
     features: [
       '50% Revenue Share',
+      'Gold Intelligence Pro',
+      '5% Lower Trading Fees',
       'Priority AI Assistant',
       'Silver Verified Badge',
-      'Exclusive Topic Groups',
-      'Early Feature Access',
+      'Topic Group Creation',
       'Ad-Free Experience'
     ],
     highlight: true,
@@ -62,14 +65,14 @@ const TIERS = [
     color: 'text-yellow-500',
     bg: 'bg-yellow-50 dark:bg-yellow-900/10',
     borderColor: 'border-yellow-100 dark:border-yellow-900/20',
-    btnBg: 'bg-gradient-to-r from-yellow-500 to-amber-600 text-white',
+    btnBg: 'bg-gradient-to-r from-yellow-500 to-amber-600 text-white shadow-yellow-500/20',
     features: [
       '80% Revenue Share (Max)',
-      'Ultra AI Engineering Lab',
-      'Verified Gold Crown',
-      'Unlimited AI Tutor Support',
-      'Direct Creator Access',
-      'Custom Profile Themes',
+      'Quantum Gold Prediction',
+      'Zero Market Trading Fees',
+      'Unlimited AI Tutoring',
+      'Gold Verified Crown',
+      'Direct Dev Channels',
       'Monthly Bonus Drops'
     ],
     highlight: false,
@@ -117,6 +120,55 @@ export default function Membership() {
 
   return (
     <div className="space-y-12 pb-20 max-w-6xl mx-auto px-4">
+      {/* Current Status Dashboard (for members) */}
+      {userData?.membershipStatus === 'active' && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-br from-indigo-900 via-slate-900 to-black rounded-[3rem] p-8 text-white border border-indigo-500/30 shadow-2xl relative overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full -mr-32 -mt-32 blur-3xl animate-pulse" />
+          <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
+            <div className="shrink-0">
+              <div className="w-24 h-24 rounded-[2rem] bg-indigo-500/20 backdrop-blur-xl border border-white/10 flex items-center justify-center shadow-lg">
+                {currentTier === 'gold' ? <Crown className="w-12 h-12 text-yellow-500" /> : 
+                 currentTier === 'silver' ? <Star className="w-12 h-12 text-blue-400" /> : 
+                 <Shield className="w-12 h-12 text-orange-400" />}
+              </div>
+            </div>
+            <div className="flex-1 text-center md:text-left space-y-2">
+              <div className="flex items-center justify-center md:justify-start gap-2">
+                <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-[8px] font-black uppercase tracking-widest border border-emerald-500/30">
+                  Active Subscription
+                </span>
+                {isDeveloper && (
+                  <span className="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-full text-[8px] font-black uppercase tracking-widest border border-purple-500/30">
+                    Administrator Access
+                  </span>
+                )}
+              </div>
+              <h2 className="text-3xl font-black tracking-tight flex items-center justify-center md:justify-start gap-3">
+                {currentTier.toUpperCase()} PIONEER
+                <BadgeCheck className="w-6 h-6 text-indigo-400" />
+              </h2>
+              <p className="text-gray-400 text-sm font-medium max-w-md">
+                You are currently on the {currentTier} plan. You are earning at 
+                <span className="text-white font-black mx-1">
+                  {TIERS.find(t => t.id === currentTier)?.features[0].split(' ')[0]}
+                </span> 
+                revenue share with priority AI execution.
+              </p>
+            </div>
+            <div className="shrink-0 flex gap-4">
+              <div className="text-center bg-white/5 backdrop-blur-md px-6 py-4 rounded-3xl border border-white/5">
+                <div className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Nex Billing</div>
+                <div className="text-sm font-black italic">June 28, 2026</div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Hero Header */}
       <div className="text-center space-y-4">
         <motion.div 
@@ -294,6 +346,62 @@ export default function Membership() {
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold text-gray-600 dark:text-gray-400">Gold</span>
                 <span className="text-[10px] font-black dark:text-white">Elite Protocol</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Creator Program & Course Revenue Split */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="bg-gradient-to-br from-purple-600 to-indigo-700 rounded-[2.5rem] p-8 text-white shadow-xl shadow-purple-500/20">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center">
+              <GraduationCap className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h3 className="text-xl font-black tracking-tight">Education Hub Earning</h3>
+              <p className="text-white/60 text-[10px] font-black uppercase tracking-widest">Revenue Split Protocol</p>
+            </div>
+          </div>
+          <div className="space-y-6">
+            <div className="p-4 rounded-3xl bg-white/10 border border-white/10">
+              <div className="flex justify-between items-end mb-2">
+                <span className="text-xs font-black uppercase tracking-widest text-white/60">Creator Reward</span>
+                <span className="text-3xl font-black">80%</span>
+              </div>
+              <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                <div className="w-[80%] h-full bg-white rounded-full" />
+              </div>
+              <p className="text-[10px] text-white/60 mt-2 italic">Earn 80% of all course enrollments and AI training contributions.</p>
+            </div>
+            <div className="p-4 rounded-3xl bg-black/20 border border-white/5">
+              <div className="flex justify-between items-end mb-2">
+                <span className="text-xs font-black uppercase tracking-widest text-white/40">Platform Fee</span>
+                <span className="text-xl font-black text-white/60">20%</span>
+              </div>
+              <p className="text-[10px] text-white/40 leading-relaxed">The 20% platform fee covers AI maintenance, cloud infrastructure, and community rewards pools.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 p-8 flex flex-col justify-center">
+          <div className="space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+              <Beaker className="w-6 h-6 text-orange-600" />
+            </div>
+            <h3 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Join the Creator Network</h3>
+            <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed">
+              Every member can become a creator. Whether you're uploading courses to the Education Hub or 
+              training AI models in the Gemini Lab, you're building value that earns you passive income. 
+              Our 80/20 split ensures that you remain the primary beneficiary of your intellectual property.
+            </p>
+            <div className="pt-4 flex flex-wrap gap-3">
+              <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-2xl text-[10px] font-black text-gray-400 uppercase tracking-widest border border-gray-100 dark:border-gray-700">
+                Quarterly Updates
+              </div>
+              <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-2xl text-[10px] font-black text-gray-400 uppercase tracking-widest border border-gray-100 dark:border-gray-700">
+                MoR Tax Compliant
               </div>
             </div>
           </div>

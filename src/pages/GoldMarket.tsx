@@ -6,7 +6,7 @@ import {
 import { 
   TrendingUp, TrendingDown, Minus, Info, Calendar, RefreshCw, Layers, ShieldCheck, 
   ArrowUpRight, ArrowDownRight, Zap, Brain, BarChart2, Wallet, ShoppingCart, 
-  ArrowLeftRight, Loader2, CheckCircle2, XCircle
+  ArrowLeftRight, Loader2, CheckCircle2, XCircle, Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { goldBrain, GoldPrediction } from '../lib/goldEngine';
@@ -14,6 +14,7 @@ import { useTranslation } from '../lib/i18n';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useRevenue } from '../contexts/RevenueContext';
+import { useNavigate } from 'react-router-dom';
 import { doc, updateDoc, increment, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -41,6 +42,7 @@ export default function GoldMarket() {
   const { t } = useTranslation();
   const { currentUser, userData } = useAuth();
   const { deductBalance, addRevenue } = useRevenue();
+  const navigate = useNavigate();
   const [prediction, setPrediction] = useState<GoldPrediction | null>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -351,32 +353,107 @@ export default function GoldMarket() {
           {/* AI Analysis Rail */}
           <div className="space-y-6">
             <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-[2.5rem] p-6 text-white shadow-xl shadow-indigo-500/20">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
-                  <Zap className="w-4 h-4" />
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
+                    <Zap className="w-4 h-4" />
+                  </div>
+                  <h3 className="font-black text-lg">Brain Execution</h3>
                 </div>
-                <h3 className="font-black text-lg">Brain Execution</h3>
+                <div className="px-2 py-0.5 rounded-full bg-white/10 text-[8px] font-black uppercase tracking-widest animate-pulse">
+                  Analyzing Live
+                </div>
               </div>
               
               <div className="space-y-4">
                 {[
-                  { label: 'Input', value: prediction.brainSteps.input },
-                  { label: 'Logic', value: prediction.brainSteps.logic },
-                  { label: 'Analysis', value: prediction.brainSteps.analysis },
-                  { label: 'Output', value: prediction.brainSteps.output }
+                  { label: 'Input', value: prediction.brainSteps.input, status: 'Completed' },
+                  { label: 'Logic', value: prediction.brainSteps.logic, status: 'Active' },
+                  { label: 'Analysis', value: prediction.brainSteps.analysis, status: 'Verifying' },
+                  { label: 'Output', value: prediction.brainSteps.output, status: 'Finalizing' }
                 ].map((step, idx) => (
-                  <div key={idx} className="relative pl-6 border-l border-white/20">
-                    <div className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 rounded-full bg-white/40" />
-                    <div className="text-[9px] font-black uppercase text-white/60 mb-0.5">{step.label}</div>
-                    <div className="text-[11px] font-bold leading-tight line-clamp-2">{step.value}</div>
+                  <div key={idx} className="relative pl-6 border-l border-white/20 pb-1">
+                    <div className="absolute left-[-5px] top-1.5 w-2.5 h-2.5 rounded-full bg-white/40 ring-4 ring-white/5" />
+                    <div className="flex items-center justify-between mb-0.5">
+                      <div className="text-[9px] font-black uppercase text-white/50 tracking-wider font-mono">{step.label}</div>
+                      <div className="text-[7px] font-black uppercase text-white/30">{step.status}</div>
+                    </div>
+                    <div className="text-[11px] font-bold leading-tight">{step.value}</div>
                   </div>
                 ))}
               </div>
 
-              <div className="mt-6 p-4 rounded-2xl bg-white/10 backdrop-blur-sm">
-                <div className="text-[9px] font-black uppercase text-white/60 mb-1">Status Report</div>
-                <div className="text-[11px] font-black line-clamp-1">{prediction.brainSteps.update}</div>
+              <div className="mt-6 p-4 rounded-2xl bg-black/20 backdrop-blur-sm border border-white/5">
+                <div className="text-[9px] font-black uppercase text-white/40 mb-1 tracking-widest font-mono">Status Report</div>
+                <div className="text-[11px] font-black text-emerald-400 flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  {prediction.brainSteps.update}
+                </div>
               </div>
+            </div>
+
+            {/* Future Intelligence (Gated) */}
+            <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border border-gray-200 dark:border-gray-800 p-6 shadow-sm relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-yellow-500/5 rounded-full -mr-12 -mt-12 group-hover:scale-150 transition-transform duration-1000" />
+              
+              <h4 className="text-xs font-black dark:text-white uppercase tracking-widest mb-4 flex items-center justify-between relative z-10">
+                Future Intelligence
+                {userData?.membershipLevel === 'gold' ? (
+                   <div className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+                ) : (
+                  <Lock className="w-3 h-3 text-gray-400" />
+                )}
+              </h4>
+              
+              {userData?.membershipLevel === 'gold' ? (
+                <div className="space-y-4 relative z-10">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-2xl bg-yellow-500/10 flex items-center justify-center shrink-0">
+                      <Calendar className="w-5 h-5 text-yellow-600" />
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Projected Bull Run</div>
+                      <div className="text-lg font-black text-gray-900 dark:text-white leading-none">In {prediction.nextBullRun.expectedIn}</div>
+                      <p className="text-[10px] font-bold text-gray-500 mt-1 leading-normal normal-case">
+                        The brain predicts a major upward correction in this timeframe.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/50">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Bullish Probability</span>
+                      <span className="text-xs font-black text-emerald-500">{prediction.nextBullRun.probability}%</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${prediction.nextBullRun.probability}%` }}
+                        className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 rounded-full" 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 items-start p-3 bg-indigo-500/5 rounded-2xl border border-indigo-500/10">
+                    <Brain className="w-4 h-4 text-indigo-500 mt-0.5 shrink-0" />
+                    <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 leading-tight normal-case italic">
+                      {prediction.nextBullRun.reasoning}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-6 relative z-10">
+                  <p className="text-[10px] font-bold text-gray-500 mb-4 px-4 leading-relaxed">
+                    Unlock Quantum Market Predictions and bull-run indicators with Pulse Gold.
+                  </p>
+                  <button 
+                    onClick={() => navigate('/membership')}
+                    className="px-6 py-2.5 bg-yellow-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-yellow-500/20 active:scale-95 transition-all"
+                  >
+                    Upgrade to Gold
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
