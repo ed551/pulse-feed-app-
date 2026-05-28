@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Gem, Award, TrendingUp, DollarSign, Receipt, Landmark, CheckCircle, Globe, Wallet, Phone, ArrowUpRight, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Info, Smartphone, CreditCard, ShieldCheck, ShieldOff, Calendar, Lock, KeyRound, AlertTriangle, Building2, RefreshCw, RotateCcw, Trash2, ShieldAlert } from "lucide-react";
+import { Layers, Award, TrendingUp, DollarSign, Receipt, Landmark, CheckCircle, Globe, Wallet, Phone, ArrowUpRight, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Info, Smartphone, CreditCard, ShieldCheck, ShieldOff, Calendar, Lock, KeyRound, AlertTriangle, Building2, RefreshCw, RotateCcw, Trash2, ShieldAlert, Zap } from "lucide-react";
 import { mpesa_handler, unified_participant_payout, rewards_policy, equal_distribution_protocol, merchant_of_record_tax_remittance } from "../lib/engines";
 import { useCurrencyConverter } from "../hooks/useCurrencyConverter";
 import { motion, AnimatePresence } from "motion/react";
@@ -86,8 +86,10 @@ export default function Rewards() {
   });
 
   const isLive = true; // Default to live mode
-  const points = userData?.points || 0;
-  const balance = points / 100;
+  const points = userData?.points || 0; // Milligrams
+  const goldBalance = userData?.balance || 0; // Grams
+  const GOLD_PRICE_USD = 80;
+  const balanceUSD = goldBalance * GOLD_PRICE_USD;
   const membershipLevel = userData?.membershipLevel || 'bronze';
 
   const canWithdrawNow = useMemo(() => {
@@ -192,7 +194,7 @@ export default function Rewards() {
       if (numAmount < minAmount) throw new Error(`Minimum withdrawal is KES ${minAmount}`);
       
       const currentRate = rates['KES'] || 135;
-      const kesBalance = (points * currentRate / 100);
+      const kesBalance = (goldBalance * GOLD_PRICE_USD * currentRate);
 
       const last24h = Date.now() - (24 * 60 * 60 * 1000);
       const recentWithdrawalsUSD = transactions
@@ -266,7 +268,8 @@ export default function Rewards() {
               const txRef = collection(db, 'users', currentUser.uid, 'transactions');
               const currentRate = rates['KES'] || 135;
               const usdAmount = numAmount / currentRate;
-              const pointsToDeduct = Math.floor(usdAmount * 100);
+              const gramsToDeduct = usdAmount / GOLD_PRICE_USD;
+              const mgToDeduct = Math.floor(gramsToDeduct * 1000);
 
               const txData = {
                 amount: numAmount,
@@ -276,10 +279,11 @@ export default function Rewards() {
                 timestamp: serverTimestamp(),
                 reference: result.transactionId || result.CheckoutRequestID || "N/A",
                 details: result.message || (result.status === 'blocked' ? 'Blocked by Bank Firewall' : 'Transaction processed'),
-                pointsDeducted: pointsToDeduct,
+                pointsDeducted: mgToDeduct,
+                gramsDeducted: gramsToDeduct,
                 usdEquivalent: usdAmount,
                 previousPoints: points,
-                remainingPoints: points - pointsToDeduct,
+                remainingPoints: points - mgToDeduct,
                 userId: currentUser.uid,
                 userEmail: currentUser.email
               };
@@ -298,8 +302,8 @@ export default function Rewards() {
 
             // Audit Ledger Entry
             await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
-              amount: -pointsToDeduct,
-              balanceAfter: points - pointsToDeduct,
+              amount: -mgToDeduct,
+              balanceAfter: points - mgToDeduct,
               type: 'deduction',
               source: 'withdrawal',
               reason: `Local Payout (${localMethod})`,
@@ -361,7 +365,7 @@ export default function Rewards() {
         setScaError(`Daily velocity limit of $${limitUSD} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is $5,000.`);
       }
 
-      if (!isDeveloper && numAmount > balance) throw new Error("Insufficient balance");
+      if (!isDeveloper && numAmount > balanceUSD) throw new Error("Insufficient gold reserve for this amount");
 
       // Logic for international payout
       if (currentUser) {
@@ -405,8 +409,9 @@ export default function Rewards() {
           const txRef = collection(db, 'users', currentUser.uid, 'transactions');
           const userRef = doc(db, 'users', currentUser.uid);
           
-          const reference = result.transactionId || `INT-${Date.now()}`;
-          const pointsToDeduct = Math.floor(numAmount * 100);
+          const reference = result.transactionId || `GLD-INT-${Date.now()}`;
+          const gramsToDeduct = numAmount / GOLD_PRICE_USD;
+          const mgToDeduct = Math.floor(gramsToDeduct * 1000);
           
           const txData = {
             amount: numAmount,
@@ -417,10 +422,11 @@ export default function Rewards() {
             bankDetails: payoutMethod === 'bank' ? bankDetails : null,
             timestamp: serverTimestamp(),
             reference,
-            details: `International ${payoutMethod} payout request`,
-            pointsDeducted: pointsToDeduct,
+            details: `International ${payoutMethod} payout request (Gold Liquidated)`,
+            pointsDeducted: mgToDeduct,
+            gramsDeducted: gramsToDeduct,
             previousPoints: points,
-            remainingPoints: points - pointsToDeduct,
+            remainingPoints: points - mgToDeduct,
             userId: currentUser.uid,
             userEmail: currentUser.email,
             scaToken: pin,
@@ -437,19 +443,20 @@ export default function Rewards() {
           }).catch(err => console.error("Central withdrawal logging failed:", err));
 
           await updateDoc(userRef, {
-            points: increment(-pointsToDeduct),
-            balance: increment(-numAmount),
+            points: increment(-mgToDeduct),
+            balance: increment(-gramsToDeduct),
             totalWithdrawals: increment(numAmount)
           });
 
           // Audit Ledger Entry
           await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
-            amount: -pointsToDeduct,
-            balanceAfter: points - pointsToDeduct,
+            amount: -mgToDeduct,
+            balanceAfter: points - mgToDeduct,
             type: 'deduction',
             source: 'withdrawal',
-            reason: `International Payout (${payoutMethod})`,
-            timestamp: serverTimestamp()
+            reason: `International Payout (${payoutMethod}) - Gold Liquidation`,
+            timestamp: serverTimestamp(),
+            unit: 'mg'
           }).catch(err => console.error("Error logging points ledger:", err));
         } else if (currentUser && !db) {
           console.warn("Firestore not available for international payout logging.");
@@ -493,7 +500,7 @@ export default function Rewards() {
   };
 
   const handleWithdrawAllInternational = () => {
-    setPayoutAmount(balance.toFixed(2));
+    setPayoutAmount(goldBalance.toFixed(3));
   };
 
   const handleSyncWallet = async () => {
@@ -634,7 +641,7 @@ export default function Rewards() {
   const achievements = [
     { id: 1, title: 'Early Adopter', desc: 'Joined during the beta phase.', icon: Award, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30' },
     { id: 2, title: 'Gold Predictor', desc: 'Correctly predicted gold movement 5 times.', icon: TrendingUp, color: 'text-yellow-500', bg: 'bg-yellow-100 dark:bg-yellow-900/30' },
-    { id: 3, title: 'Community Pillar', desc: 'Received 100+ likes on a single post.', icon: Gem, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
+    { id: 3, title: 'Community Pillar', desc: 'Received 100+ likes on a single post.', icon: Layers, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
   ];
 
   return (
@@ -1115,10 +1122,10 @@ export default function Rewards() {
           onClick={() => setActiveTab('overview')}
           className={cn(
             "flex-1 py-2.5 px-4 text-sm font-bold rounded-xl transition-all flex items-center justify-center space-x-2 whitespace-nowrap",
-            activeTab === 'overview' ? "bg-white dark:bg-gray-700 text-orange-600 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+            activeTab === 'overview' ? "bg-white dark:bg-gray-700 text-yellow-600 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
           )}
         >
-          <Gem className="w-4 h-4" />
+          <Layers className="w-4 h-4" />
           <span>Overview</span>
         </button>
         <button 
@@ -1181,18 +1188,21 @@ export default function Rewards() {
               </select>
             </div>
 
-            <div className="rounded-3xl p-8 text-white shadow-lg relative overflow-hidden bg-gradient-to-br from-yellow-400 to-orange-500">
+            <div className="rounded-3xl p-8 text-white shadow-lg relative overflow-hidden bg-gradient-to-br from-yellow-500 to-amber-600">
               <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl"></div>
               <div className="relative z-10 flex flex-col items-center justify-center">
                 <span className="text-white/80 font-medium uppercase tracking-wider mb-2">
-                  Total Balance & Reward Points
+                  Live Gold Reserve & Accumulation
                 </span>
-                <div className="text-6xl font-black mb-1 flex items-center">
-                  {convert(balance)}
+                <div className="text-6xl font-black mb-1 flex items-center gap-2">
+                  {goldBalance.toFixed(4)} <span className="text-xl font-bold opacity-60">g</span>
                 </div>
-                <div className="text-xl font-bold opacity-90 mb-4 flex items-center">
-                  <Gem className="w-5 h-5 mr-2" />
-                  {points.toLocaleString()} Points
+                <div className="text-sm font-bold text-white/70 mb-4">
+                  ≈ {convert(balanceUSD)} market value
+                </div>
+                <div className="text-xl font-bold opacity-95 mb-4 flex items-center">
+                  <Zap className="w-5 h-5 mr-2 text-yellow-300" />
+                  {points.toLocaleString()} Milligrams (mg)
                 </div>
 
                 <div className="flex gap-2 mb-6">
@@ -1299,16 +1309,16 @@ export default function Rewards() {
                     <ShieldCheck className="w-3 h-3" />
                   </div>
                   <div className="flex justify-between items-center mb-1">
-                    <span>Lifetime Earnings:</span>
-                    <span className="font-black">+{convert(userAuditTotals.totalEarned)}</span>
+                    <span>Lifetime Gold Earned:</span>
+                    <span className="font-black">+{userAuditTotals.totalEarned.toFixed(3)}g</span>
                   </div>
                   <div className="flex justify-between items-center mb-1 text-red-100">
-                    <span>Total Withdrawals:</span>
-                    <span className="font-black">-{convert(userAuditTotals.totalWithdrawn)}</span>
+                    <span>Total Gold Liquidated:</span>
+                    <span className="font-black">-{userAuditTotals.totalWithdrawn.toFixed(3)}g</span>
                   </div>
                   <div className="flex justify-between items-center pt-2 border-t border-white/10 text-white font-black">
-                    <span>Calculated Balance:</span>
-                    <span>{convert(userAuditTotals.totalEarned - userAuditTotals.totalWithdrawn)}</span>
+                    <span>Current Gold Reserve:</span>
+                    <span>{(userAuditTotals.totalEarned - userAuditTotals.totalWithdrawn).toFixed(3)}g</span>
                   </div>
                   {userAuditTotals.pendingWithdrawals > 0 && (
                     <div className="mt-2 text-yellow-200 animate-pulse flex justify-between items-center">
@@ -1346,22 +1356,22 @@ export default function Rewards() {
                         "w-2 h-2 rounded-full animate-pulse",
                         isIdle ? "bg-gray-300" : "bg-green-300"
                       )}></div>
-                      <span className="text-xs font-bold uppercase tracking-widest">
-                        {isIdle ? "Idle Mode" : "Active Earning"}
+                      <span className="text-xs font-bold uppercase tracking-widest text-white">
+                        {isIdle ? "Idle Mode" : "Gold Accumulation Active"}
                       </span>
                     </div>
-                    <span className="text-[10px] font-mono opacity-70">
+                    <span className="text-[10px] font-mono text-white/70">
                       {Math.floor(activeSeconds / 60)}m {activeSeconds % 60}s active
                     </span>
                   </div>
-                  <div className="flex justify-between items-end">
+                  <div className="flex justify-between items-end text-white">
                     <div>
                       <p className="text-[10px] opacity-70 uppercase font-bold">Earned Today</p>
-                      <p className="text-xl font-black">{totalEarnedToday} <span className="text-xs font-normal opacity-70">pts</span></p>
+                      <p className="text-xl font-black">{totalEarnedToday} <span className="text-xs font-normal opacity-70">mg</span></p>
                     </div>
                     <div className="text-right">
-                      <p className="text-[10px] opacity-70 uppercase font-bold">Status</p>
-                      <p className="text-sm font-bold">{isIdle ? "Paused" : "Live"}</p>
+                      <p className="text-[10px] opacity-70 uppercase font-bold">Current Reserve</p>
+                      <p className="text-sm font-bold">{goldBalance.toFixed(3)}g</p>
                     </div>
                   </div>
                 </div>
@@ -1369,9 +1379,9 @@ export default function Rewards() {
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button 
                     onClick={() => setActiveTab('local')}
-                    className="bg-white text-orange-600 hover:bg-yellow-50 px-8 py-3 rounded-full font-bold shadow-md transition-all flex-1"
+                    className="bg-white text-amber-700 hover:bg-yellow-50 px-8 py-3 rounded-full font-bold shadow-md transition-all flex-1"
                   >
-                    Redeem User Points
+                    Liquidate Gold (KES)
                   </button>
                 </div>
               </div>

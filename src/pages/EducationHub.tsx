@@ -140,12 +140,12 @@ export default function EducationHub() {
       // Update Firestore
       await updateDoc(doc(db, 'users', currentUser.uid), {
         enrolledCourses: arrayUnion(course.id),
-        points: increment(userShare),
+        points: increment(userShare), // Mg
         experience: increment(100)
       });
 
       showNotification("Successfully Enrolled", { 
-        body: `Welcome to ${course.title}! You earned ${userShare} points as an early-bird reward.` 
+        body: `Welcome to ${course.title}! You earned ${userShare} mg gold as an early-bird reward.` 
       });
       setSelectedCourse(null);
     } catch (err) {

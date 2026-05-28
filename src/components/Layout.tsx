@@ -145,7 +145,7 @@ export default function Layout() {
   const headerNavItems = [
     { path: '/', icon: Home, label: t('home') },
     { path: '/groups', icon: Users, label: t('groups') },
-    { path: '/rewards', icon: Gem, label: t('rewards') },
+    { path: '/rewards', icon: Layers, label: t('rewards') },
     { path: '/audio', icon: Headphones, label: 'Audio' },
     { path: '/education', icon: GraduationCap, label: 'Education' },
     { path: '/notifications', icon: Bell, label: t('alerts') },
@@ -156,7 +156,7 @@ export default function Layout() {
     { name: 'All', icon: Home, color: 'text-purple-500', label: t('all') },
     { name: 'Google Apps', icon: LayoutGrid, color: 'text-blue-500', label: t('google_apps') },
     { name: 'Browsers', icon: Globe, color: 'text-orange-500', label: t('browsers') },
-    { name: 'Rewards', icon: Gem, color: 'text-yellow-500', label: t('rewards') },
+    { name: 'Rewards', icon: Layers, color: 'text-yellow-500', label: t('rewards') },
     { name: 'Indoor Games', icon: Gamepad2, color: 'text-pink-500', label: t('indoor_games') },
     { name: 'Outdoor Games', icon: Map, color: 'text-emerald-500', label: t('outdoor_games') },
     { name: 'Toggle Frame', icon: Smartphone, color: 'text-purple-500', label: t('toggle_frame') },
@@ -1086,10 +1086,19 @@ export default function Layout() {
                   </span>
                 </div>
 
-                {/* Points Display */}
-                <div className="flex items-center px-2 sm:px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 rounded-full border border-indigo-100 dark:border-indigo-800 shadow-sm">
-                  <Gem className="w-3.5 h-3.5 sm:w-4 h-4 text-indigo-500 mr-1 sm:mr-1.5" />
-                  <span className="text-[10px] sm:text-xs font-black text-indigo-700 dark:text-indigo-300">{userData?.points || 0}</span>
+                {/* Gold Balance Display */}
+                <div className="flex items-center px-2 sm:px-3 py-1 bg-yellow-50 dark:bg-yellow-900/30 rounded-full border border-yellow-100 dark:border-yellow-800 shadow-sm group">
+                  <Layers className="w-3.5 h-3.5 sm:w-4 h-4 text-yellow-600 mr-1 sm:mr-1.5 group-hover:scale-110 transition-transform" />
+                  <span className="text-[10px] sm:text-xs font-black text-yellow-800 dark:text-yellow-300">
+                    {userData?.balance?.toFixed(3) || '0.000'} <span className="text-[8px] opacity-70">g</span>
+                  </span>
+                </div>
+
+                <div className="hidden sm:flex items-center px-2 sm:px-3 py-1 bg-amber-50 dark:bg-amber-900/20 rounded-full border border-amber-100 dark:border-amber-800 shadow-sm">
+                  <Zap className="w-3.5 h-3.5 text-amber-500 mr-1 sm:mr-1.5" />
+                  <span className="text-[10px] sm:text-xs font-black text-amber-700 dark:text-amber-300">
+                    {userData?.points || 0} <span className="text-[8px] opacity-70">mg</span>
+                  </span>
                 </div>
 
                 {/* Today's Date */}
@@ -1730,12 +1739,17 @@ export default function Layout() {
 
                   {/* Stats & Intelligence (Moved from Header) */}
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-2xl border border-indigo-100 dark:border-indigo-800/50 flex flex-col gap-1">
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-2xl border border-yellow-100 dark:border-yellow-800/50 flex flex-col gap-1 group">
                       <div className="flex items-center gap-2">
-                        <Gem className="w-4 h-4 text-indigo-600" />
-                        <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">Pulse Points</span>
+                        <Layers className="w-4 h-4 text-yellow-600 group-hover:scale-110 transition-transform" />
+                        <span className="text-xs font-bold text-yellow-700 dark:text-yellow-300">Gold Reserve</span>
                       </div>
-                      <p className="text-lg font-black text-indigo-900 dark:text-indigo-100">{userData?.points.toLocaleString() || 0}</p>
+                      <p className="text-lg font-black text-yellow-900 dark:text-yellow-100">
+                        {userData?.balance?.toFixed(3) || '0.000'} <span className="text-xs font-bold opacity-60">g</span>
+                      </p>
+                      <p className="text-[8px] font-black text-yellow-700/60 uppercase tracking-tighter">
+                        +{userData?.points.toLocaleString() || 0}mg Accumulation
+                      </p>
                     </div>
                     <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-2xl border border-yellow-100 dark:border-yellow-800/50 flex flex-col gap-1">
                       <div className="flex items-center gap-2">

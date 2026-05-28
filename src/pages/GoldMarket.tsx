@@ -89,36 +89,23 @@ export default function GoldMarket() {
     setIsProcessing(true);
     setTxStatus(null);
 
-    const totalUSD = grams * pricePerGram;
-
     try {
       if (transactionType === 'buy') {
-        const success = await deductBalance(totalUSD, `Purchase of ${grams}g Digital Gold`);
-        if (!success) {
-          throw new Error("Insufficient balance to complete purchase.");
-        }
+        // In a gold-based economy, "Buy Gold" means adding external funds to your gold balance
+        // We simulate a successful payment gateway response
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
-        const userRef = doc(db, 'users', currentUser.uid);
-        await updateDoc(userRef, {
-          goldBalance: increment(grams)
-        });
-
-        setTxStatus({ success: true, message: `Successfully purchased ${grams}g of gold.` });
+        await addRevenue(grams, 0, `Purchased ${grams}g Gold via External Settlement`, 'community');
+        setTxStatus({ success: true, message: `Successfully acquired ${grams}g of gold via external gateway.` });
       } else {
-        const userGold = (userData as any)?.goldBalance || 0;
+        const userGold = (userData as any)?.balance || 0;
         if (userGold < grams) {
-          throw new Error("Insufficient gold balance.");
+          throw new Error("Insufficient gold reserve.");
         }
 
-        const userRef = doc(db, 'users', currentUser.uid);
-        await updateDoc(userRef, {
-          goldBalance: increment(-grams)
-        });
-
-        // Add revenue back to user balance
-        await addRevenue(totalUSD, 0, `Sold ${grams}g Digital Gold`, 'community');
-
-        setTxStatus({ success: true, message: `Successfully sold ${grams}g of gold.` });
+        // Sell Gold = Liquidate to Rewards
+        navigate('/rewards');
+        return;
       }
 
       // Small delay then close modal
@@ -191,8 +178,8 @@ export default function GoldMarket() {
                   <Wallet className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="text-lg font-black dark:text-white leading-none">{(userData as any)?.goldBalance?.toFixed(2) || '0.00'}g</div>
-                  <div className="text-[10px] font-bold text-gray-500">Value: ${(((userData as any)?.goldBalance || 0) * pricePerGram).toFixed(2)}</div>
+                  <div className="text-lg font-black dark:text-white leading-none">{(userData as any)?.balance?.toFixed(3) || '0.000'}g</div>
+                  <div className="text-[10px] font-bold text-gray-400">≈ ${(((userData as any)?.balance || 0) * pricePerGram).toFixed(2)} Target Value</div>
                 </div>
               </div>
             </div>
@@ -524,8 +511,8 @@ export default function GoldMarket() {
                         <div className="absolute right-6 top-1/2 -translate-y-1/2 text-xs font-black text-gray-400">GRAMS</div>
                       </div>
                       <div className="flex items-center justify-between px-2 text-[10px] font-bold text-gray-500">
-                        <span>EST. VALUE: ${(parseFloat(amountInGrams || '0') * pricePerGram).toFixed(2)}</span>
-                        <span>WALLET: ${userData?.balance?.toFixed(2)}</span>
+                        <span>EST. VALUE: ${(parseFloat(amountInGrams || '0') * pricePerGram).toFixed(2)} USD</span>
+                        <span>RESERVE: {userData?.balance?.toFixed(3)}g</span>
                       </div>
                     </div>
 

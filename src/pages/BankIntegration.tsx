@@ -86,17 +86,17 @@ const BankingPortal: React.FC = () => {
 
   const revenuePayload = {
     userId: "user_123",
-    totalAmount: 10.50,
+    totalAmount: 1.250, // 1.25g Gold
     source: "education",
-    reason: "Learn & Earn: Module 5 Completion"
+    reason: "Learn & Earn: Gold Mastery Module"
   };
 
   const splitResult = {
     success: true,
-    userAmount: 2.10, // 20%
-    platformAmount: 8.40, // 80%
-    pointsAdded: 210,
-    split: "80/20"
+    userAmount: 0.250, // 20% (Bronze)
+    platformAmount: 1.000, // 80%
+    pointsAddedMg: 250,
+    split: "80/20 PLATFORM/USER"
   };
 
   return (

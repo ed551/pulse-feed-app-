@@ -8,9 +8,12 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
+import { useRevenue } from '../contexts/RevenueContext';
 import { useNavigate } from 'react-router-dom';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+
+const GOLD_PRICE_USD = 80;
 
 const TIERS = [
   {
@@ -38,7 +41,7 @@ const TIERS = [
     id: 'silver',
     name: 'Silver',
     subtitle: 'Growth Plus',
-    price: 9.99,
+    price: 0.125, // ≈ $10
     icon: Star,
     color: 'text-blue-500',
     bg: 'bg-blue-50 dark:bg-blue-900/10',
@@ -60,7 +63,7 @@ const TIERS = [
     id: 'gold',
     name: 'Gold',
     subtitle: 'Elite Pioneer',
-    price: 29.99,
+    price: 0.375, // ≈ $30
     icon: Crown,
     color: 'text-yellow-500',
     bg: 'bg-yellow-50 dark:bg-yellow-900/10',
@@ -83,36 +86,39 @@ const TIERS = [
 export default function Membership() {
   const { currentUser, userData } = useAuth();
   const isDeveloper = currentUser?.email === 'edwinmuoha@gmail.com';
+  const { deductBalance } = useRevenue();
   const navigate = useNavigate();
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
 
   const currentTier = userData?.membershipLevel || 'bronze';
 
-  const handleUpgrade = async (tierId: string) => {
-    if (tierId === currentTier) return;
+  const handleUpgrade = async (tier: any) => {
+    if (tier.id === currentTier) return;
     
-    setLoadingTier(tierId);
+    setLoadingTier(tier.id);
     try {
-      // In a real app, this would trigger a payment gateway
-      // Since we center on "making money", let's simulate a checkout
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (tier.price > 0) {
+        const success = await deductBalance(tier.price, `Upgrade to ${tier.name} Membership`);
+        if (!success) {
+          throw new Error(`Insufficient gold reserve to upgrade to ${tier.name}. Requires ${tier.price}g.`);
+        }
+      }
       
       if (currentUser && db) {
         await updateDoc(doc(db, 'users', currentUser.uid), {
-          membershipLevel: tierId,
+          membershipLevel: tier.id,
           membershipStatus: 'active',
           updatedAt: new Date()
         });
       }
       
       window.dispatchEvent(new CustomEvent('show-notification', { 
-        detail: { 
-          title: "Upgrade Successful!", 
-          body: `Welcome to the ${tierId.charAt(0).toUpperCase() + tierId.slice(1)} tier!` 
-        } 
+        detail: { title: "Upgrade Successful!", body: `Welcome to the ${tier.name} tier!` } 
       }));
-    } catch (err) {
-      console.error("Upgrade failed:", err);
+    } catch (err: any) {
+      window.dispatchEvent(new CustomEvent('show-notification', { 
+        detail: { title: "Upgrade Failed", body: err.message, type: "error" } 
+      }));
     } finally {
       setLoadingTier(null);
     }
@@ -247,12 +253,12 @@ export default function Membership() {
 
             <div className="flex items-baseline gap-1 mb-8">
               <span className="text-5xl font-black text-gray-900 dark:text-white tracking-tighter">
-                ${tier.price === 0 ? '0' : Math.floor(tier.price)}
+                {tier.price === 0 ? '0' : tier.price.toString().split('.')[0] || '0'}
               </span>
               <span className="text-xl font-bold text-gray-400">
-                .{tier.price === 0 ? '00' : tier.price.toString().split('.')[1] || '00'}
+                .{tier.price === 0 ? '00' : tier.price.toString().split('.')[1] || '000'}
               </span>
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">/ Month</span>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Grams</span>
             </div>
 
             <div className="space-y-4 mb-10 flex-1">
@@ -271,7 +277,7 @@ export default function Membership() {
             </p>
 
             <button
-              onClick={() => handleUpgrade(tier.id)}
+              onClick={() => handleUpgrade(tier)}
               disabled={loadingTier !== null || currentTier === tier.id}
               className={cn(
                 "w-full py-5 rounded-[2rem] font-black uppercase tracking-[0.2em] text-xs transition-all flex items-center justify-center gap-2 shadow-lg hover:scale-105 active:scale-95 disabled:opacity-50 disabled:scale-100",

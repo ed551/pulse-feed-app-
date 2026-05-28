@@ -70,7 +70,8 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const IDLE_THRESHOLD = idleThreshold;
   const EARNING_INTERVAL = 30000; // Check every 30s locally
   const SYNC_INTERVAL = 300000; // Sync to DB every 5 mins
-  const POINTS_PER_INTERVAL = 2.5; // Adjusted for 30s
+  const ACTIVE_GOLD_PER_INTERVAL = 2; // 2mg gold per 30s
+  const GOLD_PRICE_USD = 80; // $80 per 1g gold (approx)
 
   const monitorBehaviorWithAI = async () => {
     if (!currentUser || isAnalyzingBehavior || Date.now() - lastBehaviorCheckRef.current < 60000) return;
@@ -87,19 +88,18 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
         earnedToday: totalEarnedToday,
         idleTime: isIdle ? Date.now() - (lastSyncRef.current - IDLE_THRESHOLD) : 0,
         platformStats: {
-          totalUsers: 1000 // Mock for context
+          totalUsers: 1000 
         }
       };
 
-      const prompt = `Analyze user behavioral pattern for Pulse Feeds platform. 
+      const prompt = `Analyze user behavioral pattern for Pulse Feeds platform (Gold-Based Economy). 
       User ID: ${currentUser.uid}
       Session Persistence: ${activeSeconds}s
-      Points Accrual: ${totalEarnedToday}
+      Gold Accrual (mg): ${totalEarnedToday}
       Idle Status: ${isIdle}
       
-      If the user is idle for more than 10 minutes OR has accrued more than 500 points in one session without significant movement, recommend a [LOCKOUT] action.
-      Otherwise return [STABLE].
-      Provide a 1-sentence insight for the user if locking.`;
+      If the user is idle for more than 10 minutes OR has accrued more than 500mg gold in one session without movement, recommend [LOCKOUT].
+      Otherwise return [STABLE].`;
 
       const result = await generateContentWithRetry({
         model: "gemini-3-flash-preview",
@@ -190,106 +190,109 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
         serverSecret: "pulse-feeds-server-secret-2026"
       }).catch(() => {});
 
-      console.log(`[Self-Update] Successfully synced batched rewards: ${userPts} pts ($${userVal.toFixed(2)})`);
-    } catch (error) {
-      console.error("[Self-Update] Sync failure, restoring pending values:", error);
-      // Restore if failed
-      pendingUserPointsRef.current += userPts;
-      pendingUserValueRef.current += userVal;
-      pendingPlatformValueRef.current += platVal;
-    }
-  };
+      console.log(`[Self-Update] Successfully synced batched rewards: ${userPts} mg ($${(userVal * GOLD_PRICE_USD).toFixed(2)})`);
+  } catch (error) {
+    console.error("[Self-Update] Sync failure, restoring pending values:", error);
+    // Restore if failed
+    pendingUserPointsRef.current += userPts;
+    pendingUserValueRef.current += userVal;
+    pendingPlatformValueRef.current += platVal;
+  }
+};
 
-  const addRevenue = async (userAmount: number, platformAmount: number, reason: string, source: 'ad' | 'education' | 'active_time' | 'dating' | 'community' | 'events') => {
-    if (!currentUser) return;
-    try {
-      // 1. Try to log via Server API for authoritative split logic and safety
-      const totalAmount = userAmount + platformAmount;
-      const response = await fetch('/api/revenue/log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentUser.uid,
-          totalAmount,
-          source,
-          reason
-        })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log(`[API Revenue] Success: User Earned $${result.userAmount}, Platform Earned $${result.platformAmount}`);
-        setTotalEarnedToday(prev => prev + (result.pointsAdded || 0));
-        return;
-      }
-
-      console.warn("[API Revenue] Server log failed, falling back to client-side direct Firestore update.");
-
-      if (!db) {
-        console.warn("Firestore not available for revenue fallback logging.");
-        return;
-      }
-
-      // 2. Fallback to direct Firestore if API fails
-      const userRef = doc(db, 'users', currentUser.uid);
-      const statsRef = doc(db, 'platform', 'stats');
-
-      // 1 point = $0.01. So $1.00 = 100 points.
-      const pointsToAdd = userAmount > 0 ? Math.max(1, Math.floor(userAmount * 100)) : 0;
-      
-      // Update User Data with specific revenue source tracking
-      const updateData: any = {
-        points: increment(pointsToAdd),
-        balance: increment(userAmount)
-      };
-
-      if (source === 'ad') updateData.adRevenue = increment(userAmount);
-      if (source === 'education') updateData.educationRevenue = increment(userAmount);
-      if (source === 'active_time') updateData.activeTimeRevenue = increment(userAmount);
-      if (source === 'dating') updateData.datingRevenue = increment(userAmount);
-      if (source === 'community') updateData.communityRevenue = increment(userAmount);
-      if (source === 'events') updateData.eventsRevenue = increment(userAmount);
-      
-      await updateDoc(userRef, updateData);
-
-      // User-specific Points Ledger (Full Audit Trail)
-      await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
-        amount: pointsToAdd,
-        balanceAfter: (userDataRef.current?.points || 0) + pointsToAdd,
-        type: 'accrual',
-        source: source,
+const addRevenue = async (userGold: number, platformGold: number, reason: string, source: 'ad' | 'education' | 'active_time' | 'dating' | 'community' | 'events') => {
+  if (!currentUser) return;
+  try {
+    // 1. Try to log via Server API for authoritative split logic and safety
+    const totalGold = userGold + platformGold;
+    // Log as gold grams
+    const response = await fetch('/api/revenue/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: currentUser.uid,
+        totalAmount: totalGold,
+        source,
         reason,
-        timestamp: serverTimestamp()
-      }).catch(err => console.error("Error logging points ledger:", err));
+        currency: 'GOLD'
+      })
+    });
 
-      // User-specific Transaction History (UI Audit Trail)
-      await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), {
-        amount: userAmount,
-        currency: 'USD',
-        type: 'earning',
-        source: source,
-        status: 'success',
-        timestamp: serverTimestamp(),
-        reference: `REVN-${Date.now()}-${currentUser.uid.slice(0, 4)}`,
-        details: reason,
-        pointsAdded: pointsToAdd,
-        remainingPoints: (userDataRef.current?.points || 0) + pointsToAdd
-      }).catch(err => console.error("Error logging user transaction:", err));
+    if (response.ok) {
+      const result = await response.json();
+      console.log(`[API Revenue] Success: User Earned ${result.userAmount}g Gold, Platform Earned ${result.platformAmount}g Gold`);
+      setTotalEarnedToday(prev => prev + (result.pointsAdded || 0));
+      return;
+    }
+
+    console.warn("[API Revenue] Server log failed, falling back to client-side direct Firestore update.");
+
+    if (!db) {
+      console.warn("Firestore not available for revenue fallback logging.");
+      return;
+    }
+
+    // 2. Fallback to direct Firestore if API fails
+    const userRef = doc(db, 'users', currentUser.uid);
+    const statsRef = doc(db, 'platform', 'stats');
+
+    // 1000 mg = 1.00 g. 
+    const pointsToAddMg = userGold > 0 ? Math.max(1, Math.floor(userGold * 1000)) : 0;
+    
+    // Update User Data with specific revenue source tracking
+    const updateData: any = {
+      points: increment(pointsToAddMg),
+      balance: increment(userGold)
+    };
+
+    if (source === 'ad') updateData.adRevenue = increment(userGold);
+    if (source === 'education') updateData.educationRevenue = increment(userGold);
+    if (source === 'active_time') updateData.activeTimeRevenue = increment(userGold);
+    if (source === 'dating') updateData.datingRevenue = increment(userGold);
+    if (source === 'community') updateData.communityRevenue = increment(userGold);
+    if (source === 'events') updateData.eventsRevenue = increment(userGold);
+    
+    await updateDoc(userRef, updateData);
+
+    // User-specific Points Ledger (Full Audit Trail)
+    await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
+      amount: pointsToAddMg,
+      balanceAfter: (userDataRef.current?.points || 0) + pointsToAddMg,
+      type: 'accrual',
+      source: source,
+      reason,
+      timestamp: serverTimestamp(),
+      unit: 'mg'
+    }).catch(err => console.error("Error logging points ledger:", err));
+
+    // User-specific Transaction History (UI Audit Trail)
+    await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), {
+      amount: userGold,
+      currency: 'GOLD',
+      type: 'earning',
+      source: source,
+      status: 'success',
+      timestamp: serverTimestamp(),
+      reference: `GLD-${Date.now()}-${currentUser.uid.slice(0, 4)}`,
+      details: reason,
+      pointsAdded: pointsToAddMg,
+      remainingPoints: (userDataRef.current?.points || 0) + pointsToAddMg
+    }).catch(err => console.error("Error logging user transaction:", err));
 
       // Update Platform Stats (Platform Share & Total User Balances)
       await updateDoc(statsRef, {
-        platformRevenue: increment(userAmount + platformAmount),
-        platformShare: increment(platformAmount),
-        totalUserBalances: increment(userAmount),
+        platformRevenue: increment(userGold + platformGold),
+        platformShare: increment(platformGold),
+        totalUserBalances: increment(userGold),
         serverSecret: "pulse-feeds-server-secret-2026"
       }).catch(async (err) => {
         // If document doesn't exist, create it (though it should exist)
         if (err.message.includes('not-found')) {
           const { setDoc } = await import('firebase/firestore');
           await setDoc(statsRef, {
-            platformRevenue: userAmount + platformAmount,
-            platformShare: platformAmount,
-            totalUserBalances: userAmount,
+            platformRevenue: userGold + platformGold,
+            platformShare: platformGold,
+            totalUserBalances: userGold,
             serverSecret: "pulse-feeds-server-secret-2026"
           });
         }
@@ -299,17 +302,17 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
       await addDoc(collection(db, 'platform_transactions'), {
         type: 'revenue',
         source: source,
-        userAmount,
-        platformAmount,
-        totalAmount: userAmount + platformAmount,
+        userAmount: userGold,
+        platformAmount: platformGold,
+        totalAmount: userGold + platformGold,
         reason,
         userId: currentUser.uid,
         timestamp: serverTimestamp(),
         serverSecret: "pulse-feeds-server-secret-2026"
       }).catch(err => console.error("Error logging platform transaction:", err));
 
-      setTotalEarnedToday(prev => prev + pointsToAdd);
-      console.log(`Added revenue: User $${userAmount} (${pointsToAdd} points), Platform $${platformAmount} for ${reason}`);
+      setTotalEarnedToday(prev => prev + pointsToAddMg);
+      console.log(`Added revenue: User ${userGold}g (${pointsToAddMg} mg), Platform ${platformGold}g for ${reason}`);
     } catch (error) {
       console.error("Error adding revenue:", error);
     }
@@ -381,36 +384,36 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  const deductBalance = async (amount: number, reason: string): Promise<boolean> => {
+  const deductBalance = async (gramsGold: number, reason: string): Promise<boolean> => {
     if (!currentUser || !db) return false;
     try {
-      if ((userData?.balance || 0) < amount) return false;
+      if ((userData?.balance || 0) < gramsGold) return false;
 
       const userRef = doc(db, 'users', currentUser.uid);
-      const pointsToDeduct = Math.floor(amount * 100);
+      const mgToDeduct = Math.floor(gramsGold * 1000);
 
       await updateDoc(userRef, {
-        balance: increment(-amount),
-        points: increment(-pointsToDeduct)
+        balance: increment(-gramsGold),
+        points: increment(-mgToDeduct)
       });
 
       // Log Transaction
       await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), {
-        amount: -amount,
-        currency: 'USD',
+        amount: -gramsGold,
+        currency: 'GOLD',
         type: 'expense',
         source: 'purchase',
         status: 'success',
         timestamp: serverTimestamp(),
-        reference: `DEBT-${Date.now()}-${currentUser.uid.slice(0, 4)}`,
+        reference: `GLD-EXP-${Date.now()}-${currentUser.uid.slice(0, 4)}`,
         details: reason,
-        pointsDeducted: pointsToDeduct,
-        remainingPoints: (userData?.points || 0) - pointsToDeduct
+        pointsDeducted: mgToDeduct,
+        remainingPoints: (userData?.points || 0) - mgToDeduct
       });
 
       return true;
     } catch (err) {
-      console.error("Error deducting balance:", err);
+      console.error("Error deducting gold balance:", err);
       return false;
     }
   };
@@ -441,16 +444,16 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (pointsLocked) return;
         
         // Accumulate locally
-        const userPts = Math.floor(POINTS_PER_INTERVAL * 0.5);
-        const userVal = userPts / 100;
-        const platVal = (POINTS_PER_INTERVAL - userPts) / 100;
+        const userMg = Math.floor(ACTIVE_GOLD_PER_INTERVAL);
+        const userGold = userMg / 1000;
+        const platGold = (0.5 * ACTIVE_GOLD_PER_INTERVAL) / 1000; // Platform takes 50% extra from air
 
-        pendingUserPointsRef.current += userPts;
-        pendingUserValueRef.current += userVal;
-        pendingPlatformValueRef.current += platVal;
+        pendingUserPointsRef.current += userMg;
+        pendingUserValueRef.current += userGold;
+        pendingPlatformValueRef.current += platGold;
 
-        setTotalEarnedToday(prev => prev + userPts);
-        console.log(`[Self-Update] Pending Engine: ${pendingUserPointsRef.current} pts. Sync in ${Math.round((SYNC_INTERVAL - (Date.now() - lastSyncRef.current)) / 1000)}s`);
+        setTotalEarnedToday(prev => prev + userMg);
+        console.log(`[Self-Update] Pending Gold: ${pendingUserPointsRef.current} mg. Sync in ${Math.round((SYNC_INTERVAL - (Date.now() - lastSyncRef.current)) / 1000)}s`);
 
         // Check if it's time to sync
         if (Date.now() - lastSyncRef.current >= SYNC_INTERVAL) {

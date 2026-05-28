@@ -1,6 +1,6 @@
 {
   "name": "Pulse Feeds",
-  "description": "Pulse Feeds: Next-gen AI-powered community app using Gemini 3 Flash. Optimized for production deployment and secure real-time interactions.",
+  "description": "Pulse Feeds: Next-gen AI-powered community app with a Gold-Based Economy. Features smart market predictions, rewards, and education hubs.",
   "requestFramePermissions": ["geolocation", "camera", "microphone", "screen-wake-lock", "publickey-credentials-create", "publickey-credentials-get", "payment", "webauthn", "identity-credentials-get"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -20,7 +20,12 @@ setLogLevel('debug'); // Increased for diagnostic purposes
 
 // Use a factory-like initialization to prevent multiple initialization errors
 const getDb = () => {
-  const dbId = (firestoreDatabaseId && firestoreDatabaseId !== '(default)') ? firestoreDatabaseId : undefined;
+  const forceDefault = typeof localStorage !== 'undefined' && localStorage.getItem('force_firebase_default_db') === 'true';
+  const dbId = (firestoreDatabaseId && firestoreDatabaseId !== '(default)' && !forceDefault) ? firestoreDatabaseId : undefined;
+  
+  if (forceDefault) {
+     console.log('[Firebase] Resilience mode active: Forcing (default) database.');
+  }
   
   console.log(`[Firebase] Initializing Firestore with Database ID: ${dbId || '(default)'} in Project: ${firebaseConfig.projectId}`);
   
@@ -48,7 +53,7 @@ try {
 }
 
 // Export db with fallback to handle initialization failure gracefully
-export const db = dbInstance;
+export let db = dbInstance;
 
 // Initialize Storage
 export const storage = getStorage(app);
@@ -163,7 +168,7 @@ async function testConnection(retries = 5) {
   const attempt = 6 - retries;
   try {
     setConnectionStatus('testing');
-    console.log(`Testing Firebase connection (Attempt ${attempt}/5)...`);
+    console.log(`Testing Firebase connection (Attempt ${attempt}/5) on DB: ${firestoreDatabaseId || '(default)'}...`);
     
     // Using a more robust test: fetch a document that definitely exists and has public read
     // or just fetch any path to trigger a network roundtrip. 
@@ -187,9 +192,9 @@ async function testConnection(retries = 5) {
     
     console.log("Firebase connection confirmed (reached server).");
     setConnectionStatus('connected');
-  } catch (error) {
+  } catch (error: any) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorCode = (error as any)?.code;
+    const errorCode = error?.code;
     
     console.warn(`Firestore connection test attempt failed: [${errorCode || 'unknown'}] ${errorMessage}`);
     
@@ -198,6 +203,22 @@ async function testConnection(retries = 5) {
       console.log("Firebase connection confirmed (received permission denial from server).");
       setConnectionStatus('connected');
       return;
+    }
+
+    // Resilience Fallback: If configured named DB fails, try (default)
+    if (attempt === 3 && firestoreDatabaseId && firestoreDatabaseId !== '(default)') {
+       console.warn(`[Resilience] Named database '${firestoreDatabaseId}' is failing. Attempting fallback to (default)...`);
+       try {
+         // Terminate existing failing instance
+         if (db) await (db as any).terminate?.();
+         
+         // Set to default
+         db = getFirestore(app);
+         console.log("[Resilience] Switched to (default) database. Retrying connection test...");
+         return testConnection(retries); // Retry with same retry count but new DB
+       } catch (fallbackErr: any) {
+         console.error("[Resilience] Fallback initialization failed:", fallbackErr.message);
+       }
     }
 
     if (retries > 1) {
@@ -221,6 +242,13 @@ async function testConnection(retries = 5) {
     console.error("CRITICAL: Firestore connection failed after multiple attempts.");
     console.error(`Diagnostic Info: Project=${firebaseConfig.projectId}, DB=${firestoreDatabaseId || "(default)"}`);
     console.error(`Check your internet or if the database ID matches your console.`);
+
+    // Final attempt: if we are here and still haven't tried (default), try it ONE last time silently
+    if (firestoreDatabaseId && firestoreDatabaseId !== '(default)') {
+       console.warn("[System] Critical failure. Forcing page refresh with (default) database flag...");
+       localStorage.setItem('force_firebase_default_db', 'true');
+       setTimeout(() => window.location.reload(), 3000);
+    }
   }
 }
 
