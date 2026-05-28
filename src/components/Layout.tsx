@@ -163,7 +163,8 @@ export default function Layout() {
     { name: 'Coop Bank API', icon: Building2, color: 'text-indigo-500', label: t('coop_bank') },
     { name: 'Terms', icon: FileText, color: 'text-teal-500', label: t('terms') },
     { name: 'Privacy', icon: ShieldCheck, color: 'text-indigo-500', label: t('privacy') },
-    { name: 'Ads', icon: DollarSign, color: 'text-green-500', label: t('ads') }
+    { name: 'Ads', icon: DollarSign, color: 'text-green-500', label: t('ads') },
+    { name: 'Gold Market', icon: BarChart2, color: 'text-yellow-600', label: t('gold_market') }
   ];
 
   const handleCategoryClick = (categoryName: string) => {
@@ -185,6 +186,10 @@ export default function Layout() {
     }
     if (categoryName === 'Ads') {
       navigate('/ads');
+      return;
+    }
+    if (categoryName === 'Gold Market') {
+      navigate('/gold');
       return;
     }
     if (categoryName === 'Toggle Frame') {
@@ -924,6 +929,7 @@ export default function Layout() {
     { path: '/support', icon: Headphones, color: 'text-cyan-500', label: t('support') },
     { path: '/audio', icon: Headphones, color: 'text-indigo-400', label: 'Audio Hub' },
     { path: '/education', icon: GraduationCap, color: 'text-purple-600', label: 'Education Hub' },
+    { path: '/gold', icon: BarChart2, color: 'text-yellow-600', label: t('gold_market') },
     { path: '/settings', icon: Settings, color: 'text-gray-500', label: t('settings') },
   ];
 

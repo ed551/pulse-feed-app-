@@ -12,6 +12,7 @@ interface RevenueContextType {
   addRevenue: (userAmount: number, platformAmount: number, reason: string, source: 'ad' | 'education' | 'active_time' | 'dating' | 'community' | 'events') => Promise<void>;
   addPlatformRevenue: (amount: number, reason: string) => Promise<void>;
   addPlatformExpense: (amount: number, reason: string) => Promise<void>;
+  deductBalance: (amount: number, reason: string) => Promise<boolean>;
   syncActiveTimeRewards: () => Promise<void>;
 }
 
@@ -380,6 +381,40 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
+  const deductBalance = async (amount: number, reason: string): Promise<boolean> => {
+    if (!currentUser || !db) return false;
+    try {
+      if ((userData?.balance || 0) < amount) return false;
+
+      const userRef = doc(db, 'users', currentUser.uid);
+      const pointsToDeduct = Math.floor(amount * 100);
+
+      await updateDoc(userRef, {
+        balance: increment(-amount),
+        points: increment(-pointsToDeduct)
+      });
+
+      // Log Transaction
+      await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), {
+        amount: -amount,
+        currency: 'USD',
+        type: 'expense',
+        source: 'purchase',
+        status: 'success',
+        timestamp: serverTimestamp(),
+        reference: `DEBT-${Date.now()}-${currentUser.uid.slice(0, 4)}`,
+        details: reason,
+        pointsDeducted: pointsToDeduct,
+        remainingPoints: (userData?.points || 0) - pointsToDeduct
+      });
+
+      return true;
+    } catch (err) {
+      console.error("Error deducting balance:", err);
+      return false;
+    }
+  };
+
   const resetIdleTimer = () => {
     setIsIdle(false);
     setPointsLocked(false);
@@ -452,7 +487,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [isIdle, currentUser]);
 
   return (
-    <RevenueContext.Provider value={{ isIdle, setIsIdle, pointsLocked, activeSeconds, totalEarnedToday, addRevenue, addPlatformRevenue, addPlatformExpense, syncActiveTimeRewards: syncPendingToFirestore }}>
+    <RevenueContext.Provider value={{ isIdle, setIsIdle, pointsLocked, activeSeconds, totalEarnedToday, addRevenue, addPlatformRevenue, addPlatformExpense, deductBalance, syncActiveTimeRewards: syncPendingToFirestore }}>
       {children}
     </RevenueContext.Provider>
   );
