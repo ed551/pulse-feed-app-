@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { 
-  Shield, Crown, Zap, Check, Star, Award, Gem, 
-  Sparkles, TrendingUp, ArrowRight, ShieldCheck,
+  Shield, Crown, Zap, Check, Star, Award, DollarSign, 
+  Sparkles, TrendingUp, ArrowRight, ShieldCheck, Gem,
   ZapOff, Lock, Unlock, BadgeCheck, Beaker, Heart, Users, Clock,
   GraduationCap
 } from 'lucide-react';
@@ -41,7 +41,7 @@ const TIERS = [
     id: 'silver',
     name: 'Silver',
     subtitle: 'Growth Plus',
-    price: 10, // $10
+    price: 0.125, // ≈ $10
     icon: Star,
     color: 'text-blue-500',
     bg: 'bg-blue-50 dark:bg-blue-900/10',
@@ -63,7 +63,7 @@ const TIERS = [
     id: 'gold',
     name: 'Gold',
     subtitle: 'Elite Pioneer',
-    price: 30, // $30
+    price: 0.375, // ≈ $30
     icon: Crown,
     color: 'text-yellow-500',
     bg: 'bg-yellow-50 dark:bg-yellow-900/10',
@@ -100,7 +100,7 @@ export default function Membership() {
       if (tier.price > 0) {
         const success = await deductBalance(tier.price, `Upgrade to ${tier.name} Membership`);
         if (!success) {
-          throw new Error(`Insufficient reserve to upgrade to ${tier.name}. Requires $${tier.price}.`);
+          throw new Error(`Insufficient gold reserve to upgrade to ${tier.name}. Requires ${tier.price}g.`);
         }
       }
       
@@ -208,7 +208,7 @@ export default function Membership() {
         </div>
         <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
           <div className="bg-white dark:bg-gray-800 p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center">
-            <TrendingUp className="w-6 h-6 text-indigo-500 mb-2" />
+            <DollarSign className="w-6 h-6 text-indigo-500 mb-2" />
             <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Base Share</div>
             <div className="text-lg font-black text-gray-900 dark:text-white">20%</div>
           </div>
@@ -253,12 +253,12 @@ export default function Membership() {
 
             <div className="flex items-baseline gap-1 mb-8">
               <span className="text-5xl font-black text-gray-900 dark:text-white tracking-tighter">
-                ${tier.price}
+                {tier.price === 0 ? '0' : tier.price.toString().split('.')[0] || '0'}
               </span>
               <span className="text-xl font-bold text-gray-400">
-                .00
+                .{tier.price === 0 ? '00' : tier.price.toString().split('.')[1] || '000'}
               </span>
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">USD</span>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Grams</span>
             </div>
 
             <div className="space-y-4 mb-10 flex-1">
@@ -419,7 +419,7 @@ export default function Membership() {
         {[
           { label: 'Secure Payments', icon: Shield },
           { label: 'Cancel Anytime', icon: Clock },
-          { label: 'No Extra Fees', icon: Gem },
+          { label: 'No Extra Fees', icon: DollarSign },
           { label: 'Privacy First', icon: Zap }
         ].map((item, i) => (
           <div key={i} className="flex flex-col items-center gap-2 opacity-40 hover:opacity-100 transition-opacity">

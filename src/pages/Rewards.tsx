@@ -1,38 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { 
-  Layers, 
-  Award, 
-  TrendingUp, 
-  DollarSign, 
-  Receipt, 
-  Landmark, 
-  CheckCircle, 
-  Globe, 
-  Wallet, 
-  Phone, 
-  ArrowUpRight, 
-  Clock, 
-  CheckCircle2, 
-  XCircle, 
-  AlertCircle, 
-  Loader2, 
-  Info, 
-  Smartphone, 
-  CreditCard, 
-  ShieldCheck, 
-  ShieldOff, 
-  Calendar, 
-  Lock, 
-  KeyRound, 
-  AlertTriangle, 
-  Building2, 
-  RefreshCw, 
-  RotateCcw, 
-  Trash2, 
-  ShieldAlert, 
-  Zap, 
-  Gem 
-} from "lucide-react";
+import { Layers, Award, TrendingUp, DollarSign, Receipt, Landmark, CheckCircle, Globe, Wallet, Phone, ArrowUpRight, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Info, Smartphone, CreditCard, ShieldCheck, ShieldOff, Calendar, Lock, KeyRound, AlertTriangle, Building2, RefreshCw, RotateCcw, Trash2, ShieldAlert, Zap } from "lucide-react";
 import { mpesa_handler, unified_participant_payout, rewards_policy, equal_distribution_protocol, merchant_of_record_tax_remittance } from "../lib/engines";
 import { useCurrencyConverter } from "../hooks/useCurrencyConverter";
 import { motion, AnimatePresence } from "motion/react";
@@ -119,9 +86,10 @@ export default function Rewards() {
   });
 
   const isLive = true; // Default to live mode
-  const points = userData?.points || 0; // Community Points
-  const usdBalance = userData?.balance || 0; // USD Balance
-  const balanceUSD = usdBalance;
+  const points = userData?.points || 0; // Milligrams
+  const goldBalance = userData?.balance || 0; // Grams
+  const GOLD_PRICE_USD = 80;
+  const balanceUSD = goldBalance * GOLD_PRICE_USD;
   const membershipLevel = userData?.membershipLevel || 'bronze';
 
   const canWithdrawNow = useMemo(() => {
@@ -192,7 +160,7 @@ export default function Rewards() {
       if (numAmount < minAmount) throw new Error(`Minimum withdrawal is KES ${minAmount}`);
       
       const currentRate = rates['KES'] || 135;
-      const kesBalance = (usdBalance * currentRate);
+      const kesBalance = (goldBalance * GOLD_PRICE_USD * currentRate);
 
       const last24h = Date.now() - (24 * 60 * 60 * 1000);
       const recentWithdrawalsUSD = transactions
@@ -209,7 +177,7 @@ export default function Rewards() {
       else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitUSD = 500;
           
       if (recentWithdrawalsUSD + requestedUSD > limitUSD && !totp && !usePasskey) {
-        setScaError(`Daily velocity limit of ${convert(limitUSD)} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is ${convert(5000)}.`);
+        setScaError(`Daily velocity limit of $${limitUSD} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is $5,000.`);
       }
 
       if (!isDeveloper && numAmount > kesBalance) throw new Error("Insufficient reserve for this withdrawal request.");
@@ -269,7 +237,8 @@ export default function Rewards() {
               const txRef = collection(db, 'users', currentUser.uid, 'transactions');
               const currentRate = rates['KES'] || 135;
               const usdAmount = numAmount / currentRate;
-              const pointsToDeduct = Math.floor(usdAmount * 100);
+              const gramsToDeduct = usdAmount / GOLD_PRICE_USD;
+              const mgToDeduct = Math.floor(gramsToDeduct * 1000);
 
               const txData = {
                 amount: numAmount,
@@ -280,10 +249,11 @@ export default function Rewards() {
                 timestamp: serverTimestamp(),
                 reference: result.transactionId || result.CheckoutRequestID || `Q-${Date.now()}`,
                 details: isQueued ? `Queued for Monthly Batch (${nextRedemptionDate})` : (result.message || (result.status === 'blocked' ? 'Blocked by Bank Firewall' : 'Transaction processed')),
-                pointsDeducted: pointsToDeduct,
+                pointsDeducted: mgToDeduct,
+                gramsDeducted: gramsToDeduct,
                 usdEquivalent: usdAmount,
                 previousPoints: points,
-                remainingPoints: points - pointsToDeduct,
+                remainingPoints: points - mgToDeduct,
                 userId: currentUser.uid,
                 userEmail: currentUser.email
               };
@@ -301,8 +271,8 @@ export default function Rewards() {
 
             // Audit Ledger Entry
             await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
-              amount: -pointsToDeduct,
-              balanceAfter: points - pointsToDeduct,
+              amount: -mgToDeduct,
+              balanceAfter: points - mgToDeduct,
               type: 'deduction',
               source: 'withdrawal',
               reason: `Local Payout (${localMethod})`,
@@ -345,7 +315,7 @@ export default function Rewards() {
 
       const numAmount = parseFloat(payoutAmount);
       const minAmount = isDeveloper ? 0.01 : 10;
-      if (numAmount < minAmount) throw new Error(`Minimum withdrawal is ${convert(minAmount)}`); 
+      if (numAmount < minAmount) throw new Error(`Minimum withdrawal is $${minAmount.toFixed(2)} USD`); 
       
       const last24h = Date.now() - (24 * 60 * 60 * 1000);
       const recentWithdrawalsUSD = transactions
@@ -361,10 +331,10 @@ export default function Rewards() {
       else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitUSD = 500;
           
       if (recentWithdrawalsUSD + numAmount > limitUSD && !totp && !usePasskey) {
-        setScaError(`Daily velocity limit of ${convert(limitUSD)} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is ${convert(5000)}.`);
+        setScaError(`Daily velocity limit of $${limitUSD} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is $5,000.`);
       }
 
-      if (!isDeveloper && numAmount > usdBalance) throw new Error("Insufficient reserve for this amount");
+      if (!isDeveloper && numAmount > balanceUSD) throw new Error("Insufficient gold reserve for this amount");
 
       const isQueued = !canWithdrawNow;
       
@@ -408,8 +378,9 @@ export default function Rewards() {
       if (currentUser && db) {
         const txRef = collection(db, 'users', currentUser.uid, 'transactions');
         
-        const reference = result.transactionId || `REV-INT-${Date.now()}`;
-        const pointsToDeduct = Math.floor(numAmount * 100);
+        const reference = result.transactionId || `GLD-INT-${Date.now()}`;
+        const gramsToDeduct = numAmount / GOLD_PRICE_USD;
+        const mgToDeduct = Math.floor(gramsToDeduct * 1000);
         
         const txData = {
           amount: numAmount,
@@ -421,10 +392,11 @@ export default function Rewards() {
           timestamp: serverTimestamp(),
           scheduledDate: isQueued ? nextRedemptionDate : null,
           reference,
-          details: isQueued ? `Queued for Monthly Batch (${nextRedemptionDate})` : `International ${payoutMethod} payout request`,
-          pointsDeducted: pointsToDeduct,
+          details: isQueued ? `Queued for Monthly Batch (${nextRedemptionDate})` : `International ${payoutMethod} payout request (Gold Liquidated)`,
+          pointsDeducted: mgToDeduct,
+          gramsDeducted: gramsToDeduct,
           previousPoints: points,
-          remainingPoints: points - pointsToDeduct,
+          remainingPoints: points - mgToDeduct,
           userId: currentUser.uid,
           userEmail: currentUser.email,
           scaToken: pin,
@@ -443,26 +415,26 @@ export default function Rewards() {
         // Deduct balance immediately for the queued amount
         const userRef = doc(db, 'users', currentUser.uid);
         await updateDoc(userRef, {
-          points: increment(-pointsToDeduct),
-          balance: increment(-numAmount),
+          points: increment(-mgToDeduct),
+          balance: increment(-gramsToDeduct),
           totalWithdrawals: increment(numAmount)
         });
 
         // Audit Ledger Entry
         await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
-          amount: -pointsToDeduct,
-          balanceAfter: points - pointsToDeduct,
+          amount: -mgToDeduct,
+          balanceAfter: points - mgToDeduct,
           type: 'deduction',
           source: 'withdrawal',
-          reason: `International Payout (${payoutMethod})`,
+          reason: `International Payout (${payoutMethod}) - Gold Liquidation`,
           timestamp: serverTimestamp(),
-          unit: 'Points'
+          unit: 'mg'
         }).catch(err => console.error("Error logging points ledger:", err));
       } else if (currentUser && !db) {
         console.warn("Firestore not available for international payout logging.");
       }
       
-      setSuccess(`International payout request of ${convert(numAmount)} submitted successfully! ${isQueued ? "(Queued for 1st of month)" : ""}`);
+      setSuccess(`International payout request of $${numAmount} submitted successfully! ${isQueued ? "(Queued for 1st of month)" : ""}`);
       setPayoutAmount("");
       setPayoutEmail("");
     } catch (err: any) {
@@ -499,7 +471,7 @@ export default function Rewards() {
   };
 
   const handleWithdrawAllInternational = () => {
-    setPayoutAmount(usdBalance.toFixed(2));
+    setPayoutAmount(goldBalance.toFixed(3));
   };
 
   const handleSyncWallet = async () => {
@@ -516,11 +488,10 @@ export default function Rewards() {
       ledgerSnap.forEach(doc => {
         const data = doc.data();
         if (data.type === 'accrual') totalPoints += (data.amount || 0);
-        if (data.type === 'deduction' || data.type === 'redemption') totalPoints += (data.amount || 0); // Ledger amounts are negative for deductions
+        if (data.type === 'redemption') totalPoints -= (data.amount || 0);
       });
 
-      const GOLD_PRICE_USD = 80;
-      const calculatedBalance = totalPoints / 100; // $1 per 100 points balance
+      const calculatedBalance = totalPoints / 100;
 
       // 2. Update user document to match ledger
       const userRef = doc(db, 'users', currentUser.uid);
@@ -1192,17 +1163,17 @@ export default function Rewards() {
               <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white opacity-10 rounded-full blur-2xl"></div>
               <div className="relative z-10 flex flex-col items-center justify-center">
                 <span className="text-white/80 font-medium uppercase tracking-wider mb-2">
-                  Live Account Balance & Accumulation
+                  Live Gold Reserve & Accumulation
                 </span>
                 <div className="text-6xl font-black mb-1 flex items-center gap-2">
-                  {convert(usdBalance)}
+                  {goldBalance.toFixed(4)} <span className="text-xl font-bold opacity-60">g</span>
                 </div>
                 <div className="text-sm font-bold text-white/70 mb-4">
-                  ≈ {points.toLocaleString()} Community Points
+                  ≈ {convert(balanceUSD)} market value
                 </div>
                 <div className="text-xl font-bold opacity-95 mb-4 flex items-center">
                   <Zap className="w-5 h-5 mr-2 text-yellow-300" />
-                  Earning Mode: Active
+                  {points.toLocaleString()} Milligrams (mg)
                 </div>
 
                 <div className="flex gap-2 mb-6">
@@ -1309,16 +1280,16 @@ export default function Rewards() {
                     <ShieldCheck className="w-3 h-3" />
                   </div>
                   <div className="flex justify-between items-center mb-1">
-                    <span>Lifetime Earned:</span>
-                    <span className="font-black">+{convert(userAuditTotals.totalEarned)}</span>
+                    <span>Lifetime Gold Earned:</span>
+                    <span className="font-black">+{userAuditTotals.totalEarned.toFixed(3)}g</span>
                   </div>
                   <div className="flex justify-between items-center mb-1 text-red-100">
-                    <span>Total Liquidated:</span>
-                    <span className="font-black">-{convert(userAuditTotals.totalWithdrawn)}</span>
+                    <span>Total Gold Liquidated:</span>
+                    <span className="font-black">-{userAuditTotals.totalWithdrawn.toFixed(3)}g</span>
                   </div>
                   <div className="flex justify-between items-center pt-2 border-t border-white/10 text-white font-black">
-                    <span>Current Available:</span>
-                    <span>{convert(userAuditTotals.totalEarned - userAuditTotals.totalWithdrawn)}</span>
+                    <span>Current Gold Reserve:</span>
+                    <span>{(userAuditTotals.totalEarned - userAuditTotals.totalWithdrawn).toFixed(3)}g</span>
                   </div>
                   {userAuditTotals.pendingWithdrawals > 0 && (
                     <div className="mt-2 text-yellow-200 animate-pulse flex justify-between items-center">
@@ -1361,11 +1332,11 @@ export default function Rewards() {
                   <div className="flex justify-between items-end text-white">
                     <div>
                       <p className="text-[10px] opacity-70 uppercase font-bold">Earned Today</p>
-                      <p className="text-xl font-black">{totalEarnedToday} <span className="text-xs font-normal opacity-70">Points</span></p>
+                      <p className="text-xl font-black">{totalEarnedToday} <span className="text-xs font-normal opacity-70">mg</span></p>
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] opacity-70 uppercase font-bold">Current Reserve</p>
-                      <p className="text-sm font-bold">{convert(usdBalance)}</p>
+                      <p className="text-sm font-bold">{goldBalance.toFixed(3)}g</p>
                     </div>
                   </div>
                 </div>
@@ -1375,7 +1346,7 @@ export default function Rewards() {
                     onClick={() => setActiveTab('local')}
                     className="bg-white text-amber-700 hover:bg-yellow-50 px-8 py-3 rounded-full font-bold shadow-md transition-all flex-1"
                   >
-                    Withdraw Funds (KES)
+                    Liquidate Gold (KES)
                   </button>
                 </div>
               </div>
@@ -1737,7 +1708,7 @@ export default function Rewards() {
                               <div>
                                 <p className="text-sm font-bold text-gray-900 dark:text-white">
                                   {tx.type === 'earning' ? '+' : '-'}
-                                  {tx.currency === 'G' ? 'G ' : 'KES '} 
+                                  {tx.currency === 'USD' ? '$' : 'KES '} 
                                   {tx.amount.toLocaleString()}
                                 </p>
                                 <p className="text-[10px] text-gray-500">{tx.phoneNumber || tx.email || tx.details}</p>
@@ -1810,9 +1781,9 @@ export default function Rewards() {
                   </div>
                   <div className="relative z-10 space-y-4">
                     <p className="text-purple-100 font-bold uppercase tracking-widest text-xs">International Payouts</p>
-                      <h2 className="text-5xl font-black tracking-tighter">
-                        {convert(points / 100)}
-                      </h2>
+                    <h2 className="text-5xl font-black tracking-tighter">
+                      {convert(points / 100)}
+                    </h2>
                     <div className="flex items-center space-x-2 text-purple-100 text-sm">
                       <CheckCircle className="w-4 h-4" />
                       <span>Available for withdrawal globally</span>
@@ -1823,7 +1794,7 @@ export default function Rewards() {
                 <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
                   <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 p-4 rounded-r-xl mb-6">
                     <p className="text-amber-800 dark:text-amber-200 text-sm font-bold">
-                      ⚠️ Minimum withdrawal amount is {convert(100)}.
+                      ⚠️ Minimum withdrawal amount is $100.00 USD.
                     </p>
                   </div>
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center space-x-2">
@@ -1833,7 +1804,7 @@ export default function Rewards() {
 
                   <div className="grid grid-cols-3 gap-4 mb-8">
                     {[
-                      { id: 'paypal', label: 'PayPal', icon: Gem },
+                      { id: 'paypal', label: 'PayPal', icon: DollarSign },
                       { id: 'stripe', label: 'Stripe', icon: CreditCard },
                       { id: 'bank', label: 'Bank', icon: Landmark }
                     ].map((method) => (
@@ -1912,9 +1883,9 @@ export default function Rewards() {
                     )}
 
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount (Gold Grams)</label>
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount (USD)</label>
                       <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">G</span>
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">$</span>
                         <input
                           type="number"
                           placeholder="0.00"
@@ -1994,7 +1965,7 @@ export default function Rewards() {
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
-                      <span>Minimum withdrawal: {isDeveloper ? "None" : `${convert(100)} (10,000 points)`}</span>
+                      <span>Minimum withdrawal: {isDeveloper ? "None" : "$100.00 (10,000 points)"}</span>
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
@@ -2014,7 +1985,7 @@ export default function Rewards() {
                               <ArrowUpRight className="w-4 h-4" />
                             </div>
                             <div>
-                              <p className="text-[10px] font-bold text-gray-900 dark:text-white">{convert(tx.amount)}</p>
+                              <p className="text-[10px] font-bold text-gray-900 dark:text-white">${tx.amount.toFixed(2)}</p>
                               <p className="text-[8px] text-gray-500">{tx.phoneNumber}</p>
                             </div>
                           </div>
@@ -2065,10 +2036,10 @@ export default function Rewards() {
                     "flex items-center p-4 rounded-2xl border transition-all",
                     conditionsError?.includes("threshold") ? "bg-red-50 border-red-100 text-red-700" : "bg-gray-50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-700"
                   )}>
-                    <Layers className="w-5 h-5 mr-3 flex-shrink-0 text-yellow-500" />
+                    <DollarSign className="w-5 h-5 mr-3 flex-shrink-0" />
                     <div className="text-left">
                       <p className="text-xs font-bold uppercase tracking-widest">Minimum Threshold</p>
-                      <p className="text-sm font-medium">{convert(100)} minimum required</p>
+                      <p className="text-sm font-medium">$100.00 USD minimum required</p>
                     </div>
                   </div>
 

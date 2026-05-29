@@ -141,14 +141,12 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
     throw new Error("Gemini API key is not configured. Please add GEMINI_API_KEY to your environment.");
   }
   
-  let currentRelease: (() => void) | null = null;
-  const acquireLock = async () => {
-    const previousQueue = requestQueue;
-    requestQueue = new Promise(resolve => { currentRelease = resolve; });
-    await previousQueue;
-  };
-
-  await acquireLock();
+  // Queue requests to ensure MIN_REQUEST_INTERVAL between them
+  const currentQueue = requestQueue;
+  let releaseQueue: () => void;
+  requestQueue = new Promise(resolve => { releaseQueue = resolve; });
+  
+  await currentQueue;
   
   try {
     let retries = 0;
@@ -156,10 +154,8 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
     while (retries <= MAX_RETRIES) {
       try {
         const response = await ai.models.generateContent(params);
-        // Release queue after success plus interval
-        const release = currentRelease;
-        currentRelease = null;
-        if (release) setTimeout(release, MIN_REQUEST_INTERVAL);
+        // Add delay after successful request before releasing the queue
+        await delay(MIN_REQUEST_INTERVAL);
         return response;
       } catch (error: any) {
         const errorString = error?.message || (error?.toString ? error.toString() : "");
@@ -186,52 +182,28 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
           const oldModel = params.model;
           
           if (isQuotaExceeded || isDepleted) {
-            retries++;
-            const waitTime = isDepleted ? 15000 : 30000; // 15s for billing fallback, 30s for quota
-            console.warn(`[Client AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Attempt ${retries}. Waiting ${waitTime/1000}s before proactive fallback...`);
-            
-            if (currentRelease) {
-              currentRelease();
-              currentRelease = null;
-            }
+            const waitTime = isDepleted ? 300000 : 60000;
+            console.warn(`[Client AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Waiting ${waitTime/1000}s before fallback...`);
             await delay(waitTime);
-            await acquireLock();
           }
 
           // If billing is depleted, strictly use free tier candidates ONLY
           if (isDepleted) {
-            const currentModel = params.model;
-            if (currentModel === 'gemini-3-flash-preview' || currentModel === 'gemini-2.0-flash') {
+            if (params.model === 'gemini-3-flash-preview' || params.model === 'gemini-2.0-flash') {
               params.model = 'gemini-3.5-flash';
               console.warn(`[Client AI] Billing issue. Switching to free tier: ${params.model}`);
               continue;
-            } else if (currentModel === 'gemini-3.5-flash') {
-              params.model = 'gemini-flash-latest';
-              console.warn(`[Client AI] Trying reliable flash fallback: ${params.model}`);
-              continue;
-            } else if (currentModel === 'gemini-flash-latest') {
-              params.model = 'gemini-1.5-flash';
-              console.warn(`[Client AI] Trying base flash: ${params.model}`);
-              continue;
-            } else if (currentModel === 'gemini-1.5-flash') {
-              params.model = 'gemini-1.5-flash-8b';
-              console.warn(`[Client AI] Trying micro flash: ${params.model}`);
-              continue;
-            } else if (currentModel === 'gemini-1.5-flash-8b') {
+            } else if (params.model === 'gemini-3.5-flash') {
               params.model = 'gemini-3.1-flash-lite';
               console.warn(`[Client AI] Trying lite free tier: ${params.model}`);
               continue;
-            } else if (currentModel === 'gemini-3.1-flash-lite') {
-              params.model = 'gemini-3.1-pro-preview';
-              console.warn(`[Client AI] Trying pro fallback: ${params.model}`);
+            } else if (params.model === 'gemini-3.1-flash-lite') {
+              params.model = 'gemini-1.5-flash';
+              console.warn(`[Client AI] Trying legacy flash free tier: ${params.model}`);
               continue;
-            } else if (currentModel === 'gemini-3.1-pro-preview') {
-              params.model = 'gemini-1.5-pro';
-              console.warn(`[Client AI] Trying base pro: ${params.model}`);
-              continue;
-            } else if (currentModel === 'gemini-1.5-pro') {
-              params.model = 'gemini-2.0-flash-exp';
-              console.warn(`[Client AI] Trying next-gen flash exp: ${params.model}`);
+            } else if (params.model === 'gemini-1.5-flash') {
+              params.model = 'gemini-1.5-flash-8b';
+              console.warn(`[Client AI] Trying ultra-low cost free tier: ${params.model}`);
               continue;
             } else {
               console.error("[Client AI] All free-tier candidates exhausted during billing depletion.");
@@ -239,25 +211,18 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
             }
           }
 
-          const currentModel = params.model;
-          if (currentModel === 'gemini-3-flash-preview' || currentModel === 'gemini-2.0-flash') {
+          if (params.model === 'gemini-3-flash-preview' || params.model === 'gemini-2.0-flash' || params.model === 'gemini-1.5-flash') {
             params.model = 'gemini-3.5-flash';
-          } else if (currentModel === 'gemini-3.5-flash') {
+          } else if (params.model === 'gemini-3.5-flash') {
             params.model = 'gemini-flash-latest';
-          } else if (currentModel === 'gemini-flash-latest') {
-            params.model = 'gemini-1.5-flash';
-          } else if (currentModel === 'gemini-1.5-flash') {
-            params.model = 'gemini-1.5-flash-8b';
-          } else if (currentModel === 'gemini-1.5-flash-8b') {
+          } else if (params.model === 'gemini-flash-latest') {
             params.model = 'gemini-3.1-flash-lite';
-          } else if (currentModel === 'gemini-3.1-flash-lite') {
+          } else if (params.model === 'gemini-3.1-flash-lite' || params.model === 'gemini-1.5-flash-8b') {
             params.model = 'gemini-3.1-pro-preview';
-          } else if (currentModel === 'gemini-3.1-pro-preview') {
-            params.model = 'gemini-1.5-pro';
-          } else if (currentModel === 'gemini-1.5-pro') {
-            params.model = 'gemini-2.0-flash-exp';
+          } else if (params.model.includes('pro')) {
+            params.model = 'gemini-3.1-pro-preview';
           } else {
-            params.model = 'gemini-1.5-flash-8b';
+            params.model = 'gemini-3.1-flash-lite';
           }
           
           if (params.model === oldModel) {
@@ -275,14 +240,7 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
           // Exponential backoff with jitter and increased delay for higher retries
           const backoffDelay = (INITIAL_DELAY * Math.pow(1.5, retries)) + (Math.random() * 2000); 
           console.warn(`AI service under load (Status: ${status}). Retrying in ${Math.round(backoffDelay)}ms... (Attempt ${retries}/${MAX_RETRIES})`);
-          
-          if (currentRelease) {
-            currentRelease();
-            currentRelease = null;
-          }
           await delay(backoffDelay);
-          await acquireLock();
-
           continue;
         }
         
@@ -298,8 +256,6 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
     }
     throw new Error("AI service unavailable after multiple retries across different models.");
   } finally {
-    if (currentRelease) {
-      currentRelease();
-    }
+    releaseQueue!();
   }
 }
