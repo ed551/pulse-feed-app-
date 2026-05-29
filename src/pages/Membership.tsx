@@ -41,7 +41,7 @@ const TIERS = [
     id: 'silver',
     name: 'Silver',
     subtitle: 'Growth Plus',
-    price: 0.125, // ≈ $10
+    price: 10, // $10
     icon: Star,
     color: 'text-blue-500',
     bg: 'bg-blue-50 dark:bg-blue-900/10',
@@ -63,7 +63,7 @@ const TIERS = [
     id: 'gold',
     name: 'Gold',
     subtitle: 'Elite Pioneer',
-    price: 0.375, // ≈ $30
+    price: 30, // $30
     icon: Crown,
     color: 'text-yellow-500',
     bg: 'bg-yellow-50 dark:bg-yellow-900/10',
@@ -100,7 +100,7 @@ export default function Membership() {
       if (tier.price > 0) {
         const success = await deductBalance(tier.price, `Upgrade to ${tier.name} Membership`);
         if (!success) {
-          throw new Error(`Insufficient gold reserve to upgrade to ${tier.name}. Requires ${tier.price}g.`);
+          throw new Error(`Insufficient reserve to upgrade to ${tier.name}. Requires $${tier.price}.`);
         }
       }
       
@@ -253,12 +253,12 @@ export default function Membership() {
 
             <div className="flex items-baseline gap-1 mb-8">
               <span className="text-5xl font-black text-gray-900 dark:text-white tracking-tighter">
-                {tier.price === 0 ? '0' : tier.price.toString().split('.')[0] || '0'}
+                ${tier.price}
               </span>
               <span className="text-xl font-bold text-gray-400">
-                .{tier.price === 0 ? '00' : tier.price.toString().split('.')[1] || '000'}
+                .00
               </span>
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Grams</span>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">USD</span>
             </div>
 
             <div className="space-y-4 mb-10 flex-1">

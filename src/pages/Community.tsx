@@ -338,7 +338,7 @@ export default function Community() {
       await addRevenue(userShare, platformShare, `Task Completed: ${task.title}`, 'community');
 
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: true } : t));
-      alert(`Great job! You earned ${task.reward} points (${convert(monetaryValue * 80)}) for your community contribution!`);
+      alert(`Great job! You earned ${task.reward} points ($${monetaryValue.toFixed(2)}) for your community contribution!`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `users/${currentUser.uid}`);
     } finally {
@@ -589,7 +589,7 @@ export default function Community() {
           <h3 className="font-bold text-indigo-900 dark:text-indigo-100 text-sm">Community Rewards Program</h3>
           <p className="text-xs text-indigo-800/70 dark:text-indigo-200/70 leading-relaxed">
             Pulse Feeds is powered by you. Complete tasks that help the community grow and stay healthy to earn points. 
-            Points are synchronized with your gold balance (8000 points = 1 G).
+            Points contribute to your balance (100 points = $1).
           </p>
         </div>
       </div>

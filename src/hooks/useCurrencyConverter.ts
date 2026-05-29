@@ -6,7 +6,7 @@ export interface ExchangeRates {
 
 export const useCurrencyConverter = () => {
   const [rates, setRates] = useState<ExchangeRates>({ USD: 1 });
-  const [currency, setCurrency] = useState<string>('G');
+  const [currency, setCurrency] = useState<string>('USD');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -15,6 +15,9 @@ export const useCurrencyConverter = () => {
     if (savedCurrency) {
       setCurrency(savedCurrency);
     }
+    
+    // Add Points to rates locally
+    setRates(prev => ({ ...prev, PTS: 100 }));
 
     // Fetch exchange rates
     const fetchRates = async () => {
@@ -22,7 +25,7 @@ export const useCurrencyConverter = () => {
         const response = await fetch('/api/rates');
         if (response.ok) {
           const data = await response.json();
-          setRates(data.rates);
+          setRates(prev => ({ ...prev, ...data.rates, PTS: 100 }));
         } else {
           const err = await response.json().catch(() => ({}));
           console.error('Exchange rate API returned error:', err);
@@ -42,15 +45,13 @@ export const useCurrencyConverter = () => {
     localStorage.setItem('preferred_currency', newCurrency);
   };
 
-  const GOLD_PRICE_USD = 80;
-
   const convert = (amountInUSD: number): string => {
-    if (currency === 'G') {
-      const grams = amountInUSD / GOLD_PRICE_USD;
-      return `${grams.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} G`;
+    if (currency === 'PTS') {
+      const pts = amountInUSD * 100;
+      return `${Math.floor(pts).toLocaleString()} Points`;
     }
 
-    const rate = rates[currency] || 1;
+    const rate = rates[currency] || (currency === 'USD' ? 1 : (currency === 'KES' ? 135 : 1));
     const converted = amountInUSD * rate;
     
     return new Intl.NumberFormat('en-US', {

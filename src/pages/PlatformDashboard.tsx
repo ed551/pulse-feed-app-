@@ -35,11 +35,9 @@ export default function PlatformDashboard() {
   const { addPlatformRevenue, addPlatformExpense } = useRevenue();
   const { convert, rates } = useCurrencyConverter();
   const TARGET_STATIC_IP = "35.214.40.75";
-  const GOLD_PRICE_USD = 80;
 
   const formatGold = (usdAmount: number) => {
-    const grams = usdAmount / GOLD_PRICE_USD;
-    return `${grams.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} G`;
+    return convert(usdAmount);
   };
   
   const [users, setUsers] = useState<UserData[]>([]);
@@ -122,26 +120,80 @@ export default function PlatformDashboard() {
   useEffect(() => {
     if (activeTab === 'withdrawals' && currentUser?.email === 'edwinmuoha@gmail.com') {
       const lastSessionTrigger = (window as any)._lastWithdrawalTrigger || 0;
+      const lastDevTrigger = (window as any)._lastDevExpenseTrigger || 0;
       const now = Date.now();
       
-      // Allow triggering once every 10 seconds per tab-switch session to prevent accidental spam
+      // Allow triggering operational growth once every 10 seconds per tab-switch session
       if (now - lastSessionTrigger > 10000) {
         handleAutomatedOperationalPayout();
         (window as any)._lastWithdrawalTrigger = now;
       }
+
+      // Automated Developer Expense: $3,700 Monthly
+      if (now - lastDevTrigger > 30000) { // Check every 30s when on tab
+        handleScheduledDeveloperExpense();
+        (window as any)._lastDevExpenseTrigger = now;
+      }
     }
   }, [activeTab]);
+
+  const handleScheduledDeveloperExpense = async () => {
+    if (!db || !currentUser || isRefreshing) return;
+    try {
+      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+      
+      // Check if already processed this month by searching withdrawals
+      const alreadyProcessed = userWithdrawals.some(w => 
+        w.category === 'developer_expense' && 
+        w.timestamp && 
+        new Date(w.timestamp.seconds * 1000).toISOString().slice(0, 7) === currentMonth
+      );
+
+      if (alreadyProcessed) {
+        console.log(`[Developer Expense] Already processed for ${currentMonth}.`);
+        return;
+      }
+
+      const amount = 3700;
+      const refCode = `DEV-EXP-${currentMonth}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      
+      console.log(`[Developer Expense] Processing automated monthly withdrawal of $${amount} for ${currentMonth}...`);
+
+      // 1. Log as Platform Expense (Deducts from platformShare)
+      await addPlatformExpense(amount, `Monthly Developer Operational & Engineering Fee (${currentMonth})`);
+      
+      // 2. Create Withdrawal Record
+      await addDoc(collection(db, 'withdrawals'), {
+        amount,
+        amountPoints: amount * 100,
+        amountKes: amount * 135,
+        category: 'developer_expense',
+        reference: refCode,
+        status: 'success',
+        timestamp: serverTimestamp(),
+        userId: 'platform-admin',
+        userName: 'EDWIN MUOHA WATITU',
+        userEmail: 'edwinmuoha@gmail.com',
+        details: `Automated Developer Professional Services & Operational Fee - ${currentMonth}`
+      });
+
+      setSuccess(`[AUTOMATION] Monthly Developer Expense of ${formatGold(amount)} has been successfully processed for ${currentMonth}.`);
+      handleRefresh();
+    } catch (err) {
+      console.error("Scheduled developer expense failed:", err);
+    }
+  };
 
   const handleAutomatedOperationalPayout = async () => {
     if (!db || !currentUser) return;
     try {
-      const amount = 100 + (Math.random() * 800); // 1.25 G - 11.25 G
+      const amount = 100 + (Math.random() * 800); // $100 - $900
       const refCode = `S-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
       
       // Inject record
       await addDoc(collection(db, 'withdrawals'), {
         amount,
-        amountGold: amount / GOLD_PRICE_USD,
+        amountPoints: amount * 100,
         amountKes: amount * 135,
         category: 'operational',
         reference: refCode,
@@ -167,7 +219,7 @@ export default function PlatformDashboard() {
   const filteredWithdrawals = useMemo(() => {
     return userWithdrawals.filter(w => {
       if (withdrawalFilter === 'user') return w.category === 'user' && w.status !== 'queued';
-      if (withdrawalFilter === 'operational') return w.category === 'operational' || w.status === 'simulated' || !w.category;
+      if (withdrawalFilter === 'operational') return w.category === 'operational' || w.category === 'developer_expense' || w.status === 'simulated' || !w.category;
       if (withdrawalFilter === 'pending') return w.status === 'pending';
       if (withdrawalFilter === 'queued') return w.status === 'queued';
       if (withdrawalFilter === 'success') return w.status === 'success';
@@ -400,8 +452,17 @@ export default function PlatformDashboard() {
       const financialTypes = ['payout', 'expense', 'revenue', 'platform_revenue', 'refund', 'system_event'];
       if (!financialTypes.includes(tx.type)) return acc;
 
-      const platformAmt = tx.platformAmount !== undefined ? tx.platformAmount : (tx.source === 'platform' || tx.type === 'platform_revenue' ? (tx.totalAmount || 0) : 0);
-      const grossAmt = tx.totalAmount !== undefined ? tx.totalAmount : platformAmt;
+      const platformAmtRaw = tx.platformAmount !== undefined ? tx.platformAmount : (tx.source === 'platform' || tx.type === 'platform_revenue' ? (tx.totalAmount || 0) : 0);
+      const grossAmtRaw = tx.totalAmount !== undefined ? tx.totalAmount : platformAmtRaw;
+
+      // Unit Normalization: Detect if transaction was recorded in Gold (G) or USD
+      // We prioritize the 'unit' field from Firestore if present.
+      // IF unit is missing:
+      // - Platform Revenue is ALMOST ALWAYS USD (large amounts).
+      // - Standard revenue/payouts < 500 are likely Gold grams.
+      const isGold = tx.unit === 'GOLD' || (!tx.unit && Math.abs(platformAmtRaw) < 500 && tx.type !== 'platform_revenue' && tx.type !== 'expense');
+      const platformAmt = isGold ? platformAmtRaw * 80 : platformAmtRaw;
+      const grossAmt = isGold ? grossAmtRaw * 80 : grossAmtRaw;
 
       // Direct platform balance sum
       acc.ledgerBalance += platformAmt;
@@ -458,9 +519,9 @@ export default function PlatformDashboard() {
       }
 
       // Check for extreme anomalies (Potential KES/USD mixups)
-      const anomalies = platformTransactions.filter(tx => Math.abs(tx.platformAmount || 0) > 125);
+      const anomalies = platformTransactions.filter(tx => Math.abs(tx.platformAmount || 0) > 10000);
       if (anomalies.length > 0) {
-        issues.push(`Critical: ${anomalies.length} anomalous transactions detected (> 125 G). Potential currency inflation detected.`);
+        issues.push(`Critical: ${anomalies.length} anomalous transactions detected (> $10,000). Potential currency inflation detected.`);
       }
 
       // Check User Balances vs Wallet Sum
@@ -484,13 +545,13 @@ export default function PlatformDashboard() {
 
   const handlePurgeAnomalies = async () => {
     if (!db) return;
-    if (!window.confirm("CRITICAL ACTION: This will delete ALL platform transactions over 125 G. Use this only to clear treasury inflation caused by bugs. Continue?")) {
+    if (!window.confirm("CRITICAL ACTION: This will delete ALL platform transactions over $10,000. Use this only to clear treasury inflation caused by bugs. Continue?")) {
       return;
     }
     
     setIsRefreshing(true);
     try {
-      const anomalies = platformTransactions.filter(tx => Math.abs(tx.platformAmount || 0) > 125);
+      const anomalies = platformTransactions.filter(tx => Math.abs(tx.platformAmount || 0) > 10000);
       const { deleteDoc, doc } = await import('firebase/firestore');
       
       let deletedCount = 0;
@@ -577,7 +638,7 @@ export default function PlatformDashboard() {
           platformShare: data.platformShare || 0,
           totalUserBalances: data.totalUserBalances || 0,
           unredeemedRevenue: data.totalUserBalances || 0,
-          potentialRevenue: (prev.totalUsers || 0) * 0.01875 // Mock: 0.01875 G potential per user
+          potentialRevenue: (prev.totalUsers || 0) * 80 * 0.15 // Potential $12 per user
         }));
       }
     }, (error) => {
@@ -1742,7 +1803,13 @@ export default function PlatformDashboard() {
                             </td>
                             <td className="px-6 py-4 text-right font-black font-mono">
                               <span className={cn((tx.type === 'revenue' || tx.type === 'platform_revenue' || (tx.platformAmount || 0) > 0) ? "text-green-600" : "text-red-600")}>
-                                {(tx.type === 'revenue' || tx.type === 'platform_revenue' || (tx.platformAmount || 0) > 0) ? '+' : '-'}{formatGold(Math.abs(tx.platformAmount || tx.totalAmount || 0))}
+                                {(tx.type === 'revenue' || tx.type === 'platform_revenue' || (tx.platformAmount || 0) > 0) ? '+' : '-'}{
+                                  tx.unit === 'GOLD' 
+                                    ? `${Math.abs(tx.platformAmount || tx.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} G`
+                                    : tx.unit === 'Points'
+                                      ? `${Math.abs(tx.platformAmount || tx.totalAmount || 0).toLocaleString()} Pts`
+                                      : formatGold(Math.abs(tx.platformAmount || tx.totalAmount || 0))
+                                }
                               </span>
                             </td>
                           </tr>
@@ -2466,7 +2533,7 @@ export default function PlatformDashboard() {
               <div className="flex items-center gap-6 pr-4">
                 <div className="text-right">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Your User Balance</p>
-                  <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{(userData?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} G</p>
+                  <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{formatGold(userData?.balance || 0)}</p>
                 </div>
                 <div className="text-right border-l border-gray-100 dark:border-gray-800 pl-6">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Your User Points</p>

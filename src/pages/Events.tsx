@@ -187,8 +187,8 @@ export default function Events() {
     } else {
       // Check for payment if price exists
       if (event.price && event.price > 0) {
-        if (userData.balance < event.price / 80) {
-          alert(`Insufficient gold reserve. This event costs ${convert(event.price)}.`);
+        if ((userData?.balance || 0) < event.price) {
+          alert(`Insufficient reserve. This event costs KES ${event.price.toFixed(2)}.`);
           return;
         }
 

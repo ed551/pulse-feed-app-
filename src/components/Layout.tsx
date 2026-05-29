@@ -18,7 +18,7 @@ import {
   revenue_distribution_engine, auto_updater, resource_governor, 
   theme_engine, HeaderIntelligence 
 } from "../lib/engines";
-import { goldBrain, GoldPrediction } from "../lib/goldEngine";
+import { marketBrain, MarketPrediction } from "../lib/marketEngine";
 import { useAuth } from "../contexts/AuthContext";
 import { useRevenue } from "../contexts/RevenueContext";
 import { useNotifications } from "../hooks/useNotifications";
@@ -42,6 +42,8 @@ import OTPModal from "./tools/OTPModal";
 import { ConnectivityBanner } from "./ConnectivityBanner";
 import { db } from "../lib/firebase";
 import { setDoc, doc, arrayUnion, serverTimestamp, getDocFromServer, updateDoc } from "firebase/firestore";
+
+import BottomNav from "./BottomNav";
 
 export default function Layout() {
   const { currentUser, userData, logout, isFacebookApp } = useAuth();
@@ -166,7 +168,7 @@ export default function Layout() {
     { name: 'Terms', icon: FileText, color: 'text-teal-500', label: t('terms') },
     { name: 'Privacy', icon: ShieldCheck, color: 'text-indigo-500', label: t('privacy') },
     { name: 'Ads', icon: Gem, color: 'text-green-500', label: t('ads') },
-    { name: 'Gold Market', icon: BarChart2, color: 'text-yellow-600', label: t('gold_market') }
+    { name: 'Market Insights', icon: BarChart2, color: 'text-indigo-600', label: t('market_insights') }
   ];
 
   const handleCategoryClick = (categoryName: string) => {
@@ -190,8 +192,8 @@ export default function Layout() {
       navigate('/ads');
       return;
     }
-    if (categoryName === 'Gold Market') {
-      navigate('/gold');
+    if (categoryName === 'Market Insights') {
+      navigate('/market');
       return;
     }
     if (categoryName === 'Toggle Frame') {
@@ -346,12 +348,12 @@ export default function Layout() {
 
   const location = useLocation();
 
-  // Smart Gold Prediction Logic (Brain Unit)
-  const [goldData, setGoldData] = useState<GoldPrediction | null>(null);
-  const lastGoldAnalysisDateRef = useRef<string | null>(null);
+  // Smart Market Prediction Logic (Brain Unit)
+  const [marketData, setMarketData] = useState<MarketPrediction | null>(null);
+  const lastMarketAnalysisDateRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const updateGoldPrediction = async () => {
+    const updateMarketPrediction = async () => {
       const now = new Date();
       const currentHour = now.getHours();
       
@@ -362,68 +364,61 @@ export default function Layout() {
       }
       
       const dateStr = effectiveDate.toISOString().split('T')[0];
-      const prediction = goldBrain.getDailyPrediction(effectiveDate);
-      setGoldData({ ...prediction });
+      const prediction = marketBrain.getDailyPrediction(effectiveDate);
+      setMarketData({ ...prediction });
 
       // Smart Analysis via Gemini (Once per day)
-      if (lastGoldAnalysisDateRef.current !== dateStr) {
+      if (lastMarketAnalysisDateRef.current !== dateStr) {
         try {
-          const prompt = `Provide a smart, professional 1-sentence market analysis for gold today. The predicted direction is ${prediction.direction}. Mention one potential economic driver.`;
+          const prompt = `Provide a smart, professional 1-sentence market analysis for community points and earnings today. The predicted direction is ${prediction.direction}. Mention one potential economic driver.`;
           const response = await generateContentWithRetry({
             model: "gemini-3-flash-preview",
             contents: [{ role: "user", parts: [{ text: prompt }] }]
           });
           
           if (response.text) {
-            goldBrain.updateAnalysis(effectiveDate, response.text);
-            setGoldData({ ...goldBrain.getDailyPrediction(effectiveDate) });
-            lastGoldAnalysisDateRef.current = dateStr;
-            localStorage.setItem('gold_analysis_date', dateStr);
-            localStorage.setItem('gold_analysis_text', response.text);
+            // marketBrain has no updateAnalysis so we just use the text if needed, but the engine should probably have it
+            setMarketData({ ...marketBrain.getDailyPrediction(effectiveDate), analysis: response.text });
+            lastMarketAnalysisDateRef.current = dateStr;
+            localStorage.setItem('market_analysis_date', dateStr);
+            localStorage.setItem('market_analysis_text', response.text);
           }
         } catch (err: any) {
           const errorMsg = err?.message || JSON.stringify(err);
           if (err?.status === 429 || err?.status === 404 || errorMsg.includes('404') || errorMsg.includes('NOT_FOUND')) {
-            console.warn(`Gold Smart Analysis Service unavailable (${err?.status || '404'}). Using cache/default.`);
+            console.warn(`Market Smart Analysis Service unavailable (${err?.status || '404'}). Using cache/default.`);
             // Use cached text if available even if date is old
-            const cachedText = localStorage.getItem('gold_analysis_text');
+            const cachedText = localStorage.getItem('market_analysis_text');
             if (cachedText) {
-              goldBrain.updateAnalysis(effectiveDate, cachedText);
+              setMarketData({ ...marketBrain.getDailyPrediction(effectiveDate), analysis: cachedText });
             }
           } else if (errorMsg.includes('Rpc failed') || errorMsg.includes('xhr error') || errorMsg.includes('Failed to fetch')) {
             // Silent retry for transient network errors
-            console.warn("Gold Smart Analysis: Transient network error (Failed to fetch/RPC). Retrying...");
-            const cachedText = localStorage.getItem('gold_analysis_text');
-            if (cachedText) {
-              goldBrain.updateAnalysis(effectiveDate, cachedText);
-            }
+            console.warn("Market Smart Analysis: Transient network error (Failed to fetch/RPC). Retrying...");
           } else if (err?.message?.includes("AbortError")) {
              // Silent ignore for aborted requests
           } else {
-            console.error("Gold Smart Analysis Error (will retry):", err);
+            console.error("Market Smart Analysis Error (will retry):", err);
           }
           // Ensure we still have the default data
-          setGoldData({ ...goldBrain.getDailyPrediction(effectiveDate) });
+          setMarketData({ ...marketBrain.getDailyPrediction(effectiveDate) });
         }
       } else {
         // Load from cache if available
-        const cachedText = localStorage.getItem('gold_analysis_text');
-        if (cachedText) {
-          goldBrain.updateAnalysis(effectiveDate, cachedText);
-        }
-        setGoldData({ ...goldBrain.getDailyPrediction(effectiveDate) });
+        const cachedText = localStorage.getItem('market_analysis_text');
+        setMarketData({ ...marketBrain.getDailyPrediction(effectiveDate), analysis: cachedText || marketBrain.getDailyPrediction(effectiveDate).analysis });
       }
     };
 
     // Initial load from cache
-    const cachedDate = localStorage.getItem('gold_analysis_date');
-    const cachedText = localStorage.getItem('gold_analysis_text');
+    const cachedDate = localStorage.getItem('market_analysis_date');
+    const cachedText = localStorage.getItem('market_analysis_text');
     if (cachedDate && cachedText) {
-      lastGoldAnalysisDateRef.current = cachedDate;
+      lastMarketAnalysisDateRef.current = cachedDate;
     }
 
-    updateGoldPrediction();
-    const interval = setInterval(updateGoldPrediction, 60000); // Check every minute
+    updateMarketPrediction();
+    const interval = setInterval(updateMarketPrediction, 60000); // Check every minute
     return () => clearInterval(interval);
   }, []);
 
@@ -931,7 +926,7 @@ export default function Layout() {
     { path: '/support', icon: Headphones, color: 'text-cyan-500', label: t('support') },
     { path: '/audio', icon: Headphones, color: 'text-indigo-400', label: 'Audio Hub' },
     { path: '/education', icon: GraduationCap, color: 'text-purple-600', label: 'Education Hub' },
-    { path: '/gold', icon: BarChart2, color: 'text-yellow-600', label: t('gold_market') },
+    { path: '/market', icon: BarChart2, color: 'text-indigo-600', label: t('market_insights') },
     { path: '/settings', icon: Settings, color: 'text-gray-500', label: t('settings') },
   ];
 
@@ -996,7 +991,7 @@ export default function Layout() {
       <div className={cn(
         "flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden font-sans transition-all duration-500 relative h-full w-full",
         viewMode === 'mobile' && window.innerWidth >= 1024 && !(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
-          ? "max-w-[375px] max-h-[812px] rounded-[3rem] border-[12px] border-gray-800 dark:border-gray-800 shadow-[0_0_50px_rgba(0,0,0,0.3)]" 
+          ? "max-w-[400px] max-h-[850px] rounded-[3.5rem] border-[14px] border-gray-900 dark:border-gray-800 shadow-[0_0_80px_rgba(0,0,0,0.4)] ring-1 ring-white/10" 
           : "rounded-none lg:rounded-2xl shadow-2xl"
       )}>
         {/* AI Lockout Warning */}
@@ -1034,7 +1029,10 @@ export default function Layout() {
         {/* Scrollable Content Wrapper */}
         <div 
           ref={mainRef}
-          className="flex-1 overflow-y-auto custom-scrollbar relative flex flex-col"
+          className={cn(
+            "flex-1 overflow-y-auto custom-scrollbar relative flex flex-col",
+            currentUser ? "pb-24 sm:pb-32" : ""
+          )}
         >
           {/* Header - Facebook Style Scrollable */}
           <header className="relative flex flex-col bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 z-[100] shadow-sm">
@@ -1099,7 +1097,7 @@ export default function Layout() {
                 <div className="hidden sm:flex items-center px-2 sm:px-3 py-1 bg-amber-50 dark:bg-amber-900/20 rounded-full border border-amber-100 dark:border-amber-800 shadow-sm">
                   <Zap className="w-3.5 h-3.5 text-amber-500 mr-1 sm:mr-1.5" />
                   <span className="text-[10px] sm:text-xs font-black text-amber-700 dark:text-amber-300">
-                    {userData?.points || 0} <span className="text-[8px] opacity-70">mg</span>
+                    {userData?.points || 0} <span className="text-[8px] opacity-70">Points</span>
                   </span>
                 </div>
 
@@ -1117,8 +1115,8 @@ export default function Layout() {
                   <div className="flex flex-col leading-none">
                     <span className="text-[8px] font-black text-yellow-700 dark:text-yellow-300 uppercase">Gold Intel</span>
                     <div className="flex items-center gap-0.5">
-                      <span className="text-[9px] font-black text-yellow-900 dark:text-yellow-100">{goldData?.direction === 'up' ? '▲' : '▼'}</span>
-                      <span className="text-[9px] font-black text-yellow-900 dark:text-yellow-100">{goldData?.confidence || 77}%</span>
+                      <span className="text-[9px] font-black text-yellow-900 dark:text-yellow-100">{marketData?.direction === 'up' ? '▲' : '▼'}</span>
+                      <span className="text-[9px] font-black text-yellow-900 dark:text-yellow-100">{marketData?.confidence || 77}%</span>
                     </div>
                   </div>
                 </div>
@@ -1750,7 +1748,7 @@ export default function Layout() {
                         {userData?.balance?.toFixed(3) || '0.000'} <span className="text-xs font-bold opacity-60">g</span>
                       </p>
                       <p className="text-[8px] font-black text-yellow-700/60 uppercase tracking-tighter">
-                        +{userData?.points.toLocaleString() || 0}mg Accumulation
+                        +{userData?.points.toLocaleString() || 0} Points Accumulation
                       </p>
                     </div>
                     <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-2xl border border-yellow-100 dark:border-yellow-800/50 flex flex-col gap-1">
@@ -1759,8 +1757,8 @@ export default function Layout() {
                         <span className="text-xs font-bold text-yellow-700 dark:text-yellow-300">Gold Intel</span>
                       </div>
                       <div className="flex items-baseline gap-1">
-                        <p className="text-lg font-black text-yellow-900 dark:text-yellow-100">{goldData?.symbol || 'GOLD'}</p>
-                        <span className="text-[10px] font-bold text-yellow-600">{goldData?.direction === 'up' ? '▲' : '▼'} {goldData?.confidence || '--'}%</span>
+                        <p className="text-lg font-black text-yellow-900 dark:text-yellow-100">{marketData?.symbol || 'Points'}</p>
+                        <span className="text-[10px] font-bold text-yellow-600">{marketData?.direction === 'up' ? '▲' : '▼'} {marketData?.confidence || '--'}%</span>
                       </div>
                     </div>
                   </div>
@@ -2002,6 +2000,10 @@ export default function Layout() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {currentUser && (
+          <BottomNav onAddPost={() => setShowAddPostMenu(true)} />
+        )}
       </div>
     </div>
   );

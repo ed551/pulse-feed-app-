@@ -41,6 +41,7 @@ const badgeIcons: Record<string, React.ReactNode> = {
 };
 import { getEducationCourses, getLastSyncInfo, Course } from '../lib/education';
 import { useAuth } from '../contexts/AuthContext';
+import { useRevenue } from '../contexts/RevenueContext';
 import { useNotifications } from '../hooks/useNotifications';
 import { revenue_distribution_engine } from '../lib/engines';
 import { doc, updateDoc, increment, arrayUnion } from 'firebase/firestore';
@@ -92,6 +93,7 @@ const STUDY_METHODS = [
 export default function EducationHub() {
   const { currentUser, userData } = useAuth();
   const { showNotification } = useNotifications();
+  const { addPlatformRevenue } = useRevenue();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncInfo, setSyncInfo] = useState<any>(null);
@@ -133,19 +135,24 @@ export default function EducationHub() {
       // Simulate payment processing or just direct enrollment for community courses
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // 80/20 Revenue Split Simulation (Course cost: 0 for engagement, but we distribute points as rewards)
-      const rewardPoints = 500;
-      const { userShare } = revenue_distribution_engine(rewardPoints, 'education');
+      // 80/20 Revenue Split for Course Enrollment & AI Training
+      // Total Enrollment Fee/Value: 1000 Points
+      const totalEnrollmentValue = 1000;
+      const userShare = totalEnrollmentValue * 0.2; // 20% to user
+      const developerShare = totalEnrollmentValue * 0.8; // 80% to developer (as Platform Revenue)
 
       // Update Firestore
       await updateDoc(doc(db, 'users', currentUser.uid), {
         enrolledCourses: arrayUnion(course.id),
-        points: increment(userShare), // Mg
-        experience: increment(100)
+        points: increment(userShare),
+        experience: increment(250)
       });
 
-      showNotification("Successfully Enrolled", { 
-        body: `Welcome to ${course.title}! You earned ${userShare} mg gold as an early-bird reward.` 
+      // Log Developer/Platform Share
+      await addPlatformRevenue(developerShare / 100, `Course Enrollment Fee: ${course.title} (Developer 80% Share)`);
+
+      showNotification("Education Milestone", { 
+        body: `Welcome to ${course.title}! You've been rewarded ${userShare} points (20% share) while 80% ($${developerShare/100}) fuels global engineering.` 
       });
       setSelectedCourse(null);
     } catch (err) {

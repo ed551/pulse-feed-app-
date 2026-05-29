@@ -85,17 +85,24 @@ async function generateContentWithRetry(params: any): Promise<any> {
     throw new Error("Gemini API key is not configured in server environment.");
   }
   
-  const currentQueue = requestQueue;
-  let releaseQueue: () => void;
-  requestQueue = new Promise(resolve => { releaseQueue = resolve; });
-  await currentQueue;
+  let currentRelease: (() => void) | null = null;
+  const acquireLock = async () => {
+    const previousQueue = requestQueue;
+    requestQueue = new Promise(resolve => { currentRelease = resolve; });
+    await previousQueue;
+  };
+
+  await acquireLock();
   
   try {
     let retries = 0;
     while (retries <= MAX_RETRIES) {
       try {
         const response = await ai.models.generateContent(params);
-        await delay(MIN_REQUEST_INTERVAL);
+        // Release queue early if successful, but after the required interval
+        const release = currentRelease;
+        currentRelease = null;
+        if (release) setTimeout(release, MIN_REQUEST_INTERVAL);
         return response;
       } catch (error: any) {
         const errorString = error?.message || (error?.toString ? error.toString() : "");
@@ -152,53 +159,94 @@ async function generateContentWithRetry(params: any): Promise<any> {
           continue; 
         }
 
-        // Final Model Fallback Logic on Server (Sync with src/lib/ai.ts)
-        if (isQuotaExceeded || isUnavailable || status === 404 || isDepleted) {
-          const oldModel = params.model;
-          
-          if (isQuotaExceeded || isUnavailable || isDepleted) {
-            const waitTime = isDepleted ? 120000 : 15000; // Faster cooldown for standard errors
-            console.warn(`[Server AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Waiting ${waitTime/1000}s for quick recovery...`);
-            await delay(waitTime);
-          }
+          // Final Model Fallback Logic on Server (Sync with src/lib/ai.ts)
+          if (isQuotaExceeded || isUnavailable || status === 404 || isDepleted) {
+            const oldModel = params.model;
+            
+            if (isQuotaExceeded || isUnavailable || isDepleted) {
+              const waitTime = isDepleted ? 10000 : 15000; // 10s for billing, 15s for quota
+              console.warn(`[Server AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Waiting ${waitTime/1000}s for quick recovery...`);
+              
+              if (currentRelease) {
+                currentRelease();
+                currentRelease = null;
+              }
 
-          // If billing is depleted, strictly use free tier candidates ONLY
-          if (isDepleted) {
-            if (params.model === 'gemini-3-flash-preview' || params.model === 'gemini-2.0-flash') {
-              params.model = 'gemini-3.5-flash';
-              console.warn(`[Server AI] Billing issue. Switching to free tier: ${params.model}`);
-              continue;
-            } else if (params.model === 'gemini-3.5-flash') {
-              params.model = 'gemini-3.1-flash-lite';
-              console.warn(`[Server AI] Trying lite free tier: ${params.model}`);
-              continue;
-            } else if (params.model === 'gemini-3.1-flash-lite') {
-              params.model = 'gemini-1.5-flash';
-              console.warn(`[Server AI] Trying legacy flash free tier: ${params.model}`);
-              continue;
-            } else if (params.model === 'gemini-1.5-flash') {
-              params.model = 'gemini-1.5-flash-8b';
-              console.warn(`[Server AI] Trying ultra-low cost free tier: ${params.model}`);
-              continue;
-            } else {
-              console.error("[Server AI] All free-tier candidates exhausted during billing depletion.");
-              throw error;
+              // On billing error, fall back sequence immediately
+              if (isDepleted) {
+                retries++;
+                const currentModel = params.model;
+                if (currentModel === 'gemini-3-flash-preview' || currentModel === 'gemini-2.0-flash') {
+                  params.model = 'gemini-3.5-flash';
+                } else if (currentModel === 'gemini-3.5-flash') {
+                  params.model = 'gemini-flash-latest';
+                } else if (currentModel === 'gemini-flash-latest') {
+                  params.model = 'gemini-1.5-flash';
+                } else if (currentModel === 'gemini-1.5-flash') {
+                  params.model = 'gemini-1.5-flash-8b';
+                } else if (currentModel === 'gemini-1.5-flash-8b') {
+                  params.model = 'gemini-3.1-flash-lite';
+                } else if (currentModel === 'gemini-3.1-flash-lite') {
+                  params.model = 'gemini-3.1-pro-preview';
+                } else if (currentModel === 'gemini-3.1-pro-preview') {
+                  params.model = 'gemini-1.5-pro';
+                } else if (currentModel === 'gemini-1.5-pro') {
+                  params.model = 'gemini-2.0-flash-exp';
+                }
+                console.warn(`[Server AI] Billing issue detected. Attempt ${retries}. Proactively switching to fallback: ${params.model}`);
+              }
+
+              await delay(waitTime);
+              await acquireLock();
             }
-          }
+  
+            // If billing is depleted, strictly use free tier candidates ONLY
+            if (isDepleted) {
+              const currentModel = params.model;
+              if (currentModel === 'gemini-3-flash-preview' || currentModel === 'gemini-2.0-flash') {
+                params.model = 'gemini-3.5-flash';
+              } else if (currentModel === 'gemini-3.5-flash') {
+                params.model = 'gemini-flash-latest';
+              } else if (currentModel === 'gemini-flash-latest') {
+                params.model = 'gemini-1.5-flash';
+              } else if (currentModel === 'gemini-1.5-flash') {
+                params.model = 'gemini-1.5-flash-8b';
+              } else if (currentModel === 'gemini-1.5-flash-8b') {
+                params.model = 'gemini-3.1-flash-lite';
+              } else if (currentModel === 'gemini-3.1-flash-lite') {
+                params.model = 'gemini-3.1-pro-preview';
+              } else if (currentModel === 'gemini-3.1-pro-preview') {
+                params.model = 'gemini-1.5-pro';
+              } else if (currentModel === 'gemini-1.5-pro') {
+                params.model = 'gemini-2.0-flash-exp';
+              } else {
+                console.error("[Server AI] All free-tier candidates exhausted during billing depletion.");
+                throw error;
+              }
+              console.warn(`[Server AI] Billing issue loop recovery. Trying: ${params.model}`);
+              continue;
+            }
 
-          if (params.model === 'gemini-3-flash-preview' || params.model === 'gemini-2.0-flash' || params.model === 'gemini-1.5-flash') {
-            params.model = 'gemini-3.5-flash';
-          } else if (params.model === 'gemini-3.5-flash') {
-            params.model = 'gemini-flash-latest';
-          } else if (params.model === 'gemini-flash-latest') {
-            params.model = 'gemini-3.1-flash-lite'; 
-          } else if (params.model === 'gemini-3.1-flash-lite' || params.model === 'gemini-1.5-flash-8b') {
-            params.model = 'gemini-3.1-pro-preview';
-          } else if (params.model.includes('pro')) {
-            params.model = 'gemini-3.1-pro-preview'; // Prevent 'latest' suffix error
-          } else {
-            params.model = 'gemini-3.1-flash-lite';
-          }
+            const currentModel = params.model;
+            if (currentModel === 'gemini-3-flash-preview' || currentModel === 'gemini-2.0-flash') {
+              params.model = 'gemini-3.5-flash';
+            } else if (currentModel === 'gemini-3.5-flash') {
+              params.model = 'gemini-flash-latest';
+            } else if (currentModel === 'gemini-flash-latest') {
+              params.model = 'gemini-1.5-flash';
+            } else if (currentModel === 'gemini-1.5-flash') {
+              params.model = 'gemini-1.5-flash-8b';
+            } else if (currentModel === 'gemini-1.5-flash-8b') {
+              params.model = 'gemini-3.1-flash-lite'; 
+            } else if (currentModel === 'gemini-3.1-flash-lite') {
+              params.model = 'gemini-3.1-pro-preview';
+            } else if (currentModel === 'gemini-3.1-pro-preview') {
+              params.model = 'gemini-1.5-pro';
+            } else if (currentModel === 'gemini-1.5-pro') {
+              params.model = 'gemini-2.0-flash-exp';
+            } else {
+              params.model = 'gemini-1.5-flash-8b';
+            }
           
           if (params.model === oldModel) {
              console.error(`[Server AI] All model fallbacks exhausted for ${oldModel}.`);
@@ -220,7 +268,14 @@ async function generateContentWithRetry(params: any): Promise<any> {
           retries++;
           const backoffDelay = (INITIAL_DELAY * Math.pow(2, retries)) + (Math.random() * 1000); 
           console.warn(`[Server AI] Quota exceeded. Retrying in ${Math.round(backoffDelay)}ms... (Attempt ${retries}/${MAX_RETRIES})`);
+          
+          if (currentRelease) {
+            currentRelease();
+            currentRelease = null;
+          }
           await delay(backoffDelay);
+          await acquireLock();
+          
           continue;
         }
         throw error;
@@ -228,7 +283,9 @@ async function generateContentWithRetry(params: any): Promise<any> {
     }
     throw new Error("AI service unavailable after retries.");
   } finally {
-    releaseQueue!();
+    if (currentRelease) {
+      currentRelease();
+    }
   }
 }
 
@@ -991,6 +1048,7 @@ try {
       userAmount: isUserWithdrawal ? (status === 'refunded' ? amountUsd : -amountUsd) : 0,
       platformAmount: isUserWithdrawal ? 0 : (status === 'refunded' ? amountUsd : -amountUsd),
       totalAmount: (status === 'refunded' ? amountUsd : -amountUsd), 
+      unit: 'USD',
       reason: `${isUserWithdrawal ? 'User Withdrawal' : 'Platform Withdrawal'} (${type}) to ${destination} [${status.toUpperCase()}]`,
       userId: isUserWithdrawal ? 'user-system' : 'system',
       clientIp: clientIp,
@@ -1062,7 +1120,7 @@ async function startServer() {
   setInterval(monitorIP, 1000 * 60 * 5); // Check every 5 minutes in production
   setInterval(reconcilePendingTransactions, 1000 * 60 * 2); // Poll status every 2 minutes
   setInterval(processPayoutQueue, 5000); // Process payout queue every 5 seconds
-  setInterval(syncEducationCourses, 1000 * 60 * 60 * 24 * 90); // Quarterly automated research (3 Months)
+  setInterval(performRobustEducationSync, 1000 * 60 * 60 * 12); // Check for fresh content twice a day (every 12 hours)
   
   // Initial background tasks
   performRobustEducationSync().catch(() => {}); // Initial population or refresh if stale with retries
@@ -3864,7 +3922,7 @@ async function performRobustEducationSync() {
           platformAmount = totalAmount;
       }
 
-      const pointsToAdd = userAmount > 0 ? Math.max(1, Math.floor(userAmount * 100)) : 0;
+      const pointsToAdd = userAmount > 0 ? Math.max(1, Math.floor(userAmount * 12.5)) : 0;
       const timestamp = FieldValue.serverTimestamp();
 
       // Update User Data (if user earns)
@@ -3939,6 +3997,7 @@ async function performRobustEducationSync() {
         userAmount,
         platformAmount,
         totalAmount,
+        unit: 'USD',
         reason,
         userId,
         timestamp,

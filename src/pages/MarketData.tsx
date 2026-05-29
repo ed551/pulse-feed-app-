@@ -9,7 +9,7 @@ import {
   ArrowLeftRight, Loader2, CheckCircle2, XCircle, Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { goldBrain, GoldPrediction } from '../lib/goldEngine';
+import { marketBrain, MarketPrediction } from '../lib/marketEngine';
 import { useTranslation } from '../lib/i18n';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
@@ -39,23 +39,23 @@ const generateHistory = (direction: 'up' | 'down' | 'stable', points: number = 3
   return data;
 };
 
-export default function GoldMarket() {
+export default function MarketData() {
   const { t } = useTranslation();
   const { currentUser, userData } = useAuth();
   const { deductBalance, addRevenue } = useRevenue();
   const { convert } = useCurrencyConverter();
   const navigate = useNavigate();
-  const [prediction, setPrediction] = useState<GoldPrediction | null>(null);
+  const [prediction, setPrediction] = useState<MarketPrediction | null>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [viewPoints, setViewPoints] = useState(14); // 14 days by default
   const [transactionType, setTransactionType] = useState<'buy' | 'sell' | null>(null);
-  const [amountInGrams, setAmountInGrams] = useState<string>('1');
+  const [amountInPoints, setAmountInPoints] = useState<string>('100');
   const [isProcessing, setIsProcessing] = useState(false);
   const [txStatus, setTxStatus] = useState<{ success: boolean; message: string } | null>(null);
 
   useEffect(() => {
-    const pred = goldBrain.getDailyPrediction(new Date());
+    const pred = marketBrain.getDailyPrediction(new Date());
     setPrediction(pred);
     setHistory(generateHistory(pred.direction, 30));
   }, []);
@@ -63,7 +63,7 @@ export default function GoldMarket() {
   const handleRefresh = () => {
     setIsRefreshing(true);
     setTimeout(() => {
-      const pred = goldBrain.getDailyPrediction(new Date());
+      const pred = marketBrain.getDailyPrediction(new Date());
       setPrediction(pred);
       setHistory(generateHistory(pred.direction, 30));
       setIsRefreshing(false);
@@ -79,33 +79,32 @@ export default function GoldMarket() {
   const priceDiff = currentPrice - startPrice;
   const percentageChange = (priceDiff / startPrice) * 100;
 
-  // Gold price is per ounce. 1 ounce = 28.3495 grams
-  // We'll trade in grams for accessibility
-  const pricePerGram = currentPrice / 28.3495;
+  // Points conversion: 100 Points = $1.00
+  // Market index is simulated as a growth multiplier
+  const pointsToUsd = (pts: number) => pts / 100;
 
   const handleTransaction = async () => {
-    if (!currentUser || !db || !amountInGrams) return;
-    const grams = parseFloat(amountInGrams);
-    if (isNaN(grams) || grams <= 0) return;
+    if (!currentUser || !db || !amountInPoints) return;
+    const pts = parseFloat(amountInPoints);
+    if (isNaN(pts) || pts <= 0) return;
 
     setIsProcessing(true);
     setTxStatus(null);
 
     try {
       if (transactionType === 'buy') {
-        // In a gold-based economy, "Buy Gold" means adding external funds to your gold balance
-        // We simulate a successful payment gateway response
+        // "Buy Points" means adding funds via payment gateway
         await new Promise(resolve => setTimeout(resolve, 2000));
         
-        await addRevenue(grams, 0, `Purchased ${grams}g Gold via External Settlement`, 'community');
-        setTxStatus({ success: true, message: `Successfully acquired ${grams}g of gold via external gateway.` });
+        const usdCost = pointsToUsd(pts);
+        await addRevenue(usdCost, 0, `Purchased ${pts} Community Points via External Settlement`, 'community');
+        setTxStatus({ success: true, message: `Successfully acquired ${pts} points via external gateway.` });
       } else {
-        const userGold = (userData as any)?.balance || 0;
-        if (userGold < grams) {
-          throw new Error("Insufficient gold reserve.");
+        if ((userData?.points || 0) < pts) {
+          throw new Error("Insufficient points balance.");
         }
 
-        // Sell Gold = Liquidate to Rewards
+        // Withdraw / Liquidate
         navigate('/rewards');
         return;
       }
@@ -114,7 +113,7 @@ export default function GoldMarket() {
       setTimeout(() => {
         setTransactionType(null);
         setTxStatus(null);
-        setAmountInGrams('1');
+        setAmountInPoints('100');
       }, 3000);
 
     } catch (err: any) {
@@ -136,15 +135,15 @@ export default function GoldMarket() {
         <div className="max-w-4xl mx-auto relative z-10">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center shadow-lg shadow-yellow-500/20">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
                 <Layers className="w-6 h-6 text-white" />
               </div>
               <div>
                 <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
-                  Gold Market Intelligence
+                  Market Insights & Economy
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400 font-medium normal-case">
-                  Real-time precious metal analytics and movement prediction
+                  Real-time yield analytics and community economic trends
                 </p>
               </div>
             </div>
@@ -160,9 +159,9 @@ export default function GoldMarket() {
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="p-4 rounded-3xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/50">
-              <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Spot Price (XAU)</div>
+              <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Growth Index</div>
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black text-gray-900 dark:text-white">{convert(currentPrice)}</span>
+                <span className="text-2xl font-black text-gray-900 dark:text-white">{currentPrice.toFixed(0)}</span>
                 <span className={cn(
                   "text-[10px] font-bold px-1.5 py-0.5 rounded-lg flex items-center gap-0.5",
                   priceDiff >= 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
@@ -174,20 +173,24 @@ export default function GoldMarket() {
             </div>
 
             <div className="p-4 rounded-3xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/50">
-              <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Your Holdings</div>
+              <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Your Earnings</div>
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-xl bg-yellow-500/10 text-yellow-500">
+                <div className="p-1.5 rounded-xl bg-blue-500/10 text-blue-500">
                   <Wallet className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="text-lg font-black dark:text-white leading-none">{(userData as any)?.balance?.toFixed(3) || '0.000'}g</div>
-                  <div className="text-[10px] font-bold text-gray-400">≈ {((userData as any)?.balance || 0).toFixed(3)} G Target Value</div>
+                  <div className="text-lg font-black dark:text-white leading-none">
+                    {convert(userData?.balance || 0)}
+                  </div>
+                  <div className="text-[10px] font-bold text-gray-400">
+                    ≈ {(userData?.points || 0).toLocaleString()} Points
+                  </div>
                 </div>
               </div>
             </div>
 
             <div className="p-4 rounded-3xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/50">
-              <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">AI Logic Signal</div>
+              <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">AI Growth Signal</div>
               <div className="flex items-center gap-2">
                 <div className={cn(
                   "p-2 rounded-xl",
@@ -230,7 +233,7 @@ export default function GoldMarket() {
               <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <BarChart2 className="w-5 h-5 text-gray-400" />
-                  <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tight">Movement Chart</h3>
+                  <h3 className="font-black text-gray-900 dark:text-white uppercase tracking-tight">yield Trend</h3>
                 </div>
                 <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-2xl">
                   {[7, 14, 30].map(days => (
@@ -298,12 +301,12 @@ export default function GoldMarket() {
 
               <div className="px-6 py-4 bg-gray-50/50 dark:bg-gray-800/20 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[10px] font-bold text-gray-500 uppercase tracking-tighter">
                 <div className="flex items-center gap-4">
-                  <span>LOW: {convert(Math.min(...chartData.map(d => d.price)))}</span>
-                  <span>HIGH: {convert(Math.max(...chartData.map(d => d.price)))}</span>
+                  <span>LOW: {Math.min(...chartData.map(d => d.price)).toFixed(0)}</span>
+                  <span>HIGH: {Math.max(...chartData.map(d => d.price)).toFixed(0)}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>LIVE MARKET DATA SYNCED</span>
+                  <span>ECONOMY HUB SYNCED</span>
                 </div>
               </div>
             </div>
@@ -311,15 +314,15 @@ export default function GoldMarket() {
             <div className="grid grid-cols-2 gap-4">
               <button 
                 onClick={() => setTransactionType('buy')}
-                className="group relative p-6 bg-emerald-500 dark:bg-emerald-600 rounded-[2.5rem] text-white overflow-hidden transition-all active:scale-95 active:opacity-90"
+                className="group relative p-6 bg-blue-600 dark:bg-blue-700 rounded-[2.5rem] text-white overflow-hidden transition-all active:scale-95 active:opacity-90"
               >
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 group-hover:scale-110 transition-transform" />
                 <div className="relative z-10">
                   <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center mb-3">
                     <ShoppingCart className="w-5 h-5 text-white" />
                   </div>
-                  <div className="text-xl font-black uppercase tracking-tight">Buy Gold</div>
-                  <p className="text-[10px] font-bold text-white/70 tracking-widest">SPOT: {convert(pricePerGram)}/G</p>
+                  <div className="text-xl font-black uppercase tracking-tight">Buy Points</div>
+                  <p className="text-[10px] font-bold text-white/70 tracking-widest">RATE: 100 PTS / $1</p>
                 </div>
               </button>
               
@@ -332,8 +335,8 @@ export default function GoldMarket() {
                   <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center mb-3">
                     <ArrowLeftRight className="w-5 h-5 text-white" />
                   </div>
-                  <div className="text-xl font-black uppercase tracking-tight">Sell Gold</div>
-                  <p className="text-[10px] font-bold text-white/50 tracking-widest">MARKET RATE: LIQUIDATE</p>
+                  <div className="text-xl font-black uppercase tracking-tight">Withdraw</div>
+                  <p className="text-[10px] font-bold text-white/50 tracking-widest">LIQUIDATE BALANCE</p>
                 </div>
               </button>
             </div>
@@ -383,12 +386,12 @@ export default function GoldMarket() {
 
             {/* Future Intelligence (Gated) */}
             <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border border-gray-200 dark:border-gray-800 p-6 shadow-sm relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-yellow-500/5 rounded-full -mr-12 -mt-12 group-hover:scale-150 transition-transform duration-1000" />
+              <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full -mr-12 -mt-12 group-hover:scale-150 transition-transform duration-1000" />
               
               <h4 className="text-xs font-black dark:text-white uppercase tracking-widest mb-4 flex items-center justify-between relative z-10">
-                Future Intelligence
+                Economy Projection
                 {userData?.membershipLevel === 'gold' ? (
-                   <div className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                 ) : (
                   <Lock className="w-3 h-3 text-gray-400" />
                 )}
@@ -397,11 +400,11 @@ export default function GoldMarket() {
               {userData?.membershipLevel === 'gold' ? (
                 <div className="space-y-4 relative z-10">
                   <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-2xl bg-yellow-500/10 flex items-center justify-center shrink-0">
-                      <Calendar className="w-5 h-5 text-yellow-600" />
+                    <div className="w-10 h-10 rounded-2xl bg-blue-500/10 flex items-center justify-center shrink-0">
+                      <Calendar className="w-5 h-5 text-blue-600" />
                     </div>
                     <div>
-                      <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Projected Bull Run</div>
+                      <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Projected Yield Boost</div>
                       <div className="text-lg font-black text-gray-900 dark:text-white leading-none">In {prediction.nextBullRun.expectedIn}</div>
                       <p className="text-[10px] font-bold text-gray-500 mt-1 leading-normal normal-case">
                         The brain predicts a major upward correction in this timeframe.
@@ -411,7 +414,7 @@ export default function GoldMarket() {
 
                   <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/50">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Bullish Probability</span>
+                      <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Growth Probability</span>
                       <span className="text-xs font-black text-emerald-500">{prediction.nextBullRun.probability}%</span>
                     </div>
                     <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -433,13 +436,13 @@ export default function GoldMarket() {
               ) : (
                 <div className="text-center py-6 relative z-10">
                   <p className="text-[10px] font-bold text-gray-500 mb-4 px-4 leading-relaxed">
-                    Unlock Quantum Market Predictions and bull-run indicators with Pulse Gold.
+                    Unlock Quantum Market Predictions and yield indicators with Pulse Gold.
                   </p>
                   <button 
                     onClick={() => navigate('/membership')}
-                    className="px-6 py-2.5 bg-yellow-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-yellow-500/20 active:scale-95 transition-all"
+                    className="px-6 py-2.5 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
                   >
-                    Upgrade to Gold
+                    Upgrade to Premium
                   </button>
                 </div>
               )}
@@ -447,16 +450,16 @@ export default function GoldMarket() {
 
             <div className="bg-white dark:bg-gray-900 rounded-[2.5rem] border border-gray-200 dark:border-gray-800 p-6 shadow-sm">
               <h4 className="text-xs font-black dark:text-white uppercase tracking-widest mb-4 flex items-center justify-between">
-                Market Partners
+                Economy Partners
                 <ShieldCheck className="w-3 h-3 text-emerald-500" />
               </h4>
               <div className="space-y-3">
                 <div className="p-3 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/50">
-                  <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Recommended Seller</div>
+                  <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Earning Partner</div>
                   <div className="text-xs font-black dark:text-white">{prediction.bestSeller}</div>
                 </div>
                 <div className="p-3 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/50">
-                  <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">TOP BUYER (LIQUIDITY)</div>
+                  <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Liquidity Provider</div>
                   <div className="text-xs font-black dark:text-white">{prediction.bestBuyer}</div>
                 </div>
               </div>
@@ -484,16 +487,16 @@ export default function GoldMarket() {
             >
               <div className={cn(
                 "p-8 text-center",
-                transactionType === 'buy' ? "bg-emerald-500" : "bg-gray-900"
+                transactionType === 'buy' ? "bg-blue-600" : "bg-gray-900"
               )}>
                 <div className="w-16 h-16 rounded-3xl bg-white/20 flex items-center justify-center mx-auto mb-4">
                   {transactionType === 'buy' ? <ShoppingCart className="w-8 h-8 text-white" /> : <ArrowLeftRight className="w-8 h-8 text-white" />}
                 </div>
                 <h3 className="text-2xl font-black text-white uppercase tracking-tight">
-                  {transactionType === 'buy' ? 'Acquire Gold' : 'Liquidate Gold'}
+                  {transactionType === 'buy' ? 'Acquire Points' : 'Withdraw Funds'}
                 </h3>
                 <p className="text-white/70 text-xs font-bold mt-1">
-                  XAU: {convert(currentPrice)} ({convert(pricePerGram)}/g)
+                  100 points = $1.00 USD
                 </p>
               </div>
 
@@ -501,29 +504,29 @@ export default function GoldMarket() {
                 {!txStatus ? (
                   <>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">Amount in Grams (G)</label>
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">Amount in Points (PTS)</label>
                       <div className="relative">
                         <input 
                           type="number"
-                          value={amountInGrams}
-                          onChange={(e) => setAmountInGrams(e.target.value)}
+                          value={amountInPoints}
+                          onChange={(e) => setAmountInPoints(e.target.value)}
                           placeholder="0.00"
-                          className="w-full h-16 bg-gray-50 dark:bg-gray-800 border-none rounded-3xl px-6 text-xl font-black focus:ring-4 focus:ring-emerald-500/20 dark:text-white"
+                          className="w-full h-16 bg-gray-50 dark:bg-gray-800 border-none rounded-3xl px-6 text-xl font-black focus:ring-4 focus:ring-blue-500/20 dark:text-white"
                         />
-                        <div className="absolute right-6 top-1/2 -translate-y-1/2 text-xs font-black text-gray-400">GRAMS</div>
+                        <div className="absolute right-6 top-1/2 -translate-y-1/2 text-xs font-black text-gray-400">POINTS</div>
                       </div>
                       <div className="flex items-center justify-between px-2 text-[10px] font-bold text-gray-500">
-                        <span>EST. VALUE: {convert(parseFloat(amountInGrams || '0') * pricePerGram)}</span>
-                        <span>RESERVE: {userData?.balance?.toFixed(3)}g</span>
+                        <span>EST. VALUE: {convert(pointsToUsd(parseFloat(amountInPoints || '0')))}</span>
+                        <span>BALANCE: {userData?.points || 0} PTS</span>
                       </div>
                     </div>
 
                     <button
                       onClick={handleTransaction}
-                      disabled={isProcessing || !amountInGrams}
+                      disabled={isProcessing || !amountInPoints}
                       className={cn(
                         "w-full h-16 rounded-[2rem] text-white font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 disabled:grayscale",
-                        transactionType === 'buy' ? "bg-emerald-500 shadow-emerald-500/20" : "bg-gray-900 shadow-black/20"
+                        transactionType === 'buy' ? "bg-blue-600 shadow-blue-600/20" : "bg-gray-900 shadow-black/20"
                       )}
                     >
                       {isProcessing ? (
@@ -532,7 +535,7 @@ export default function GoldMarket() {
                           Processing...
                         </>
                       ) : (
-                        transactionType === 'buy' ? 'Confirm Purchase' : 'Confirm Sale'
+                        transactionType === 'buy' ? 'Confirm Purchase' : 'Confirm Withdrawal'
                       )}
                     </button>
                   </>
