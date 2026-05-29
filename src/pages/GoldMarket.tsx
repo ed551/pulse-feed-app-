@@ -14,6 +14,7 @@ import { useTranslation } from '../lib/i18n';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useRevenue } from '../contexts/RevenueContext';
+import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 import { useNavigate } from 'react-router-dom';
 import { doc, updateDoc, increment, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -42,6 +43,7 @@ export default function GoldMarket() {
   const { t } = useTranslation();
   const { currentUser, userData } = useAuth();
   const { deductBalance, addRevenue } = useRevenue();
+  const { convert } = useCurrencyConverter();
   const navigate = useNavigate();
   const [prediction, setPrediction] = useState<GoldPrediction | null>(null);
   const [history, setHistory] = useState<any[]>([]);
@@ -158,9 +160,9 @@ export default function GoldMarket() {
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="p-4 rounded-3xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/50">
-              <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Spot Price (XAU/USD)</div>
+              <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Spot Price (XAU)</div>
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black text-gray-900 dark:text-white">${currentPrice.toLocaleString()}</span>
+                <span className="text-2xl font-black text-gray-900 dark:text-white">{convert(currentPrice)}</span>
                 <span className={cn(
                   "text-[10px] font-bold px-1.5 py-0.5 rounded-lg flex items-center gap-0.5",
                   priceDiff >= 0 ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
@@ -179,7 +181,7 @@ export default function GoldMarket() {
                 </div>
                 <div>
                   <div className="text-lg font-black dark:text-white leading-none">{(userData as any)?.balance?.toFixed(3) || '0.000'}g</div>
-                  <div className="text-[10px] font-bold text-gray-400">≈ ${(((userData as any)?.balance || 0) * pricePerGram).toFixed(2)} Target Value</div>
+                  <div className="text-[10px] font-bold text-gray-400">≈ {((userData as any)?.balance || 0).toFixed(3)} G Target Value</div>
                 </div>
               </div>
             </div>
@@ -296,8 +298,8 @@ export default function GoldMarket() {
 
               <div className="px-6 py-4 bg-gray-50/50 dark:bg-gray-800/20 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[10px] font-bold text-gray-500 uppercase tracking-tighter">
                 <div className="flex items-center gap-4">
-                  <span>LOW: ${Math.min(...chartData.map(d => d.price)).toLocaleString()}</span>
-                  <span>HIGH: ${Math.max(...chartData.map(d => d.price)).toLocaleString()}</span>
+                  <span>LOW: {convert(Math.min(...chartData.map(d => d.price)))}</span>
+                  <span>HIGH: {convert(Math.max(...chartData.map(d => d.price)))}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -317,7 +319,7 @@ export default function GoldMarket() {
                     <ShoppingCart className="w-5 h-5 text-white" />
                   </div>
                   <div className="text-xl font-black uppercase tracking-tight">Buy Gold</div>
-                  <p className="text-[10px] font-bold text-white/70 tracking-widest">SPOT: ${pricePerGram.toFixed(2)}/G</p>
+                  <p className="text-[10px] font-bold text-white/70 tracking-widest">SPOT: {convert(pricePerGram)}/G</p>
                 </div>
               </button>
               
@@ -491,7 +493,7 @@ export default function GoldMarket() {
                   {transactionType === 'buy' ? 'Acquire Gold' : 'Liquidate Gold'}
                 </h3>
                 <p className="text-white/70 text-xs font-bold mt-1">
-                  XAU/USD: ${currentPrice.toLocaleString()} (${pricePerGram.toFixed(2)}/g)
+                  XAU: {convert(currentPrice)} ({convert(pricePerGram)}/g)
                 </p>
               </div>
 
@@ -511,7 +513,7 @@ export default function GoldMarket() {
                         <div className="absolute right-6 top-1/2 -translate-y-1/2 text-xs font-black text-gray-400">GRAMS</div>
                       </div>
                       <div className="flex items-center justify-between px-2 text-[10px] font-bold text-gray-500">
-                        <span>EST. VALUE: ${(parseFloat(amountInGrams || '0') * pricePerGram).toFixed(2)} USD</span>
+                        <span>EST. VALUE: {convert(parseFloat(amountInGrams || '0') * pricePerGram)}</span>
                         <span>RESERVE: {userData?.balance?.toFixed(3)}g</span>
                       </div>
                     </div>

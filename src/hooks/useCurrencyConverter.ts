@@ -6,7 +6,7 @@ export interface ExchangeRates {
 
 export const useCurrencyConverter = () => {
   const [rates, setRates] = useState<ExchangeRates>({ USD: 1 });
-  const [currency, setCurrency] = useState<string>('USD');
+  const [currency, setCurrency] = useState<string>('G');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -42,7 +42,14 @@ export const useCurrencyConverter = () => {
     localStorage.setItem('preferred_currency', newCurrency);
   };
 
+  const GOLD_PRICE_USD = 80;
+
   const convert = (amountInUSD: number): string => {
+    if (currency === 'G') {
+      const grams = amountInUSD / GOLD_PRICE_USD;
+      return `${grams.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} G`;
+    }
+
     const rate = rates[currency] || 1;
     const converted = amountInUSD * rate;
     

@@ -71,9 +71,9 @@ if (isValidApiKey) {
 } else {
   console.warn("[AI Init] No valid Gemini API Key found in environment variables. Searched: GEMINI_AI, GEMINI_API_KEY, GOOGLE_API_KEY, GEMINI_API");
 }
-const MIN_REQUEST_INTERVAL = 5000;
+const MIN_REQUEST_INTERVAL = 15000;
 const MAX_RETRIES = 100;
-const INITIAL_DELAY = 5000;
+const INITIAL_DELAY = 10000;
 let requestQueue: Promise<void> = Promise.resolve();
 
 async function delay(ms: number) {
@@ -144,6 +144,10 @@ async function generateContentWithRetry(params: any): Promise<any> {
           currentKeyIndex++;
           console.warn(`[Server AI] Key ${oldIndex + 1} limited/exhausted (${status}${isDepleted ? '-BILLING' : ''}). Rotating to next key ${currentKeyIndex + 1}/${AVAILABLE_KEYS.length}...`);
           ai = createAIClient(AVAILABLE_KEYS[currentKeyIndex]);
+          
+          // Reset model and instruction to ensure a fresh start with the new key
+          params.model = 'gemini-3-flash-preview';
+          
           await delay(2000); 
           continue; 
         }
@@ -2495,7 +2499,7 @@ async function syncEducationCourses() {
 
     // Prefer a lighter model for automated daily tasks to reduce 429 risk
     const response = await generateContentWithRetry({
-      model: "gemini-3.1-flash-lite", 
+      model: "gemini-3-flash-preview", 
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       tools: [{ googleSearch: {} }] 
     });

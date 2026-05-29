@@ -67,7 +67,7 @@ export const revenue_distribution_engine = (amount: number, source: 'ad' | 'educ
     }
   }
 
-  console.log(`Revenue Distribution (${source}, paid: ${isPaid}): Platform ($${platformShare.toFixed(2)}), User ($${userShare.toFixed(2)})`);
+  console.log(`Revenue Distribution (${source}, paid: ${isPaid}): Platform (${platformShare.toFixed(4)} G), User (${userShare.toFixed(4)} G)`);
   return { platformShare, userShare };
 };
 

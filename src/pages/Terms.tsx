@@ -115,7 +115,7 @@ export default function Terms() {
           <li><strong>Intellectual Property in Reports:</strong> You grant Pulse Feeds a worldwide, royalty-free license to use the data from your reports to improve our AI models and for public interest research.</li>
         </ul>
 
-        <h3>5.4 Dating Hub: Social Connections and Safety</h3>
+        <h3>5.3 Dating Hub: Social Connections and Safety</h3>
         <p>
           The Dating Hub is intended for personal social connections.
         </p>
@@ -144,12 +144,12 @@ export default function Terms() {
           To ensure financial integrity and prevent fraudulent activity, all withdrawal requests are processed in a single monthly batch.
         </p>
         <ul>
-          <li><strong>Processing Window:</strong> Withdrawals are typically processed between the 1st and 5th of each calendar month for requests made in the previous month.</li>
-          <li><strong>Minimum Threshold:</strong> You must reach a minimum balance (e.g., $100.00 USD equivalent) before a withdrawal can be initiated.</li>
+          <li><strong>Processing Window:</strong> All withdrawal requests are processed in a consolidated monthly batch. Disbursements are executed on the 1st of every month.</li>
+          <li><strong>Minimum Threshold:</strong> You must reach a minimum balance (e.g., 1.25 G equivalent) before a withdrawal can be initiated.</li>
           <li><strong>Verification:</strong> We reserve the right to delay or deny any withdrawal pending further identity or activity verification.</li>
           <li><strong>Forfeiture:</strong> Rewards not withdrawn within 12 months of being earned may be subject to forfeiture or administrative fees.</li>
         </ul>
-        <h3>6.3 Merchant of Record (MoR) and Global Tax Remittance</h3>
+        <h3>6.4 Merchant of Record (MoR) and Global Tax Remittance</h3>
         <p>
           We utilize a global Merchant of Record to handle all financial transactions.
         </p>

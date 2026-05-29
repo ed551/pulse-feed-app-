@@ -22,6 +22,7 @@ import { goldBrain, GoldPrediction } from "../lib/goldEngine";
 import { useAuth } from "../contexts/AuthContext";
 import { useRevenue } from "../contexts/RevenueContext";
 import { useNotifications } from "../hooks/useNotifications";
+import { useCurrencyConverter } from "../hooks/useCurrencyConverter";
 import { useTranslation } from "../lib/i18n";
 import { speak, stopSpeech, narratePage } from "../lib/speech";
 import AIAssistant from "./AIAssistant";
@@ -45,6 +46,7 @@ import { setDoc, doc, arrayUnion, serverTimestamp, getDocFromServer, updateDoc }
 export default function Layout() {
   const { currentUser, userData, logout, isFacebookApp } = useAuth();
   const { t } = useTranslation();
+  const { convert } = useCurrencyConverter();
 
   const weatherTypes = [
     { type: t('weather_sunny'), icon: Sun, color: 'text-orange-500', bg: 'from-orange-500/20 to-yellow-500/20', glow: 'drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]', symbol: '☀️', temp: '--°C', tempValue: 25 },
@@ -163,7 +165,7 @@ export default function Layout() {
     { name: 'Coop Bank API', icon: Building2, color: 'text-indigo-500', label: t('coop_bank') },
     { name: 'Terms', icon: FileText, color: 'text-teal-500', label: t('terms') },
     { name: 'Privacy', icon: ShieldCheck, color: 'text-indigo-500', label: t('privacy') },
-    { name: 'Ads', icon: DollarSign, color: 'text-green-500', label: t('ads') },
+    { name: 'Ads', icon: Gem, color: 'text-green-500', label: t('ads') },
     { name: 'Gold Market', icon: BarChart2, color: 'text-yellow-600', label: t('gold_market') }
   ];
 
@@ -940,7 +942,7 @@ export default function Layout() {
   const rightLinks = [
     { type: 'icon', icon: Share2, color: 'text-blue-500', title: 'Share Pulse Feeds', action: handleShare },
     { type: 'icon', icon: Edit3, color: 'text-yellow-500', title: 'Note Pad', action: () => setActiveModal('notepad') },
-    { type: 'icon', icon: DollarSign, color: 'text-green-500', title: 'AdMob Ads', path: '/ads' },
+    { type: 'icon', icon: Gem, color: 'text-green-500', title: 'AdMob Ads', path: '/ads' },
     
     // Messaging Links
     { type: 'img', src: 'https://cdn.simpleicons.org/whatsapp/25D366', title: 'WhatsApp', href: 'https://web.whatsapp.com' },
@@ -1469,7 +1471,7 @@ export default function Layout() {
                 <div className="grid grid-cols-2 gap-4 w-full mb-8">
                   <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
                     <span className="block text-[10px] font-black text-gray-400 uppercase mb-1">Market Value</span>
-                    <span className="text-lg font-black text-yellow-600">$1,240.50</span>
+                    <span className="text-lg font-black text-yellow-600">{convert(1240.50)}</span>
                   </div>
                   <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
                     <span className="block text-[10px] font-black text-gray-400 uppercase mb-1">Your Stake</span>

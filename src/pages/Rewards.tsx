@@ -133,6 +133,10 @@ export default function Rewards() {
     }, { totalEarned: 0, totalWithdrawn: 0, pendingWithdrawals: 0 });
   }, [transactions, rates]);
 
+  const formatGold = (usdAmount: number) => {
+    return `${(usdAmount / GOLD_PRICE_USD).toFixed(3)} G`;
+  };
+
   const handlePayment = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean, totp?: string) => {
     if (e) e.preventDefault();
     if (!amount) return;
@@ -177,7 +181,7 @@ export default function Rewards() {
       else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitUSD = 500;
           
       if (recentWithdrawalsUSD + requestedUSD > limitUSD && !totp && !usePasskey) {
-        setScaError(`Daily velocity limit of $${limitUSD} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is $5,000.`);
+        setScaError(`Daily velocity limit of ${formatGold(limitUSD)} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is ${formatGold(5000)}.`);
       }
 
       if (!isDeveloper && numAmount > kesBalance) throw new Error("Insufficient reserve for this withdrawal request.");
@@ -315,7 +319,7 @@ export default function Rewards() {
 
       const numAmount = parseFloat(payoutAmount);
       const minAmount = isDeveloper ? 0.01 : 10;
-      if (numAmount < minAmount) throw new Error(`Minimum withdrawal is $${minAmount.toFixed(2)} USD`); 
+      if (numAmount < minAmount) throw new Error(`Minimum withdrawal is ${convert(minAmount)}`); 
       
       const last24h = Date.now() - (24 * 60 * 60 * 1000);
       const recentWithdrawalsUSD = transactions
@@ -331,7 +335,7 @@ export default function Rewards() {
       else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitUSD = 500;
           
       if (recentWithdrawalsUSD + numAmount > limitUSD && !totp && !usePasskey) {
-        setScaError(`Daily velocity limit of $${limitUSD} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is $5,000.`);
+        setScaError(`Daily velocity limit of ${convert(limitUSD)} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is ${convert(5000)}.`);
       }
 
       if (!isDeveloper && numAmount > balanceUSD) throw new Error("Insufficient gold reserve for this amount");
@@ -434,7 +438,7 @@ export default function Rewards() {
         console.warn("Firestore not available for international payout logging.");
       }
       
-      setSuccess(`International payout request of $${numAmount} submitted successfully! ${isQueued ? "(Queued for 1st of month)" : ""}`);
+      setSuccess(`International payout request of ${convert(numAmount)} submitted successfully! ${isQueued ? "(Queued for 1st of month)" : ""}`);
       setPayoutAmount("");
       setPayoutEmail("");
     } catch (err: any) {
@@ -1308,9 +1312,7 @@ export default function Rewards() {
                     <p className="text-[10px] text-white/70">Next Settlement Gate</p>
                     <p className="text-lg font-black text-white">{nextRedemptionDate}</p>
                     <p className="text-[10px] text-white/60">
-                      {isDeveloper 
-                        ? "Developer Priority: Zero Limits" 
-                        : "Consolidated Monthly Batching (1st of Month)"}
+                      Consolidated Monthly Batching (1st of Month)
                     </p>
                   </div>
                 </div>
@@ -1364,10 +1366,9 @@ export default function Rewards() {
                   <br/><br/>
                   <strong>2. Exclusions:</strong> Membership level benefits do <strong>not</strong> apply to Ads revenue (fixed 50/50 split).
                   <br/><br/>
-                  <strong>3. Platform Payments:</strong> To ensure the long-term sustainability of our high-performance AI infrastructure, all direct platform payments—including Advanced AI Lab access, Event tickets, and Marketplace transactions—belong 100% to the platform treasury.
+                  <strong>3. Platform Payments:</strong> To ensure the long-term sustainability of our high-performance AI infrastructure, all direct platform payments—including Advanced AI Lab access, Event tickets, and Marketplace transactions—belong 100% to the platform treasury. Specialized revenue from Education Hub course enrollments and AI training follow an 80/20 split (80% platform, 20% user reward).
                   <br/><br/>
-                  <strong>3. Withdrawals:</strong> {isDeveloper ? "Developer accounts are exempt from all minimum limits and time restrictions. Access is instant and absolute." : 
-                    "All earnings are batched and processed in standard monthly cycles on the 1st of each month. You can queue your withdrawal at any time, and it will be settled during the next available batch gate."}
+                  <strong>4. Rewards & Withdrawals:</strong> All earnings are batched and processed in standard monthly cycles on the 1st of each month. You can queue your withdrawal at any time, and it will be settled during the next available batch gate.
                   <br/><br/>
                   <strong>Tax Compliance:</strong> The platform operates via a global Merchant of Record (MoR). This means your local and international taxes (e.g., VAT, WHT) are automatically calculated, withheld, and legally remitted directly to your country's tax authority (like KRA, IRS, or HMRC) on your behalf.
                 </p>
@@ -1711,7 +1712,7 @@ export default function Rewards() {
                               <div>
                                 <p className="text-sm font-bold text-gray-900 dark:text-white">
                                   {tx.type === 'earning' ? '+' : '-'}
-                                  {tx.currency === 'USD' ? '$' : 'KES '} 
+                                  {tx.currency === 'G' ? 'G ' : 'KES '} 
                                   {tx.amount.toLocaleString()}
                                 </p>
                                 <p className="text-[10px] text-gray-500">{tx.phoneNumber || tx.email || tx.details}</p>
@@ -1784,9 +1785,9 @@ export default function Rewards() {
                   </div>
                   <div className="relative z-10 space-y-4">
                     <p className="text-purple-100 font-bold uppercase tracking-widest text-xs">International Payouts</p>
-                    <h2 className="text-5xl font-black tracking-tighter">
-                      {convert(points / 100)}
-                    </h2>
+                      <h2 className="text-5xl font-black tracking-tighter">
+                        {convert(points / 100)}
+                      </h2>
                     <div className="flex items-center space-x-2 text-purple-100 text-sm">
                       <CheckCircle className="w-4 h-4" />
                       <span>Available for withdrawal globally</span>
@@ -1797,7 +1798,7 @@ export default function Rewards() {
                 <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
                   <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 p-4 rounded-r-xl mb-6">
                     <p className="text-amber-800 dark:text-amber-200 text-sm font-bold">
-                      ⚠️ Minimum withdrawal amount is $100.00 USD.
+                      ⚠️ Minimum withdrawal amount is {formatGold(100)}.
                     </p>
                   </div>
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center space-x-2">
@@ -1807,7 +1808,7 @@ export default function Rewards() {
 
                   <div className="grid grid-cols-3 gap-4 mb-8">
                     {[
-                      { id: 'paypal', label: 'PayPal', icon: DollarSign },
+                      { id: 'paypal', label: 'PayPal', icon: Gem },
                       { id: 'stripe', label: 'Stripe', icon: CreditCard },
                       { id: 'bank', label: 'Bank', icon: Landmark }
                     ].map((method) => (
@@ -1886,9 +1887,9 @@ export default function Rewards() {
                     )}
 
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount (USD)</label>
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount (Gold Grams)</label>
                       <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">$</span>
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">G</span>
                         <input
                           type="number"
                           placeholder="0.00"
@@ -1968,7 +1969,7 @@ export default function Rewards() {
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
-                      <span>Minimum withdrawal: {isDeveloper ? "None" : "$100.00 (10,000 points)"}</span>
+                      <span>Minimum withdrawal: {isDeveloper ? "None" : `${formatGold(100)} (10,000 points)`}</span>
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
@@ -1988,7 +1989,7 @@ export default function Rewards() {
                               <ArrowUpRight className="w-4 h-4" />
                             </div>
                             <div>
-                              <p className="text-[10px] font-bold text-gray-900 dark:text-white">${tx.amount.toFixed(2)}</p>
+                              <p className="text-[10px] font-bold text-gray-900 dark:text-white">{convert(tx.amount)}</p>
                               <p className="text-[8px] text-gray-500">{tx.phoneNumber}</p>
                             </div>
                           </div>
@@ -2039,10 +2040,10 @@ export default function Rewards() {
                     "flex items-center p-4 rounded-2xl border transition-all",
                     conditionsError?.includes("threshold") ? "bg-red-50 border-red-100 text-red-700" : "bg-gray-50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-700"
                   )}>
-                    <DollarSign className="w-5 h-5 mr-3 flex-shrink-0" />
+                    <Layers className="w-5 h-5 mr-3 flex-shrink-0 text-yellow-500" />
                     <div className="text-left">
                       <p className="text-xs font-bold uppercase tracking-widest">Minimum Threshold</p>
-                      <p className="text-sm font-medium">$100.00 USD minimum required</p>
+                      <p className="text-sm font-medium">{formatGold(100)} minimum required</p>
                     </div>
                   </div>
 

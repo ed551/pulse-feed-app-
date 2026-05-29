@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { 
   PlayCircle, MessageSquare, Heart, Share2, MoreHorizontal, Sun, Snowflake, CloudRain, Cloud, CloudLightning, 
   Send, Loader2, AlertTriangle, Search, Filter, X, TrendingUp, TrendingDown, Minus,
-  LayoutGrid, Globe, Gem, Smartphone, FileText, Gamepad2, DollarSign, Calendar, Clock,
+  LayoutGrid, Globe, Gem, Smartphone, FileText, Gamepad2, Calendar, Clock,
   Mail, Map, Youtube, Image, Languages, ExternalLink, Eye, Camera, Award, Sparkles, Volume2, VolumeX,
   Home as HomeIcon, Flag, BarChart2, Megaphone, RefreshCw, Radio, Video, Type, Smile, Tv,
   PlusCircle, MinusCircle, Bookmark, EyeOff, Bell, Link, XCircle, AlertCircle, Copy, Crown,
@@ -17,6 +17,7 @@ import { moderateContent } from "../services/moderationService";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { usePosts } from "../hooks/usePosts";
 import { useAuth } from "../contexts/AuthContext";
+import { useCurrencyConverter } from "../hooks/useCurrencyConverter";
 import SponsoredPost from "../components/SponsoredPost";
 import { db } from "../lib/firebase";
 import { getDocFromServer, doc, setDoc, serverTimestamp, arrayUnion } from "firebase/firestore";
@@ -48,6 +49,7 @@ export default function Home() {
   } = useOutletContext<any>();
   const { posts: firebasePosts, updatePost, deletePost, loading: postsLoading } = usePosts();
   const { currentUser, loading: authLoading } = useAuth();
+  const { convert } = useCurrencyConverter();
   const [activeCommentPostId, setActiveCommentPostId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [isPostingComment, setIsPostingComment] = useState(false);
@@ -120,7 +122,7 @@ export default function Home() {
       type: 'sponsored',
       company: 'CloudScale',
       title: 'Scale your business with ease',
-      description: 'Enterprise-grade cloud infrastructure for startups. Get $5,000 in credits when you sign up today.',
+      description: 'Enterprise-grade cloud infrastructure for startups. Get 62.5 G in credits when you sign up today.',
       imageUrl: 'https://picsum.photos/seed/cloud/800/400',
       cta: 'Get Credits',
       link: 'https://google.com'
@@ -130,7 +132,7 @@ export default function Home() {
       type: 'sponsored',
       company: 'Pulse Rewards',
       title: 'Earn more with Pulse Feeds',
-      description: 'Did you know you can earn up to $50/month by just engaging with the community? Check your rewards dashboard.',
+      description: 'Did you know you can earn up to 0.625 G/month by just engaging with the community? Check your rewards dashboard.',
       imageUrl: 'https://picsum.photos/seed/rewards/800/400',
       cta: 'Check Rewards',
       link: '/rewards'
@@ -431,7 +433,7 @@ export default function Home() {
           <div className="flex-1 text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
               <div className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-widest text-indigo-100 flex items-center">
-                <DollarSign className="w-3 h-3 mr-1" /> {t('active_profit_hub')}
+                < Award className="w-3 h-3 mr-1" /> {t('active_profit_hub')}
               </div>
               <div className="px-3 py-1 bg-green-400/20 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-widest text-green-200 flex items-center">
                 <TrendingUp className="w-3 h-3 mr-1" /> Live
@@ -462,7 +464,7 @@ export default function Home() {
                 className="px-4 py-2 bg-black/20 backdrop-blur-lg rounded-2xl border border-white/10 flex items-center gap-3 shadow-xl hover:bg-black/30 transition-all text-left"
               >
                 <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shadow-lg shadow-blue-500/30">
-                  <DollarSign className="w-4 h-4 text-white" />
+                  <Layers className="w-4 h-4 text-white" />
                 </div>
                 <div>
                   <div className="text-[10px] font-black text-blue-200 uppercase tracking-widest leading-none mb-1">{t('best_gold_buyer')}</div>
@@ -478,7 +480,7 @@ export default function Home() {
           <div className="flex items-center gap-4 bg-white/10 backdrop-blur-xl p-4 rounded-3xl border border-white/20">
             <div className="text-center px-4 border-r border-white/10">
               <div className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-1">{t('total_earned')}</div>
-              <div className="text-2xl font-black">$42.45</div>
+              <div className="text-2xl font-black">{convert(42.45)}</div>
             </div>
             <div className="text-center px-4">
               <div className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-1">{t('daily_cap')}</div>

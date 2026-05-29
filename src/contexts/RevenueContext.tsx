@@ -160,7 +160,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // LOG TRANSACTION
       await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), {
         amount: userVal,
-        currency: 'USD',
+        currency: 'GOLD',
         type: 'earning',
         source: 'active_time',
         status: 'success',
@@ -190,7 +190,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
         serverSecret: "pulse-feeds-server-secret-2026"
       }).catch(() => {});
 
-      console.log(`[Self-Update] Successfully synced batched rewards: ${userPts} mg ($${(userVal * GOLD_PRICE_USD).toFixed(2)})`);
+      console.log(`[Self-Update] Successfully synced batched rewards: ${userPts} mg (${userVal.toFixed(4)} G)`);
   } catch (error) {
     console.error("[Self-Update] Sync failure, restoring pending values:", error);
     // Restore if failed
@@ -350,7 +350,7 @@ const addRevenue = async (userGold: number, platformGold: number, reason: string
         serverSecret: "pulse-feeds-server-secret-2026"
       }).catch(err => console.error("Error logging platform transaction:", err));
 
-      console.log(`Added Platform Revenue: $${amount} for ${reason} (100% Platform Share)`);
+      console.log(`Added Platform Revenue: ${amount} G for ${reason} (100% Platform Share)`);
     } catch (error) {
       console.error("Error adding platform revenue:", error);
     }
@@ -378,7 +378,7 @@ const addRevenue = async (userGold: number, platformGold: number, reason: string
         serverSecret: "pulse-feeds-server-secret-2026"
       }).catch(err => console.error("Error logging platform transaction:", err));
 
-      console.log(`Logged Platform Expense: $${amount} for ${reason}`);
+      console.log(`Logged Platform Expense: ${amount} G for ${reason}`);
     } catch (error) {
       console.error("Error logging platform expense:", error);
     }

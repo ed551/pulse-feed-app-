@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { 
-  Shield, Crown, Zap, Check, Star, Award, DollarSign, 
-  Sparkles, TrendingUp, ArrowRight, ShieldCheck, Gem,
+  Shield, Crown, Zap, Check, Star, Award, Gem, 
+  Sparkles, TrendingUp, ArrowRight, ShieldCheck,
   ZapOff, Lock, Unlock, BadgeCheck, Beaker, Heart, Users, Clock,
   GraduationCap
 } from 'lucide-react';
@@ -208,7 +208,7 @@ export default function Membership() {
         </div>
         <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
           <div className="bg-white dark:bg-gray-800 p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center">
-            <DollarSign className="w-6 h-6 text-indigo-500 mb-2" />
+            <TrendingUp className="w-6 h-6 text-indigo-500 mb-2" />
             <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Base Share</div>
             <div className="text-lg font-black text-gray-900 dark:text-white">20%</div>
           </div>
@@ -373,20 +373,20 @@ export default function Membership() {
           <div className="space-y-6">
             <div className="p-4 rounded-3xl bg-white/10 border border-white/10">
               <div className="flex justify-between items-end mb-2">
-                <span className="text-xs font-black uppercase tracking-widest text-white/60">Creator Reward</span>
+                <span className="text-xs font-black uppercase tracking-widest text-white/60">Platform Growth</span>
                 <span className="text-3xl font-black">80%</span>
               </div>
               <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
                 <div className="w-[80%] h-full bg-white rounded-full" />
               </div>
-              <p className="text-[10px] text-white/60 mt-2 italic">Earn 80% of all course enrollments and AI training contributions.</p>
+              <p className="text-[10px] text-white/60 mt-2 italic">80% of Education Hub enrollments sustain our AI infrastructure.</p>
             </div>
             <div className="p-4 rounded-3xl bg-black/20 border border-white/5">
               <div className="flex justify-between items-end mb-2">
-                <span className="text-xs font-black uppercase tracking-widest text-white/40">Platform Fee</span>
+                <span className="text-xs font-black uppercase tracking-widest text-white/40">User Reward</span>
                 <span className="text-xl font-black text-white/60">20%</span>
               </div>
-              <p className="text-[10px] text-white/40 leading-relaxed">The 20% platform fee covers AI maintenance, cloud infrastructure, and community rewards pools.</p>
+              <p className="text-[10px] text-white/40 leading-relaxed">Users receive a 20% reward for participating in educational growth and AI training.</p>
             </div>
           </div>
         </div>
@@ -419,7 +419,7 @@ export default function Membership() {
         {[
           { label: 'Secure Payments', icon: Shield },
           { label: 'Cancel Anytime', icon: Clock },
-          { label: 'No Extra Fees', icon: DollarSign },
+          { label: 'No Extra Fees', icon: Gem },
           { label: 'Privacy First', icon: Zap }
         ].map((item, i) => (
           <div key={i} className="flex flex-col items-center gap-2 opacity-40 hover:opacity-100 transition-opacity">
