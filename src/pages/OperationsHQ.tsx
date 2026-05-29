@@ -8,11 +8,13 @@ import {
 } from 'lucide-react';
 import { db, auth } from '../lib/firebase';
 import { collection, query, orderBy, limit, onSnapshot, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 import { cn } from '../lib/utils';
 
 export default function OperationsHQ() {
   const [activeWing, setActiveWing] = useState<'security' | 'compliance' | 'network' | 'vault'>('security');
   const [systemLogs, setSystemLogs] = useState<any[]>([]);
+  const { convert } = useCurrencyConverter();
   const [healthStatus, setHealthStatus] = useState<any>({
     apiStatus: 'nominal',
     vaultIntegrity: 'verified',
@@ -218,7 +220,7 @@ export default function OperationsHQ() {
                      <div className="relative aspect-video bg-black/60 rounded-xl border border-white/10 flex items-center justify-center p-8">
                         <div className="text-center">
                           <Database className="w-16 h-16 text-blue-500 mx-auto mb-4 opacity-50" />
-                          <h3 className="text-4xl font-black text-white tracking-widest font-mono">$1,248,300.52</h3>
+                          <h3 className="text-4xl font-black text-white tracking-widest font-mono">{convert(1248300.52)}</h3>
                           <p className="text-xs text-gray-500 uppercase tracking-widest mt-2">Certified Ledger Balance</p>
                         </div>
                         
@@ -234,15 +236,15 @@ export default function OperationsHQ() {
                         <div className="grid grid-cols-3 gap-4">
                           <div className="space-y-1">
                             <span className="text-[10px] text-gray-500 uppercase">Daily In</span>
-                            <p className="text-sm font-mono text-green-500">+$12.4k</p>
+                            <p className="text-sm font-mono text-green-500">+{convert(12400)}</p>
                           </div>
                           <div className="space-y-1">
                             <span className="text-[10px] text-gray-500 uppercase">Daily Out</span>
-                            <p className="text-sm font-mono text-red-500">-$2.1k</p>
+                            <p className="text-sm font-mono text-red-500">-{convert(2100)}</p>
                           </div>
                           <div className="space-y-1">
                             <span className="text-[10px] text-gray-500 uppercase">Net Diff</span>
-                            <p className="text-sm font-mono text-blue-500">+$10.3k</p>
+                            <p className="text-sm font-mono text-blue-500">+{convert(10300)}</p>
                           </div>
                         </div>
                      </div>

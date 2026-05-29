@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Users, DollarSign, Gem, TrendingUp, Clock, CheckCircle2, AlertCircle, 
+  Users, Gem, TrendingUp, Clock, CheckCircle2, AlertCircle, 
   Loader2, MessageSquare, Share2, Info, Sparkles, Heart, Award, Zap,
   MapPin, Camera, Shield, Search, Filter, Plus, Megaphone, Handshake,
   Lightbulb, Wrench, GraduationCap, ChevronRight, Star, ArrowUpCircle,
@@ -11,6 +11,7 @@ import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow, Marker, MapControl, 
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useRevenue } from '../contexts/RevenueContext';
+import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp, orderBy, limit } from 'firebase/firestore';
 import { generateContentWithRetry } from '../lib/ai';
@@ -100,6 +101,7 @@ class MarkerErrorBoundary extends React.Component<{
 export default function Community() {
   const { currentUser, userData } = useAuth();
   const { totalEarnedToday, addRevenue } = useRevenue();
+  const { convert } = useCurrencyConverter();
   const [tasks, setTasks] = useState<CommunityTask[]>([]);
   const [reports, setReports] = useState<CommunityReport[]>([]);
   const [polls, setPolls] = useState<CommunityPoll[]>([]);
@@ -247,8 +249,8 @@ export default function Community() {
       const fetchedReports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as CommunityReport[];
       if (fetchedReports.length === 0 && db) {
         setReports([
-          { id: 'r1', title: 'Broken Street Light', description: 'The light on 5th Ave has been out for 3 days.', category: 'Safety', status: 'Investigating', location: 'Downtown', reporterName: 'John D.', timestamp: new Date(), upvotes: 12, aiAnalysis: 'High priority for nighttime safety.', bounty: 5.00 },
-          { id: 'r2', title: 'Pothole Alert', description: 'Large pothole near the school entrance.', category: 'Infrastructure', status: 'Pending', location: 'Westside', reporterName: 'Sarah M.', timestamp: new Date(), upvotes: 45, aiAnalysis: 'Potential hazard for school buses.', bounty: 15.00, solutionPrice: 2.99 }
+          { id: 'r1', title: 'Broken Street Light', description: 'The light on 5th Ave has been out for 3 days.', category: 'Safety', status: 'Investigating', location: 'Downtown', reporterName: 'John D.', timestamp: new Date(), upvotes: 12, aiAnalysis: 'High priority for nighttime safety.', bounty: 400 }, // 400 USD
+          { id: 'r2', title: 'Pothole Alert', description: 'Large pothole near the school entrance.', category: 'Infrastructure', status: 'Pending', location: 'Westside', reporterName: 'Sarah M.', timestamp: new Date(), upvotes: 45, aiAnalysis: 'Potential hazard for school buses.', bounty: 1200, solutionPrice: 240 } // 240 USD
         ]);
       } else {
         setReports(fetchedReports);
@@ -484,7 +486,7 @@ export default function Community() {
         bounty: increment(amount)
       });
 
-      alert(`Bounty sponsored! You've added $${amount.toFixed(2)} to the reward pool for solving this issue.`);
+      alert(`Bounty sponsored! You've added ${convert(amount * 80)} to the reward pool for solving this issue.`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `community_reports/${reportId}`);
     }
@@ -522,7 +524,7 @@ export default function Community() {
           <Gem className="w-8 h-8 text-indigo-500 mb-2" />
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Your Balance</p>
           <p className="text-2xl font-black text-gray-900 dark:text-white">
-            ${(userData?.balance || 0).toFixed(2)}
+            {convert(userData?.balance || 0)}
           </p>
           <p className="text-[10px] font-bold text-gray-400 mt-1">
             {userData?.points || 0} Points
@@ -587,7 +589,7 @@ export default function Community() {
           <h3 className="font-bold text-indigo-900 dark:text-indigo-100 text-sm">Community Rewards Program</h3>
           <p className="text-xs text-indigo-800/70 dark:text-indigo-200/70 leading-relaxed">
             Pulse Feeds is powered by you. Complete tasks that help the community grow and stay healthy to earn points. 
-            Points are synchronized with your cash balance (100 pts = $1.00).
+            Points contribute to your balance (100 points = $1).
           </p>
         </div>
       </div>
@@ -927,14 +929,14 @@ export default function Community() {
                 {report.bounty && (
                   <div className="flex items-center justify-between p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl border border-emerald-100 dark:border-emerald-800/30">
                     <div className="flex items-center gap-2">
-                      <DollarSign className="w-4 h-4 text-emerald-600" />
-                      <span className="text-xs font-black text-emerald-700 dark:text-emerald-300">Active Bounty: ${report.bounty.toFixed(2)}</span>
+                      <Gem className="w-4 h-4 text-emerald-600" />
+                      <span className="text-xs font-black text-emerald-700 dark:text-emerald-300">Active Bounty: {convert(report.bounty)}</span>
                     </div>
                     <button 
-                      onClick={() => sponsorBounty(report.id, 5.00)}
+                      onClick={() => sponsorBounty(report.id, 400)}
                       className="text-[10px] font-black text-emerald-600 hover:underline"
                     >
-                      + Sponsor $5
+                      + Sponsor 5 G
                     </button>
                   </div>
                 )}
@@ -974,7 +976,7 @@ export default function Community() {
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="bg-emerald-600 p-6 rounded-3xl text-white shadow-xl relative overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-10">
-              <DollarSign className="w-32 h-32" />
+              <Gem className="w-32 h-32 text-indigo-500/20" />
             </div>
             <div className="relative z-10 space-y-2">
               <h2 className="text-2xl font-black">Community Bounties</h2>
@@ -1021,7 +1023,7 @@ export default function Community() {
                   onClick={() => buySolution(report)}
                   className="w-full py-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-black rounded-xl hover:bg-indigo-100 transition-all flex items-center justify-center gap-2"
                 >
-                  <DollarSign className="w-4 h-4" />
+                  <Gem className="w-4 h-4" />
                   Unlock for ${report.solutionPrice}
                 </button>
               </div>

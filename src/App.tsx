@@ -33,7 +33,8 @@ const GeminiLab = lazy(() => import("./pages/GeminiLab"));
 const Membership = lazy(() => import("./pages/Membership"));
 const AudioHub = lazy(() => import("./pages/AudioHub"));
 const EducationHub = lazy(() => import("./pages/EducationHub"));
-const GoldMarket = lazy(() => import("./pages/GoldMarket"));
+const MarketData = lazy(() => import("./pages/MarketData"));
+const Dating = lazy(() => import("./pages/Dating"));
 const PasskeyAuth = lazy(() => import("./pages/PasskeyAuth"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 
@@ -204,9 +205,14 @@ export default function App() {
                       <EducationHub />
                     </ProtectedRoute>
                   } />
-                  <Route path="gold" element={
+                  <Route path="market" element={
                     <ProtectedRoute>
-                      <GoldMarket />
+                      <MarketData />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="dating" element={
+                    <ProtectedRoute>
+                      <Dating />
                     </ProtectedRoute>
                   } />
                   <Route path="passkey-auth" element={<PasskeyAuth />} />

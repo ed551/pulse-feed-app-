@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { 
-  Shield, Crown, Zap, Check, Star, Award, DollarSign, 
-  Sparkles, TrendingUp, ArrowRight, ShieldCheck, Gem,
+  Shield, Crown, Zap, Check, Star, Award, Gem, 
+  Sparkles, TrendingUp, ArrowRight, ShieldCheck,
   ZapOff, Lock, Unlock, BadgeCheck, Beaker, Heart, Users, Clock,
   GraduationCap
 } from 'lucide-react';
@@ -12,8 +12,6 @@ import { useRevenue } from '../contexts/RevenueContext';
 import { useNavigate } from 'react-router-dom';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-
-const GOLD_PRICE_USD = 80;
 
 const TIERS = [
   {
@@ -28,7 +26,7 @@ const TIERS = [
     btnBg: 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white',
     features: [
       '20% Revenue Share',
-      'Standard Gold Analytics',
+      'Standard Market Analytics',
       'Daily Task Rewards',
       'Basic AI Support',
       'Community Discussions',
@@ -41,7 +39,7 @@ const TIERS = [
     id: 'silver',
     name: 'Silver',
     subtitle: 'Growth Plus',
-    price: 0.125, // ≈ $10
+    price: 10, // $10
     icon: Star,
     color: 'text-blue-500',
     bg: 'bg-blue-50 dark:bg-blue-900/10',
@@ -49,7 +47,7 @@ const TIERS = [
     btnBg: 'bg-blue-600 text-white shadow-blue-500/20',
     features: [
       '50% Revenue Share',
-      'Gold Intelligence Pro',
+      'Market Intelligence Pro',
       '5% Lower Trading Fees',
       'Priority AI Assistant',
       'Silver Verified Badge',
@@ -63,7 +61,7 @@ const TIERS = [
     id: 'gold',
     name: 'Gold',
     subtitle: 'Elite Pioneer',
-    price: 0.375, // ≈ $30
+    price: 30, // $30
     icon: Crown,
     color: 'text-yellow-500',
     bg: 'bg-yellow-50 dark:bg-yellow-900/10',
@@ -71,10 +69,10 @@ const TIERS = [
     btnBg: 'bg-gradient-to-r from-yellow-500 to-amber-600 text-white shadow-yellow-500/20',
     features: [
       '80% Revenue Share (Max)',
-      'Quantum Gold Prediction',
+      'Quantum Market Prediction',
       'Zero Market Trading Fees',
       'Unlimited AI Tutoring',
-      'Gold Verified Crown',
+      'Market Verified Crown',
       'Direct Dev Channels',
       'Monthly Bonus Drops'
     ],
@@ -100,7 +98,7 @@ export default function Membership() {
       if (tier.price > 0) {
         const success = await deductBalance(tier.price, `Upgrade to ${tier.name} Membership`);
         if (!success) {
-          throw new Error(`Insufficient gold reserve to upgrade to ${tier.name}. Requires ${tier.price}g.`);
+          throw new Error(`Insufficient reserve to upgrade to ${tier.name}. Requires $${tier.price}.`);
         }
       }
       
@@ -208,7 +206,7 @@ export default function Membership() {
         </div>
         <div className="grid grid-cols-2 gap-4 w-full md:w-auto">
           <div className="bg-white dark:bg-gray-800 p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center text-center">
-            <DollarSign className="w-6 h-6 text-indigo-500 mb-2" />
+            <TrendingUp className="w-6 h-6 text-indigo-500 mb-2" />
             <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Base Share</div>
             <div className="text-lg font-black text-gray-900 dark:text-white">20%</div>
           </div>
@@ -253,12 +251,12 @@ export default function Membership() {
 
             <div className="flex items-baseline gap-1 mb-8">
               <span className="text-5xl font-black text-gray-900 dark:text-white tracking-tighter">
-                {tier.price === 0 ? '0' : tier.price.toString().split('.')[0] || '0'}
+                ${tier.price}
               </span>
               <span className="text-xl font-bold text-gray-400">
-                .{tier.price === 0 ? '00' : tier.price.toString().split('.')[1] || '000'}
+                .00
               </span>
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Grams</span>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">USD</span>
             </div>
 
             <div className="space-y-4 mb-10 flex-1">
@@ -419,7 +417,7 @@ export default function Membership() {
         {[
           { label: 'Secure Payments', icon: Shield },
           { label: 'Cancel Anytime', icon: Clock },
-          { label: 'No Extra Fees', icon: DollarSign },
+          { label: 'No Extra Fees', icon: Gem },
           { label: 'Privacy First', icon: Zap }
         ].map((item, i) => (
           <div key={i} className="flex flex-col items-center gap-2 opacity-40 hover:opacity-100 transition-opacity">

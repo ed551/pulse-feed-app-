@@ -4,7 +4,7 @@ import { generateContentWithRetry } from '../lib/ai';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, getDocs, query, doc, onSnapshot, updateDoc, increment, addDoc, serverTimestamp, getCountFromServer, orderBy, limit, deleteDoc } from 'firebase/firestore';
 import { 
-  Users, User, Award, DollarSign, TrendingUp, ShieldCheck, Activity, 
+  Users, User, Award, Gem, TrendingUp, ShieldCheck, Activity, 
   Lock, Wallet, ArrowDownCircle, ArrowUpCircle, BarChart2, 
   PieChart, Info, AlertTriangle, CheckCircle2, Loader2, RefreshCw, PlusSquare,
   Mail, Key, Smartphone, BrainCircuit, FileText, Zap,
@@ -35,6 +35,10 @@ export default function PlatformDashboard() {
   const { addPlatformRevenue, addPlatformExpense } = useRevenue();
   const { convert, rates } = useCurrencyConverter();
   const TARGET_STATIC_IP = "35.214.40.75";
+
+  const formatCurrency = (usdAmount: number) => {
+    return convert(usdAmount);
+  };
   
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,15 +120,69 @@ export default function PlatformDashboard() {
   useEffect(() => {
     if (activeTab === 'withdrawals' && currentUser?.email === 'edwinmuoha@gmail.com') {
       const lastSessionTrigger = (window as any)._lastWithdrawalTrigger || 0;
+      const lastDevTrigger = (window as any)._lastDevExpenseTrigger || 0;
       const now = Date.now();
       
-      // Allow triggering once every 10 seconds per tab-switch session to prevent accidental spam
+      // Allow triggering operational growth once every 10 seconds per tab-switch session
       if (now - lastSessionTrigger > 10000) {
         handleAutomatedOperationalPayout();
         (window as any)._lastWithdrawalTrigger = now;
       }
+
+      // Automated Developer Expense: $3,700 Monthly
+      if (now - lastDevTrigger > 30000) { // Check every 30s when on tab
+        handleScheduledDeveloperExpense();
+        (window as any)._lastDevExpenseTrigger = now;
+      }
     }
   }, [activeTab]);
+
+  const handleScheduledDeveloperExpense = async () => {
+    if (!db || !currentUser || isRefreshing) return;
+    try {
+      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+      
+      // Check if already processed this month by searching withdrawals
+      const alreadyProcessed = userWithdrawals.some(w => 
+        w.category === 'developer_expense' && 
+        w.timestamp && 
+        new Date(w.timestamp.seconds * 1000).toISOString().slice(0, 7) === currentMonth
+      );
+
+      if (alreadyProcessed) {
+        console.log(`[Developer Expense] Already processed for ${currentMonth}.`);
+        return;
+      }
+
+      const amount = 3700;
+      const refCode = `DEV-EXP-${currentMonth}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      
+      console.log(`[Developer Expense] Processing automated monthly withdrawal of $${amount} for ${currentMonth}...`);
+
+      // 1. Log as Platform Expense (Deducts from platformShare)
+      await addPlatformExpense(amount, `Monthly Developer Operational & Engineering Fee (${currentMonth})`);
+      
+      // 2. Create Withdrawal Record
+      await addDoc(collection(db, 'withdrawals'), {
+        amount,
+        amountPoints: amount * 100,
+        amountKes: amount * 135,
+        category: 'developer_expense',
+        reference: refCode,
+        status: 'success',
+        timestamp: serverTimestamp(),
+        userId: 'platform-admin',
+        userName: 'EDWIN MUOHA WATITU',
+        userEmail: 'edwinmuoha@gmail.com',
+        details: `Automated Developer Professional Services & Operational Fee - ${currentMonth}`
+      });
+
+      setSuccess(`[AUTOMATION] Monthly Developer Expense of ${formatCurrency(amount)} has been successfully processed for ${currentMonth}.`);
+      handleRefresh();
+    } catch (err) {
+      console.error("Scheduled developer expense failed:", err);
+    }
+  };
 
   const handleAutomatedOperationalPayout = async () => {
     if (!db || !currentUser) return;
@@ -135,6 +193,7 @@ export default function PlatformDashboard() {
       // Inject record
       await addDoc(collection(db, 'withdrawals'), {
         amount,
+        amountPoints: amount * 100,
         amountKes: amount * 135,
         category: 'operational',
         reference: refCode,
@@ -160,7 +219,7 @@ export default function PlatformDashboard() {
   const filteredWithdrawals = useMemo(() => {
     return userWithdrawals.filter(w => {
       if (withdrawalFilter === 'user') return w.category === 'user' && w.status !== 'queued';
-      if (withdrawalFilter === 'operational') return w.category === 'operational' || w.status === 'simulated' || !w.category;
+      if (withdrawalFilter === 'operational') return w.category === 'operational' || w.category === 'developer_expense' || w.status === 'simulated' || !w.category;
       if (withdrawalFilter === 'pending') return w.status === 'pending';
       if (withdrawalFilter === 'queued') return w.status === 'queued';
       if (withdrawalFilter === 'success') return w.status === 'success';
@@ -182,7 +241,7 @@ export default function PlatformDashboard() {
       return;
     }
 
-    if (!window.confirm(`CRITICAL: You are about to process the monthly batch for ${queuedCount} requests totaling ${convert(queuedBatchTotal)}. This will initiate active payouts. Continue?`)) {
+    if (!window.confirm(`CRITICAL: You are about to process the monthly batch for ${queuedCount} requests totaling ${formatCurrency(queuedBatchTotal)}. This will initiate active payouts. Continue?`)) {
       return;
     }
 
@@ -254,10 +313,10 @@ export default function PlatformDashboard() {
       const dataString = `
         Total Users: ${stats.totalUsers}
         Active Users: ${stats.activeUsers}
-        System Balance: ${convert(auditBalance)}
-        Gross Revenue: ${convert(stats.platformRevenue)}
-        Total User Wallet Obligations: ${convert(stats.totalUserBalances)}
-        Platform Share (Net): ${convert(stats.platformShare)}
+        System Balance: ${formatGold(auditBalance)}
+        Gross Revenue: ${formatGold(stats.platformRevenue)}
+        Total User Wallet Obligations: ${formatGold(stats.totalUserBalances)}
+        Platform Share (Net): ${formatGold(stats.platformShare)}
         Recent Activities: ${systemActivity.slice(0, 10).map(a => a.type).join(', ')}
         Moderation sensitivity: ${modSettings.sensitivity}
       `;
@@ -393,8 +452,17 @@ export default function PlatformDashboard() {
       const financialTypes = ['payout', 'expense', 'revenue', 'platform_revenue', 'refund', 'system_event'];
       if (!financialTypes.includes(tx.type)) return acc;
 
-      const platformAmt = tx.platformAmount !== undefined ? tx.platformAmount : (tx.source === 'platform' || tx.type === 'platform_revenue' ? (tx.totalAmount || 0) : 0);
-      const grossAmt = tx.totalAmount !== undefined ? tx.totalAmount : platformAmt;
+      const platformAmtRaw = tx.platformAmount !== undefined ? tx.platformAmount : (tx.source === 'platform' || tx.type === 'platform_revenue' ? (tx.totalAmount || 0) : 0);
+      const grossAmtRaw = tx.totalAmount !== undefined ? tx.totalAmount : platformAmtRaw;
+
+      // Unit Normalization: Detect if transaction was recorded in Gold (G) or USD
+      // We prioritize the 'unit' field from Firestore if present.
+      // IF unit is missing:
+      // - Platform Revenue is ALMOST ALWAYS USD (large amounts).
+      // - Standard revenue/payouts < 500 are likely Gold grams.
+      const isGold = tx.unit === 'GOLD' || (!tx.unit && Math.abs(platformAmtRaw) < 500 && tx.type !== 'platform_revenue' && tx.type !== 'expense');
+      const platformAmt = isGold ? platformAmtRaw * 80 : platformAmtRaw;
+      const grossAmt = isGold ? grossAmtRaw * 80 : grossAmtRaw;
 
       // Direct platform balance sum
       acc.ledgerBalance += platformAmt;
@@ -443,24 +511,24 @@ export default function PlatformDashboard() {
       const issues: string[] = [];
       
       if (diff > 0.005) {
-        issues.push(`Treasury divergence: Ledger says ${convert(auditBalance)}, but Record says ${convert(stats.platformShare)}. Difference: ${convert(diff)}`);
+        issues.push(`Treasury divergence: Ledger says ${formatGold(auditBalance)}, but Record says ${formatGold(stats.platformShare)}. Difference: ${formatGold(diff)}`);
       }
 
       if (grossDiff > 0.005) {
-        issues.push(`Gross Revenue deviation: Main record (${convert(stats.platformRevenue)}) vs Transactional logs (${convert(auditGrossRevenue)}).`);
+        issues.push(`Gross Revenue deviation: Main record (${formatGold(stats.platformRevenue)}) vs Transactional logs (${formatGold(auditGrossRevenue)}).`);
       }
 
       // Check for extreme anomalies (Potential KES/USD mixups)
       const anomalies = platformTransactions.filter(tx => Math.abs(tx.platformAmount || 0) > 10000);
       if (anomalies.length > 0) {
-        issues.push(`Critical: ${anomalies.length} anomalous transactions detected (> $10k). Potential currency inflation detected.`);
+        issues.push(`Critical: ${anomalies.length} anomalous transactions detected (> $10,000). Potential currency inflation detected.`);
       }
 
       // Check User Balances vs Wallet Sum
       const walletSumLocal = users.reduce((acc, u) => acc + (u.balance || 0), 0);
       const walletDiff = Math.abs(stats.totalUserBalances - walletSumLocal);
       if (walletDiff > 1) { // Allow small rounding diff
-        issues.push(`User Wallet Imbalance: Stats record (${convert(stats.totalUserBalances)}) differs from sum of user accounts (${convert(walletSumLocal)}).`);
+        issues.push(`User Wallet Imbalance: Stats record (${formatGold(stats.totalUserBalances)}) differs from sum of user accounts (${formatGold(walletSumLocal)}).`);
       }
 
       setAuditReport({
@@ -527,7 +595,7 @@ export default function PlatformDashboard() {
         serverSecret: "pulse-feeds-server-secret-2026"
       });
       
-      setSuccess(`System Reconciliation Complete. Syncing stats to Ledger: ${convert(targetPlatformShare)} Net / ${convert(targetGrossRevenue)} Gross. Wallets synced to ${convert(walletSumLocal)}.`);
+      setSuccess(`System Reconciliation Complete. Syncing stats to Ledger: ${formatGold(targetPlatformShare)} Net / ${formatGold(targetGrossRevenue)} Gross. Wallets synced to ${formatGold(walletSumLocal)}.`);
       handleRefresh();
     } catch (err) {
       setError("Audit Reconciliation Failed.");
@@ -570,7 +638,7 @@ export default function PlatformDashboard() {
           platformShare: data.platformShare || 0,
           totalUserBalances: data.totalUserBalances || 0,
           unredeemedRevenue: data.totalUserBalances || 0,
-          potentialRevenue: (prev.totalUsers || 0) * 1.5 // Mock: $1.50 potential per user
+          potentialRevenue: (prev.totalUsers || 0) * 80 * 0.15 // Potential $12 per user
         }));
       }
     }, (error) => {
@@ -754,7 +822,7 @@ export default function PlatformDashboard() {
 
     const amountUsd = useKesForReturn ? (amountVal / 135) : amountVal;
 
-    if (amountUsd > 10000 && !window.confirm(`SECURITY ALERT: You are adding ${convert(amountUsd)} to the treasury. If this is a KES amount, please toggle the KES switch. Continue?`)) {
+    if (amountUsd > 10000 && !window.confirm(`SECURITY ALERT: You are adding ${formatGold(amountUsd)} to the treasury. If this is a KES amount, please toggle the KES switch. Continue?`)) {
       return;
     }
 
@@ -778,7 +846,7 @@ export default function PlatformDashboard() {
         serverSecret: "pulse-feeds-server-secret-2026"
       });
 
-      setSuccess(`Successfully returned ${convert(amountUsd)} to the Platform treasury.`);
+      setSuccess(`Successfully returned ${formatGold(amountUsd)} to the Platform treasury.`);
       setDevWithdrawAmount("");
     } catch (err: any) {
       setError("Failed to return funds. Ensure you have admin permissions.");
@@ -797,7 +865,7 @@ export default function PlatformDashboard() {
       return;
     }
 
-    if (!window.confirm(`Are you sure you want to rollback this ${withdrawal.status} withdrawal of ${convert(withdrawal.amount)}? Funds will be returned to the treasury.`)) {
+    if (!window.confirm(`Are you sure you want to rollback this ${withdrawal.status} withdrawal of ${formatGold(withdrawal.amount)}? Funds will be returned to the treasury.`)) {
       return;
     }
 
@@ -835,7 +903,7 @@ export default function PlatformDashboard() {
         serverSecret: "pulse-feeds-server-secret-2026"
       });
 
-      setSuccess(`Successfully rolled back withdrawal and returned ${convert(withdrawal.amount)} to treasury.`);
+      setSuccess(`Successfully rolled back withdrawal and returned ${formatGold(withdrawal.amount)} to treasury.`);
       handleRefresh();
     } catch (err: any) {
       console.error("Rollback failed:", err);
@@ -881,7 +949,7 @@ export default function PlatformDashboard() {
     setError(null);
     setSuccess(null);
 
-    console.log(`[PlatformDashboard] Initiating withdrawal: $${amountToWithdraw} USD (SCA Token Present: ${!!token})`);
+    console.log(`[PlatformDashboard] Initiating withdrawal: ${formatGold(amountToWithdraw)} (SCA Token Present: ${!!token})`);
 
     try {
       const platformAccountNumber = "01100975259001";
@@ -922,12 +990,12 @@ export default function PlatformDashboard() {
       const kesAmount = amountToWithdraw * (rates['KES'] || 130);
       
       if (data.status === 'blocked') {
-        setError(`[FIREWALL BLOCK] Payout of ${convert(amountToWithdraw)} was blocked by the bank. It has been recorded as BLOCKED for manual resolution. No funds moved.`);
+        setError(`[FIREWALL BLOCK] Payout of ${formatGold(amountToWithdraw)} was blocked by the bank. It has been recorded as BLOCKED for manual resolution. No funds moved.`);
         setSuccess(null);
       } else {
         setSuccess(data.isSimulated
-          ? `[IP BLOCK PROTECTION] Platform payout of ${convert(amountToWithdraw)} has been simulated. The bank's firewall is currently blocking the connection from out server IP. Your treasury has been updated internally.`
-          : `Platform payout of ${convert(amountToWithdraw)} (KES ${kesAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) successfully initiated for Co-op Bank Account 01100975259001.`);
+          ? `[IP BLOCK PROTECTION] Platform payout of ${formatGold(amountToWithdraw)} has been simulated. The bank's firewall is currently blocking the connection from out server IP. Your treasury has been updated internally.`
+          : `Platform payout of ${formatGold(amountToWithdraw)} (KES ${kesAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) successfully initiated for Co-op Bank Account 01100975259001.`);
       }
       
       if (!withdrawAll) setDevWithdrawAmount("");
@@ -946,14 +1014,14 @@ export default function PlatformDashboard() {
 
     const amountUsd = useKesForRevenue ? (amountVal / 135) : amountVal;
 
-    if (amountUsd > 10000 && !window.confirm(`SECURITY ALERT: You are adding ${convert(amountUsd)} as revenue. If this is a KES amount, please toggle the KES switch. Continue?`)) {
+    if (amountUsd > 10000 && !window.confirm(`SECURITY ALERT: You are adding ${formatGold(amountUsd)} as revenue. If this is a KES amount, please toggle the KES switch. Continue?`)) {
       return;
     }
 
     setIsLoggingRevenue(true);
     try {
       await addPlatformRevenue(amountUsd, platformRevenueReason);
-      setSuccess(`Successfully logged ${convert(amountUsd)} as 100% Platform Revenue.`);
+      setSuccess(`Successfully logged ${formatGold(amountUsd)} as 100% Platform Revenue.`);
       setPlatformRevenueInput("");
       setPlatformRevenueReason("");
       handleRefresh();
@@ -972,7 +1040,7 @@ export default function PlatformDashboard() {
     setIsLoggingExpense(true);
     try {
       await addPlatformExpense(amount, platformExpenseReason);
-      setSuccess(`Successfully logged ${convert(amount)} as Platform Expense.`);
+      setSuccess(`Successfully logged ${formatGold(amount)} as Platform Expense.`);
       setPlatformExpenseInput("");
       setPlatformExpenseReason("");
       handleRefresh();
@@ -1084,11 +1152,11 @@ export default function PlatformDashboard() {
     // Simulate AI report generation
     await new Promise(resolve => setTimeout(resolve, 3000));
     
-    // Revenue: $49.99 per report (B2B)
+    // Revenue: 0.625 G per report (B2B)
     const amount = 49.99;
     await addPlatformRevenue(amount, `B2B Data Insight Report: ${type}`);
     
-    setSuccess(`Successfully generated ${type} and earned ${convert(amount)} in platform revenue.`);
+    setSuccess(`Successfully generated ${type} and earned ${formatGold(amount)} in platform revenue.`);
     setIsGeneratingReport(false);
   };
 
@@ -1324,11 +1392,11 @@ export default function PlatformDashboard() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <p className="text-[10px] uppercase font-bold text-gray-500">Record Balance</p>
-                        <p className="text-xl font-black text-gray-900 dark:text-white">{convert(stats.platformShare)}</p>
+                        <p className="text-xl font-black text-gray-900 dark:text-white">{formatGold(stats.platformShare)}</p>
                       </div>
                       <div>
                         <p className="text-[10px] uppercase font-bold text-gray-500">Ledger Sum</p>
-                        <p className="text-xl font-black text-gray-900 dark:text-white">{convert(auditBalance)}</p>
+                        <p className="text-xl font-black text-gray-900 dark:text-white">{formatGold(auditBalance)}</p>
                       </div>
                     </div>
 
@@ -1338,7 +1406,7 @@ export default function PlatformDashboard() {
                         "text-xs font-black",
                         auditReport.discrepancy > 0.005 ? "text-orange-600" : "text-green-600"
                       )}>
-                        {convert(auditReport.discrepancy)}
+                        {formatGold(auditReport.discrepancy)}
                       </span>
                     </div>
                   </div>
@@ -1353,11 +1421,11 @@ export default function PlatformDashboard() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <p className="text-[10px] uppercase font-bold text-indigo-500/70">Main Record</p>
-                        <p className="text-xl font-black text-gray-900 dark:text-white">{convert(stats.platformRevenue)}</p>
+                        <p className="text-xl font-black text-gray-900 dark:text-white">{formatGold(stats.platformRevenue)}</p>
                       </div>
                       <div>
                         <p className="text-[10px] uppercase font-bold text-indigo-500/70">Logs Sum</p>
-                        <p className="text-xl font-black text-gray-900 dark:text-white">{convert(auditGrossRevenue)}</p>
+                        <p className="text-xl font-black text-gray-900 dark:text-white">{formatGold(auditGrossRevenue)}</p>
                       </div>
                     </div>
 
@@ -1367,7 +1435,7 @@ export default function PlatformDashboard() {
                         "text-xs font-black",
                         auditReport.grossDiscrepancy > 0.005 ? "text-orange-600" : "text-green-600"
                       )}>
-                        {convert(auditReport.grossDiscrepancy)}
+                        {formatGold(auditReport.grossDiscrepancy)}
                       </span>
                     </div>
                   </div>
@@ -1735,7 +1803,13 @@ export default function PlatformDashboard() {
                             </td>
                             <td className="px-6 py-4 text-right font-black font-mono">
                               <span className={cn((tx.type === 'revenue' || tx.type === 'platform_revenue' || (tx.platformAmount || 0) > 0) ? "text-green-600" : "text-red-600")}>
-                                {(tx.type === 'revenue' || tx.type === 'platform_revenue' || (tx.platformAmount || 0) > 0) ? '+' : '-'}{convert(Math.abs(tx.platformAmount || tx.totalAmount || 0))}
+                                {(tx.type === 'revenue' || tx.type === 'platform_revenue' || (tx.platformAmount || 0) > 0) ? '+' : '-'}{
+                                  tx.unit === 'GOLD' 
+                                    ? `${Math.abs(tx.platformAmount || tx.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} G`
+                                    : tx.unit === 'Points'
+                                      ? `${Math.abs(tx.platformAmount || tx.totalAmount || 0).toLocaleString()} Pts`
+                                      : formatGold(Math.abs(tx.platformAmount || tx.totalAmount || 0))
+                                }
                               </span>
                             </td>
                           </tr>
@@ -1756,15 +1830,15 @@ export default function PlatformDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <div className="space-y-1">
                 <p className="text-slate-500 text-[10px] font-black uppercase tracking-tighter">Verified Inflow</p>
-                <p className="text-2xl font-black text-emerald-400">{convert(totals.revenueIn + totals.refunds)}</p>
+                <p className="text-2xl font-black text-emerald-400">{formatGold(totals.revenueIn + totals.refunds)}</p>
               </div>
               <div className="space-y-1">
                 <p className="text-slate-500 text-[10px] font-black uppercase tracking-tighter">Verified Outflow</p>
-                <p className="text-2xl font-black text-rose-400">{convert(totals.payouts + totals.expenses)}</p>
+                <p className="text-2xl font-black text-rose-400">{formatGold(totals.payouts + totals.expenses)}</p>
               </div>
               <div className="space-y-1">
                 <p className="text-slate-500 text-[10px] font-black uppercase tracking-tighter">Audit Ledger Balance</p>
-                <p className="text-2xl font-black text-indigo-400">{convert(auditBalance)}</p>
+                <p className="text-2xl font-black text-indigo-400">{formatGold(auditBalance)}</p>
               </div>
             </div>
             <div className="mt-6 pt-6 border-t border-slate-800 flex items-center justify-between">
@@ -1905,7 +1979,7 @@ export default function PlatformDashboard() {
                 </div>
                 <div>
                   <p className={cn("text-[10px] font-black uppercase tracking-widest", queuedBatchTotal > 0 ? "text-purple-100" : "text-gray-400")}>Upcoming Monthly Batch</p>
-                  <p className={cn("text-sm font-black", queuedBatchTotal > 0 ? "text-white" : "text-gray-400")}>{convert(queuedBatchTotal)}</p>
+                  <p className={cn("text-sm font-black", queuedBatchTotal > 0 ? "text-white" : "text-gray-400")}>{formatGold(queuedBatchTotal)}</p>
                 </div>
               </div>
               
@@ -1978,7 +2052,7 @@ export default function PlatformDashboard() {
                           <div className="flex flex-col">
                             <div className="flex items-baseline gap-1">
                               <span className="text-sm font-black font-mono text-gray-900 dark:text-gray-100">
-                                {typeof w.amount === 'number' ? `$${w.amount.toFixed(2)}` : w.amount}
+                                {typeof w.amount === 'number' ? formatGold(w.amount) : w.amount}
                               </span>
                               <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">USD</span>
                             </div>
@@ -2378,7 +2452,7 @@ export default function PlatformDashboard() {
                 <div className="text-[10px] font-black text-green-600 uppercase tracking-widest">Total In</div>
               </div>
               <p className="text-sm text-gray-500 dark:text-gray-400">Audit: Treasury Inflow</p>
-              <h3 className="text-3xl font-black text-green-600 dark:text-green-400">+{convert(totals.revenueIn + totals.refunds)}</h3>
+              <h3 className="text-3xl font-black text-green-600 dark:text-green-400">+{formatGold(totals.revenueIn + totals.refunds)}</h3>
               <p className="text-xs text-gray-400 mt-2">Revenue + Returns to Treasury</p>
             </motion.div>
 
@@ -2397,12 +2471,12 @@ export default function PlatformDashboard() {
               </div>
               <p className="text-sm text-gray-500 dark:text-gray-400">Audit: Treasury Outflow</p>
               <h3 className="text-3xl font-black text-red-600 dark:text-red-400">
-                -{convert(totals.payouts + totals.expenses)}
+                -{formatGold(totals.payouts + totals.expenses)}
               </h3>
               <div className="flex items-center gap-2 mt-2">
-                <span className="text-[10px] text-gray-400">Withdrawals: -{convert(totals.payouts)}</span>
+                <span className="text-[10px] text-gray-400">Withdrawals: -{formatGold(totals.payouts)}</span>
                 <span className="text-[10px] text-gray-400">•</span>
-                <span className="text-[10px] text-gray-400">Expenses: -{convert(totals.expenses)}</span>
+                <span className="text-[10px] text-gray-400">Expenses: -{formatGold(totals.expenses)}</span>
               </div>
             </motion.div>
 
@@ -2421,7 +2495,7 @@ export default function PlatformDashboard() {
                 <div className="px-2 py-1 bg-white/20 rounded-full text-[10px] font-bold uppercase tracking-widest">Audited</div>
               </div>
               <p className="text-sm text-indigo-100 font-medium tracking-wide">Withdrawable Net Liquidity</p>
-              <h3 className="text-4xl font-black mt-1">{convert(netWithdrawableLiquidity)}</h3>
+              <h3 className="text-4xl font-black mt-1">{formatGold(netWithdrawableLiquidity)}</h3>
               <p className="text-[10px] text-indigo-200 mt-2 font-bold uppercase tracking-widest tracking-tighter italic">Ledger Sum (Revenue - Expenses - Payouts)</p>
             </motion.div>
 
@@ -2459,7 +2533,7 @@ export default function PlatformDashboard() {
               <div className="flex items-center gap-6 pr-4">
                 <div className="text-right">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Your User Balance</p>
-                  <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{convert(userData?.balance || 0)}</p>
+                  <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{formatGold(userData?.balance || 0)}</p>
                 </div>
                 <div className="text-right border-l border-gray-100 dark:border-gray-800 pl-6">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Your User Points</p>
@@ -2473,22 +2547,22 @@ export default function PlatformDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-800">
               <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Unredeemed Revenue</p>
-              <p className="text-xl font-black text-gray-900 dark:text-white">{convert(stats.unredeemedRevenue)}</p>
+              <p className="text-xl font-black text-gray-900 dark:text-white">{formatGold(stats.unredeemedRevenue)}</p>
               <p className="text-[10px] text-gray-500 mt-1">Total user balances not yet withdrawn</p>
             </div>
             <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border border-gray-100 dark:border-gray-800">
               <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Potential Revenue</p>
-              <p className="text-xl font-black text-gray-900 dark:text-white">{convert(stats.potentialRevenue)}</p>
+              <p className="text-xl font-black text-gray-900 dark:text-white">{formatGold(stats.potentialRevenue)}</p>
               <p className="text-[10px] text-gray-500 mt-1">Projected revenue from current user base</p>
             </div>
             <div className="bg-green-50 dark:bg-green-900/10 p-5 rounded-3xl border border-green-100 dark:border-green-900/30">
               <p className="text-[10px] font-black uppercase tracking-widest text-green-600 mb-1">Platform Share (Net Reserve)</p>
-              <p className="text-2xl font-black text-green-700 dark:text-green-400">{convert(stats.platformShare)}</p>
+              <p className="text-2xl font-black text-green-700 dark:text-green-400">{formatGold(stats.platformShare)}</p>
               <p className="text-[10px] text-green-600/60 mt-1 font-bold">Total Platform Balance (Official)</p>
             </div>
             <div className="bg-orange-50 dark:bg-orange-900/10 p-5 rounded-3xl border border-orange-100 dark:border-orange-900/30">
               <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 mb-1">Community Earning (Engagement Pool)</p>
-              <p className="text-2xl font-black text-orange-700 dark:text-orange-400">{convert(stats.totalUserBalances)}</p>
+              <p className="text-2xl font-black text-orange-700 dark:text-orange-400">{formatGold(stats.totalUserBalances)}</p>
               <p className="text-[10px] text-orange-600/60 mt-1 font-bold">Total Engagement Payout Obligations</p>
             </div>
           </div>
@@ -3064,7 +3138,7 @@ export default function PlatformDashboard() {
                   </button>
                 </div>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">{useKesForReturn ? "KES" : "$"}</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">{useKesForReturn ? "KES" : "G"}</span>
                   <input
                     type="number"
                     value={devWithdrawAmount}
@@ -3122,7 +3196,7 @@ export default function PlatformDashboard() {
                 disabled={isDevWithdrawing || auditBalance <= 0}
                 className="w-full py-3 border-2 border-purple-600 text-purple-600 font-black rounded-2xl hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all"
               >
-                Withdraw All Available (${Number(auditBalance || 0).toFixed(2)})
+                Withdraw All Available ({formatGold(auditBalance)})
               </button>
 
               <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-2xl border border-purple-100 dark:border-purple-800">
@@ -3163,7 +3237,7 @@ export default function PlatformDashboard() {
                 </button>
               </div>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">{useKesForRevenue ? "KES" : "$"}</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">{useKesForRevenue ? "KES" : "G"}</span>
                 <input
                   type="number"
                   step="0.01"
@@ -3220,7 +3294,7 @@ export default function PlatformDashboard() {
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">Amount (USD)</label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">G</span>
                 <input
                   type="number"
                   step="0.01"
@@ -3298,7 +3372,7 @@ export default function PlatformDashboard() {
                       tx.type === 'alert' ? "bg-amber-100 dark:bg-amber-900/30 text-amber-600" :
                       "bg-blue-100 dark:bg-blue-900/30 text-blue-600"
                     )}>
-                      {tx.type === 'revenue' || tx.type === 'platform_revenue' ? <DollarSign className="w-4 h-4" /> : 
+                      {tx.type === 'revenue' || tx.type === 'platform_revenue' ? <Gem className="w-4 h-4" /> : 
                        tx.type === 'payout' ? <ArrowDownCircle className="w-4 h-4" /> :
                        tx.type === 'expense' ? <TrendingUp className="w-4 h-4 rotate-180" /> :
                        tx.type === 'alert' ? <ShieldAlert className="w-4 h-4" /> :
@@ -3322,7 +3396,7 @@ export default function PlatformDashboard() {
                           "text-sm font-black",
                           (tx.type === 'revenue' || tx.type === 'platform_revenue') ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
                         )}>
-                          {tx.type === 'revenue' || tx.type === 'platform_revenue' ? '+' : '-'}{convert(Math.abs(tx.totalAmount || tx.platformAmount || 0))}
+                          {tx.type === 'revenue' || tx.type === 'platform_revenue' ? '+' : '-'}{formatGold(Math.abs(tx.totalAmount || tx.platformAmount || 0))}
                         </p>
                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">
                           {tx.type === 'revenue' || tx.type === 'platform_revenue' ? 'Collected' : 'Deducted'}
@@ -3382,7 +3456,7 @@ export default function PlatformDashboard() {
                     {(user.points || 0).toLocaleString()}
                   </td>
                   <td className="px-6 py-4 text-green-600 dark:text-green-400 font-black text-sm">
-                    {convert(user.balance || 0)}
+                    {(user.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} G
                   </td>
                   <td className="px-6 py-4">
                     <span className={cn(
@@ -3422,7 +3496,7 @@ export default function PlatformDashboard() {
               </div>
               
               <p className="text-gray-600 dark:text-gray-400 mb-8 font-medium">
-                You are about to withdraw the entire Platform treasury of <span className="text-purple-600 font-black">{convert(auditBalance)}</span>. 
+                You are about to withdraw the entire Platform treasury of <span className="text-purple-600 font-black">{formatGold(auditBalance)}</span>. 
                 This action will be processed to Co-op Bank Account 01100975259001.
               </p>
 
@@ -3489,11 +3563,11 @@ export default function PlatformDashboard() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <p className="text-[9px] font-bold text-gray-400 uppercase">Current Usage</p>
-                      <p className="text-xl font-black text-gray-900 dark:text-white">{convert(velocityLimitInfo?.current || 0)}</p>
+                      <p className="text-xl font-black text-gray-900 dark:text-white">{formatGold(velocityLimitInfo?.current || 0)}</p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-[9px] font-bold text-gray-400 uppercase">Daily Limit</p>
-                      <p className="text-xl font-black text-red-500">{convert(velocityLimitInfo?.limit || 0)}</p>
+                      <p className="text-xl font-black text-red-500">{formatGold(velocityLimitInfo?.limit || 0)}</p>
                     </div>
                   </div>
                 </div>

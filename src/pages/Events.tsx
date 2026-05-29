@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, onSnapshot, doc, updateDoc, arrayUnion, arrayRemove, addDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import EventCard from '../components/EventCard';
-import { Loader2, Plus, Calendar, X, MapPin, Clock, Users, Share2, Info, DollarSign, Video, Star } from 'lucide-react';
+import { Loader2, Plus, Calendar, X, MapPin, Clock, Users, Share2, Info, Gem, Video, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useRevenue } from '../contexts/RevenueContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 
 interface Event {
   id: string;
@@ -24,6 +25,7 @@ interface Event {
 export default function Events() {
   const { userData } = useAuth();
   const { addRevenue } = useRevenue();
+  const { convert } = useCurrencyConverter();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -77,9 +79,9 @@ export default function Events() {
 
   const handleSponsorEvent = async (event: Event) => {
     if (!auth.currentUser || !userData || !db) return;
-    // Sponsorship Fee: $100.00
+    // Sponsorship Fee: 8000 USD (100 G)
     // 100% Platform revenue
-    const fee = 100.00;
+    const fee = 8000.00; 
     const platformShare = fee;
     const userShare = 0;
 
@@ -152,7 +154,7 @@ export default function Events() {
             attendees: [],
             category: 'Education',
             imageUrl: 'https://picsum.photos/seed/masterclass/800/400',
-            price: 25.00,
+            price: 2000.00, // 2000 USD = 25 G
             isVirtual: true
           }
         ];
@@ -185,8 +187,8 @@ export default function Events() {
     } else {
       // Check for payment if price exists
       if (event.price && event.price > 0) {
-        if (userData.balance < event.price) {
-          alert(`Insufficient balance. This event costs $${event.price.toFixed(2)}.`);
+        if ((userData?.balance || 0) < event.price) {
+          alert(`Insufficient reserve. This event costs KES ${event.price.toFixed(2)}.`);
           return;
         }
 
@@ -335,11 +337,11 @@ export default function Events() {
                   </div>
                   <div className="flex items-center gap-3 text-gray-600 dark:text-gray-300">
                     <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                      {selectedEvent.price ? <DollarSign className="w-5 h-5 text-indigo-500" /> : <Info className="w-5 h-5 text-indigo-500" />}
+                      {selectedEvent.price ? <Gem className="w-5 h-5 text-indigo-500" /> : <Info className="w-5 h-5 text-indigo-500" />}
                     </div>
                     <div>
-                      <p className="text-xs text-gray-400 uppercase font-bold">{selectedEvent.price ? 'Ticket Price' : 'Organizer'}</p>
-                      <p className="text-sm font-medium">{selectedEvent.price ? `$${selectedEvent.price.toFixed(2)}` : 'Community Member'}</p>
+                      <p className="text-xs text-gray-400 uppercase font-bold">{selectedEvent.price ? 'Ticket Entry' : 'Organizer'}</p>
+                      <p className="text-sm font-medium">{selectedEvent.price ? convert(selectedEvent.price) : 'Community Member'}</p>
                     </div>
                   </div>
                 </div>
@@ -358,8 +360,8 @@ export default function Events() {
                       disabled={isProcessing}
                       className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg hover:bg-indigo-700 shadow-lg shadow-indigo-200 dark:shadow-none transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                     >
-                      {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <DollarSign className="w-5 h-5" />}
-                      Buy Ticket (${selectedEvent.price.toFixed(2)})
+                      {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Gem className="w-5 h-5" />}
+                      Buy Ticket ({convert(selectedEvent.price)})
                     </button>
                   ) : (
                     <button 

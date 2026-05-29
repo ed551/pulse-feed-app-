@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
+import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 import { 
   Building2, 
   ArrowRightLeft, 
@@ -21,6 +22,7 @@ const BankingPortal: React.FC = () => {
   const [testMode, setTestMode] = useState<'ift' | 'pesalink'>('ift');
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
+  const { convert } = useCurrencyConverter();
 
   const iftPayload = {
     MessageReference: "PULSE-IFT-002",
@@ -358,15 +360,15 @@ const BankingPortal: React.FC = () => {
                         <h4 className="font-black text-xs text-indigo-600 uppercase mb-4 tracking-widest">Education Model (80/20)</h4>
                         <div className="flex justify-between items-center mb-2">
                           <span className="text-sm font-medium text-slate-600">Input Amount:</span>
-                          <span className="text-sm font-black text-slate-900">$10.50</span>
+                          <span className="text-sm font-black text-slate-900">{convert(10.50)}</span>
                         </div>
                         <div className="flex justify-between items-center text-indigo-600">
                           <span className="text-sm font-bold">Platform Share:</span>
-                          <span className="text-sm font-black">$8.40 (80%)</span>
+                          <span className="text-sm font-black">{convert(8.40)} (80%)</span>
                         </div>
                         <div className="flex justify-between items-center text-emerald-600">
                           <span className="text-sm font-bold">User Salary:</span>
-                          <span className="text-sm font-black">$2.10 (20%)</span>
+                          <span className="text-sm font-black">{convert(2.10)} (20%)</span>
                         </div>
                       </div>
 
@@ -374,15 +376,15 @@ const BankingPortal: React.FC = () => {
                         <h4 className="font-black text-xs text-amber-600 uppercase mb-4 tracking-widest">Active Time / Ads (50/50)</h4>
                         <div className="flex justify-between items-center mb-2">
                           <span className="text-sm font-medium text-slate-600">Input Amount:</span>
-                          <span className="text-sm font-black text-slate-900">$10.50</span>
+                          <span className="text-sm font-black text-slate-900">{convert(10.50)}</span>
                         </div>
                         <div className="flex justify-between items-center text-amber-600">
                           <span className="text-sm font-bold">Platform Share:</span>
-                          <span className="text-sm font-black">$5.25 (50%)</span>
+                          <span className="text-sm font-black">{convert(5.25)} (50%)</span>
                         </div>
                         <div className="flex justify-between items-center text-emerald-600">
                           <span className="text-sm font-bold">User Salary:</span>
-                          <span className="text-sm font-black">$5.25 (50%)</span>
+                          <span className="text-sm font-black">{convert(5.25)} (50%)</span>
                         </div>
                       </div>
                     </div>

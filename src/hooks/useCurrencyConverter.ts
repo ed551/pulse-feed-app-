@@ -15,6 +15,9 @@ export const useCurrencyConverter = () => {
     if (savedCurrency) {
       setCurrency(savedCurrency);
     }
+    
+    // Add Points to rates locally
+    setRates(prev => ({ ...prev, PTS: 100 }));
 
     // Fetch exchange rates
     const fetchRates = async () => {
@@ -22,7 +25,7 @@ export const useCurrencyConverter = () => {
         const response = await fetch('/api/rates');
         if (response.ok) {
           const data = await response.json();
-          setRates(data.rates);
+          setRates(prev => ({ ...prev, ...data.rates, PTS: 100 }));
         } else {
           const err = await response.json().catch(() => ({}));
           console.error('Exchange rate API returned error:', err);
@@ -43,7 +46,12 @@ export const useCurrencyConverter = () => {
   };
 
   const convert = (amountInUSD: number): string => {
-    const rate = rates[currency] || 1;
+    if (currency === 'PTS') {
+      const pts = amountInUSD * 100;
+      return `${Math.floor(pts).toLocaleString()} Points`;
+    }
+
+    const rate = rates[currency] || (currency === 'USD' ? 1 : (currency === 'KES' ? 135 : 1));
     const converted = amountInUSD * rate;
     
     return new Intl.NumberFormat('en-US', {

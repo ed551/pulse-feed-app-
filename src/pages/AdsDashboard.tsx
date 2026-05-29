@@ -1,12 +1,14 @@
-import { DollarSign, TrendingUp, Users, MousePointerClick, Activity, PieChart, Landmark, Send, CheckCircle, Clock, ArrowRight, Play, Loader2 } from "lucide-react";
+import { TrendingUp, Users, MousePointerClick, Activity, PieChart, Landmark, Send, CheckCircle, Clock, ArrowRight, Play, Loader2, Gem } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useRevenue } from "../contexts/RevenueContext";
+import { useCurrencyConverter } from "../hooks/useCurrencyConverter";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 
 export default function AdsDashboard() {
   const { userData } = useAuth();
   const { addRevenue } = useRevenue();
+  const { convert } = useCurrencyConverter();
   const navigate = useNavigate();
   const [isWatching, setIsWatching] = useState(false);
 
@@ -15,18 +17,20 @@ export default function AdsDashboard() {
     // Simulate ad watching
     await new Promise(resolve => setTimeout(resolve, 3000));
     
-    // High-Yield Ad: $1.00 for premium engagement (simulated)
-    const totalRevenue = 1.00;
-    const userShare = totalRevenue * 0.5;
-    const platformShare = totalRevenue * 0.5;
+    // High-Yield Ad: 100 Points ($1.00) simulated high yield
+    const rewardPoints = 100;
+    const userShareInPoints = rewardPoints * 0.5;
+    const platformShareInUSD = (rewardPoints * 0.5) / 100;
     
-    await addRevenue(userShare, platformShare, "High-Yield Ad Engagement", "ad");
+    // addRevenue handles points internally for user share if pointsAdded passed? 
+    // Wait, let's check addRevenue signature
+    await addRevenue(userShareInPoints / 100, platformShareInUSD, "High-Yield Ad Engagement", "ad");
     
     setIsWatching(false);
     window.dispatchEvent(new CustomEvent('show-notification', { 
       detail: { 
         title: "High-Yield Reward!", 
-        body: `BOOM! You earned $${userShare.toFixed(2)} from this premium ad session!` 
+        body: `BOOM! You earned ${userShareInPoints} Community Points from this premium ad session!` 
       } 
     }));
   };
@@ -35,7 +39,7 @@ export default function AdsDashboard() {
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-yellow-500 to-orange-500 flex items-center">
-          <DollarSign className="w-8 h-8 mr-2 text-yellow-500" />
+          <Gem className="w-8 h-8 mr-2 text-yellow-500" />
           AdMob & AdSense Revenue
         </h1>
       </div>
@@ -43,7 +47,7 @@ export default function AdsDashboard() {
       <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg text-white flex flex-col md:flex-row items-center justify-between">
         <div>
           <h2 className="text-green-100 font-medium uppercase tracking-wider text-sm mb-1">Your Ad Revenue Share</h2>
-          <div className="text-4xl font-black">{userData?.adRevenue ? `$${userData.adRevenue.toFixed(2)}` : '$0.00'}</div>
+          <div className="text-4xl font-black">${(userData?.adRevenue || 0).toFixed(2)}</div>
           <p className="text-green-100 text-sm mt-2">Earned from your engagement and content views.</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 mt-4 md:mt-0">
@@ -70,10 +74,10 @@ export default function AdsDashboard() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-gray-500 dark:text-gray-400 font-medium">Estimated Earnings</h3>
             <div className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg">
-              <DollarSign className="w-5 h-5" />
+              <Gem className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-3xl font-bold text-gray-900 dark:text-white">$1,245.89</div>
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">$15.57</div>
           <div className="flex items-center mt-2 text-sm text-green-600 dark:text-green-400 font-medium">
             <TrendingUp className="w-4 h-4 mr-1" />
             +12.5% from last month
@@ -115,7 +119,7 @@ export default function AdsDashboard() {
               <Activity className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-3xl font-bold text-gray-900 dark:text-white">$8.74</div>
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">$0.10</div>
           <div className="flex items-center mt-2 text-sm text-red-500 font-medium">
             <TrendingUp className="w-4 h-4 mr-1 rotate-180" />
             -2.1% from last month
@@ -140,7 +144,7 @@ export default function AdsDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Community Rewards Pool</h3>
-            <div className="text-3xl font-black text-green-500 mb-2">$622.94</div>
+            <div className="text-3xl font-black text-green-500 mb-2">$7,786.00</div>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Distributed back to users via the Rewards system for viewing ads, creating content, and participating in the community.
               <br/><br/>
@@ -200,7 +204,7 @@ export default function AdsDashboard() {
               </div>
               <div>
                 <div className="font-bold text-gray-900 dark:text-white">Tax Remission: IRS (USA)</div>
-                <div className="text-xs text-gray-500">Amount: $12.50 (30% WHT) • Ref: TX-99282</div>
+                <div className="text-xs text-gray-500">Amount: $12.48 (30% WHT) • Ref: TX-99282</div>
               </div>
             </div>
             <span className="text-xs font-bold text-yellow-500 flex items-center"><Clock className="w-3 h-3 mr-1"/> Pending Batch</span>
