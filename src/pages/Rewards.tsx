@@ -93,49 +93,15 @@ export default function Rewards() {
   const membershipLevel = userData?.membershipLevel || 'bronze';
 
   const canWithdrawNow = useMemo(() => {
-    if (isDeveloper) return true;
     const now = new Date();
-    const day = now.getDate();
-    const dayOfWeek = now.getDay(); // 0 is Sunday
-
-    if (membershipLevel === 'gold') {
-      // Gold can withdraw on Sundays
-      return dayOfWeek === 0;
-    } else if (membershipLevel === 'silver') {
-      // Silver can withdraw on 1st or 15th
-      return day === 1 || day === 15;
-    } else {
-      // Bronze can only withdraw on the 1st
-      return day === 1;
-    }
-  }, [isDeveloper, membershipLevel]);
+    return now.getDate() === 1;
+  }, []);
 
   const nextRedemptionDate = useMemo(() => {
-    if (isDeveloper) return "Instant Access";
-    
     const now = new Date();
-    
-    // Tiered Withdrawal Frequency
-    if (membershipLevel === 'gold') {
-      // Weekly Payouts (Next Sunday)
-      const nextSunday = new Date(now);
-      nextSunday.setDate(now.getDate() + (7 - now.getDay()) % 7 || 7);
-      return `Next Sunday: ${nextSunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-    } else if (membershipLevel === 'silver') {
-      // Mid-month Payouts (15th)
-      const currentMonth15 = new Date(now.getFullYear(), now.getMonth(), 15);
-      if (now.getDate() < 15) {
-        return `Mid-Month: ${currentMonth15.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-      } else {
-        const nextMonth15 = new Date(now.getFullYear(), now.getMonth() + 1, 15);
-        return `Mid-Month: ${nextMonth15.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-      }
-    } else {
-      // Bronze: Monthly (1st of next month)
-      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      return nextMonth.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-    }
-  }, [isDeveloper, membershipLevel]);
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + (now.getDate() === 1 ? 0 : 1), 1);
+    return nextMonth.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  }, []);
 
   useEffect(() => {
     if (!currentUser || !db) return;
@@ -214,53 +180,56 @@ export default function Rewards() {
         setScaError(`Daily velocity limit of $${limitUSD} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is $5,000.`);
       }
 
-      if (!isDeveloper && numAmount > kesBalance) throw new Error("Insufficient balance");
+      if (!isDeveloper && numAmount > kesBalance) throw new Error("Insufficient reserve for this withdrawal request.");
 
-      let endpoint = '/api/payout/mpesa';
-      let body: any = { 
-        amount: numAmount, 
-        userId: currentUser?.uid,
-        scaToken: pin,
-        usePasskey,
-        totpCode: totp
-      };
-
-      if (localMethod === 'mpesa') {
-        if (!phoneNumber) throw new Error("Phone number is required");
-        body.phoneNumber = phoneNumber;
-      } else if (localMethod === 'bank') {
-        if (!bankDetails.accountNumber) throw new Error("Bank account number is required");
-        endpoint = '/api/payout/bank';
-        body.bankDetails = bankDetails;
-      } else if (localMethod === 'paybill') {
-        if (!paybillDetails.businessNumber || !paybillDetails.accountNumber) throw new Error("Paybill details are required");
-        endpoint = '/api/payout/paybill';
-        body.paybillDetails = paybillDetails;
-      }
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-
-      const result = await response.json();
+      const isQueued = !canWithdrawNow;
       
-      if (result.status === 'SOFT_DECLINE') {
-        setScaError(result.message);
-        
-        // Auto-switch to a higher security method if requiredLevel is higher than current auth
-        if (result.requiredLevel >= 2 && authMethod === 'pin') {
-          setAuthMethod('totp');
+      let result: any = { success: true, message: isQueued ? "Withdrawal queued for 1st of month" : "Processing..." };
+      
+      if (!isQueued) {
+        let endpoint = '/api/payout/mpesa';
+        let body: any = { 
+          amount: numAmount, 
+          userId: currentUser?.uid,
+          scaToken: pin,
+          usePasskey,
+          totpCode: totp
+        };
+
+        if (localMethod === 'mpesa') {
+          if (!phoneNumber) throw new Error("Phone number is required");
+          body.phoneNumber = phoneNumber;
+        } else if (localMethod === 'bank') {
+          if (!bankDetails.accountNumber) throw new Error("Bank account number is required");
+          endpoint = '/api/payout/bank';
+          body.bankDetails = bankDetails;
+        } else if (localMethod === 'paybill') {
+          if (!paybillDetails.businessNumber || !paybillDetails.accountNumber) throw new Error("Paybill details are required");
+          endpoint = '/api/payout/paybill';
+          body.paybillDetails = paybillDetails;
         }
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        result = await response.json();
         
-        setShowSCAModal(true);
-        setScaPendingAction(() => (p: string, up?: boolean, t?: string) => handlePayment(undefined, p, up, t));
-        return;
+        if (result.status === 'SOFT_DECLINE') {
+          setScaError(result.message);
+          if (result.requiredLevel >= 2 && authMethod === 'pin') {
+            setAuthMethod('totp');
+          }
+          setShowSCAModal(true);
+          setScaPendingAction(() => (p: string, up?: boolean, t?: string) => handlePayment(undefined, p, up, t));
+          return;
+        }
       }
 
-      if (result.success || result.ResponseCode === "0") {
-        setSuccess(result.message || "Payout request initiated successfully!");
+      if (result.success || result.ResponseCode === "0" || isQueued) {
+        setSuccess(isQueued ? `Success! ${numAmount} KES queued for payment on ${nextRedemptionDate}.` : (result.message || "Payout request initiated successfully!"));
         setAmount("");
         
             // Log transaction to Firestore
@@ -275,10 +244,11 @@ export default function Rewards() {
                 amount: numAmount,
                 currency: 'KES',
                 type: localMethod,
-                status: result.status || (result.success ? 'success' : 'pending'),
+                status: isQueued ? 'queued' : (result.status || (result.success ? 'success' : 'pending')),
+                scheduledDate: isQueued ? nextRedemptionDate : null,
                 timestamp: serverTimestamp(),
-                reference: result.transactionId || result.CheckoutRequestID || "N/A",
-                details: result.message || (result.status === 'blocked' ? 'Blocked by Bank Firewall' : 'Transaction processed'),
+                reference: result.transactionId || result.CheckoutRequestID || `Q-${Date.now()}`,
+                details: isQueued ? `Queued for Monthly Batch (${nextRedemptionDate})` : (result.message || (result.status === 'blocked' ? 'Blocked by Bank Firewall' : 'Transaction processed')),
                 pointsDeducted: mgToDeduct,
                 gramsDeducted: gramsToDeduct,
                 usdEquivalent: usdAmount,
@@ -291,12 +261,11 @@ export default function Rewards() {
               await addDoc(txRef, txData);
               
               // Also log to the central withdrawals collection for admin visibility
-              // Use setDoc with reference as ID to ensure idempotency with server-side logs
               import('firebase/firestore').then(({ doc, setDoc }) => {
                 setDoc(doc(db, 'withdrawals', txData.reference), {
                   ...txData,
                   userName: userData?.displayName || 'Anonymous',
-                  processedAt: result.success ? serverTimestamp() : null
+                  processedAt: (result.success && !isQueued) ? serverTimestamp() : null
                 }, { merge: true }).catch(err => console.error("Central withdrawal logging failed:", err));
               });
 
@@ -367,8 +336,11 @@ export default function Rewards() {
 
       if (!isDeveloper && numAmount > balanceUSD) throw new Error("Insufficient gold reserve for this amount");
 
-      // Logic for international payout
-      if (currentUser) {
+      const isQueued = !canWithdrawNow;
+      
+      let result: any = { success: true, message: isQueued ? "Withdrawal queued for 1st of month" : "Processing..." };
+
+      if (!isQueued) {
         const body = {
           method: payoutMethod,
           amount: numAmount,
@@ -386,16 +358,13 @@ export default function Rewards() {
           body: JSON.stringify(body)
         });
 
-        const result = await response.json();
+        result = await response.json();
 
         if (result.status === 'SOFT_DECLINE') {
           setScaError(result.message);
-          
-          // Auto-switch to a higher security method if requiredLevel is higher than current auth
           if (result.requiredLevel >= 2 && authMethod === 'pin') {
             setAuthMethod('totp');
           }
-
           setShowSCAModal(true);
           setScaPendingAction(() => (p: string, up?: boolean, t?: string) => handleInternationalPayout(undefined, p, up, t));
           return;
@@ -404,68 +373,70 @@ export default function Rewards() {
         if (!result.success) {
           throw new Error(result.message || "Payout initiation failed");
         }
-
-        if (currentUser && db) {
-          const txRef = collection(db, 'users', currentUser.uid, 'transactions');
-          const userRef = doc(db, 'users', currentUser.uid);
-          
-          const reference = result.transactionId || `GLD-INT-${Date.now()}`;
-          const gramsToDeduct = numAmount / GOLD_PRICE_USD;
-          const mgToDeduct = Math.floor(gramsToDeduct * 1000);
-          
-          const txData = {
-            amount: numAmount,
-            currency: 'USD',
-            type: payoutMethod,
-            status: 'pending',
-            email: payoutEmail,
-            bankDetails: payoutMethod === 'bank' ? bankDetails : null,
-            timestamp: serverTimestamp(),
-            reference,
-            details: `International ${payoutMethod} payout request (Gold Liquidated)`,
-            pointsDeducted: mgToDeduct,
-            gramsDeducted: gramsToDeduct,
-            previousPoints: points,
-            remainingPoints: points - mgToDeduct,
-            userId: currentUser.uid,
-            userEmail: currentUser.email,
-            scaToken: pin,
-            usePasskey,
-            totpCode: totp
-          };
-
-          await addDoc(txRef, txData);
-
-          // Also log to the central withdrawals collection for admin visibility
-          await addDoc(collection(db, 'withdrawals'), {
-            ...txData,
-            userName: userData?.displayName || 'Anonymous',
-          }).catch(err => console.error("Central withdrawal logging failed:", err));
-
-          await updateDoc(userRef, {
-            points: increment(-mgToDeduct),
-            balance: increment(-gramsToDeduct),
-            totalWithdrawals: increment(numAmount)
-          });
-
-          // Audit Ledger Entry
-          await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
-            amount: -mgToDeduct,
-            balanceAfter: points - mgToDeduct,
-            type: 'deduction',
-            source: 'withdrawal',
-            reason: `International Payout (${payoutMethod}) - Gold Liquidation`,
-            timestamp: serverTimestamp(),
-            unit: 'mg'
-          }).catch(err => console.error("Error logging points ledger:", err));
-        } else if (currentUser && !db) {
-          console.warn("Firestore not available for international payout logging.");
-        }
-        
-        setSuccess(`International payout request of $${numAmount} submitted successfully!`);
-        setPayoutAmount("");
-        setPayoutEmail("");
       }
+
+      if (currentUser && db) {
+        const txRef = collection(db, 'users', currentUser.uid, 'transactions');
+        
+        const reference = result.transactionId || `GLD-INT-${Date.now()}`;
+        const gramsToDeduct = numAmount / GOLD_PRICE_USD;
+        const mgToDeduct = Math.floor(gramsToDeduct * 1000);
+        
+        const txData = {
+          amount: numAmount,
+          currency: 'USD',
+          type: payoutMethod,
+          status: isQueued ? 'queued' : 'pending',
+          email: payoutEmail,
+          bankDetails: payoutMethod === 'bank' ? bankDetails : null,
+          timestamp: serverTimestamp(),
+          scheduledDate: isQueued ? nextRedemptionDate : null,
+          reference,
+          details: isQueued ? `Queued for Monthly Batch (${nextRedemptionDate})` : `International ${payoutMethod} payout request (Gold Liquidated)`,
+          pointsDeducted: mgToDeduct,
+          gramsDeducted: gramsToDeduct,
+          previousPoints: points,
+          remainingPoints: points - mgToDeduct,
+          userId: currentUser.uid,
+          userEmail: currentUser.email,
+          scaToken: pin,
+          usePasskey,
+          totpCode: totp
+        };
+
+        await addDoc(txRef, txData);
+
+        // Also log to the central withdrawals collection for admin visibility
+        await addDoc(collection(db, 'withdrawals'), {
+          ...txData,
+          userName: userData?.displayName || 'Anonymous',
+        }).catch(err => console.error("Central withdrawal logging failed:", err));
+
+        // Deduct balance immediately for the queued amount
+        const userRef = doc(db, 'users', currentUser.uid);
+        await updateDoc(userRef, {
+          points: increment(-mgToDeduct),
+          balance: increment(-gramsToDeduct),
+          totalWithdrawals: increment(numAmount)
+        });
+
+        // Audit Ledger Entry
+        await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
+          amount: -mgToDeduct,
+          balanceAfter: points - mgToDeduct,
+          type: 'deduction',
+          source: 'withdrawal',
+          reason: `International Payout (${payoutMethod}) - Gold Liquidation`,
+          timestamp: serverTimestamp(),
+          unit: 'mg'
+        }).catch(err => console.error("Error logging points ledger:", err));
+      } else if (currentUser && !db) {
+        console.warn("Firestore not available for international payout logging.");
+      }
+      
+      setSuccess(`International payout request of $${numAmount} submitted successfully! ${isQueued ? "(Queued for 1st of month)" : ""}`);
+      setPayoutAmount("");
+      setPayoutEmail("");
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -1339,11 +1310,7 @@ export default function Rewards() {
                     <p className="text-[10px] text-white/60">
                       {isDeveloper 
                         ? "Developer Priority: Zero Limits" 
-                        : membershipLevel === 'gold' 
-                          ? "Gold Status: Weekly Payouts" 
-                          : membershipLevel === 'silver' 
-                            ? "Silver Status: Bi-Monthly Payouts" 
-                            : "Bronze Status: Monthly Batching"}
+                        : "Consolidated Monthly Batching (1st of Month)"}
                     </p>
                   </div>
                 </div>
@@ -1400,11 +1367,7 @@ export default function Rewards() {
                   <strong>3. Platform Payments:</strong> To ensure the long-term sustainability of our high-performance AI infrastructure, all direct platform payments—including Advanced AI Lab access, Event tickets, and Marketplace transactions—belong 100% to the platform treasury.
                   <br/><br/>
                   <strong>3. Withdrawals:</strong> {isDeveloper ? "Developer accounts are exempt from all minimum limits and time restrictions. Access is instant and absolute." : 
-                    membershipLevel === 'gold' 
-                      ? "Gold members enjoy weekly payout settlements every Sunday with prioritized processing." 
-                      : membershipLevel === 'silver' 
-                        ? "Silver members benefit from mid-month and end-of-month payout cycles." 
-                        : "Bronze earnings are processed in standard monthly batches on the 1st of each month."}
+                    "All earnings are batched and processed in standard monthly cycles on the 1st of each month. You can queue your withdrawal at any time, and it will be settled during the next available batch gate."}
                   <br/><br/>
                   <strong>Tax Compliance:</strong> The platform operates via a global Merchant of Record (MoR). This means your local and international taxes (e.g., VAT, WHT) are automatically calculated, withheld, and legally remitted directly to your country's tax authority (like KRA, IRS, or HMRC) on your behalf.
                 </p>

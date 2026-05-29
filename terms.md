@@ -11,7 +11,13 @@
 *   **Log Data:** If the app crashes or has an error, your phone sends us "Log Data". This includes your phone’s IP address, device name, and the time you used the app to help us fix the problem.
 *   **Third Parties:** We use services like Google Play and One Signal. These third parties may have access to some info to perform tasks for us, but they are not allowed to use it for anything else.
 
-## 3. Safety & Cookies
+## 3. Rewards and Withdrawals
+*   **Settlement Schedule:** All user earnings and rewards are subject to consolidated monthly batch processing.
+*   **Payout Date:** Automated disbursements are executed on the **1st of every month**.
+*   **Queuing Mechanism:** Users may initiate a withdrawal request (queue) at any time. Once initiated, the amount is reserved and scheduled for the next upcoming settlement gate on the 1st of the month.
+*   **Tax Compliance:** Platform earnings are subject to automated tax remittance via our Merchant of Record (MoR) protocols.
+
+## 4. Safety & Cookies
 *   **Cookies:** These are tiny files used as "ID cards" for your device. While we don't use them directly, the tools we use might. You can choose to block them in your settings, but some parts of the app may stop working.
 *   **Security:** We work hard to keep your data safe, but please remember that no internet service is 100% secure.
 *   **Children:** This app is not for anyone under 13. If we find a child’s data on our servers, we will delete it immediately.

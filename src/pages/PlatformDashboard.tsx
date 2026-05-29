@@ -68,7 +68,7 @@ export default function PlatformDashboard() {
   const [networkAlerts, setNetworkAlerts] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showSystemAuditPopup, setShowSystemAuditPopup] = useState(false);
-  const [withdrawalFilter, setWithdrawalFilter] = useState<'all' | 'user' | 'operational' | 'pending' | 'success'>('operational');
+  const [withdrawalFilter, setWithdrawalFilter] = useState<'all' | 'user' | 'operational' | 'pending' | 'success' | 'queued'>('operational');
   const [systemHealth, setSystemHealth] = useState({
     cpu: 18,
     memory: 42,
@@ -159,13 +159,65 @@ export default function PlatformDashboard() {
 
   const filteredWithdrawals = useMemo(() => {
     return userWithdrawals.filter(w => {
-      if (withdrawalFilter === 'user') return w.category === 'user';
+      if (withdrawalFilter === 'user') return w.category === 'user' && w.status !== 'queued';
       if (withdrawalFilter === 'operational') return w.category === 'operational' || w.status === 'simulated' || !w.category;
       if (withdrawalFilter === 'pending') return w.status === 'pending';
+      if (withdrawalFilter === 'queued') return w.status === 'queued';
       if (withdrawalFilter === 'success') return w.status === 'success';
       return true;
     });
   }, [userWithdrawals, withdrawalFilter]);
+
+  const queuedBatchTotal = useMemo(() => {
+    return userWithdrawals
+      .filter(w => w.status === 'queued')
+      .reduce((sum, w) => sum + (w.amount || 0), 0);
+  }, [userWithdrawals]);
+
+  const handleProcessMonthlyBatch = async () => {
+    if (!db || !isDevUnlocked) return;
+    const queuedCount = userWithdrawals.filter(w => w.status === 'queued').length;
+    if (queuedCount === 0) {
+      setSuccess("No queued withdrawals to process.");
+      return;
+    }
+
+    if (!window.confirm(`CRITICAL: You are about to process the monthly batch for ${queuedCount} requests totaling ${convert(queuedBatchTotal)}. This will initiate active payouts. Continue?`)) {
+      return;
+    }
+
+    setIsRefreshing(true);
+    try {
+      const { writeBatch, doc } = await import('firebase/firestore');
+      const batch = writeBatch(db);
+      const queuedDocs = userWithdrawals.filter(w => w.status === 'queued');
+
+      for (const w of queuedDocs) {
+        // Update central withdrawal status
+        batch.update(doc(db, 'withdrawals', w.id), {
+          status: 'success',
+          processedAt: serverTimestamp(),
+          batchRef: `BATCH-${new Date().toISOString().split('T')[0]}`
+        });
+
+        // Update user's transaction status
+        if (w.userId) {
+          batch.update(doc(db, 'users', w.userId, 'transactions', w.reference || w.id), {
+            status: 'success',
+            processedAt: serverTimestamp()
+          });
+        }
+      }
+
+      await batch.commit();
+      setSuccess(`Successfully processed monthly batch: ${queuedCount} payouts finalized.`);
+      handleRefresh();
+    } catch (err: any) {
+      setError(`Batch processing failed: ${err.message}`);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handlePurgeAllSystemLogs = async () => {
     if (!db || !isDevUnlocked) return;
@@ -1783,7 +1835,7 @@ export default function PlatformDashboard() {
             
             <div className="flex items-center gap-2">
               <div className="flex bg-gray-100 dark:bg-gray-900 p-1 rounded-xl border border-gray-100 dark:border-gray-800">
-                {(['user', 'operational', 'pending', 'all'] as const).map((f) => (
+                {(['queued', 'user', 'operational', 'pending', 'all'] as const).map((f) => (
                   <button
                     key={f}
                     onClick={() => setWithdrawalFilter(f)}
@@ -1823,17 +1875,53 @@ export default function PlatformDashboard() {
             </div>
           </div>
 
-          {/* Payout Cycle Notice */}
-          <div className="mb-6 p-4 bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800/50 rounded-2xl flex items-center gap-4">
-             <div className="p-2 bg-indigo-100 dark:bg-indigo-800 rounded-lg">
-                <Calendar className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-             </div>
-             <div>
-                <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider mb-0.5">Automated Monthly Settlement Protocol</p>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                  Withdrawals are batched and disbursed on the <span className="font-bold text-indigo-600 dark:text-indigo-400">1st of every month</span>. Current status records represent queued requests, not final disbursements.
-                </p>
-             </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            {/* Payout Cycle Notice */}
+            <div className="p-4 bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800/50 rounded-2xl flex items-center gap-4">
+              <div className="p-2 bg-indigo-100 dark:bg-indigo-800 rounded-lg">
+                  <Calendar className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <div>
+                  <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider mb-0.5">Monthly Settlement Protocol</p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    Withdrawals are disbursed on the <span className="font-bold text-indigo-600 dark:text-indigo-400">1st of every month</span>.
+                  </p>
+              </div>
+            </div>
+
+            {/* Batch Processing Controls */}
+            <div className={cn(
+              "p-4 rounded-2xl border transition-all flex items-center justify-between gap-4",
+              queuedBatchTotal > 0 
+                ? "bg-purple-600 border-purple-500 shadow-lg shadow-purple-600/20" 
+                : "bg-gray-50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800"
+            )}>
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "p-2 rounded-lg",
+                  queuedBatchTotal > 0 ? "bg-white/20" : "bg-gray-200 dark:bg-gray-800"
+                )}>
+                  <Zap className={cn("w-4 h-4", queuedBatchTotal > 0 ? "text-white" : "text-gray-400")} />
+                </div>
+                <div>
+                  <p className={cn("text-[10px] font-black uppercase tracking-widest", queuedBatchTotal > 0 ? "text-purple-100" : "text-gray-400")}>Upcoming Monthly Batch</p>
+                  <p className={cn("text-sm font-black", queuedBatchTotal > 0 ? "text-white" : "text-gray-400")}>{convert(queuedBatchTotal)}</p>
+                </div>
+              </div>
+              
+              <button 
+                onClick={handleProcessMonthlyBatch}
+                disabled={isRefreshing || queuedBatchTotal === 0 || !isDevUnlocked}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                  queuedBatchTotal > 0 && isDevUnlocked
+                    ? "bg-white text-purple-600 hover:bg-purple-50 shadow-sm"
+                    : "bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed"
+                )}
+              >
+                {isRefreshing ? "Processing..." : "Process Batch"}
+              </button>
+            </div>
           </div>
 
           <div className="bg-white dark:bg-gray-800 rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-700 shadow-xl">
@@ -1916,9 +2004,10 @@ export default function PlatformDashboard() {
                           <div className="flex flex-col items-center gap-1.5">
                             <span className={cn(
                               "px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-[0.1em] inline-flex items-center gap-1.5 border shadow-sm",
-                              w.status === 'success' ? "bg-green-50 text-green-700 border-green-100 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800/50" :
+                              w.status === 'success' || w.status === 'completed' ? "bg-green-50 text-green-700 border-green-100 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800/50" :
                               w.status === 'simulated' || w.status === 'blocked' ? "bg-red-50 text-red-700 border-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/50" :
                               w.status === 'pending' ? "bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800/50" :
+                              w.status === 'queued' ? "bg-purple-50 text-purple-700 border-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800/50" :
                               w.status === 'rolled_back' ? "bg-gray-50 text-gray-500 border-gray-100 dark:border-gray-800" :
                               "bg-red-50 text-red-700 border-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/50"
                             )}>
@@ -1926,6 +2015,8 @@ export default function PlatformDashboard() {
                                 <ShieldAlert className="w-3 h-3 animate-pulse" />
                               ) : (w.status === 'success' || w.status === 'completed') ? (
                                 <CheckCircle className="w-3 h-3" />
+                              ) : w.status === 'queued' ? (
+                                <Clock className="w-3 h-3 text-purple-500" />
                               ) : (
                                 <Clock className="w-3 h-3" />
                               )}
