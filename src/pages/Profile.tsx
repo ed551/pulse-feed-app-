@@ -525,7 +525,7 @@ export default function Profile() {
           className={cn(
             "p-6 rounded-3xl border-2 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group",
             userData?.membershipLevel === 'gold' 
-              ? "bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-900/10 dark:to-amber-900/10 border-yellow-200 dark:border-yellow-800" 
+              ? "bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/10 dark:to-purple-900/10 border-indigo-200 dark:border-indigo-800" 
               : userData?.membershipLevel === 'silver'
               ? "bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 border-blue-200 dark:border-blue-800"
               : "bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/10 dark:to-orange-900/20 border-orange-200 dark:border-orange-800"
@@ -540,7 +540,7 @@ export default function Profile() {
             <div className={cn(
               "w-20 h-20 rounded-[2rem] flex items-center justify-center shadow-xl",
               userData?.membershipLevel === 'gold' 
-                ? "bg-gradient-to-br from-yellow-400 to-yellow-600 shadow-yellow-500/20" 
+                ? "bg-gradient-to-br from-indigo-400 to-purple-600 shadow-indigo-500/20" 
                 : userData?.membershipLevel === 'silver'
                 ? "bg-gradient-to-br from-blue-400 to-indigo-600 shadow-blue-500/20"
                 : "bg-gradient-to-br from-orange-400 to-orange-600 shadow-orange-500/20"
@@ -559,12 +559,10 @@ export default function Profile() {
               <h3 className={cn(
                 "text-3xl font-black italic tracking-tighter capitalize mb-2",
                 userData?.membershipLevel === 'gold' 
-                  ? "text-yellow-700 dark:text-yellow-400" 
+                  ? "text-indigo-700 dark:text-indigo-400" 
                   : userData?.membershipLevel === 'silver'
-                  ? "text-blue-700 dark:text-blue-400"
-                  : "text-orange-700 dark:text-orange-400"
               )}>
-                {userData?.membershipLevel || 'Bronze'} {t('tier_label')}
+                {userData?.membershipLevel === 'gold' ? 'Market' : userData?.membershipLevel || 'Bronze'} {t('tier_label')}
               </h3>
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1.5">

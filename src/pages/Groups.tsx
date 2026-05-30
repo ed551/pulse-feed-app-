@@ -36,7 +36,7 @@ export default function Groups() {
   }, []);
 
   const [groupList, setGroupList] = useState([
-    { id: 1, name: 'Gold Traders Elite', desc: 'Daily analysis and predictions for gold markets.', members: '12.4k', joined: true, admin: false },
+    { id: 1, name: 'Market Traders Elite', desc: 'Daily analysis and predictions for yield markets.', members: '12.4k', joined: true, admin: false },
     { id: 2, name: 'Tech Innovators', desc: 'Discussing the latest in AI and tech.', members: '8.2k', joined: false, admin: false },
     { id: 3, name: 'Pulse Feeds Creators', desc: 'Official group for platform creators and developers.', members: '45k', joined: true, admin: true },
     { id: 4, name: 'Health & Wellness', desc: 'Tips for maintaining a healthy lifestyle using our AI checker.', members: '3.1k', joined: false, admin: false },

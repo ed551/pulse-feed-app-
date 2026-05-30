@@ -145,7 +145,7 @@ export default function Terms() {
         </p>
         <ul>
           <li><strong>Processing Window:</strong> All withdrawal requests are processed in a consolidated monthly batch. Disbursements are executed on the 1st of every month.</li>
-          <li><strong>Minimum Threshold:</strong> You must reach a minimum balance (e.g., 1.25 G equivalent) before a withdrawal can be initiated.</li>
+          <li><strong>Minimum Threshold:</strong> You must reach a minimum balance (e.g., $1.25 equivalent) before a withdrawal can be initiated.</li>
           <li><strong>Verification:</strong> We reserve the right to delay or deny any withdrawal pending further identity or activity verification.</li>
           <li><strong>Forfeiture:</strong> Rewards not withdrawn within 12 months of being earned may be subject to forfeiture or administrative fees.</li>
         </ul>

@@ -34,7 +34,7 @@ const Membership = lazy(() => import("./pages/Membership"));
 const AudioHub = lazy(() => import("./pages/AudioHub"));
 const EducationHub = lazy(() => import("./pages/EducationHub"));
 const MarketData = lazy(() => import("./pages/MarketData"));
-const Dating = lazy(() => import("./pages/Dating"));
+const GoldGraph = lazy(() => import("./pages/GoldGraph"));
 const PasskeyAuth = lazy(() => import("./pages/PasskeyAuth"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 
@@ -210,9 +210,9 @@ export default function App() {
                       <MarketData />
                     </ProtectedRoute>
                   } />
-                  <Route path="dating" element={
+                  <Route path="gold" element={
                     <ProtectedRoute>
-                      <Dating />
+                      <GoldGraph />
                     </ProtectedRoute>
                   } />
                   <Route path="passkey-auth" element={<PasskeyAuth />} />

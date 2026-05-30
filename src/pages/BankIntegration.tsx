@@ -88,9 +88,9 @@ const BankingPortal: React.FC = () => {
 
   const revenuePayload = {
     userId: "user_123",
-    totalAmount: 1.250, // 1.25g Gold
+    totalAmount: 1.250, // 1.25 USD
     source: "education",
-    reason: "Learn & Earn: Gold Mastery Module"
+    reason: "Learn & Earn: Market Mastery Module"
   };
 
   const splitResult = {

@@ -98,7 +98,10 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
           // Success!
         } else {
           const combinedErrorText = (data.error || "" + JSON.stringify(data)).toLowerCase();
-          const isBilling = response.status === 402 || data.code === "BILLING_DEPLETED";
+          const isBilling = response.status === 402 || 
+                            data.code === "BILLING_DEPLETED" || 
+                            combinedErrorText.includes("billing") || 
+                            combinedErrorText.includes("depleted");
           const isRetryable = response.status === 503 || response.status === 429 || response.status === 504 || response.status === 502 || response.status === 500;
           
           if (isRetryable && proxyRetries < MAX_PROXY_RETRIES) {
@@ -175,6 +178,7 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
                           combinedErrorText.includes("depleted") ||
                           combinedErrorText.includes("insufficient balance") ||
                           combinedErrorText.includes("credit") ||
+                          combinedErrorText.includes("billing_depleted") ||
                           status === 402;
 
         const isQuotaExceeded = status === 429 || combinedErrorText.includes("quota") || combinedErrorText.includes("resource_exhausted");
@@ -200,14 +204,14 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
 
           // If billing is depleted, strictly use free tier candidates ONLY
           if (isDepleted) {
+            const waitTime = 10000;
+            console.warn(`[Client AI] Billing issue. Waiting ${waitTime/1000}s for recovery cooldown...`);
+            await delay(waitTime);
+
             const currentModel = params.model;
-            if (currentModel === 'gemini-3-flash-preview' || currentModel === 'gemini-2.0-flash') {
-              params.model = 'gemini-3.5-flash';
-              console.warn(`[Client AI] Billing issue. Switching to free tier: ${params.model}`);
-              continue;
-            } else if (currentModel === 'gemini-3.5-flash') {
+            if (currentModel === 'gemini-3-flash-preview' || currentModel === 'gemini-2.0-flash' || currentModel === 'gemini-3.5-flash') {
               params.model = 'gemini-flash-latest';
-              console.warn(`[Client AI] Trying reliable flash fallback: ${params.model}`);
+              console.warn(`[Client AI] Billing issue. Switching to free tier: ${params.model}`);
               continue;
             } else if (currentModel === 'gemini-flash-latest') {
               params.model = 'gemini-1.5-flash-002';
@@ -218,6 +222,10 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
               console.warn(`[Client AI] Trying micro flash: ${params.model}`);
               continue;
             } else if (currentModel === 'gemini-1.5-flash-8b') {
+              params.model = 'gemini-1.5-flash-001';
+              console.warn(`[Client AI] Trying legacy flash: ${params.model}`);
+              continue;
+            } else if (currentModel === 'gemini-1.5-flash-001') {
               params.model = 'gemini-3.1-flash-lite';
               console.warn(`[Client AI] Trying lite free tier: ${params.model}`);
               continue;
@@ -230,8 +238,12 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
               console.warn(`[Client AI] Trying base pro: ${params.model}`);
               continue;
             } else if (currentModel === 'gemini-1.5-pro-002' || currentModel === 'gemini-1.5-pro') {
+              params.model = 'gemini-1.0-pro';
+              console.warn(`[Client AI] Trying ultimate legacy pro fallback: ${params.model}`);
+              continue;
+            } else if (currentModel === 'gemini-1.0-pro') {
               params.model = 'gemini-2.0-flash-exp';
-              console.warn(`[Client AI] Trying next-gen flash exp: ${params.model}`);
+              console.warn(`[Client AI] Trying experimental flash: ${params.model}`);
               continue;
             } else {
               console.error("[Client AI] All free-tier candidates exhausted during billing depletion.");
@@ -249,12 +261,16 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
           } else if (currentModel === 'gemini-1.5-flash-002' || currentModel === 'gemini-1.5-flash') {
             params.model = 'gemini-1.5-flash-8b';
           } else if (currentModel === 'gemini-1.5-flash-8b') {
+            params.model = 'gemini-1.5-flash-001';
+          } else if (currentModel === 'gemini-1.5-flash-001') {
             params.model = 'gemini-3.1-flash-lite';
           } else if (currentModel === 'gemini-3.1-flash-lite') {
             params.model = 'gemini-3.1-pro-preview';
           } else if (currentModel === 'gemini-3.1-pro-preview') {
             params.model = 'gemini-1.5-pro-002';
           } else if (currentModel === 'gemini-1.5-pro-002' || currentModel === 'gemini-1.5-pro') {
+            params.model = 'gemini-1.0-pro';
+          } else if (currentModel === 'gemini-1.0-pro') {
             params.model = 'gemini-2.0-flash-exp';
           } else {
             params.model = 'gemini-1.5-flash-8b';

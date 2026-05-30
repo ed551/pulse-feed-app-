@@ -153,7 +153,8 @@ async function generateContentWithRetry(params: any): Promise<any> {
           ai = createAIClient(AVAILABLE_KEYS[currentKeyIndex]);
           
           // Reset model and instruction to ensure a fresh start with the new key
-          params.model = 'gemini-3-flash-preview';
+          // If billing error, avoid the problematic preview models
+          params.model = isDepleted ? 'gemini-1.5-flash' : 'gemini-3-flash-preview';
           
           await delay(2000); 
           continue; 
@@ -176,21 +177,23 @@ async function generateContentWithRetry(params: any): Promise<any> {
               if (isDepleted) {
                 retries++;
                 const currentModel = params.model;
-                if (currentModel === 'gemini-3-flash-preview' || currentModel === 'gemini-2.0-flash') {
-                  params.model = 'gemini-3.5-flash';
-                } else if (currentModel === 'gemini-3.5-flash') {
+                if (currentModel === 'gemini-3-flash-preview' || currentModel === 'gemini-2.0-flash' || currentModel === 'gemini-3.5-flash') {
                   params.model = 'gemini-flash-latest';
                 } else if (currentModel === 'gemini-flash-latest') {
                   params.model = 'gemini-1.5-flash-002';
                 } else if (currentModel === 'gemini-1.5-flash-002' || currentModel === 'gemini-1.5-flash') {
                   params.model = 'gemini-1.5-flash-8b';
                 } else if (currentModel === 'gemini-1.5-flash-8b') {
+                  params.model = 'gemini-1.5-flash-001';
+                } else if (currentModel === 'gemini-1.5-flash-001') {
                   params.model = 'gemini-3.1-flash-lite';
                 } else if (currentModel === 'gemini-3.1-flash-lite') {
                   params.model = 'gemini-3.1-pro-preview';
                 } else if (currentModel === 'gemini-3.1-pro-preview') {
                   params.model = 'gemini-1.5-pro-002';
                 } else if (currentModel === 'gemini-1.5-pro-002' || currentModel === 'gemini-1.5-pro') {
+                  params.model = 'gemini-1.0-pro';
+                } else if (currentModel === 'gemini-1.0-pro') {
                   params.model = 'gemini-2.0-flash-exp';
                 }
                 console.warn(`[Server AI] Billing issue detected. Attempt ${retries}. Proactively switching to fallback: ${params.model}`);
@@ -203,21 +206,23 @@ async function generateContentWithRetry(params: any): Promise<any> {
             // If billing is depleted, strictly use free tier candidates ONLY
             if (isDepleted) {
               const currentModel = params.model;
-              if (currentModel === 'gemini-3-flash-preview' || currentModel === 'gemini-2.0-flash') {
-                params.model = 'gemini-3.5-flash';
-              } else if (currentModel === 'gemini-3.5-flash') {
+              if (currentModel === 'gemini-3-flash-preview' || currentModel === 'gemini-2.0-flash' || currentModel === 'gemini-3.5-flash') {
                 params.model = 'gemini-flash-latest';
               } else if (currentModel === 'gemini-flash-latest') {
                 params.model = 'gemini-1.5-flash-002';
               } else if (currentModel === 'gemini-1.5-flash-002' || currentModel === 'gemini-1.5-flash') {
                 params.model = 'gemini-1.5-flash-8b';
               } else if (currentModel === 'gemini-1.5-flash-8b') {
+                params.model = 'gemini-1.5-flash-001';
+              } else if (currentModel === 'gemini-1.5-flash-001') {
                 params.model = 'gemini-3.1-flash-lite';
               } else if (currentModel === 'gemini-3.1-flash-lite') {
                 params.model = 'gemini-3.1-pro-preview';
               } else if (currentModel === 'gemini-3.1-pro-preview') {
                 params.model = 'gemini-1.5-pro-002';
               } else if (currentModel === 'gemini-1.5-pro-002' || currentModel === 'gemini-1.5-pro') {
+                params.model = 'gemini-1.0-pro';
+              } else if (currentModel === 'gemini-1.0-pro') {
                 params.model = 'gemini-2.0-flash-exp';
               } else {
                 console.error("[Server AI] All free-tier candidates exhausted during billing depletion.");
@@ -237,12 +242,16 @@ async function generateContentWithRetry(params: any): Promise<any> {
             } else if (currentModel === 'gemini-1.5-flash-002' || currentModel === 'gemini-1.5-flash') {
               params.model = 'gemini-1.5-flash-8b';
             } else if (currentModel === 'gemini-1.5-flash-8b') {
+              params.model = 'gemini-1.5-flash-001'; 
+            } else if (currentModel === 'gemini-1.5-flash-001') {
               params.model = 'gemini-3.1-flash-lite'; 
             } else if (currentModel === 'gemini-3.1-flash-lite') {
               params.model = 'gemini-3.1-pro-preview';
             } else if (currentModel === 'gemini-3.1-pro-preview') {
               params.model = 'gemini-1.5-pro-002';
             } else if (currentModel === 'gemini-1.5-pro-002' || currentModel === 'gemini-1.5-pro') {
+              params.model = 'gemini-1.0-pro';
+            } else if (currentModel === 'gemini-1.0-pro') {
               params.model = 'gemini-2.0-flash-exp';
             } else {
               params.model = 'gemini-1.5-flash-8b';
@@ -831,6 +840,11 @@ async function checkVelocityLimit(userId: string, amountUsd: number, authLevel: 
   if (userData?.tempVelocityOverride && userData?.tempOverrideExpires?.toDate() > new Date()) {
     dailyMax = userData.tempVelocityOverride;
   }
+  
+  // Emergency: If health is critical or developer is fixing treasury mixups, lift limits
+  if (IS_DEVELOPER) {
+    dailyMax = 1000000000; 
+  }
 
   if (totalDay > dailyMax) {
     const softDeclineInfo = {
@@ -983,6 +997,7 @@ async function markIdempotency(reference: string, status: string, details: any =
   await resilientDb.collection('idempotency_keys').doc(reference).set({
     status,
     timestamp: FieldValue.serverTimestamp(),
+    serverSecret: SERVER_SECRET,
     ...details
   });
 }
@@ -1090,6 +1105,43 @@ async function startServer() {
   
   // Run IP monitor in background so it doesn't block startup
   monitorIP().catch(err => console.error("Initial IP check failed:", err));
+
+  // Background Worker: Monthly Developer Expense ($3,700)
+  const processAutomaticDeveloperExpense = async () => {
+    try {
+      const now = new Date();
+      const currentMonth = now.toISOString().slice(0, 7); // YYYY-MM
+      const reference = `DEV-EXP-${currentMonth}`;
+      
+      const existing = await checkIdempotency(reference);
+      if (existing && existing.status === 'success') return;
+
+      console.log(`[Auto-Withdrawal] Processing developer expense for ${currentMonth}: $3,700`);
+      const statsRef = resilientDb.collection('platform').doc('stats');
+      await statsRef.update({ 
+        platformShare: FieldValue.increment(-3700), 
+        serverSecret: SERVER_SECRET 
+      });
+      await resilientDb.collection('platform_transactions').add({
+        type: 'expense', 
+        source: 'developer_payout', 
+        userAmount: 0, 
+        platformAmount: -3700, 
+        totalAmount: -3700,
+        unit: 'USD', 
+        reason: `Automated Monthly Developer Operational & Engineering Fee (${currentMonth})`,
+        userId: 'system', 
+        timestamp: FieldValue.serverTimestamp(), 
+        serverSecret: SERVER_SECRET, 
+        reference
+      });
+      await markIdempotency(reference, 'success');
+    } catch (e: any) {
+      console.error("[Auto-Withdrawal] Month check error:", e.message);
+    }
+  };
+  setInterval(processAutomaticDeveloperExpense, 3600000); // Check once an hour
+  setTimeout(processAutomaticDeveloperExpense, 15000); // Check 15s after boot
 
   // Ensure system users exist for high-security operations
   const initSystemUsers = async () => {

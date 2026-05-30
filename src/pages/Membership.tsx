@@ -59,14 +59,14 @@ const TIERS = [
   },
   {
     id: 'gold',
-    name: 'Gold',
+    name: 'Market',
     subtitle: 'Elite Pioneer',
     price: 30, // $30
     icon: Crown,
-    color: 'text-yellow-500',
-    bg: 'bg-yellow-50 dark:bg-yellow-900/10',
-    borderColor: 'border-yellow-100 dark:border-yellow-900/20',
-    btnBg: 'bg-gradient-to-r from-yellow-500 to-amber-600 text-white shadow-yellow-500/20',
+    color: 'text-indigo-500',
+    bg: 'bg-indigo-50 dark:bg-indigo-900/10',
+    borderColor: 'border-indigo-100 dark:border-indigo-900/20',
+    btnBg: 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-indigo-500/20',
     features: [
       '80% Revenue Share (Max)',
       'Quantum Market Prediction',
@@ -135,7 +135,7 @@ export default function Membership() {
           <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
             <div className="shrink-0">
               <div className="w-24 h-24 rounded-[2rem] bg-indigo-500/20 backdrop-blur-xl border border-white/10 flex items-center justify-center shadow-lg">
-                {currentTier === 'gold' ? <Crown className="w-12 h-12 text-yellow-500" /> : 
+                {currentTier === 'gold' ? <Crown className="w-12 h-12 text-indigo-500" /> : 
                  currentTier === 'silver' ? <Star className="w-12 h-12 text-blue-400" /> : 
                  <Shield className="w-12 h-12 text-orange-400" />}
               </div>
@@ -312,7 +312,7 @@ export default function Membership() {
                 <span className="text-sm font-black dark:text-white">50%</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-xs font-bold text-gray-600 dark:text-gray-400">Gold</span>
+                <span className="text-xs font-bold text-gray-600 dark:text-gray-400">Market</span>
                 <span className="text-sm font-black dark:text-white">80%</span>
               </div>
             </div>
@@ -330,8 +330,8 @@ export default function Membership() {
                 <span className="text-[10px] font-black bg-blue-100 dark:bg-blue-900/30 text-blue-600 px-2 py-0.5 rounded uppercase tracking-tighter">Priority</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-xs font-bold text-gray-600 dark:text-gray-400">Gold</span>
-                <span className="text-[10px] font-black bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 px-2 py-0.5 rounded uppercase tracking-tighter">Quantum</span>
+                <span className="text-xs font-bold text-gray-600 dark:text-gray-400">Market</span>
+                <span className="text-[10px] font-black bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 px-2 py-0.5 rounded uppercase tracking-tighter">Quantum</span>
               </div>
             </div>
           </div>
@@ -348,7 +348,7 @@ export default function Membership() {
                 <span className="text-[10px] font-black dark:text-white">Fingerprint Engr.</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-xs font-bold text-gray-600 dark:text-gray-400">Gold</span>
+                <span className="text-xs font-bold text-gray-600 dark:text-gray-400">Market</span>
                 <span className="text-[10px] font-black dark:text-white">Elite Protocol</span>
               </div>
             </div>

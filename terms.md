@@ -24,13 +24,13 @@
 
 ## ⚠️ Important Disclaimers
 
-### Gold Price Movement Indicator
-*   **Prediction Only:** The Gold Price Movement Indicator is powered by AI to show predicted trends (Up ⏫, Down ⏬, or No Change ⏭️). These are estimates for your information only and are not financial advice.
-*   **No Guarantees:** Gold prices change constantly. Pulse Feeds does not guarantee the accuracy of these movements. Always do your own research before making financial decisions.
+### Market Price Movement Indicator
+*   **Prediction Only:** The Market Price Movement Indicator is powered by AI to show predicted trends (Up ⏫, Down ⏬, or No Change ⏭️). These are estimates for your information only and are not financial advice.
+*   **No Guarantees:** Yields and market prices change constantly. Pulse Feeds does not guarantee the accuracy of these movements. Always do your own research before making financial decisions.
 
-### Best Gold Seller Recognition
-*   **Naming Rights:** Pulse Feeds aims to connect you with the Best Gold Seller insights by providing top-tier market data.
-*   **Role:** We provide the technology and data to help you identify quality market opportunities, but we do not act as the seller ourselves.
+### Best Market Insights Recognition
+*   **Analytics Rights:** Pulse Feeds aims to connect you with the Best Market Insights by providing top-tier market data.
+*   **Role:** We provide the technology and data to help you identify quality market opportunities, but we do not act as the financial advisor ourselves.
 
 ## General Disclaimer
 *   **System Perfection:** We are constantly working to perfect our AI and self-healing systems. Please use the app "as is" while we continue to enhance your experience.

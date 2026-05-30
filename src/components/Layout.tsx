@@ -5,7 +5,7 @@ import {
   Sun, Moon, CloudRain, Cloud, CloudLightning, Clock, Watch, BellRing, StickyNote, Tv,
   Fingerprint, HeartPulse, MapPin, Phone, MessageCircle, Gamepad2, Globe, BrainCircuit,
   Languages, Ticket, Snowflake, Calendar, Smartphone, Monitor, PhoneCall, Wrench, Building2,
-  Calculator, LayoutGrid, Power, RefreshCw, ArrowUpCircle, ArrowDownCircle, XCircle, RotateCcw, Edit3, DollarSign, LogOut, Wallet, X, Send, Search, CheckCircle2, Plus, ShieldCheck, Zap,
+  Calculator, LayoutGrid, Power, RefreshCw, ArrowUpCircle, ArrowDownCircle, XCircle, RotateCcw, Edit3, DollarSign, LogOut, Wallet, X, Send, Search, CheckCircle2, Plus, ShieldCheck, Zap, LineChart,
   Volume2, VolumeX, Share2, Brain, TrendingUp, TrendingDown, Minus, Menu, GraduationCap, Eye, Loader2, Video, Type, Radio, Megaphone, BarChart2, Smile, Crown, Filter, Sparkles, Camera, Heart, Youtube, Layers, Map, AlertTriangle, ExternalLink
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -42,8 +42,6 @@ import OTPModal from "./tools/OTPModal";
 import { ConnectivityBanner } from "./ConnectivityBanner";
 import { db } from "../lib/firebase";
 import { setDoc, doc, arrayUnion, serverTimestamp, getDocFromServer, updateDoc } from "firebase/firestore";
-
-import BottomNav from "./BottomNav";
 
 export default function Layout() {
   const { currentUser, userData, logout, isFacebookApp } = useAuth();
@@ -141,19 +139,19 @@ export default function Layout() {
       setIsLocked(true);
     }
   }, [isIdle, userData?.twoFactorEnabled, currentUser]);
-  const [showAddPostMenu, setShowAddPostMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
 
+  // Header navigation items - Simplified
   const headerNavItems = [
     { path: '/', icon: Home, label: t('home') },
+    { path: '/market', icon: LineChart, label: t('market_data') },
+    { path: '/gold', icon: Gem, label: t('gold_graph') },
     { path: '/groups', icon: Users, label: t('groups') },
     { path: '/rewards', icon: Layers, label: t('rewards') },
     { path: '/audio', icon: Headphones, label: 'Audio' },
-    { path: '/education', icon: GraduationCap, label: 'Education' },
-    { path: '/notifications', icon: Bell, label: t('alerts') },
-    { path: '/profile', icon: User, label: t('profile') },
+    { path: '/education', icon: GraduationCap, label: 'Education' }
   ];
 
   const CATEGORIES = [
@@ -1139,63 +1137,6 @@ export default function Layout() {
                   </button>
                 </div>
 
-                <div className="relative">
-                  <button 
-                    onClick={() => setShowAddPostMenu(!showAddPostMenu)}
-                    className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
-                  >
-                    <Plus className={cn("w-5 h-5 transition-transform", showAddPostMenu && "rotate-45")} />
-                  </button>
-                  
-                  <AnimatePresence>
-                    {showAddPostMenu && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.8, y: 10 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.8, y: 10 }}
-                        className="absolute top-full mt-2 right-0 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 p-3 grid grid-cols-3 gap-3 z-[110] min-w-[240px]"
-                      >
-                        {[
-                          { icon: Video, color: 'bg-red-500', label: t('video'), modal: 'create-post-video' },
-                          { icon: Radio, color: 'bg-orange-500', label: t('live'), modal: 'create-post-live' },
-                          { icon: BarChart2, color: 'bg-emerald-500', label: t('poll'), modal: 'create-post-poll' },
-                          { icon: Megaphone, color: 'bg-purple-500', label: t('announcement'), modal: 'create-post-announcement' },
-                          { icon: RefreshCw, color: 'bg-blue-400', label: t('update'), modal: 'create-post-update' },
-                          { icon: Type, color: 'bg-blue-500', label: t('text'), modal: 'create-post-text' },
-                          { icon: Smile, color: 'bg-pink-500', label: t('gif'), modal: 'create-post-gif' },
-                          { icon: Users, color: 'bg-green-500', label: t('group'), modal: 'create-group' },
-                          { icon: Brain, color: 'bg-indigo-600', label: t('smart'), modal: 'smart' }
-                        ].map((item, idx) => (
-                          <button
-                            key={idx}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (item.modal === 'smart') {
-                                const suggestions = ['poll', 'announcement', 'update', 'text', 'video'];
-                                const randomType = suggestions[Math.floor(Math.random() * suggestions.length)];
-                                setActiveModal(`create-post-${randomType}`);
-                                showNotification(t('smart_suggestion'), { body: t('gemini_suggests').replace('{{type}}', t(randomType)) });
-                              } else if (item.modal === 'create-group') {
-                                navigate('/groups?create=true');
-                                setShowAddPostMenu(false);
-                              } else {
-                                setActiveModal(item.modal);
-                              }
-                              setShowAddPostMenu(false);
-                            }}
-                            className="flex flex-col items-center gap-1 group/item"
-                          >
-                            <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center text-white shadow-sm group-hover/item:scale-110 transition-transform", item.color)}>
-                              <item.icon className="w-4 h-4" />
-                            </div>
-                            <span className="text-[7px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-tighter">{item.label}</span>
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
                 <Link to="/messages" className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">
                   <MessageCircle className="w-5 h-5" />
                 </Link>
@@ -1299,36 +1240,6 @@ export default function Layout() {
                 setActiveCategory,
                 showAdvancedSearch
               }} />
-
-              {/* Floating Global Audio Narrator */}
-              <div className="fixed bottom-24 right-6 z-[40] flex flex-col items-center gap-3">
-                <AnimatePresence>
-                  {isGlobalAudioActive && (
-                    <motion.div 
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20 }}
-                      className="bg-indigo-600 text-white px-4 py-2 rounded-2xl shadow-xl flex items-center gap-2 mb-2"
-                    >
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Narrating Page</span>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-                
-                <button
-                  onClick={handleTogglePageNarration}
-                  className={cn(
-                    "w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-90 border-4",
-                    isGlobalAudioActive 
-                      ? "bg-red-500 border-red-400 text-white animate-pulse" 
-                      : "bg-indigo-600 border-white dark:border-gray-800 text-white hover:bg-indigo-700"
-                  )}
-                  title="Toggle Page Narration"
-                >
-                  {isGlobalAudioActive ? <X className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
-                </button>
-              </div>
 
               {/* Global App Disclaimer */}
               <div className="mt-20 pt-12 border-t border-gray-100 dark:border-gray-800/50 pb-12">
@@ -2001,9 +1912,6 @@ export default function Layout() {
           )}
         </AnimatePresence>
 
-        {currentUser && (
-          <BottomNav onAddPost={() => setShowAddPostMenu(true)} />
-        )}
       </div>
     </div>
   );

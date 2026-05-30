@@ -80,9 +80,14 @@ export default function SelfHealing() {
 
     // Auto-trigger healing if it's an error
     if (type === 'error') {
-      // Prevent recursive healing if the error is already about AI service availability
-      if (message.includes("AI service is temporarily unavailable")) {
-        console.warn("Skipping self-healing due to AI service unavailability.");
+      // Prevent recursive healing if the error is already about AI service availability or billing
+      const isAIUnavailable = message.includes("AI service is temporarily unavailable") || 
+                              message.toLowerCase().includes("billing") || 
+                              message.toLowerCase().includes("depleted") ||
+                              message.toLowerCase().includes("quota");
+
+      if (isAIUnavailable) {
+        console.warn("Skipping self-healing due to AI service unavailability or billing limits.");
         setHealStatus('idle');
         return;
       }

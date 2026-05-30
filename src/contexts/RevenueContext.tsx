@@ -71,8 +71,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const EARNING_INTERVAL = 30000; // Check every 30s locally
   const SYNC_INTERVAL = 300000; // Sync to DB every 5 mins
   const ACTIVE_POINTS_PER_INTERVAL = 16; // 16 Points per 30s (~$0.16 equivalent)
-  const GOLD_PRICE_USD = 80; // Operational constant for old balance scaling if needed
-
+  
   const monitorBehaviorWithAI = async () => {
     if (!currentUser || isAnalyzingBehavior || Date.now() - lastBehaviorCheckRef.current < 60000) return;
     
@@ -416,7 +415,7 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
         source: 'purchase',
         status: 'success',
         timestamp: serverTimestamp(),
-        reference: `GLD-EXP-${Date.now()}-${currentUser.uid.slice(0, 4)}`,
+        reference: `USD-EXP-${Date.now()}-${currentUser.uid.slice(0, 4)}`,
         details: reason,
         pointsDeducted: pointsToDeduct,
         remainingPoints: (userData?.points || 0) - pointsToDeduct

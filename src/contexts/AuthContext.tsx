@@ -263,7 +263,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   photoURL: user.photoURL,
                   role: user.email === 'edwinmuoha@gmail.com' ? 'admin' : 'user',
                   points: 500, // 500 Community Points
-                  balance: 40, // $40 (~0.5g gold)
+                  balance: 40, // Initial $40.00 USD
                   adRevenue: 0,
                   enrolledCourses: [],
                   completedModules: [],
@@ -359,7 +359,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           photoURL: result.user.photoURL,
           role: result.user.email === 'edwinmuoha@gmail.com' ? 'admin' : 'user',
           points: 500, // 500 Community Points
-          balance: 40, // $40 (~0.5g gold)
+          balance: 40, // Initial $40.00 USD
           adRevenue: 0,
           enrolledCourses: [],
           completedModules: [],
