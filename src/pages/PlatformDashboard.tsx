@@ -155,19 +155,19 @@ export default function PlatformDashboard() {
         return;
       }
 
-      const amount = 3700;
+      const amount = 481000;
       const refCode = `DEV-EXP-${currentMonth}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
       
-      console.log(`[Developer Expense] Processing automated monthly withdrawal of $${amount} for ${currentMonth}...`);
+      console.log(`[Developer Expense] Processing automated monthly withdrawal of KSH ${amount} for ${currentMonth}...`);
 
       // 1. Log as Platform Expense (Deducts from platformShare)
-      await addPlatformExpense(amount, `Monthly Developer Operational & Engineering Fee (${currentMonth})`);
+      await addPlatformExpense(amount, `Monthly Developer Operational, Engineering & Cooperative Bank Governance Fee (${currentMonth})`);
       
       // 2. Create Withdrawal Record
       await addDoc(collection(db, 'withdrawals'), {
         amount,
-        amountPoints: amount * 100,
-        amountKes: amount * 135,
+        amountPoints: amount * 0.1, // Adjusted for Gold mg context if needed
+        amountKes: amount,
         category: 'developer_expense',
         reference: refCode,
         status: 'success',
@@ -456,14 +456,14 @@ export default function PlatformDashboard() {
       const platformAmtRaw = tx.platformAmount !== undefined ? tx.platformAmount : (tx.source === 'platform' || tx.type === 'platform_revenue' ? (tx.totalAmount || 0) : 0);
       const grossAmtRaw = tx.totalAmount !== undefined ? tx.totalAmount : platformAmtRaw;
 
-      // Unit Normalization: Detect if transaction was recorded in Points or USD
+      // Unit Normalization: Detect if transaction was recorded in Gold mg (Points) or KES
       // We prioritize the 'unit' field from Firestore if present.
       // IF unit is missing:
-      // - Platform Revenue is ALMOST ALWAYS USD (large amounts).
-      // - Standard revenue/payouts < 500 are likely Points.
-      const isPoints = tx.unit === 'POINTS' || (!tx.unit && Math.abs(platformAmtRaw) < 500 && tx.type !== 'platform_revenue' && tx.type !== 'expense');
-      const platformAmt = isPoints ? platformAmtRaw / 100 : platformAmtRaw;
-      const grossAmt = isPoints ? grossAmtRaw / 100 : grossAmtRaw;
+      // - Platform Revenue is ALMOST ALWAYS KES (large amounts).
+      // - Standard revenue/payouts < 5000 are likely Gold mg.
+      const isPoints = tx.unit === 'POINTS' || tx.unit === 'G' || (!tx.unit && Math.abs(platformAmtRaw) < 5000 && tx.type !== 'platform_revenue' && tx.type !== 'expense');
+      const platformAmt = isPoints ? platformAmtRaw / 10 : platformAmtRaw;
+      const grossAmt = isPoints ? grossAmtRaw / 10 : grossAmtRaw;
 
       // Direct platform balance sum
       acc.ledgerBalance += platformAmt;
@@ -841,7 +841,7 @@ export default function PlatformDashboard() {
         userAmount: 0,
         platformAmount: amountUsd,
         totalAmount: amountUsd,
-        reason: `Manual Return of Funds to Treasury (${useKesForReturn ? 'KES' : 'USD'})`,
+        reason: `Manual Return of Funds to Treasury (${useKesForReturn ? 'KES' : 'Gold mg'})`,
         userId: currentUser?.uid || 'system',
         timestamp: serverTimestamp(),
         serverSecret: "pulse-feeds-server-secret-2026"
@@ -2055,7 +2055,7 @@ export default function PlatformDashboard() {
                               <span className="text-sm font-black font-mono text-gray-900 dark:text-gray-100">
                                 {typeof w.amount === 'number' ? formatCurrency(w.amount) : w.amount}
                               </span>
-                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">USD</span>
+                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">KES</span>
                             </div>
                             {w.amountKes && (
                               <div className="text-[10px] text-green-600 font-bold mt-0.5 flex items-center gap-1">
@@ -3575,7 +3575,7 @@ export default function PlatformDashboard() {
 
                 <div className="space-y-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">New Proposed Limit (USD)</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">New Proposed Limit (KES)</label>
                     <input 
                       type="number"
                       value={requestedLimit}

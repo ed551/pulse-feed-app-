@@ -38,6 +38,23 @@ import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
 
+// Load Cooperative Bank Strict Rules
+const COOP_RULES_PATH = path.join(process.cwd(), 'src', 'config', 'cooperative_bank.json');
+let COOP_CONFIG_FIXED: any = {
+  strictRules: {
+    developerMonthlyExpenseKES: 481000,
+    usdToKesRate: 130
+  }
+};
+try {
+  if (fs.existsSync(COOP_RULES_PATH)) {
+    COOP_CONFIG_FIXED = JSON.parse(fs.readFileSync(COOP_RULES_PATH, 'utf8'));
+    console.log("[Config] Cooperative Bank strict rules loaded.");
+  }
+} catch (e) {
+  console.warn("[Config] Failed to load coop rules, using defaults.");
+}
+
 const rawKeys = [
   process.env.GEMINI_AI,
   process.env.GEMINI_API_KEY,
@@ -132,18 +149,20 @@ async function generateContentWithRetry(params: any): Promise<any> {
                           combinedErrorText.includes("depleted") ||
                           combinedErrorText.includes("insufficient balance") ||
                           combinedErrorText.includes("credit") ||
+                          combinedErrorText.includes("429") ||
                           errorJson?.error?.message?.toLowerCase().includes("prepayment") ||
                           errorJson?.error?.message?.toLowerCase().includes("credits are depleted") ||
                           errorJson?.error?.message?.toLowerCase().includes("insufficient balance") ||
-                          (status === 429 && combinedErrorText.includes("billing")) ||
+                          (status === 429 && (combinedErrorText.includes("billing") || combinedErrorText.includes("quota"))) ||
                           (status === 402);
 
         const isQuotaExceeded = status === 429 || 
                                 combinedErrorText.includes("quota") || 
                                 combinedErrorText.includes("resource_exhausted") ||
+                                combinedErrorText.includes("rate limit") ||
                                 errorJson?.error?.status === "RESOURCE_EXHAUSTED";
 
-        const isUnavailable = status === 503 || combinedErrorText.includes("unavailable") || status === 402 || status === 504 || status === 502;
+        const isUnavailable = status === 503 || combinedErrorText.includes("unavailable") || status === 402 || status === 504 || status === 502 || combinedErrorText.includes("overloaded");
         
         // Key Rotation on Billing/Quota failure
         if ((isDepleted || status === 429 || status === 402 || isQuotaExceeded) && currentKeyIndex < AVAILABLE_KEYS.length - 1) {
@@ -152,11 +171,10 @@ async function generateContentWithRetry(params: any): Promise<any> {
           console.warn(`[Server AI] Key ${oldIndex + 1} limited/exhausted (${status}${isDepleted ? '-BILLING' : ''}). Rotating to next key ${currentKeyIndex + 1}/${AVAILABLE_KEYS.length}...`);
           ai = createAIClient(AVAILABLE_KEYS[currentKeyIndex]);
           
-          // Reset model and instruction to ensure a fresh start with the new key
-          // If billing error, avoid the problematic preview models
-          params.model = isDepleted ? 'gemini-1.5-flash' : 'gemini-3-flash-preview';
+          // Reset model to the start of the sequence
+          params.model = 'gemini-1.5-flash';
           
-          await delay(2000); 
+          await delay(1000); 
           continue; 
         }
 
@@ -165,112 +183,57 @@ async function generateContentWithRetry(params: any): Promise<any> {
             const oldModel = params.model;
             
             if (isQuotaExceeded || isUnavailable || isDepleted) {
-              const waitTime = isDepleted ? 10000 : 15000; // 10s for billing, 15s for quota
+              const waitTime = isDepleted ? 3000 : 7000; 
               console.warn(`[Server AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Waiting ${waitTime/1000}s for quick recovery...`);
               
               if (currentRelease) {
                 currentRelease();
                 currentRelease = null;
               }
-
-              // On billing error, fall back sequence immediately
-              if (isDepleted) {
-                retries++;
-                const currentModel = params.model;
-                if (currentModel === 'gemini-3-flash-preview' || currentModel === 'gemini-2.0-flash' || currentModel === 'gemini-3.5-flash') {
-                  params.model = 'gemini-flash-latest';
-                } else if (currentModel === 'gemini-flash-latest') {
-                  params.model = 'gemini-1.5-flash-002';
-                } else if (currentModel === 'gemini-1.5-flash-002' || currentModel === 'gemini-1.5-flash') {
-                  params.model = 'gemini-1.5-flash-8b';
-                } else if (currentModel === 'gemini-1.5-flash-8b') {
-                  params.model = 'gemini-1.5-flash-001';
-                } else if (currentModel === 'gemini-1.5-flash-001') {
-                  params.model = 'gemini-3.1-flash-lite';
-                } else if (currentModel === 'gemini-3.1-flash-lite') {
-                  params.model = 'gemini-3.1-pro-preview';
-                } else if (currentModel === 'gemini-3.1-pro-preview') {
-                  params.model = 'gemini-1.5-pro-002';
-                } else if (currentModel === 'gemini-1.5-pro-002' || currentModel === 'gemini-1.5-pro') {
-                  params.model = 'gemini-1.0-pro';
-                } else if (currentModel === 'gemini-1.0-pro') {
-                  params.model = 'gemini-2.0-flash-exp';
-                }
-                console.warn(`[Server AI] Billing issue detected. Attempt ${retries}. Proactively switching to fallback: ${params.model}`);
-              }
-
               await delay(waitTime);
               await acquireLock();
             }
-  
-            // If billing is depleted, strictly use free tier candidates ONLY
-            if (isDepleted) {
-              const currentModel = params.model;
-              if (currentModel === 'gemini-3-flash-preview' || currentModel === 'gemini-2.0-flash' || currentModel === 'gemini-3.5-flash') {
-                params.model = 'gemini-flash-latest';
-              } else if (currentModel === 'gemini-flash-latest') {
-                params.model = 'gemini-1.5-flash-002';
-              } else if (currentModel === 'gemini-1.5-flash-002' || currentModel === 'gemini-1.5-flash') {
-                params.model = 'gemini-1.5-flash-8b';
-              } else if (currentModel === 'gemini-1.5-flash-8b') {
-                params.model = 'gemini-1.5-flash-001';
-              } else if (currentModel === 'gemini-1.5-flash-001') {
-                params.model = 'gemini-3.1-flash-lite';
-              } else if (currentModel === 'gemini-3.1-flash-lite') {
-                params.model = 'gemini-3.1-pro-preview';
-              } else if (currentModel === 'gemini-3.1-pro-preview') {
-                params.model = 'gemini-1.5-pro-002';
-              } else if (currentModel === 'gemini-1.5-pro-002' || currentModel === 'gemini-1.5-pro') {
-                params.model = 'gemini-1.0-pro';
-              } else if (currentModel === 'gemini-1.0-pro') {
-                params.model = 'gemini-2.0-flash-exp';
-              } else {
-                console.error("[Server AI] All free-tier candidates exhausted during billing depletion.");
-                throw error;
-              }
-              console.warn(`[Server AI] Billing issue loop recovery. Trying: ${params.model}`);
-              continue;
-            }
 
             const currentModel = params.model;
-            if (currentModel === 'gemini-3-flash-preview' || currentModel === 'gemini-2.0-flash') {
-              params.model = 'gemini-3.5-flash';
-            } else if (currentModel === 'gemini-3.5-flash') {
-              params.model = 'gemini-flash-latest';
-            } else if (currentModel === 'gemini-flash-latest') {
-              params.model = 'gemini-1.5-flash-002';
-            } else if (currentModel === 'gemini-1.5-flash-002' || currentModel === 'gemini-1.5-flash') {
+            // Robust Fallback Sequence (Prioritizing stable flash models)
+            if (currentModel === 'gemini-1.5-flash') {
               params.model = 'gemini-1.5-flash-8b';
             } else if (currentModel === 'gemini-1.5-flash-8b') {
-              params.model = 'gemini-1.5-flash-001'; 
+              params.model = 'gemini-1.5-flash-001';
             } else if (currentModel === 'gemini-1.5-flash-001') {
-              params.model = 'gemini-3.1-flash-lite'; 
+              params.model = 'gemini-1.5-flash-002';
+            } else if (currentModel === 'gemini-flash-latest') {
+              params.model = 'gemini-1.5-flash';
+            } else if (currentModel === 'gemini-3-flash-preview') {
+              params.model = 'gemini-2.0-flash';
+            } else if (currentModel === 'gemini-2.0-flash') {
+              params.model = 'gemini-3.5-flash';
+            } else if (currentModel === 'gemini-3.5-flash') {
+              params.model = 'gemini-3.1-flash-lite';
             } else if (currentModel === 'gemini-3.1-flash-lite') {
-              params.model = 'gemini-3.1-pro-preview';
-            } else if (currentModel === 'gemini-3.1-pro-preview') {
+              params.model = 'gemini-1.5-pro';
+            } else if (currentModel === 'gemini-1.5-pro') {
               params.model = 'gemini-1.5-pro-002';
-            } else if (currentModel === 'gemini-1.5-pro-002' || currentModel === 'gemini-1.5-pro') {
-              params.model = 'gemini-1.0-pro';
-            } else if (currentModel === 'gemini-1.0-pro') {
-              params.model = 'gemini-2.0-flash-exp';
+            } else if (currentModel === 'gemini-3.1-pro-preview') {
+              params.model = 'gemini-1.5-pro';
             } else {
+              // Loop back to a high-availability model if somehow stuck
               params.model = 'gemini-1.5-flash-8b';
             }
           
-          if (params.model === oldModel) {
-             console.error(`[Server AI] All model fallbacks exhausted for ${oldModel}.`);
-             // If it's a billing error and we tried everything, throw explicit error
-             if (isDepleted || status === 402) {
-               const billingError: any = new Error("Gemini API credits are depleted across all models. Please check your billing at ai.studio or wait for free-tier resets.");
-               billingError.status = 402;
-               billingError.code = "BILLING_DEPLETED";
-               throw billingError;
-             }
-             throw error;
-          }
-          
-          console.warn(`[Server AI] Retrying with model fallback: ${params.model}`);
-          continue;
+            if (params.model === oldModel) {
+              console.error(`[Server AI] All model fallbacks exhausted for ${oldModel}.`);
+              if (isDepleted || status === 402 || status === 429) {
+                const billingError: any = new Error("Gemini API credits are depleted across all models. Please check your billing at ai.studio or wait for free-tier resets.");
+                billingError.status = 402;
+                billingError.code = "BILLING_DEPLETED";
+                throw billingError;
+              }
+              throw error;
+            }
+            
+            console.warn(`[Server AI] Retrying with model fallback: ${params.model}`);
+            continue;
         }
 
         if (isQuotaExceeded && retries < MAX_RETRIES) {
@@ -803,56 +766,44 @@ async function checkIdempotency(reference: string) {
 }
 
 // Velocity Limits (Financial Fraud Detection)
-async function checkVelocityLimit(userId: string, amountUsd: number, authLevel: number = 0) {
+async function checkVelocityLimit(userId: string, amountKes: number, authLevel: number = 0) {
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const txs = await resilientDb.collection('withdrawals')
     .where('userId', '==', userId)
     .where('timestamp', '>', dayAgo)
     .get();
 
-  let totalDay = amountUsd;
+  let totalDayKes = amountKes;
   txs.forEach(doc => {
     const data = doc.data();
-    const val = data.currency === 'KES' ? (data.amount / 130) : (data.amount || 0);
-    totalDay += val;
+    totalDayKes += (data.amountKes || data.amount || 0);
   });
 
   const userDoc = await resilientDb.collection('users').doc(userId).get();
   const userData = userDoc.data();
   const IS_DEVELOPER = userId === 'platform-admin' || userId === 'user-system' || userData?.email === 'edwinmuoha@gmail.com'; 
   
-  // 1. Dynamic Throttling: Base limits
-  let dailyMax = 50; // default for unverified
-  if (IS_DEVELOPER) dailyMax = 5000;
-  else if (userData?.kycVerified) dailyMax = 500;
+  // 1. Dynamic Throttling: Base limits in KES
+  let dailyMaxKes = 6500; // default (approx $50)
+  if (IS_DEVELOPER) dailyMaxKes = 650000;
+  else if (userData?.kycVerified) dailyMaxKes = 65000;
 
-  // 2. Emergency Carve-Out Rule (Multi-Factor Overrides)
+  // 2. Emergency overrides
   const accountAgeDays = userData?.createdAt ? (Date.now() - userData.createdAt.toDate().getTime()) / (1000 * 60 * 60 * 24) : 0;
   const isTrustedAccount = accountAgeDays > 90;
 
-  // Level 1: PIN
-  // Level 2: TOTP (Code) -> Unlocks 2x buffer
-  if (authLevel === 2) dailyMax = Math.max(dailyMax, isTrustedAccount ? 1500 : 1000);
-  // Level 3: Passkey -> Unlocks 5x buffer or up to $5,000
-  if (authLevel === 3) dailyMax = Math.max(dailyMax, 5000);
+  if (authLevel === 2) dailyMaxKes = Math.max(dailyMaxKes, isTrustedAccount ? 195000 : 130000);
+  if (authLevel === 3) dailyMaxKes = Math.max(dailyMaxKes, 650000);
 
-  // 3. Admin Override (Manual Review / Fast-Track)
-  if (userData?.tempVelocityOverride && userData?.tempOverrideExpires?.toDate() > new Date()) {
-    dailyMax = userData.tempVelocityOverride;
-  }
-  
-  // Emergency: If health is critical or developer is fixing treasury mixups, lift limits
-  if (IS_DEVELOPER) {
-    dailyMax = 1000000000; 
-  }
+  if (IS_DEVELOPER) dailyMaxKes = 1000000000; 
 
-  if (totalDay > dailyMax) {
+  if (totalDayKes > dailyMaxKes) {
     const softDeclineInfo = {
       status: 'SOFT_DECLINE',
-      limit: dailyMax,
-      current: totalDay,
+      limitKes: dailyMaxKes,
+      currentKes: totalDayKes,
       requiredLevel: authLevel < 2 ? 2 : 3,
-      message: `Daily velocity limit reached: $${dailyMax.toLocaleString()}. Please authorize with a higher security method (TOTP or Passkey) to override.`
+      message: `Daily velocity limit reached: KES ${dailyMaxKes.toLocaleString()}. Please authorize with a higher security method (TOTP or Passkey) to override.`
     };
     throw new Error(JSON.stringify(softDeclineInfo));
   }
@@ -1002,30 +953,26 @@ async function markIdempotency(reference: string, status: string, details: any =
   });
 }
 
-// Helper to log platform-level payouts to the audit trail
-async function logPlatformPayout(amountUsd: number, type: string, destination: string, clientIp: string, isUserWithdrawal: boolean = true, status: string = 'success', existingReference?: string, triggeredBy?: string) {
+// Helper to log platform-level payouts to the audit trail (Primary: KES)
+async function logPlatformPayout(amountKes: number, type: string, destination: string, clientIp: string, isUserWithdrawal: boolean = true, status: string = 'success', existingReference?: string, triggeredBy?: string) {
 try {
-  // Check System Safety Lock before writing ANY financial logs
+  // Check System Safety Lock 
   const monDoc = await resilientDb.collection("system").doc("monitoring").get();
   if (monDoc.exists && monDoc.data()?.safetyLocked === true) {
-    console.warn(`[SAFETY LOCK] Blocking automated ${isUserWithdrawal ? 'user' : 'platform'} payout log: $${amountUsd}`);
-    return; // Abort log
+    console.warn(`[SAFETY LOCK] Blocking automated ${isUserWithdrawal ? 'user' : 'platform'} payout log: KES ${amountKes}`);
+    return;
   }
 
   if (status === 'simulated') {
-    console.warn(`[SIMULATION LOG] Logging simulated payout of $${amountUsd} as a non-real bridge transaction.`);
-    // We continue logging so the audit remains consistent with UI states
+    console.warn(`[SIMULATION LOG] Logging simulated payout of KES ${amountKes} as a non-real bridge transaction.`);
   }
 
   const statsRef = resilientDb.collection('platform').doc('stats');
-    const kesRate = 135; // Standard operational rate
-    const amountKes = amountUsd * kesRate;
-
-    console.log(`[Audit] Logging ${isUserWithdrawal ? 'User' : 'Platform'} payout: $${amountUsd} (KES ${amountKes}) to ${destination} with status: ${status} [TriggeredBy: ${triggeredBy || 'unknown'}]`);
+    
+    console.log(`[Audit] Logging ${isUserWithdrawal ? 'User' : 'Platform'} payout: KES ${amountKes} to ${destination} with status: ${status} [TriggeredBy: ${triggeredBy || 'unknown'}]`);
     
     const reference = existingReference || `SYS-${Date.now().toString(36).toUpperCase()}`;
     
-    // Check if this was a retry
     if (existingReference) {
       const existing = await checkIdempotency(existingReference);
       if (existing && existing.status === 'success') {
@@ -1034,12 +981,12 @@ try {
       }
     }
 
-    // 0. Log to withdrawals collection for the "Withdraw Request List" (Audit Trail)
+    // 0. Log to withdrawals collection (Audit Trail)
     await resilientDb.collection('withdrawals').doc(reference).set({
       type: isUserWithdrawal ? type : 'operational_payout',
-      amount: amountUsd, // Note: logPlatformPayout uses USD
+      amount: amountKes,
       amountKes: amountKes,
-      currency: 'USD',
+      currency: 'KES',
       status: status,
       isSimulated: status === 'simulated',
       timestamp: FieldValue.serverTimestamp(),
@@ -1053,17 +1000,17 @@ try {
       category: isUserWithdrawal ? 'user' : 'operational',
       triggeredBy: triggeredBy || (isUserWithdrawal ? 'User Interaction' : 'System Engine'),
       source: isUserWithdrawal ? 'User Wallet' : 'Platform Treasury'
-    }, { merge: true }).catch(err => console.error("[Audit] Failed to log to central withdrawals:", err.message));
+    }, { merge: true });
 
-    // 1. Log to platform_transactions for the Recent Activity list
+    // 1. Log to platform_transactions
     await resilientDb.collection('platform_transactions').add({
       type: status === 'refunded' ? 'refund' : 'payout',
       source: isUserWithdrawal ? 'user_payout' : 'platform_withdrawal',
       isSimulated: status === 'simulated',
-      userAmount: isUserWithdrawal ? (status === 'refunded' ? amountUsd : -amountUsd) : 0,
-      platformAmount: isUserWithdrawal ? 0 : (status === 'refunded' ? amountUsd : -amountUsd),
-      totalAmount: (status === 'refunded' ? amountUsd : -amountUsd), 
-      unit: 'USD',
+      userAmount: isUserWithdrawal ? (status === 'refunded' ? amountKes : -amountKes) : 0,
+      platformAmount: isUserWithdrawal ? 0 : (status === 'refunded' ? amountKes : -amountKes),
+      totalAmount: (status === 'refunded' ? amountKes : -amountKes), 
+      unit: 'KES',
       reason: `${isUserWithdrawal ? 'User Withdrawal' : 'Platform Withdrawal'} (${type}) to ${destination} [${status.toUpperCase()}]`,
       userId: isUserWithdrawal ? 'user-system' : 'system',
       clientIp: clientIp,
@@ -1073,7 +1020,7 @@ try {
     });
 
     // 3. Mark Idempotency
-    await markIdempotency(reference, status, { amount: amountUsd, destination });
+    await markIdempotency(reference, status, { amount: amountKes, destination });
 
     // 2. Update global stats
     const updateData: any = {
@@ -1081,7 +1028,7 @@ try {
       serverSecret: SERVER_SECRET
     };
 
-    const delta = status === 'refunded' ? amountUsd : -amountUsd;
+    const delta = status === 'refunded' ? amountKes : -amountKes;
 
     if (isUserWithdrawal) {
       updateData.totalUserBalances = FieldValue.increment(delta);
@@ -1090,7 +1037,7 @@ try {
     }
 
     await statsRef.update(updateData);
-    console.log(`[Audit] Logged ${isUserWithdrawal ? 'user' : 'platform'} payout of $${amountUsd.toFixed(2)} to destination ${destination}`);
+    console.log(`[Audit] Logged ${isUserWithdrawal ? 'user' : 'platform'} payout of KES ${amountKes.toFixed(2)} to destination ${destination}`);
   } catch (err: any) {
     console.error("[Audit] Failed to log payout:", err.message);
   }
@@ -1106,35 +1053,36 @@ async function startServer() {
   // Run IP monitor in background so it doesn't block startup
   monitorIP().catch(err => console.error("Initial IP check failed:", err));
 
-  // Background Worker: Monthly Developer Expense ($3,700)
-  const processAutomaticDeveloperExpense = async () => {
-    try {
-      const now = new Date();
-      const currentMonth = now.toISOString().slice(0, 7); // YYYY-MM
-      const reference = `DEV-EXP-${currentMonth}`;
-      
-      const existing = await checkIdempotency(reference);
-      if (existing && existing.status === 'success') return;
-
-      console.log(`[Auto-Withdrawal] Processing developer expense for ${currentMonth}: $3,700`);
-      const statsRef = resilientDb.collection('platform').doc('stats');
-      await statsRef.update({ 
-        platformShare: FieldValue.increment(-3700), 
-        serverSecret: SERVER_SECRET 
-      });
-      await resilientDb.collection('platform_transactions').add({
-        type: 'expense', 
-        source: 'developer_payout', 
-        userAmount: 0, 
-        platformAmount: -3700, 
-        totalAmount: -3700,
-        unit: 'USD', 
-        reason: `Automated Monthly Developer Operational & Engineering Fee (${currentMonth})`,
-        userId: 'system', 
-        timestamp: FieldValue.serverTimestamp(), 
-        serverSecret: SERVER_SECRET, 
-        reference
-      });
+    // Background Worker: Monthly Developer Expense (KSH 481,000)
+    const processAutomaticDeveloperExpense = async () => {
+      try {
+        const now = new Date();
+        const currentMonth = now.toISOString().slice(0, 7); // YYYY-MM
+        const reference = `DEV-EXP-${currentMonth}`;
+        
+        const existing = await checkIdempotency(reference);
+        if (existing && existing.status === 'success') return;
+  
+        const expenseAmount = COOP_CONFIG_FIXED.strictRules.developerMonthlyExpenseKES || 481000;
+        console.log(`[Auto-Withdrawal] Processing developer expense for ${currentMonth}: KSH ${expenseAmount.toLocaleString()}`);
+        const statsRef = resilientDb.collection('platform').doc('stats');
+        await statsRef.update({ 
+          platformShare: FieldValue.increment(-expenseAmount), 
+          serverSecret: SERVER_SECRET 
+        });
+        await resilientDb.collection('platform_transactions').add({
+          type: 'expense', 
+          source: 'developer_payout', 
+          userAmount: 0, 
+          platformAmount: -expenseAmount, 
+          totalAmount: -expenseAmount,
+          unit: 'KES', 
+          reason: `Automated Monthly Developer Operational, Engineering & Cooperative Bank Governance Fee (${currentMonth})`,
+          userId: 'system', 
+          timestamp: FieldValue.serverTimestamp(), 
+          serverSecret: SERVER_SECRET, 
+          reference
+        });
       await markIdempotency(reference, 'success');
     } catch (e: any) {
       console.error("[Auto-Withdrawal] Month check error:", e.message);
@@ -1245,6 +1193,10 @@ async function startServer() {
                         combinedText.includes("billing") ||
                         combinedText.includes("credits are exhausted") ||
                         combinedText.includes("resource_exhausted") ||
+                        combinedText.includes("429") ||
+                        combinedText.includes("quota") ||
+                        combinedText.includes("depleted") ||
+                        combinedText.includes("insufficient balance") ||
                         combinedText.includes("api_key_invalid");
       
       const isWarmup = combinedText.includes("503") || combinedText.includes("unavailable") || combinedText.includes("overloaded") || combinedText.includes("502") || combinedText.includes("504");
@@ -1597,7 +1549,7 @@ async function startServer() {
       // Log to platform audit
       const isUserWithdrawal = payout.isUserWithdrawal !== false;
       await logPlatformPayout(
-        parseFloat(amount) / 130, 
+        parseFloat(amount), 
         payout.method || 'mpesa', 
         phoneNumber, 
         clientIp || '0.0.0.0', 
@@ -1666,7 +1618,7 @@ async function startServer() {
 
       const isUserWithdrawal = payout.isUserWithdrawal !== false;
       await logPlatformPayout(
-        parseFloat(amount) / 130, 
+        parseFloat(amount), 
         payout.method || 'bank_coop', 
         bankDetails.accountNumber, 
         clientIp || '0.0.0.0', 
@@ -1751,13 +1703,8 @@ async function startServer() {
           // IF REAL SUCCESSFUL PLATFORM PAYOUT, UPDATE TREASURY STATS
           if (payout.source === 'platform_treasury_movement' || payout.userId === 'platform-admin' || payout.userId === 'portal-admin') {
              try {
-               const amountUSD = (payout.amount / 130); // Approx back to USD
-               const statsRef = resilientDb.collection('platform').doc('stats');
-               await statsRef.update({
-                 platformShare: FieldValue.increment(-amountUSD),
-                 lastUpdated: new Date().toISOString()
-               });
-               console.log(`[Queue] REAL Platform treasury updated for ${reference} (-$${amountUSD.toFixed(4)})`);
+                // platformShare is already updated inside executeCoop* functions via logPlatformPayout
+                console.log(`[Queue] REAL Platform treasury successfully processed for ${reference}`);
              } catch (statsErr: any) {
                console.error(`[Queue] Failed to update platform stats for ${reference}:`, statsErr.message);
              }
@@ -2028,7 +1975,9 @@ async function startServer() {
     // Safety 3: Velocity Limit (Auth-Aware)
     if (userId) {
       try {
-        await checkVelocityLimit(userId, parseFloat(amount) / 130, authLevel);
+        // Convert KES to USD only for velocity logic if velocity is still calibrated in USD
+        // Or just use KES directly if we change checkVelocityLimit
+        await checkVelocityLimit(userId, parseFloat(amount), authLevel);
       } catch (velErr: any) {
         try {
           const softDecline = JSON.parse(velErr.message);
@@ -2049,21 +1998,21 @@ async function startServer() {
         const userDoc = await resilientDb.collection('users').doc(userId).get();
         if (!userDoc.exists) return res.status(404).json({ success: false, error: "USER_NOT_FOUND" });
         
-        const balance = userDoc.data()?.balance || 0;
-        const amountUSD = parseFloat(amount) / 130;
+        const points = userDoc.data()?.points || 0; // Gold mg
+        const amountKes = parseFloat(amount);
+        const requiredPoints = amountKes * 10; // Assuming 10 mg Gold = 1 KES (approx for logic)
         
-        if (balance < amountUSD - 0.001) {
-          return res.status(400).json({ success: false, error: "INSUFFICIENT_BALANCE", message: "Insufficient balance for this withdrawal." });
+        if (points < requiredPoints) {
+          return res.status(400).json({ success: false, error: "INSUFFICIENT_BALANCE", message: `Insufficient Gold mg for this withdrawal. Need ${requiredPoints} mg.` });
         }
         
-        // Deduct balance as part of the initiation
+        // Deduct points (Gold mg)
         await resilientDb.collection('users').doc(userId).update({
-          balance: FieldValue.increment(-amountUSD),
-          points: FieldValue.increment(-Math.floor(amountUSD * 100)),
-          totalWithdrawals: FieldValue.increment(amountUSD),
+          points: FieldValue.increment(-requiredPoints),
+          totalWithdrawalsKes: FieldValue.increment(amountKes),
           serverSecret: SERVER_SECRET
         });
-        console.log(`[Deduction] Deducted $${amountUSD.toFixed(4)} from ${userId} for M-Pesa payout.`);
+        console.log(`[Deduction] Deducted ${requiredPoints} Gold mg from ${userId} for KES ${amountKes} M-Pesa payout.`);
       } catch (deductionErr: any) {
         return res.status(500).json({ success: false, error: "DEDUCTION_FAILED", message: deductionErr.message });
       }
@@ -2124,7 +2073,7 @@ async function startServer() {
         );
 
         // Log the successful payout to platform audit
-        await logPlatformPayout(parseFloat(amount) / 130, 'mpesa_equity', phoneNumber, clientIp, true, 'success', reference);
+        await logPlatformPayout(parseFloat(amount), 'mpesa_equity', phoneNumber, clientIp, true, 'success', reference);
 
         return res.json({ success: true, transactionId: reference, message: "Real payout sent via Equity Bank", details: response.data });
       } catch (error: any) {
@@ -2261,7 +2210,7 @@ async function startServer() {
     // Safety 3: Velocity Limit (Auth-Aware)
     if (userId) {
       try {
-        await checkVelocityLimit(userId, parseFloat(amount) / 130, authLevel);
+        await checkVelocityLimit(userId, parseFloat(amount), authLevel);
       } catch (velErr: any) {
         try {
           const softDecline = JSON.parse(velErr.message);
@@ -2280,17 +2229,17 @@ async function startServer() {
     if (userId) {
       try {
         const userDoc = await resilientDb.collection('users').doc(userId).get();
-        const balance = userDoc.data()?.balance || 0;
-        const amountUSD = parseFloat(amount) / 130; 
+        const points = userDoc.data()?.points || 0;
+        const amountKes = parseFloat(amount);
+        const requiredPoints = amountKes * 10;
         
-        if (balance < amountUSD - 0.001) {
-          return res.status(400).json({ success: false, error: "INSUFFICIENT_BALANCE", message: "Insufficient balance for this withdrawal." });
+        if (points < requiredPoints) {
+          return res.status(400).json({ success: false, error: "INSUFFICIENT_BALANCE", message: `Insufficient Gold mg for this withdrawal. Need ${requiredPoints} mg.` });
         }
         
         await resilientDb.collection('users').doc(userId).update({
-          balance: FieldValue.increment(-amountUSD),
-          points: FieldValue.increment(-Math.floor(amountUSD * 100)),
-          totalWithdrawals: FieldValue.increment(amountUSD),
+          points: FieldValue.increment(-requiredPoints),
+          totalWithdrawalsKes: FieldValue.increment(amountKes),
           serverSecret: SERVER_SECRET
         });
       } catch (deductionErr: any) {
@@ -2350,14 +2299,14 @@ async function startServer() {
           }
         );
         // Audit log for successful bank payout
-        await logPlatformPayout(parseFloat(amount) / 130, 'bank_equity', bankDetails.accountNumber, clientIp, true, 'success', reference);
+        await logPlatformPayout(parseFloat(amount), 'bank_equity', bankDetails.accountNumber, clientIp, true, 'success', reference);
 
         return res.json({ success: true, transactionId: reference, message: "Real bank payout sent via Equity Bank", details: response.data });
       } catch (error: any) {
         console.error("Equity Bank Bank Error:", error.response?.data || error.message);
 
         // Audit log for initiated/simulated bank payout
-        await logPlatformPayout(parseFloat(amount) / 130, 'bank_equity_simulated', bankDetails.accountNumber, clientIp, true, 'simulated', reference);
+        await logPlatformPayout(parseFloat(amount), 'bank_equity_simulated', bankDetails.accountNumber, clientIp, true, 'simulated', reference);
 
         if (isNetworkBlock(error)) {
           console.error("Bank payout blocked. Simulation is PERMANENTLY FROZEN.");
@@ -2426,7 +2375,7 @@ async function startServer() {
     // Safety 3: Velocity Limit (Auth-Aware)
     if (userId) {
       try {
-        await checkVelocityLimit(userId, parseFloat(amount) / 130, authLevel);
+        await checkVelocityLimit(userId, parseFloat(amount), authLevel);
       } catch (velErr: any) {
         try {
           const softDecline = JSON.parse(velErr.message);
@@ -2764,7 +2713,7 @@ async function performRobustEducationSync() {
     }
     
     console.log(`[Developer Payout] Request Body:`, JSON.stringify(req.body));
-    console.log(`[Developer Payout] Initiating for ${recipient} (${destination}) with amount $${amount} USD via ${method}`);
+    console.log(`[Developer Payout] Initiating for ${recipient} (${destination}) with amount KES ${amount} via ${method}`);
     
     let statsDoc: any = null;
     if (isNaN(amount) || amount <= 0) {
@@ -2813,7 +2762,7 @@ async function performRobustEducationSync() {
       if (available < amount - 0.001) {
         return res.status(400).json({ 
           error: "Insufficient funds in Platform share.", 
-          details: `Available: $${available.toFixed(4)}, Requested: $${amount}` 
+          details: `Available: KES ${available.toFixed(2)}, Requested: KES ${amount}` 
         });
       }
 
@@ -2822,7 +2771,7 @@ async function performRobustEducationSync() {
       let payoutDetails = null;
 
       if (COOP_CONFIG.clientId && COOP_CONFIG.sourceAccount && (method === 'coop_bank' || method === 'bank_payout' || method === 'mpesa_b2c' || !method)) {
-        console.log(`[Developer Payout] Queueing real Co-op Bank payout for $${amount} via ${method || 'IFT'}`);
+        console.log(`[Developer Payout] Queueing real Co-op Bank payout for KES ${amount} via ${method || 'IFT'}`);
         
         const payoutData = {
           type: method === 'mpesa_b2c' ? 'mpesa' : 'bank',
@@ -2833,7 +2782,7 @@ async function performRobustEducationSync() {
             bankCode: "11", // Default to Internal Co-op
             bankName: "Co-operative Bank"
           },
-          amount: Math.round(amount * 130), // Convert to KES
+          amount: Math.round(amount), // Already KES
           userId: 'platform-admin',
           reference: reference, // Use PLAT-PAY-* reference
           clientIp: clientIp,
@@ -2854,7 +2803,7 @@ async function performRobustEducationSync() {
 
       const equityKey = process.env.EQUITY_CONSUMER_KEY;
       if (equityKey) {
-        console.log(`Initiating Equity Bank payout for $${amount} to ${recipient}`);
+        console.log(`Initiating Equity Bank payout for KES ${amount} to ${recipient}`);
         // Equity implementation...
         transactionId = "EQUITY-" + reference;
         payoutDetails = { Status: "INITIATED", Provider: "EQUITY" };
@@ -2878,7 +2827,7 @@ async function performRobustEducationSync() {
       res.json({
         success: true,
         transactionId,
-        message: `Payout of $${amount} USD initiated successfully.`,
+        message: `Payout of KES ${amount} initiated successfully.`,
         newBalance: currentStats.platformShare - amount
       });
     } catch (error: any) {
@@ -2929,8 +2878,8 @@ async function performRobustEducationSync() {
     const { method, amount, email: targetEmail, bankDetails, userId, scaToken, totpCode } = req.body;
     
     // Threshold check
-    if (amount < 10) {
-      return res.status(400).json({ success: false, error: "Minimum payout threshold is 10 USD" });
+    if (amount < 1300) {
+      return res.status(400).json({ success: false, error: "Minimum payout threshold is 1300 KES" });
     }
 
     // Safety 2: Authentication Level Check
@@ -2956,7 +2905,7 @@ async function performRobustEducationSync() {
       }
     }
 
-    console.log(`Initiating ${method} payout for ${amount} to ${targetEmail || bankDetails?.accountNumber}`);
+    console.log(`Initiating ${method} payout for KES ${amount} to ${targetEmail || bankDetails?.accountNumber}`);
     
     // 4. Balance Check and Deduction
     if (userId) {
@@ -2964,23 +2913,23 @@ async function performRobustEducationSync() {
         const userDoc = await resilientDb.collection('users').doc(userId).get();
         if (!userDoc.exists) return res.status(404).json({ success: false, error: "USER_NOT_FOUND" });
         
-        const balance = userDoc.data()?.balance || 0;
-        const amountUSD = parseFloat(amount);
+        const points = userDoc.data()?.points || 0;
+        const amountKes = parseFloat(amount);
+        const requiredPoints = amountKes * 10;
         
-        if (balance < amountUSD - 0.001) {
-          return res.status(400).json({ success: false, error: "INSUFFICIENT_BALANCE", message: "Insufficient balance for this withdrawal." });
+        if (points < requiredPoints) {
+          return res.status(400).json({ success: false, error: "INSUFFICIENT_BALANCE", message: `Insufficient Gold mg for this withdrawal. Need ${requiredPoints} mg.` });
         }
         
         // Deduct balance
         await resilientDb.collection('users').doc(userId).update({
-          balance: FieldValue.increment(-amountUSD),
-          points: FieldValue.increment(-Math.floor(amountUSD * 100)),
-          totalWithdrawals: FieldValue.increment(amountUSD),
+          points: FieldValue.increment(-requiredPoints),
+          totalWithdrawalsKes: FieldValue.increment(amountKes),
           serverSecret: SERVER_SECRET
         });
         
         // Log transaction
-        await logPlatformPayout(amountUSD, method, targetEmail || bankDetails?.accountNumber, "0.0.0.0", true, 'pending', `INT-${Date.now()}`, 'International Request');
+        await logPlatformPayout(amountKes, method, targetEmail || bankDetails?.accountNumber, "0.0.0.0", true, 'pending', `INT-${Date.now()}`, 'International Request');
         
         return res.json({
           success: true,

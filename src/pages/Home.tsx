@@ -119,7 +119,7 @@ export default function Home() {
       type: 'sponsored',
       company: 'CloudScale',
       title: 'Scale your business with ease',
-      description: 'Enterprise-grade cloud infrastructure for startups. Get 62.5 G in credits when you sign up today.',
+      description: 'Enterprise-grade cloud infrastructure for startups. Get 62.5 Gold mg in credits when you sign up today.',
       imageUrl: 'https://picsum.photos/seed/cloud/800/400',
       cta: 'Get Credits',
       link: 'https://google.com'
@@ -129,7 +129,7 @@ export default function Home() {
       type: 'sponsored',
       company: 'Pulse Rewards',
       title: 'Earn more with Pulse Feeds',
-      description: 'Did you know you can earn up to 0.625 G/month by just engaging with the community? Check your rewards dashboard.',
+      description: 'Did you know you can earn up to 0.625 Gold mg/month by just engaging with the community? Check your rewards dashboard.',
       imageUrl: 'https://picsum.photos/seed/rewards/800/400',
       cta: 'Check Rewards',
       link: '/rewards'
@@ -444,30 +444,7 @@ export default function Home() {
             </div>
             
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-4 animate-in fade-in slide-in-from-left duration-500">
-              <button 
-                onClick={() => navigate('/market')}
-                className="px-4 py-2 bg-black/20 backdrop-blur-lg rounded-2xl border border-white/10 flex items-center gap-3 shadow-xl hover:bg-black/30 transition-all text-left"
-              >
-                <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/30">
-                  <TrendingUp className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <div className="text-[10px] font-black text-emerald-200 uppercase tracking-widest leading-none mb-1">{t('best_market_partner')}</div>
-                  <div className="text-sm font-black text-white leading-none">APMEX</div>
-                </div>
-              </button>
-              <button 
-                onClick={() => navigate('/market')}
-                className="px-4 py-2 bg-black/20 backdrop-blur-lg rounded-2xl border border-white/10 flex items-center gap-3 shadow-xl hover:bg-black/30 transition-all text-left"
-              >
-                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shadow-lg shadow-blue-500/30">
-                  <Layers className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <div className="text-[10px] font-black text-blue-200 uppercase tracking-widest leading-none mb-1">{t('best_liquidity_provider')}</div>
-                  <div className="text-sm font-black text-white leading-none">JM Bullion</div>
-                </div>
-              </button>
+              {/* Market Partner links removed */}
             </div>
 
             <h2 className="text-3xl font-black tracking-tight mb-2">{t('make_money_msg')}</h2>
@@ -495,7 +472,6 @@ export default function Home() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
           {[
             { label: t('watch_ads'), icon: PlayCircle, path: '/ads', color: 'bg-indigo-400/30' },
-            { label: t('market_insights'), icon: BarChart2, path: '/market', color: 'bg-yellow-400/30' },
             { label: t('complete_task'), icon: CheckCircle2, path: '/rewards', color: 'bg-purple-400/30' },
             { label: t('daily_bonus'), icon: Gem, path: '/rewards', color: 'bg-white/20' }
           ].map((item, i) => (

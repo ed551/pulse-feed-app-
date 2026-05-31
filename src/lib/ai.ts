@@ -185,105 +185,58 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
         const isProxyError = status === 500 || status === 503 || status === 504 || combinedErrorText.includes("xhr error") || combinedErrorText.includes("failed to fetch") || status === 502;
         const isNotFound = status === 404;
         
-        // Model Fallback Logic (Sync with server.ts)
-        if ((isQuotaExceeded || isProxyError || isNotFound || isDepleted)) {
-          const oldModel = params.model;
-          
-          if (isQuotaExceeded || isDepleted) {
-            retries++;
-            const waitTime = isDepleted ? 15000 : 30000; // 15s for billing fallback, 30s for quota
-            console.warn(`[Client AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Attempt ${retries}. Waiting ${waitTime/1000}s before proactive fallback...`);
+          // Model Fallback Logic (Sync with server.ts)
+          if ((isQuotaExceeded || isProxyError || isNotFound || isDepleted)) {
+            const oldModel = params.model;
             
-            if (currentRelease) {
-              currentRelease();
-              currentRelease = null;
+            if (isQuotaExceeded || isDepleted) {
+              retries++;
+              const waitTime = isDepleted ? 5000 : 15000; // 5s for billing fallback, 15s for quota
+              console.warn(`[Client AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Attempt ${retries}. Waiting ${waitTime/1000}s before proactive fallback...`);
+              
+              if (currentRelease) {
+                currentRelease();
+                currentRelease = null;
+              }
+              await delay(waitTime);
+              await acquireLock();
             }
-            await delay(waitTime);
-            await acquireLock();
-          }
-
-          // If billing is depleted, strictly use free tier candidates ONLY
-          if (isDepleted) {
-            const waitTime = 10000;
-            console.warn(`[Client AI] Billing issue. Waiting ${waitTime/1000}s for recovery cooldown...`);
-            await delay(waitTime);
 
             const currentModel = params.model;
-            if (currentModel === 'gemini-3-flash-preview' || currentModel === 'gemini-2.0-flash' || currentModel === 'gemini-3.5-flash') {
-              params.model = 'gemini-flash-latest';
-              console.warn(`[Client AI] Billing issue. Switching to free tier: ${params.model}`);
-              continue;
-            } else if (currentModel === 'gemini-flash-latest') {
-              params.model = 'gemini-1.5-flash-002';
-              console.warn(`[Client AI] Trying base flash: ${params.model}`);
-              continue;
-            } else if (currentModel === 'gemini-1.5-flash-002' || currentModel === 'gemini-1.5-flash') {
+            // Robust Fallback Sequence (Prioritizing stable flash models)
+            if (currentModel === 'gemini-1.5-flash') {
               params.model = 'gemini-1.5-flash-8b';
-              console.warn(`[Client AI] Trying micro flash: ${params.model}`);
-              continue;
             } else if (currentModel === 'gemini-1.5-flash-8b') {
               params.model = 'gemini-1.5-flash-001';
-              console.warn(`[Client AI] Trying legacy flash: ${params.model}`);
-              continue;
             } else if (currentModel === 'gemini-1.5-flash-001') {
+              params.model = 'gemini-1.5-flash-002';
+            } else if (currentModel === 'gemini-flash-latest') {
+              params.model = 'gemini-1.5-flash';
+            } else if (currentModel === 'gemini-3-flash-preview') {
+              params.model = 'gemini-2.0-flash';
+            } else if (currentModel === 'gemini-2.0-flash') {
+              params.model = 'gemini-3.5-flash';
+            } else if (currentModel === 'gemini-3.5-flash') {
               params.model = 'gemini-3.1-flash-lite';
-              console.warn(`[Client AI] Trying lite free tier: ${params.model}`);
-              continue;
             } else if (currentModel === 'gemini-3.1-flash-lite') {
-              params.model = 'gemini-3.1-pro-preview';
-              console.warn(`[Client AI] Trying pro fallback: ${params.model}`);
-              continue;
-            } else if (currentModel === 'gemini-3.1-pro-preview') {
+              params.model = 'gemini-1.5-pro';
+            } else if (currentModel === 'gemini-1.5-pro') {
               params.model = 'gemini-1.5-pro-002';
-              console.warn(`[Client AI] Trying base pro: ${params.model}`);
-              continue;
-            } else if (currentModel === 'gemini-1.5-pro-002' || currentModel === 'gemini-1.5-pro') {
-              params.model = 'gemini-1.0-pro';
-              console.warn(`[Client AI] Trying ultimate legacy pro fallback: ${params.model}`);
-              continue;
-            } else if (currentModel === 'gemini-1.0-pro') {
-              params.model = 'gemini-2.0-flash-exp';
-              console.warn(`[Client AI] Trying experimental flash: ${params.model}`);
-              continue;
+            } else if (currentModel === 'gemini-3.1-pro-preview') {
+              params.model = 'gemini-1.5-pro';
             } else {
-              console.error("[Client AI] All free-tier candidates exhausted during billing depletion.");
+              // Loop back to a high-availability model if somehow stuck
+              params.model = 'gemini-1.5-flash-8b';
+            }
+            
+            if (params.model === oldModel) {
+              console.error(`[Client AI] All model fallbacks exhausted for ${oldModel}`);
               throw error;
             }
+            
+            console.warn(`[Client AI] Falling back from ${oldModel} to ${params.model}`);
+            continue;
           }
-
-          const currentModel = params.model;
-          if (currentModel === 'gemini-3-flash-preview' || currentModel === 'gemini-2.0-flash') {
-            params.model = 'gemini-3.5-flash';
-          } else if (currentModel === 'gemini-3.5-flash') {
-            params.model = 'gemini-flash-latest';
-          } else if (currentModel === 'gemini-flash-latest') {
-            params.model = 'gemini-1.5-flash-002';
-          } else if (currentModel === 'gemini-1.5-flash-002' || currentModel === 'gemini-1.5-flash') {
-            params.model = 'gemini-1.5-flash-8b';
-          } else if (currentModel === 'gemini-1.5-flash-8b') {
-            params.model = 'gemini-1.5-flash-001';
-          } else if (currentModel === 'gemini-1.5-flash-001') {
-            params.model = 'gemini-3.1-flash-lite';
-          } else if (currentModel === 'gemini-3.1-flash-lite') {
-            params.model = 'gemini-3.1-pro-preview';
-          } else if (currentModel === 'gemini-3.1-pro-preview') {
-            params.model = 'gemini-1.5-pro-002';
-          } else if (currentModel === 'gemini-1.5-pro-002' || currentModel === 'gemini-1.5-pro') {
-            params.model = 'gemini-1.0-pro';
-          } else if (currentModel === 'gemini-1.0-pro') {
-            params.model = 'gemini-2.0-flash-exp';
-          } else {
-            params.model = 'gemini-1.5-flash-8b';
-          }
-          
-          if (params.model === oldModel) {
-            console.error(`[Client AI] All model fallbacks exhausted for ${oldModel}`);
-            throw error;
-          }
-          
-          console.warn(`[Client AI] Falling back from ${oldModel} to ${params.model}`);
-          continue;
-        }
 
 
         if ((isQuotaExceeded || isProxyError) && retries < MAX_RETRIES) {

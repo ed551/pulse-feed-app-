@@ -119,9 +119,9 @@ export default function Rewards() {
   });
 
   const isLive = true; // Default to live mode
-  const points = userData?.points || 0; // Community Points
-  const usdBalance = userData?.balance || 0; // USD Balance
-  const balanceUSD = usdBalance;
+  const points = userData?.points || 0; // Gold mg
+  const goldBalance = points;
+  const balanceKES = points / 10; // 10 mg Gold = 1 KES
   const membershipLevel = userData?.membershipLevel || 'bronze';
 
   const canWithdrawNow = useMemo(() => {
@@ -149,17 +149,17 @@ export default function Rewards() {
     }, (err) => handleFirestoreError(err, OperationType.GET, `users/${currentUser.uid}/transactions`));
   }, [currentUser, db]);
 
-  // Calculate user audit totals (Normalized to USD for integrity)
+  // Calculate user audit totals (Normalized to KES for integrity)
   const userAuditTotals = useMemo(() => {
     return transactions.reduce((acc, tx) => {
-      // Use USD amount if available, otherwise fallback to amount (which is USD for earnings anyway)
-      const amountUsd = tx.currency === 'KES' ? (tx.pointsDeducted ? tx.pointsDeducted / 100 : (tx.amount / (rates['KES'] || 135))) : tx.amount;
+      // Use KES amount if available
+      const amountKes = tx.currency === 'KES' ? tx.amount : (tx.amount * (rates['KES'] || 10));
       
       if (tx.type === 'earning') {
-        acc.totalEarned += amountUsd;
+        acc.totalEarned += amountKes;
       } else if (['mpesa', 'bank', 'paybill', 'payout'].includes(tx.type || '')) {
-        acc.totalWithdrawn += amountUsd;
-        if (tx.status === 'pending') acc.pendingWithdrawals += amountUsd;
+        acc.totalWithdrawn += amountKes;
+        if (tx.status === 'pending') acc.pendingWithdrawals += amountKes;
       }
       return acc;
     }, { totalEarned: 0, totalWithdrawn: 0, pendingWithdrawals: 0 });
@@ -191,28 +191,28 @@ export default function Rewards() {
       const minAmount = isDeveloper ? 1 : 100;
       if (numAmount < minAmount) throw new Error(`Minimum withdrawal is KES ${minAmount}`);
       
-      const currentRate = rates['KES'] || 135;
-      const kesBalance = (usdBalance * currentRate);
+      const currentRate = rates['KES'] || 10;
+      const kesBalance = balanceKES;
 
       const last24h = Date.now() - (24 * 60 * 60 * 1000);
-      const recentWithdrawalsUSD = transactions
+      const recentWithdrawalsKES = transactions
         .filter(tx => ['mpesa', 'bank', 'paybill', 'payout', 'paypal', 'stripe'].includes(tx.type || '') && (tx.timestamp?.toMillis?.() || 0) > last24h)
         .reduce((sum, tx) => {
-          const txAmountUSD = (tx.currency === 'KES') ? (tx.amount / (rates['KES'] || 135)) : tx.amount;
-          return sum + txAmountUSD;
+          const txAmountKES = (tx.currency === 'KES') ? tx.amount : (tx.amount * (rates['KES'] || 10));
+          return sum + txAmountKES;
         }, 0);
 
-      // Velocity Limit Check (Informational)
-      const requestedUSD = numAmount / currentRate;
-      let limitUSD = 50; 
-      if (isDeveloper) limitUSD = 1000000000; // Unrestricted for system fixes
-      else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitUSD = 500;
+      // Velocity Limit Check
+      const requestedKES = numAmount;
+      let limitKES = 6500; // ~50 USD
+      if (isDeveloper) limitKES = 1300000000; // Unrestricted for system fixes
+      else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitKES = 65000; // ~500 USD
           
-      if (recentWithdrawalsUSD + requestedUSD > limitUSD && !totp && !usePasskey) {
-        setScaError(`Daily velocity limit of ${convert(limitUSD)} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is ${convert(5000)}.`);
+      if (recentWithdrawalsKES + requestedKES > limitKES && !totp && !usePasskey) {
+        setScaError(`Daily velocity limit of KES ${limitKES.toLocaleString()} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is KES 650,000.`);
       }
 
-      if (!isDeveloper && numAmount > kesBalance) throw new Error("Insufficient reserve for this withdrawal request.");
+      if (!isDeveloper && numAmount > balanceKES) throw new Error("Insufficient reserve for this withdrawal request.");
 
       const isQueued = !canWithdrawNow;
       
@@ -267,9 +267,8 @@ export default function Rewards() {
             // Log transaction to Firestore
             if (currentUser && db) {
               const txRef = collection(db, 'users', currentUser.uid, 'transactions');
-              const currentRate = rates['KES'] || 135;
-              const usdAmount = numAmount / currentRate;
-              const pointsToDeduct = Math.floor(usdAmount * 100);
+              const pointsToDeduct = Math.floor(numAmount * 10); // 10 mg Gold = 1 KES
+              const usdAmount = numAmount / 130; // 130 KES = 1 USD
 
               const txData = {
                 amount: numAmount,
@@ -344,27 +343,27 @@ export default function Rewards() {
       }
 
       const numAmount = parseFloat(payoutAmount);
-      const minAmount = isDeveloper ? 0.01 : 10;
-      if (numAmount < minAmount) throw new Error(`Minimum withdrawal is ${convert(minAmount)}`); 
+      const minAmount = isDeveloper ? 1 : 1300; 
+      if (numAmount < minAmount) throw new Error(`Minimum withdrawal is KES ${minAmount}`); 
       
       const last24h = Date.now() - (24 * 60 * 60 * 1000);
-      const recentWithdrawalsUSD = transactions
+      const recentWithdrawalsKES = transactions
         .filter(tx => ['mpesa', 'bank', 'paybill', 'payout', 'paypal', 'stripe'].includes(tx.type || '') && (tx.timestamp?.toMillis?.() || 0) > last24h)
         .reduce((sum, tx) => {
-          const txAmountUSD = (tx.currency === 'KES') ? (tx.amount / (rates['KES'] || 135)) : tx.amount;
-          return sum + txAmountUSD;
+          const txAmountKES = (tx.currency === 'KES') ? tx.amount : (tx.amount * (rates['KES'] || 10));
+          return sum + txAmountKES;
         }, 0);
 
-      // Velocity Limit Check (Informational)
-      let limitUSD = 50; 
-      if (isDeveloper) limitUSD = 1000000000;
-      else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitUSD = 500;
+      // Velocity Limit Check
+      let limitKES = 6500; 
+      if (isDeveloper) limitKES = 1300000000;
+      else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitKES = 65000; 
           
-      if (recentWithdrawalsUSD + numAmount > limitUSD && !totp && !usePasskey) {
-        setScaError(`Daily velocity limit of ${convert(limitUSD)} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is ${convert(5000)}.`);
+      if (recentWithdrawalsKES + numAmount > limitKES && !totp && !usePasskey) {
+        setScaError(`Daily velocity limit of KES ${limitKES.toLocaleString()} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is KES 650,000.`);
       }
 
-      if (!isDeveloper && numAmount > usdBalance) throw new Error("Insufficient reserve for this amount");
+      if (!isDeveloper && numAmount > balanceKES) throw new Error("Insufficient reserve for this amount");
 
       const isQueued = !canWithdrawNow;
       
@@ -409,11 +408,11 @@ export default function Rewards() {
         const txRef = collection(db, 'users', currentUser.uid, 'transactions');
         
         const reference = result.transactionId || `REV-INT-${Date.now()}`;
-        const pointsToDeduct = Math.floor(numAmount * 100);
+        const pointsToDeduct = Math.floor(numAmount * 10); // 10 mg Gold = 1 KES
         
         const txData = {
           amount: numAmount,
-          currency: 'USD',
+          currency: 'KES',
           type: payoutMethod,
           status: isQueued ? 'queued' : 'pending',
           email: payoutEmail,
@@ -444,7 +443,6 @@ export default function Rewards() {
         const userRef = doc(db, 'users', currentUser.uid);
         await updateDoc(userRef, {
           points: increment(-pointsToDeduct),
-          balance: increment(-numAmount),
           totalWithdrawals: increment(numAmount)
         });
 
@@ -456,13 +454,11 @@ export default function Rewards() {
           source: 'withdrawal',
           reason: `International Payout (${payoutMethod})`,
           timestamp: serverTimestamp(),
-          unit: 'Points'
+          unit: 'Gold mg'
         }).catch(err => console.error("Error logging points ledger:", err));
-      } else if (currentUser && !db) {
-        console.warn("Firestore not available for international payout logging.");
       }
       
-      setSuccess(`International payout request of ${convert(numAmount)} submitted successfully! ${isQueued ? "(Queued for 1st of month)" : ""}`);
+      setSuccess(`International payout request of KES ${numAmount.toLocaleString()} submitted successfully! ${isQueued ? "(Queued for 1st of month)" : ""}`);
       setPayoutAmount("");
       setPayoutEmail("");
     } catch (err: any) {
@@ -493,13 +489,11 @@ export default function Rewards() {
   };
 
   const handleWithdrawMax = () => {
-    const currentRate = rates['KES'] || 135;
-    const maxKes = Math.floor(points * currentRate / 100);
-    setAmount(maxKes.toString());
+    setAmount(Math.floor(balanceKES).toString());
   };
 
   const handleWithdrawAllInternational = () => {
-    setPayoutAmount(usdBalance.toFixed(2));
+    setPayoutAmount(balanceKES.toFixed(2));
   };
 
   const handleSyncWallet = async () => {
@@ -519,13 +513,13 @@ export default function Rewards() {
         if (data.type === 'deduction' || data.type === 'redemption') totalPoints += (data.amount || 0); // Ledger amounts are negative for deductions
       });
 
-      const calculatedBalance = totalPoints / 100; // $1 per 100 points balance
+      const calculatedBalanceKes = totalPoints / 10; // KES 1 per 10 mg Gold
 
       // 2. Update user document to match ledger
       const userRef = doc(db, 'users', currentUser.uid);
       await updateDoc(userRef, {
         points: totalPoints,
-        balance: calculatedBalance,
+        balanceKes: calculatedBalanceKes,
         lastSyncAt: serverTimestamp()
       });
 
@@ -546,12 +540,12 @@ export default function Rewards() {
       const userRef = doc(db, 'users', currentUser.uid);
       await updateDoc(userRef, {
         points: 6337,
-        balance: 63.37,
+        balanceKes: 633.7,
         isPointsRecovered: true,
         isRestoredTo6337: true,
         recoveredAt: serverTimestamp()
       });
-      setSuccess("Full balance of 6,337 points successfully restored!");
+      setSuccess("Full balance of 6,337 Gold mg successfully restored!");
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
       setError("Restoration failed. Please try again.");
@@ -568,7 +562,7 @@ export default function Rewards() {
     const timestamp = new Date().toISOString();
     const auditData = transactions.map(tx => {
       const date = tx.timestamp?.toDate?.() || new Date(tx.timestamp);
-      return `${date.toISOString()},${tx.type},${tx.amount},${tx.currency || 'USD'},${tx.status},${tx.reference}`;
+      return `${date.toISOString()},${tx.type},${tx.amount},${tx.currency || 'KES'},${tx.status},${tx.reference}`;
     }).join('\n');
     
     const header = "Date,Type,Amount,Currency,Status,Reference\n";
@@ -639,7 +633,7 @@ export default function Rewards() {
 
   const achievements = [
     { id: 1, title: 'Early Adopter', desc: 'Joined during the beta phase.', icon: Award, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30' },
-    { id: 2, title: 'Market Predictor', desc: 'Correctly predicted market movement 5 times.', icon: TrendingUp, color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
+    { id: 2, title: 'Gold Predictor', desc: 'Correctly predicted gold movement 5 times.', icon: TrendingUp, color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
     { id: 3, title: 'Community Pillar', desc: 'Received 100+ likes on a single post.', icon: Layers, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
   ];
 
@@ -1135,7 +1129,7 @@ export default function Rewards() {
           )}
         >
           <Smartphone className="w-4 h-4" />
-          <span>Local (KES)</span>
+          <span>Withdrawals (KES)</span>
         </button>
         <button 
           onClick={() => setActiveTab('international')}
@@ -1194,10 +1188,10 @@ export default function Rewards() {
                   Live Account Balance & Accumulation
                 </span>
                 <div className="text-6xl font-black mb-1 flex items-center gap-2">
-                  {convert(usdBalance)}
+                  KES {balanceKES.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className="text-sm font-bold text-white/70 mb-4">
-                  ≈ {points.toLocaleString()} Community Points
+                  ≈ {points.toLocaleString()} Gold mg Balance
                 </div>
                 <div className="text-xl font-bold opacity-95 mb-4 flex items-center">
                   <Zap className="w-5 h-5 mr-2 text-yellow-300" />
@@ -1297,7 +1291,7 @@ export default function Rewards() {
                       className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center transition-all shadow-lg shadow-orange-500/20 active:scale-95 animate-pulse"
                     >
                       <RotateCcw className="w-3 h-3 mr-2" />
-                      {isRecovering ? 'Restoring...' : 'Restore 6,337 Pts'}
+                      {isRecovering ? 'Restoring...' : 'Restore 6,337 Gold mg'}
                     </button>
                   )}
                 </div>
@@ -1360,11 +1354,11 @@ export default function Rewards() {
                   <div className="flex justify-between items-end text-white">
                     <div>
                       <p className="text-[10px] opacity-70 uppercase font-bold">Earned Today</p>
-                      <p className="text-xl font-black">{totalEarnedToday} <span className="text-xs font-normal opacity-70">Points</span></p>
+                      <p className="text-xl font-black">{totalEarnedToday} <span className="text-xs font-normal opacity-70">Gold mg</span></p>
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] opacity-70 uppercase font-bold">Current Reserve</p>
-                      <p className="text-sm font-bold">{convert(usdBalance)}</p>
+                      <p className="text-sm font-bold">KES {balanceKES.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
                   </div>
                 </div>
@@ -1386,7 +1380,7 @@ export default function Rewards() {
                 <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm">
                   Pulse Feeds operates on a transparent, multi-tiered revenue distribution model designed to reward community participation while sustaining platform innovation.
                   <br/><br/>
-                  <strong>1. User Engagement:</strong> For general platform activity, including social interactions, active time, and community participation, your revenue share is determined by your <strong>Membership Level</strong> (Bronze: 20%, Silver: 50%, Market: 80%).
+                  <strong>1. User Engagement:</strong> For general platform activity, including social interactions, active time, and community participation, your revenue share is determined by your <strong>Membership Level</strong> (Bronze: 20%, Silver: 50%, Gold: 80%).
                   <br/><br/>
                   <strong>2. Exclusions:</strong> Membership level benefits do <strong>not</strong> apply to Ads revenue (fixed 50/50 split).
                   <br/><br/>
@@ -1439,15 +1433,15 @@ export default function Rewards() {
                   <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
                     <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
                       <div className="text-gray-500 mb-1">Gross Earnings</div>
-                      <div className="font-bold text-gray-900 dark:text-white">{convert(50.00)}</div>
+                      <div className="font-bold text-gray-900 dark:text-white">KES {((50.00 * 130)).toLocaleString()}</div>
                     </div>
                     <div className="bg-red-50 dark:bg-red-900/10 p-3 rounded-lg border border-red-100 dark:border-red-900/20">
                       <div className="text-red-500 mb-1 flex items-center"><Landmark className="w-3 h-3 mr-1"/> Tax Withheld (16%)</div>
-                      <div className="font-bold text-red-600 dark:text-red-400">-{convert(8.00)}</div>
+                      <div className="font-bold text-red-600 dark:text-red-400">-KES {((8.00 * 130)).toLocaleString()}</div>
                     </div>
                     <div className="bg-green-50 dark:bg-green-900/10 p-3 rounded-lg border border-green-100 dark:border-green-900/20">
                       <div className="text-green-600 mb-1">Net Payout</div>
-                      <div className="font-bold text-green-700 dark:text-green-400">{convert(42.00)}</div>
+                      <div className="font-bold text-green-700 dark:text-green-400">KES {((42.00 * 130)).toLocaleString()}</div>
                     </div>
                   </div>
                 </div>
@@ -1489,7 +1483,7 @@ export default function Rewards() {
                   <div className="relative z-10 space-y-4">
                     <p className="text-blue-100 font-bold uppercase tracking-widest text-xs">Local Wallet Balance (KES)</p>
                     <h2 className="text-5xl font-black tracking-tighter">
-                      {new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format((points / 100) * (rates['KES'] || 130))}
+                      KES {balanceKES.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </h2>
                     <div className="flex items-center space-x-2 text-blue-100 text-sm">
                       <ShieldCheck className="w-4 h-4" />
@@ -1793,7 +1787,7 @@ export default function Rewards() {
               </div>
             </div>
           </motion.div>
-        ) : (
+        ) : activeTab === 'international' ? (
           <motion.div 
             key="international"
             initial={{ opacity: 0, y: 20 }}
@@ -1808,13 +1802,13 @@ export default function Rewards() {
                     <Globe className="w-32 h-32" />
                   </div>
                   <div className="relative z-10 space-y-4">
-                    <p className="text-purple-100 font-bold uppercase tracking-widest text-xs">International Payouts</p>
+                    <p className="text-purple-100 font-bold uppercase tracking-widest text-xs">International Payouts (KES)</p>
                       <h2 className="text-5xl font-black tracking-tighter">
-                        {convert(points / 100)}
+                        KES {balanceKES.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </h2>
                     <div className="flex items-center space-x-2 text-purple-100 text-sm">
                       <CheckCircle className="w-4 h-4" />
-                      <span>Available for withdrawal globally</span>
+                      <span>Available for withdrawal globally in KES</span>
                     </div>
                   </div>
                 </div>
@@ -1822,7 +1816,7 @@ export default function Rewards() {
                 <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
                   <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 p-4 rounded-r-xl mb-6">
                     <p className="text-amber-800 dark:text-amber-200 text-sm font-bold">
-                      ⚠️ Minimum withdrawal amount is {convert(100)}.
+                      ⚠️ Minimum international withdrawal is KES 1,300.
                     </p>
                   </div>
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center space-x-2">
@@ -1911,9 +1905,9 @@ export default function Rewards() {
                     )}
 
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount (Equivalent Gold)</label>
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount (KES)</label>
                       <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">G</span>
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">KES</span>
                         <input
                           type="number"
                           placeholder="0.00"
@@ -1930,7 +1924,7 @@ export default function Rewards() {
                         </button>
                       </div>
                       <p className="text-[10px] text-gray-500 mt-1">
-                        Equivalent to {payoutAmount ? Math.round(parseFloat(payoutAmount) * 100) : 0} points
+                        Equivalent to {payoutAmount ? Math.round(parseFloat(payoutAmount) * 10) : 0} Gold mg
                       </p>
                     </div>
 
@@ -1989,11 +1983,11 @@ export default function Rewards() {
                   <ul className="space-y-3 text-xs text-gray-500 dark:text-gray-400">
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
-                      <span>Processing time: {isDeveloper ? "Instant (Developer Priority)" : "1-3 business days"}</span>
+                      <span>Processing time: {isDeveloper ? "Instant (Developer Priority)" : "1st of every month"}</span>
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
-                      <span>Minimum withdrawal: {isDeveloper ? "None" : `${convert(100)} (10,000 points)`}</span>
+                      <span>Minimum withdrawal: KES 1,300 (~13,000 Gold mg)</span>
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
@@ -2001,31 +1995,21 @@ export default function Rewards() {
                     </li>
                   </ul>
                 </div>
-
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                  <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">Recent Payouts</h3>
-                  <div className="space-y-3">
-                    {transactions.filter(tx => tx.id.startsWith('INT-')).length > 0 ? (
-                      transactions.filter(tx => tx.id.startsWith('INT-')).map(tx => (
-                        <div key={`int-payout-${tx.id}`} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center">
-                              <ArrowUpRight className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-bold text-gray-900 dark:text-white">{convert(tx.amount)}</p>
-                              <p className="text-[8px] text-gray-500">{tx.phoneNumber}</p>
-                            </div>
-                          </div>
-                          <span className="text-[8px] font-black text-green-600 uppercase">Success</span>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-[10px] text-gray-400 text-center py-4">No international payouts yet</p>
-                    )}
-                  </div>
-                </div>
               </div>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div 
+            key="history"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-8"
+          >
+            <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col items-center justify-center text-center py-20">
+               <Clock className="w-16 h-16 text-gray-200 mb-6" />
+               <h3 className="text-2xl font-black text-gray-900 dark:text-white">Transaction History</h3>
+               <p className="text-gray-500 max-w-sm mt-2">See your full activity log on the Overview tab under Audit Trail.</p>
             </div>
           </motion.div>
         )}

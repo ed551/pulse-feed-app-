@@ -249,8 +249,8 @@ export default function Community() {
       const fetchedReports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as CommunityReport[];
       if (fetchedReports.length === 0 && db) {
         setReports([
-          { id: 'r1', title: 'Broken Street Light', description: 'The light on 5th Ave has been out for 3 days.', category: 'Safety', status: 'Investigating', location: 'Downtown', reporterName: 'John D.', timestamp: new Date(), upvotes: 12, aiAnalysis: 'High priority for nighttime safety.', bounty: 400 }, // 400 USD
-          { id: 'r2', title: 'Pothole Alert', description: 'Large pothole near the school entrance.', category: 'Infrastructure', status: 'Pending', location: 'Westside', reporterName: 'Sarah M.', timestamp: new Date(), upvotes: 45, aiAnalysis: 'Potential hazard for school buses.', bounty: 1200, solutionPrice: 240 } // 240 USD
+          { id: 'r1', title: 'Broken Street Light', description: 'The light on 5th Ave has been out for 3 days.', category: 'Safety', status: 'Investigating', location: 'Downtown', reporterName: 'John D.', timestamp: new Date(), upvotes: 12, aiAnalysis: 'High priority for nighttime safety.', bounty: 50000 }, // 50000 Gold mg
+          { id: 'r2', title: 'Pothole Alert', description: 'Large pothole near the school entrance.', category: 'Infrastructure', status: 'Pending', location: 'Westside', reporterName: 'Sarah M.', timestamp: new Date(), upvotes: 45, aiAnalysis: 'Potential hazard for school buses.', bounty: 156000, solutionPrice: 31200 } // Gold mg
         ]);
       } else {
         setReports(fetchedReports);

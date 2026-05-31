@@ -148,11 +148,11 @@ export default function EducationHub() {
         experience: increment(250)
       });
 
-      // Log Developer/Platform Share
-      await addPlatformRevenue(developerShare / 100, `Course Enrollment Fee: ${course.title} (Developer 80% Share)`);
+      // Log Developer/Platform Share (10 mg Gold = 1 KES)
+      await addPlatformRevenue(developerShare / 10, `Course Enrollment Fee: ${course.title} (Developer 80% Share)`);
 
       showNotification("Education Milestone", { 
-        body: `Welcome to ${course.title}! You've been rewarded ${userShare} points (20% share) while 80% ($${developerShare/100}) fuels global engineering.` 
+        body: `Welcome to ${course.title}! You've been rewarded ${userShare} points (20% share) while 80% (KES ${developerShare/10}) fuels global engineering.` 
       });
       setSelectedCourse(null);
     } catch (err) {

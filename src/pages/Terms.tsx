@@ -157,7 +157,7 @@ export default function Terms() {
           <li><strong>Automatic Withholding:</strong> Depending on your jurisdiction, the MoR may automatically calculate and withhold necessary taxes (e.g., VAT, Income Tax, WHT) from your gross earnings.</li>
           <li><strong>Tax Reporting:</strong> You are responsible for reporting your earnings to your local tax authorities. We will provide annual earning statements where required by law.</li>
           <li><strong>Compliance:</strong> By using the reward system, you agree to provide all necessary information for tax compliance purposes.</li>
-          <li><strong>Currency Conversion:</strong> Payouts are typically made in USD or the local currency equivalent at the time of processing, subject to prevailing exchange rates and fees.</li>
+          <li><strong>Currency Conversion:</strong> Payouts are typically made in Kenyan Shillings (KES) or the local currency equivalent at the time of processing, subject to prevailing exchange rates and fees.</li>
         </ul>
 
         <h2>7. Intellectual Property Rights and Content Licensing</h2>

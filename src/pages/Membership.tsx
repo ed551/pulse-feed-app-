@@ -256,7 +256,7 @@ export default function Membership() {
               <span className="text-xl font-bold text-gray-400">
                 .00
               </span>
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">USD</span>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">KES</span>
             </div>
 
             <div className="space-y-4 mb-10 flex-1">

@@ -119,7 +119,7 @@ export default function AdsDashboard() {
               <Activity className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-3xl font-bold text-gray-900 dark:text-white">$0.10</div>
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">KES 13</div>
           <div className="flex items-center mt-2 text-sm text-red-500 font-medium">
             <TrendingUp className="w-4 h-4 mr-1 rotate-180" />
             -2.1% from last month

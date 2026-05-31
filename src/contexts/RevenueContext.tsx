@@ -70,7 +70,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const IDLE_THRESHOLD = idleThreshold;
   const EARNING_INTERVAL = 30000; // Check every 30s locally
   const SYNC_INTERVAL = 300000; // Sync to DB every 5 mins
-  const ACTIVE_POINTS_PER_INTERVAL = 16; // 16 Points per 30s (~$0.16 equivalent)
+  const ACTIVE_POINTS_PER_INTERVAL = 16; // 16 Gold mg per 30s
   
   const monitorBehaviorWithAI = async () => {
     if (!currentUser || isAnalyzingBehavior || Date.now() - lastBehaviorCheckRef.current < 60000) return;
@@ -91,13 +91,13 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       };
 
-      const prompt = `Analyze user behavioral pattern for Pulse Feeds platform (Points-Based Economy). 
+      const prompt = `Analyze user behavioral pattern for Pulse Feeds platform (Gold-Based Economy). 
       User ID: ${currentUser.uid}
       Session Persistence: ${activeSeconds}s
-      Points Accrual: ${totalEarnedToday}
+      Gold Accrual: ${totalEarnedToday} mg
       Idle Status: ${isIdle}
       
-      If the user is idle for more than 10 minutes OR has accrued more than 4000 points in one session without movement, recommend [LOCKOUT].
+      If the user is idle for more than 10 minutes OR has accrued more than 4000 mg gold in one session without movement, recommend [LOCKOUT].
       Otherwise return [STABLE].`;
 
       const result = await generateContentWithRetry({

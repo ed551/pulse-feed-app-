@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -12,7 +12,12 @@ import {
   Calendar,
   Sparkles,
   BarChart3,
-  LineChart
+  LineChart,
+  Brain,
+  Zap,
+  Target,
+  ChevronRight,
+  ShieldCheck
 } from 'lucide-react';
 import { 
   LineChart as ReLineChart, 
@@ -23,9 +28,11 @@ import {
   Tooltip, 
   ResponsiveContainer,
   AreaChart,
-  Area
+  Area,
+  ReferenceLine
 } from 'recharts';
 import { generateContentWithRetry } from '../lib/ai';
+import { cn } from '../lib/utils';
 
 // Mock data generator for 30 days of Gold price movement
 const generateGoldData = () => {
@@ -53,6 +60,12 @@ const generateGoldData = () => {
 export default function GoldGraph() {
   const [data, setData] = useState(generateGoldData());
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [prediction, setPrediction] = useState<{
+    direction: 'UP' | 'DOWN' | 'SIDEWAYS';
+    confidence: number;
+    target: number;
+    reasoning: string;
+  } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [timeframe, setTimeframe] = useState<'7D' | '30D' | 'ALL'>('30D');
 
@@ -61,25 +74,58 @@ export default function GoldGraph() {
   const priceChange = currentPrice - startPrice;
   const percentChange = (priceChange / startPrice) * 100;
 
+  // Forecast data for the chart projection
+  const chartData = useMemo(() => {
+    if (!prediction) return data;
+    
+    const lastPoint = data[data.length - 1];
+    const forecastPoints = [];
+    const step = (prediction.target - lastPoint.price) / 3;
+    
+    for (let i = 1; i <= 3; i++) {
+      forecastPoints.push({
+        date: `Forecast ${i}`,
+        price: parseFloat((lastPoint.price + step * i).toFixed(2)),
+        isForecast: true
+      });
+    }
+    
+    return [...data, ...forecastPoints];
+  }, [data, prediction]);
+
   const runAiPrediction = async () => {
     setIsAnalyzing(true);
     try {
-      const prompt = `Based on the current Gold price of $${currentPrice} (which has seen a ${percentChange.toFixed(2)}% change over 30 days), what is the 7-day prediction and market sentiment? Provide a brief, professional technical analysis. Context: Pulse Feeds Gold Ecosystem.`;
+      const prompt = `
+        Analyze the Gold Market for Pulse Feeds Gold Ecosystem.
+        Current Price: ${currentPrice} mg.
+        30-Day Trend: ${percentChange.toFixed(2)}%.
+        
+        Provide a 7-day technical prediction in STRICT JSON format:
+        {
+          "direction": "UP", "DOWN", or "SIDEWAYS",
+          "confidence": (0-100),
+          "target": (predicted price in mg),
+          "reasoning": "brief 1-sentence analytical insight"
+        }
+      `;
       
       const response = await generateContentWithRetry({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 500,
+          temperature: 0.4,
+          responseMimeType: "application/json"
         }
       });
 
       if (response.candidates?.[0]?.content?.parts?.[0]?.text) {
-        setAiAnalysis(response.candidates[0].content.parts[0].text);
+        const result = JSON.parse(response.candidates[0].content.parts[0].text);
+        setPrediction(result);
+        setAiAnalysis(result.reasoning);
       }
     } catch (error) {
       console.error("AI Analysis failed:", error);
-      setAiAnalysis("Unable to generate prediction at this time. Market volatility is currently outside standard parameters.");
+      setAiAnalysis("Market signals are currently divergent. Neutral stance recommended.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -109,9 +155,9 @@ export default function GoldGraph() {
 
           <div className="flex items-center gap-4">
             <div className="text-right">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Spot Price (USD/oz)</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Spot Price (KES/g)</p>
               <div className="flex items-center gap-2">
-                <span className="text-3xl font-black text-gray-900 dark:text-white">${currentPrice.toLocaleString()}</span>
+                <span className="text-3xl font-black text-gray-900 dark:text-white">{currentPrice.toLocaleString()}</span>
                 <span className={`flex items-center text-xs font-bold px-2 py-0.5 rounded-full ${priceChange >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                   {priceChange >= 0 ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
                   {Math.abs(percentChange).toFixed(2)}%
@@ -150,14 +196,18 @@ export default function GoldGraph() {
 
             <div className="h-[350px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data}>
+                <AreaChart data={chartData}>
                   <defs>
                     <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#eab308" stopOpacity={0.3}/>
                       <stop offset="95%" stopColor="#eab308" stopOpacity={0}/>
                     </linearGradient>
+                    <linearGradient id="colorForecast" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                    </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.1} />
                   <XAxis 
                     dataKey="date" 
                     axisLine={false} 
@@ -185,9 +235,29 @@ export default function GoldGraph() {
                     dataKey="price" 
                     stroke="#eab308" 
                     strokeWidth={3}
+                    dot={(props: any) => {
+                      if (props.payload.isForecast) {
+                        return <circle cx={props.cx} cy={props.cy} r={3} fill="#8b5cf6" stroke="none" />;
+                      }
+                      return null;
+                    }}
                     fillOpacity={1} 
                     fill="url(#colorPrice)" 
                   />
+                  {prediction && (
+                    <ReferenceLine 
+                      y={prediction.target} 
+                      stroke="#8b5cf6" 
+                      strokeDasharray="3 3" 
+                      label={{ 
+                        value: 'AI Target', 
+                        position: 'right', 
+                        fill: '#8b5cf6', 
+                        fontSize: 10, 
+                        fontWeight: 900 
+                      }} 
+                    />
+                  )}
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -199,38 +269,120 @@ export default function GoldGraph() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.1 }}
-              className="bg-slate-900 text-white rounded-3xl p-6 shadow-xl border border-slate-800 relative overflow-hidden"
+              className="bg-slate-900 border-2 border-purple-500/30 text-white rounded-3xl p-6 shadow-[0_0_40px_-10px_rgba(139,92,246,0.3)] relative overflow-hidden"
             >
               <div className="absolute top-0 right-0 p-4 opacity-10">
-                <Sparkles size={120} />
+                <Brain size={120} className="text-purple-400" />
               </div>
               
-              <div className="flex items-center gap-2 mb-6">
-                <div className="w-8 h-8 bg-yellow-500/20 rounded-lg flex items-center justify-center">
-                  <Activity className="w-4 h-4 text-yellow-500" />
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">
+                    <Zap className="w-4 h-4 text-purple-400" />
+                  </div>
+                  <h3 className="font-black text-xs uppercase tracking-widest text-purple-400">The Brain: Prediction Engine</h3>
                 </div>
-                <h3 className="font-black text-xs uppercase tracking-widest text-yellow-500">Gemini Intelligence</h3>
+                <ShieldCheck className="w-4 h-4 text-emerald-400 opacity-50" />
               </div>
 
-              <div className="space-y-4">
-                {isAnalyzing ? (
-                  <div className="space-y-3 animate-pulse">
-                    <div className="h-4 bg-slate-800 rounded w-full"></div>
-                    <div className="h-4 bg-slate-800 rounded w-5/6"></div>
-                    <div className="h-4 bg-slate-800 rounded w-4/6"></div>
+              <div className="space-y-6 relative z-10">
+                {/* Movement Indicator Gauge */}
+                <div className="bg-slate-800/50 rounded-2xl p-4 border border-white/5">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Movement Potential</span>
+                    <span className={cn(
+                      "text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest",
+                      prediction?.direction === 'UP' ? 'bg-emerald-500/20 text-emerald-400' :
+                      prediction?.direction === 'DOWN' ? 'bg-rose-500/20 text-rose-400' :
+                      'bg-slate-700 text-slate-400'
+                    )}>
+                      {isAnalyzing ? 'Scanning...' : prediction?.direction || 'Standing By'}
+                    </span>
                   </div>
-                ) : (
-                  <div className="text-sm font-medium leading-relaxed text-slate-300">
-                    {aiAnalysis}
+                  
+                  <div className="relative h-2 bg-slate-700 rounded-full overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: isAnalyzing ? '100%' : `${prediction?.confidence || 0}%` }}
+                      className={cn(
+                        "absolute inset-y-0 left-0 transition-all duration-1000",
+                        prediction?.direction === 'UP' ? 'bg-emerald-500' :
+                        prediction?.direction === 'DOWN' ? 'bg-rose-500' :
+                        'bg-purple-500'
+                      )}
+                    />
+                    {isAnalyzing && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
+                    )}
                   </div>
-                )}
+                  
+                  <div className="flex justify-between mt-2">
+                    <span className="text-[9px] font-bold text-slate-500 italic">Caution</span>
+                    <span className="text-[9px] font-bold text-slate-400">{prediction?.confidence || 0}% Confidence</span>
+                    <span className="text-[9px] font-bold text-slate-500 italic">High conviction</span>
+                  </div>
+                </div>
+
+                {/* Target & Reasoning */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-slate-800/50 rounded-2xl border border-white/5">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Target className="w-3 h-3 text-purple-400" />
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">AI Price Target</p>
+                    </div>
+                    {isAnalyzing ? (
+                      <div className="h-5 bg-slate-700 rounded animate-pulse w-2/3" />
+                    ) : (
+                      <p className="text-lg font-black text-white">{prediction?.target?.toLocaleString() || '---'}</p>
+                    )}
+                  </div>
+                  <div className="p-4 bg-slate-800/50 rounded-2xl border border-white/5">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Clock className="w-3 h-3 text-slate-400" />
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">Timeline</p>
+                    </div>
+                    <p className="text-lg font-black text-white">7 Days</p>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-slate-800/50 rounded-2xl border border-white/5">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <ChevronRight className="w-3 h-3 text-purple-400" />
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">The Brain's Logic</p>
+                  </div>
+                  {isAnalyzing ? (
+                    <div className="space-y-2">
+                      <div className="h-3 bg-slate-700 rounded animate-pulse w-full" />
+                      <div className="h-3 bg-slate-700 rounded animate-pulse w-4/5" />
+                    </div>
+                  ) : (
+                    <p className="text-xs font-medium text-slate-300 leading-relaxed italic">
+                      "{aiAnalysis || 'Waiting for market data synchronization...'}"
+                    </p>
+                  )}
+                </div>
                 
                 <button 
                   onClick={runAiPrediction}
                   disabled={isAnalyzing}
-                  className="w-full mt-4 bg-white/10 hover:bg-white/20 transition-colors py-3 rounded-xl border border-white/10 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2"
+                  className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-slate-700 transition-all py-4 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20 active:scale-95"
                 >
-                  {isAnalyzing ? 'Scanning Markets...' : 'Refresh AI Prediction'}
+                  {isAnalyzing ? (
+                    <>
+                      <motion.div 
+                        animate={{ rotate: 360 }}
+                        transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                      >
+                        <Brain className="w-4 h-4" />
+                      </motion.div>
+                      <span>Brain Thinking...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>Synchronize Predictions</span>
+                    </>
+                  )}
                 </button>
               </div>
             </motion.div>

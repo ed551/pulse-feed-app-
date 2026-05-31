@@ -146,7 +146,6 @@ export default function Layout() {
   // Header navigation items - Simplified
   const headerNavItems = [
     { path: '/', icon: Home, label: t('home') },
-    { path: '/market', icon: LineChart, label: t('market_data') },
     { path: '/gold', icon: Gem, label: t('gold_graph') },
     { path: '/groups', icon: Users, label: t('groups') },
     { path: '/rewards', icon: Layers, label: t('rewards') },
@@ -165,8 +164,7 @@ export default function Layout() {
     { name: 'Coop Bank API', icon: Building2, color: 'text-indigo-500', label: t('coop_bank') },
     { name: 'Terms', icon: FileText, color: 'text-teal-500', label: t('terms') },
     { name: 'Privacy', icon: ShieldCheck, color: 'text-indigo-500', label: t('privacy') },
-    { name: 'Ads', icon: Gem, color: 'text-green-500', label: t('ads') },
-    { name: 'Market Insights', icon: BarChart2, color: 'text-indigo-600', label: t('market_insights') }
+    { name: 'Ads', icon: Gem, color: 'text-green-500', label: t('ads') }
   ];
 
   const handleCategoryClick = (categoryName: string) => {
@@ -188,10 +186,6 @@ export default function Layout() {
     }
     if (categoryName === 'Ads') {
       navigate('/ads');
-      return;
-    }
-    if (categoryName === 'Market Insights') {
-      navigate('/market');
       return;
     }
     if (categoryName === 'Toggle Frame') {
@@ -924,7 +918,6 @@ export default function Layout() {
     { path: '/support', icon: Headphones, color: 'text-cyan-500', label: t('support') },
     { path: '/audio', icon: Headphones, color: 'text-indigo-400', label: 'Audio Hub' },
     { path: '/education', icon: GraduationCap, color: 'text-purple-600', label: 'Education Hub' },
-    { path: '/market', icon: BarChart2, color: 'text-indigo-600', label: t('market_insights') },
     { path: '/settings', icon: Settings, color: 'text-gray-500', label: t('settings') },
   ];
 
@@ -1656,7 +1649,7 @@ export default function Layout() {
                         <span className="text-xs font-bold text-yellow-700 dark:text-yellow-300">Liquidity Reserve</span>
                       </div>
                       <p className="text-lg font-black text-yellow-900 dark:text-yellow-100">
-                        {userData?.balance?.toFixed(3) || '0.000'} <span className="text-xs font-bold opacity-60">USD</span>
+                        {userData?.points?.toLocaleString() || '0'} <span className="text-xs font-bold opacity-60 uppercase">Gold mg</span>
                       </p>
                       <p className="text-[8px] font-black text-yellow-700/60 uppercase tracking-tighter">
                         +{userData?.points.toLocaleString() || 0} Points Accumulation

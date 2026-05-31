@@ -154,7 +154,7 @@ export default function Events() {
             attendees: [],
             category: 'Education',
             imageUrl: 'https://picsum.photos/seed/masterclass/800/400',
-            price: 2000.00, // 2000 USD = 25 G
+            price: 260000.00, // KES 260k
             isVirtual: true
           }
         ];

@@ -16,8 +16,13 @@ export const useCurrencyConverter = () => {
       setCurrency(savedCurrency);
     }
     
-    // Add Points to rates locally
-    setRates(prev => ({ ...prev, PTS: 100 }));
+    // Add Gold (mg) and KES to rates locally
+    setRates(prev => ({ 
+      ...prev, 
+      G: 100, // 1 balance unit = 100 mg Gold
+      KES: 10, // 1 balance unit = 10 KES (since 10 mg Gold = 1 KES)
+      USD: 10 / 130 // 1 balance unit = 0.0769 USD (since 130 KES = 1 USD)
+    }));
 
     // Fetch exchange rates
     const fetchRates = async () => {
@@ -25,7 +30,14 @@ export const useCurrencyConverter = () => {
         const response = await fetch('/api/rates');
         if (response.ok) {
           const data = await response.json();
-          setRates(prev => ({ ...prev, ...data.rates, PTS: 100 }));
+          // Merge with custom overrides
+          setRates(prev => ({ 
+            ...prev, 
+            ...data.rates, 
+            G: 100, 
+            KES: 10,
+            USD: 10 / 130 
+          }));
         } else {
           const err = await response.json().catch(() => ({}));
           console.error('Exchange rate API returned error:', err);
@@ -45,18 +57,20 @@ export const useCurrencyConverter = () => {
     localStorage.setItem('preferred_currency', newCurrency);
   };
 
-  const convert = (amountInUSD: number): string => {
-    if (currency === 'PTS') {
-      const pts = amountInUSD * 100;
-      return `${Math.floor(pts).toLocaleString()} Points`;
+  const convert = (amountInBalance: number): string => {
+    // Current application logic treats 100 units of Gold mg (Points) as 1 balance unit
+    if (currency === 'PTS' || currency === 'G') {
+      const goldMg = amountInBalance * 100;
+      return `${Math.floor(goldMg).toLocaleString()} Gold mg`;
     }
 
-    const rate = rates[currency] || (currency === 'USD' ? 1 : (currency === 'KES' ? 135 : 1));
-    const converted = amountInUSD * rate;
+    // Default rate is KES (135)
+    const rate = rates[currency] || (currency === 'KES' ? 135 : 1);
+    const converted = amountInBalance * rate;
     
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-KE', {
       style: 'currency',
-      currency: currency,
+      currency: currency === 'USD' ? 'KES' : currency,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(converted);
