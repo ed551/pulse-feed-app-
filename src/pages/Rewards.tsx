@@ -51,7 +51,7 @@ interface Transaction {
   currency?: string;
   phoneNumber?: string;
   email?: string;
-  status: 'pending' | 'success' | 'failed';
+  status: 'pending' | 'success' | 'failed' | 'queued';
   timestamp: any;
   reference: string;
   type?: string;
@@ -152,14 +152,21 @@ export default function Rewards() {
   // Calculate user audit totals (Normalized to KES for integrity)
   const userAuditTotals = useMemo(() => {
     return transactions.reduce((acc, tx) => {
-      // Use KES amount if available
-      const amountKes = tx.currency === 'KES' ? tx.amount : (tx.amount * (rates['KES'] || 10));
+      // Use KES amount if available, otherwise convert from USD
+      // Note: rates['KES'] is now 130 (relative to USD base)
+      let amountKes = 0;
+      if (tx.currency === 'KES') {
+        amountKes = tx.amount;
+      } else {
+        // Assume USD if not KES, use current rate of 130
+        amountKes = tx.amount * (rates['KES'] || 130);
+      }
       
       if (tx.type === 'earning') {
         acc.totalEarned += amountKes;
-      } else if (['mpesa', 'bank', 'paybill', 'payout'].includes(tx.type || '')) {
+      } else if (['mpesa', 'bank', 'paybill', 'payout', 'paypal', 'stripe'].includes(tx.type || '')) {
         acc.totalWithdrawn += amountKes;
-        if (tx.status === 'pending') acc.pendingWithdrawals += amountKes;
+        if (tx.status === 'pending' || tx.status === 'queued') acc.pendingWithdrawals += amountKes;
       }
       return acc;
     }, { totalEarned: 0, totalWithdrawn: 0, pendingWithdrawals: 0 });
@@ -191,14 +198,14 @@ export default function Rewards() {
       const minAmount = isDeveloper ? 1 : 100;
       if (numAmount < minAmount) throw new Error(`Minimum withdrawal is KES ${minAmount}`);
       
-      const currentRate = rates['KES'] || 10;
+      const currentRate = rates['KES'] || 130;
       const kesBalance = balanceKES;
 
       const last24h = Date.now() - (24 * 60 * 60 * 1000);
       const recentWithdrawalsKES = transactions
         .filter(tx => ['mpesa', 'bank', 'paybill', 'payout', 'paypal', 'stripe'].includes(tx.type || '') && (tx.timestamp?.toMillis?.() || 0) > last24h)
         .reduce((sum, tx) => {
-          const txAmountKES = (tx.currency === 'KES') ? tx.amount : (tx.amount * (rates['KES'] || 10));
+          const txAmountKES = (tx.currency === 'KES') ? tx.amount : (tx.amount * (rates['KES'] || 130));
           return sum + txAmountKES;
         }, 0);
 
@@ -350,7 +357,7 @@ export default function Rewards() {
       const recentWithdrawalsKES = transactions
         .filter(tx => ['mpesa', 'bank', 'paybill', 'payout', 'paypal', 'stripe'].includes(tx.type || '') && (tx.timestamp?.toMillis?.() || 0) > last24h)
         .reduce((sum, tx) => {
-          const txAmountKES = (tx.currency === 'KES') ? tx.amount : (tx.amount * (rates['KES'] || 10));
+          const txAmountKES = (tx.currency === 'KES') ? tx.amount : (tx.amount * (rates['KES'] || 130));
           return sum + txAmountKES;
         }, 0);
 
@@ -1190,8 +1197,11 @@ export default function Rewards() {
                 <div className="text-6xl font-black mb-1 flex items-center gap-2">
                   KES {balanceKES.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
+                <div className="text-xl font-bold text-white/90 mb-2">
+                  US$ {(userData?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
                 <div className="text-sm font-bold text-white/70 mb-4">
-                  ≈ {points.toLocaleString()} Gold mg Balance
+                  ≈ {(points / 1000).toFixed(3)} g Gold Balance
                 </div>
                 <div className="text-xl font-bold opacity-95 mb-4 flex items-center">
                   <Zap className="w-5 h-5 mr-2 text-yellow-300" />

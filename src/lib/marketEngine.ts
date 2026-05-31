@@ -71,25 +71,36 @@ class MarketBrainUnit {
     }
 
     const seed = this.generateSeed(dateStr);
-    const brainSteps = {
-      input: `Market seed: ${dateStr} initialized.`,
-      logic: "Determining community growth vectors...",
-      analysis: "Evaluating network engagement and payout velocity...",
-      output: "Compiling final growth direction...",
-      errorCorrection: "Adjusting for outlier behaviors...",
-      update: "Daily economic sync successful."
-    };
-    
+    const directions: ('up' | 'down' | 'stable')[] = ['up', 'down', 'stable'];
     const directionIndex = Math.abs(seed) % 3;
-    const partnerIndex = Math.abs(seed * 7) % this.partners.length;
-    const processorIndex = Math.abs(seed * 13) % this.processors.length;
+    const direction = directions[directionIndex];
     const confidence = 70 + (Math.abs(seed * 3) % 25);
 
-    const directions: ('up' | 'down' | 'stable')[] = ['up', 'down', 'stable'];
-    const symbols = { up: '⏫', down: '⏬', stable: '⏭️' };
-    const direction = directions[directionIndex];
+    const prediction = this.createDefaultPrediction(direction, confidence, seed, dateStr);
+    this.dailyCache[cacheKey] = prediction;
+    return prediction;
+  }
+
+  public updatePrediction(prediction: Partial<MarketPrediction>) {
+    const dateStr = new Date().toISOString().split('T')[0];
+    const current = this.getDailyPrediction(new Date());
     
-    const prediction: MarketPrediction = {
+    this.dailyCache[dateStr] = {
+      ...current,
+      ...prediction,
+      lastUpdate: new Date().toISOString()
+    };
+    
+    // Broadcast for cross-component sync
+    window.dispatchEvent(new CustomEvent('market-intel-update', { detail: this.dailyCache[dateStr] }));
+  }
+
+  private createDefaultPrediction(direction: 'up' | 'down' | 'stable', confidence: number, seed: number, dateStr: string): MarketPrediction {
+    const symbols = { up: '▲', down: '▼', stable: '—' };
+    const partnerIndex = Math.abs(seed * 7) % this.partners.length;
+    const processorIndex = Math.abs(seed * 13) % this.processors.length;
+
+    return {
       direction,
       symbol: symbols[direction],
       confidence,
@@ -98,11 +109,15 @@ class MarketBrainUnit {
       analysis: this.generateAnalysis(direction, confidence, seed),
       nextBullRun: this.generateFutureProjection(seed),
       lastUpdate: new Date().toISOString(),
-      brainSteps
+      brainSteps: {
+        input: `Market seed: ${dateStr} initialized.`,
+        logic: "Determining community growth vectors...",
+        analysis: "Evaluating network engagement and payout velocity...",
+        output: "Compiling final growth direction...",
+        errorCorrection: "Adjusting for outlier behaviors...",
+        update: "Daily economic sync successful."
+      }
     };
-
-    this.dailyCache[cacheKey] = prediction;
-    return prediction;
   }
 
   private generateSeed(dateStr: string): number {

@@ -166,7 +166,7 @@ export default function PlatformDashboard() {
       // 2. Create Withdrawal Record
       await addDoc(collection(db, 'withdrawals'), {
         amount,
-        amountPoints: amount * 0.1, // Adjusted for Gold mg context if needed
+        amountPoints: amount * 10, // 10 mg Gold = 1 KES
         amountKes: amount,
         category: 'developer_expense',
         reference: refCode,
@@ -194,8 +194,8 @@ export default function PlatformDashboard() {
       // Inject record
       await addDoc(collection(db, 'withdrawals'), {
         amount,
-        amountPoints: amount * 100,
-        amountKes: amount * 135,
+        amountPoints: amount * 1300, // 1300 mg Gold = 1 USD
+        amountKes: amount * 130, // 130 KES = 1 USD
         category: 'operational',
         reference: refCode,
         status: 'success',
@@ -456,14 +456,28 @@ export default function PlatformDashboard() {
       const platformAmtRaw = tx.platformAmount !== undefined ? tx.platformAmount : (tx.source === 'platform' || tx.type === 'platform_revenue' ? (tx.totalAmount || 0) : 0);
       const grossAmtRaw = tx.totalAmount !== undefined ? tx.totalAmount : platformAmtRaw;
 
-      // Unit Normalization: Detect if transaction was recorded in Gold mg (Points) or KES
+      // Unit Normalization: Detect if transaction was recorded in Gold mg (Points), KES or USD
       // We prioritize the 'unit' field from Firestore if present.
       // IF unit is missing:
-      // - Platform Revenue is ALMOST ALWAYS KES (large amounts).
-      // - Standard revenue/payouts < 5000 are likely Gold mg.
-      const isPoints = tx.unit === 'POINTS' || tx.unit === 'G' || (!tx.unit && Math.abs(platformAmtRaw) < 5000 && tx.type !== 'platform_revenue' && tx.type !== 'expense');
-      const platformAmt = isPoints ? platformAmtRaw / 10 : platformAmtRaw;
-      const grossAmt = isPoints ? grossAmtRaw / 10 : grossAmtRaw;
+      // - Platform Revenue is ALMOST ALWAYS KES or USD (large amounts).
+      // - Standard revenue/payouts < 10000 are likely Gold mg.
+      const isPoints = tx.unit === 'POINTS' || tx.unit === 'G' || tx.unit === 'Gold mg' || (!tx.unit && Math.abs(platformAmtRaw) < 1000 && tx.type !== 'platform_revenue' && tx.type !== 'expense');
+      const isKes = tx.unit === 'KES' || tx.currency === 'KES';
+      
+      let platformAmt = platformAmtRaw;
+      let grossAmt = grossAmtRaw;
+
+      if (isPoints) {
+        // 1300 Gold mg = $1.00
+        platformAmt = platformAmtRaw / 1300;
+        grossAmt = grossAmtRaw / 1300;
+      } else if (isKes) {
+        // 130 KES = $1.00
+        platformAmt = platformAmtRaw / 130;
+        grossAmt = grossAmtRaw / 130;
+      }
+      // If unit is missing, we assume it's already USD. 
+      // This preserves historical 140M USD balances which were logged without unit.
 
       // Direct platform balance sum
       acc.ledgerBalance += platformAmt;

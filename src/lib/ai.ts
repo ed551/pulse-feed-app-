@@ -97,9 +97,10 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
         if (response.ok) {
           // Success!
         } else {
-          const combinedErrorText = (data.error || "" + JSON.stringify(data)).toLowerCase();
+          const errorMsg = data?.error || (data ? JSON.stringify(data) : "Unknown Error");
+          const combinedErrorText = errorMsg.toLowerCase();
           const isBilling = response.status === 402 || 
-                            data.code === "BILLING_DEPLETED" || 
+                            data?.code === "BILLING_DEPLETED" || 
                             combinedErrorText.includes("billing") || 
                             combinedErrorText.includes("depleted");
           const isRetryable = response.status === 503 || response.status === 429 || response.status === 504 || response.status === 502 || response.status === 500;
@@ -111,11 +112,11 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
             await delay(backoff);
             continue;
           }
-          throw new Error(data.error || `AI service returned error ${response.status}${isBilling ? ' (Billing Exhausted)' : ''}`);
+          throw new Error(data?.error || `AI service returned error ${response.status}${isBilling ? ' (Billing Exhausted)' : ''}`);
         }
         
         // Robust 'text' property reconstruction for browser callers
-        if (!data.text) {
+        if (data && !data.text) {
           try {
             const parts = data.candidates?.[0]?.content?.parts || [];
             const textContent = parts.filter((p: any) => p.text).map((p: any) => p.text).join('');
@@ -158,7 +159,8 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
     
     while (retries <= MAX_RETRIES) {
       try {
-        const response = await ai.models.generateContent(params);
+        if (params && !params.model) params.model = 'gemini-1.5-flash';
+        const response = await (ai as any).models.generateContent(params);
         // Release queue after success plus interval
         const release = currentRelease;
         currentRelease = null;

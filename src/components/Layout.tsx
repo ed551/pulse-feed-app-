@@ -410,8 +410,18 @@ export default function Layout() {
     }
 
     updateMarketPrediction();
+    
+    // Listen for manual syncs from Gold Graph
+    const handleManualUpdate = (e: any) => {
+      if (e.detail) setMarketData(e.detail);
+    };
+    window.addEventListener('market-intel-update', handleManualUpdate);
+
     const interval = setInterval(updateMarketPrediction, 60000); // Check every minute
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('market-intel-update', handleManualUpdate);
+    };
   }, []);
 
   // Real-time Weather & Date Logic
@@ -1081,14 +1091,15 @@ export default function Layout() {
                 <div className="flex items-center px-2 sm:px-3 py-1 bg-yellow-50 dark:bg-yellow-900/30 rounded-full border border-yellow-100 dark:border-yellow-800 shadow-sm group">
                   <Layers className="w-3.5 h-3.5 sm:w-4 h-4 text-yellow-600 mr-1 sm:mr-1.5 group-hover:scale-110 transition-transform" />
                   <span className="text-[10px] sm:text-xs font-black text-yellow-800 dark:text-yellow-300">
-                    {userData?.balance?.toFixed(3) || '0.000'} <span className="text-[8px] opacity-70">g</span>
+                    {((userData?.points || 0) / 1000).toFixed(3)} <span className="text-[8px] opacity-70">g</span>
                   </span>
                 </div>
 
-                <div className="hidden sm:flex items-center px-2 sm:px-3 py-1 bg-amber-50 dark:bg-amber-900/20 rounded-full border border-amber-100 dark:border-amber-800 shadow-sm">
-                  <Zap className="w-3.5 h-3.5 text-amber-500 mr-1 sm:mr-1.5" />
-                  <span className="text-[10px] sm:text-xs font-black text-amber-700 dark:text-amber-300">
-                    {userData?.points || 0} <span className="text-[8px] opacity-70">Points</span>
+                {/* USD Wallet Balance */}
+                <div className="hidden sm:flex items-center px-2 sm:px-3 py-1 bg-emerald-50 dark:bg-emerald-900/30 rounded-full border border-emerald-100 dark:border-emerald-800 shadow-sm group">
+                  <DollarSign className="w-3.5 h-3.5 sm:w-4 h-4 text-emerald-600 mr-1 sm:mr-1.5 group-hover:scale-110 transition-transform" />
+                  <span className="text-[10px] sm:text-xs font-black text-emerald-800 dark:text-emerald-300">
+                    {(userData?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
 

@@ -33,6 +33,7 @@ import {
 } from 'recharts';
 import { generateContentWithRetry } from '../lib/ai';
 import { cn } from '../lib/utils';
+import { marketBrain } from '../lib/marketEngine';
 
 // Mock data generator for 30 days of Gold price movement
 const generateGoldData = () => {
@@ -122,6 +123,13 @@ export default function GoldGraph() {
         const result = JSON.parse(response.candidates[0].content.parts[0].text);
         setPrediction(result);
         setAiAnalysis(result.reasoning);
+        
+        // Push to global Market Intel in header/menu
+        marketBrain.updatePrediction({
+          direction: result.direction.toLowerCase() as any,
+          confidence: result.confidence,
+          analysis: result.reasoning
+        });
       }
     } catch (error) {
       console.error("AI Analysis failed:", error);

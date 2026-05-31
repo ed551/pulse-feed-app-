@@ -115,7 +115,8 @@ async function generateContentWithRetry(params: any): Promise<any> {
     let retries = 0;
     while (retries <= MAX_RETRIES) {
       try {
-        const response = await ai.models.generateContent(params);
+        if (params && !params.model) params.model = 'gemini-1.5-flash';
+        const response = await (ai as any).models.generateContent(params);
         // Release queue early if successful, but after the required interval
         const release = currentRelease;
         currentRelease = null;
@@ -1144,7 +1145,7 @@ async function startServer() {
         isValid: !!isValidApiKey,
         keyCount: AVAILABLE_KEYS.length,
         currentKeyIndex: currentKeyIndex,
-        envVarsDetected: Object.keys(process.env).filter(k => (k.includes("GEMINI") || k.includes("GOOGLE_API")) && !k.includes("SECRET")),
+        envVarsDetected: process.env ? Object.keys(process.env).filter(k => (k.includes("GEMINI") || k.includes("GOOGLE_API")) && !k.includes("SECRET")) : [],
         mode: process.env.NODE_ENV || "development"
       });
     } catch (e) {
@@ -1208,7 +1209,7 @@ async function startServer() {
                isWarmup ? "The AI engine is currently warming up or overloaded. We are automatically retrying with optimized backoff..." : errorString,
         status: status,
         code: isDepleted ? "BILLING_DEPLETED" : (isWarmup ? "AI_WARMUP" : "AI_ERROR"),
-        details: err.details || null
+        details: err?.details || null
       });
     }
   });

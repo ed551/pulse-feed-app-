@@ -122,6 +122,23 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
+  useEffect(() => {
+    if (currentUser && db && userData && !pointsLocked) {
+      const expectedPoints = Math.floor((userData.balance || 0) * 1300);
+      const currentPoints = userData.points || 0;
+      const diff = Math.abs(expectedPoints - currentPoints);
+      
+      // If discrepancy > 10 mg (minimal) and not recently synced, heal it
+      if (diff > 10) {
+        console.log(`[Self-Healing] Syncing points to balance: ${currentPoints} -> ${expectedPoints}`);
+        const userRef = doc(db, 'users', currentUser.uid);
+        updateDoc(userRef, {
+          points: expectedPoints
+        }).catch(err => console.error("Self-healing failed:", err));
+      }
+    }
+  }, [userData?.balance, currentUser?.uid]);
+
   const syncPendingToFirestore = async () => {
     if (!currentUser || !db || pendingUserPointsRef.current <= 0 || pointsLocked) return;
     
@@ -242,8 +259,8 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
     const userRef = doc(db, 'users', currentUser.uid);
     const statsRef = doc(db, 'platform', 'stats');
 
-    // 100 Points per $1.00
-    const pointsToAdd = userUsdAmount > 0 ? Math.max(1, Math.floor(userUsdAmount * 100)) : 0;
+    // 1300 Points per $1.00 (10 mg Gold = 1 KES, 130 KES = 1 USD)
+    const pointsToAdd = userUsdAmount > 0 ? Math.max(1, Math.floor(userUsdAmount * 1300)) : 0;
     
     // Update User Data with specific revenue source tracking
     const updateData: any = {
@@ -399,8 +416,8 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
       if ((userData?.balance || 0) < usdAmount) return false;
 
       const userRef = doc(db, 'users', currentUser.uid);
-      // 100 Points per $1.00
-      const pointsToDeduct = Math.floor(usdAmount * 100);
+      // 1300 Points per $1.00
+      const pointsToDeduct = Math.floor(usdAmount * 1300);
 
       await updateDoc(userRef, {
         balance: increment(-usdAmount),
@@ -453,10 +470,10 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
       earningIntervalRef.current = setInterval(() => {
         if (pointsLocked) return;
         
-        // Accumulate locally
+        // Accumulate locally: 16 mg Gold per interval
         const userPts = Math.floor(ACTIVE_POINTS_PER_INTERVAL);
-        const userUsd = userPts / 100; // 100 points = $1.00
-        const platUsd = (0.5 * ACTIVE_POINTS_PER_INTERVAL) / 100; // Platform takes 50% extra from air
+        const userUsd = userPts / 1300; // 1300 points = $1.00 (Standard Gold Economy)
+        const platUsd = (0.5 * ACTIVE_POINTS_PER_INTERVAL) / 1300; // Platform takes 50% extra from air
 
         pendingUserPointsRef.current += userPts;
         pendingUserValueRef.current += userUsd;

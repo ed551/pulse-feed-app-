@@ -16,12 +16,13 @@ export const useCurrencyConverter = () => {
       setCurrency(savedCurrency);
     }
     
-    // Add Gold (mg) and KES to rates locally
+    // Standardized Exchange Rates (Base: 1 USD)
     setRates(prev => ({ 
       ...prev, 
-      G: 100, // 1 balance unit = 100 mg Gold
-      KES: 10, // 1 balance unit = 10 KES (since 10 mg Gold = 1 KES)
-      USD: 10 / 130 // 1 balance unit = 0.0769 USD (since 130 KES = 1 USD)
+      USD: 1,
+      KES: 130,
+      G: 1300,   // 1 USD = 1300 mg Gold
+      PTS: 1300  // 1 USD = 1300 Points
     }));
 
     // Fetch exchange rates
@@ -30,13 +31,14 @@ export const useCurrencyConverter = () => {
         const response = await fetch('/api/rates');
         if (response.ok) {
           const data = await response.json();
-          // Merge with custom overrides
+          // Merge with custom overrides safely
           setRates(prev => ({ 
             ...prev, 
             ...data.rates, 
-            G: 100, 
-            KES: 10,
-            USD: 10 / 130 
+            USD: 1,
+            KES: 130, // Override with authoritative local rate
+            G: 1300, 
+            PTS: 1300
           }));
         } else {
           const err = await response.json().catch(() => ({}));
@@ -58,19 +60,19 @@ export const useCurrencyConverter = () => {
   };
 
   const convert = (amountInBalance: number): string => {
-    // Current application logic treats 100 units of Gold mg (Points) as 1 balance unit
+    // Standard: 1300 mg Gold (Points) = $1.00
     if (currency === 'PTS' || currency === 'G') {
-      const goldMg = amountInBalance * 100;
+      const goldMg = amountInBalance * 1300;
       return `${Math.floor(goldMg).toLocaleString()} Gold mg`;
     }
 
-    // Default rate is KES (135)
-    const rate = rates[currency] || (currency === 'KES' ? 135 : 1);
+    // Default rate check
+    const rate = rates[currency] || (currency === 'KES' ? 130 : 1);
     const converted = amountInBalance * rate;
     
     return new Intl.NumberFormat('en-KE', {
       style: 'currency',
-      currency: currency === 'USD' ? 'KES' : currency,
+      currency: currency,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(converted);
