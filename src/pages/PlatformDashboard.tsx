@@ -1842,20 +1842,20 @@ export default function PlatformDashboard() {
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
               Accountability Checksum
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="space-y-1">
-                <p className="text-slate-500 text-[10px] font-black uppercase tracking-tighter">Verified Inflow</p>
-                <p className="text-2xl font-black text-emerald-400">{formatCurrency(totals.revenueIn + totals.refunds)}</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-1">
+                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-tighter">Verified Inflow</p>
+                  <p className="text-2xl font-black text-amber-400">{formatCurrency(totals.revenueIn + totals.refunds)}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-tighter">Verified Outflow</p>
+                  <p className="text-2xl font-black text-rose-400">{formatCurrency(totals.payouts + totals.expenses)}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-tighter">Audit Ledger Balance</p>
+                  <p className="text-2xl font-black text-amber-500">{formatCurrency(auditBalance)}</p>
+                </div>
               </div>
-              <div className="space-y-1">
-                <p className="text-slate-500 text-[10px] font-black uppercase tracking-tighter">Verified Outflow</p>
-                <p className="text-2xl font-black text-rose-400">{formatCurrency(totals.payouts + totals.expenses)}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-slate-500 text-[10px] font-black uppercase tracking-tighter">Audit Ledger Balance</p>
-                <p className="text-2xl font-black text-indigo-400">{formatCurrency(auditBalance)}</p>
-              </div>
-            </div>
             <div className="mt-6 pt-6 border-t border-slate-800 flex items-center justify-between">
               <p className="text-[10px] text-slate-500 font-mono italic">Checksum Match: {Math.abs(stats.platformShare - auditBalance) < 0.01 ? 'TRUE' : 'WARNING: DISCREPANCY'}</p>
               <button 
@@ -3076,10 +3076,10 @@ export default function PlatformDashboard() {
             <button 
               onClick={() => handleGenerateReport('Community Pulse Report')}
               disabled={isGeneratingReport}
-              className="w-full py-3 bg-indigo-600 text-white text-xs font-black rounded-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
+              className="w-full py-3 bg-amber-600 text-white text-xs font-black rounded-xl hover:bg-amber-700 transition-all flex items-center justify-center gap-2"
             >
               {isGeneratingReport ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-              Generate & Sell ($49.99)
+              Generate & Sell ({formatCurrency(49.99)})
             </button>
           </div>
 
@@ -3092,10 +3092,10 @@ export default function PlatformDashboard() {
             <button 
               onClick={() => handleGenerateReport('Infrastructure Health Map')}
               disabled={isGeneratingReport}
-              className="w-full py-3 bg-indigo-600 text-white text-xs font-black rounded-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
+              className="w-full py-3 bg-amber-600 text-white text-xs font-black rounded-xl hover:bg-amber-700 transition-all flex items-center justify-center gap-2"
             >
               {isGeneratingReport ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-              Generate & Sell ($49.99)
+              Generate & Sell ({formatCurrency(49.99)})
             </button>
           </div>
 
@@ -3108,10 +3108,10 @@ export default function PlatformDashboard() {
             <button 
               onClick={() => handleGenerateReport('Skill Supply & Demand Report')}
               disabled={isGeneratingReport}
-              className="w-full py-3 bg-indigo-600 text-white text-xs font-black rounded-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
+              className="w-full py-3 bg-amber-600 text-white text-xs font-black rounded-xl hover:bg-amber-700 transition-all flex items-center justify-center gap-2"
             >
               {isGeneratingReport ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-              Generate & Sell ($49.99)
+              Generate & Sell ({formatCurrency(49.99)})
             </button>
           </div>
         </div>
@@ -3146,10 +3146,10 @@ export default function PlatformDashboard() {
                     onClick={() => setUseKesForReturn(!useKesForReturn)}
                     className={cn(
                       "text-[10px] font-black uppercase tracking-tighter px-2 py-0.5 rounded border transition-colors",
-                      useKesForReturn ? "bg-blue-600 text-white border-blue-600" : "bg-gray-100 text-gray-500 border-gray-200"
+                      useKesForReturn ? "bg-blue-600 text-white border-blue-600" : "bg-amber-500 text-white border-amber-500"
                     )}
                   >
-                    {useKesForReturn ? "Mode: KES" : "Mode: USD"}
+                    {useKesForReturn ? "Mode: KES" : "Mode: Gold"}
                   </button>
                 </div>
                 <div className="relative">
@@ -3240,16 +3240,16 @@ export default function PlatformDashboard() {
             <div className="space-y-2">
               <div className="flex justify-between items-end">
                 <label className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">Revenue Amount</label>
-                <button 
-                  type="button"
-                  onClick={() => setUseKesForRevenue(!useKesForRevenue)}
-                  className={cn(
-                    "text-[10px] font-black uppercase tracking-tighter px-2 py-0.5 rounded border transition-colors",
-                    useKesForRevenue ? "bg-green-600 text-white border-green-600" : "bg-gray-100 text-gray-500 border-gray-200"
-                  )}
-                >
-                  {useKesForRevenue ? "Mode: KES" : "Mode: USD"}
-                </button>
+                  <button 
+                    type="button"
+                    onClick={() => setUseKesForRevenue(!useKesForRevenue)}
+                    className={cn(
+                      "text-[10px] font-black uppercase tracking-tighter px-2 py-0.5 rounded border transition-colors",
+                      useKesForRevenue ? "bg-green-600 text-white border-green-600" : "bg-amber-500 text-white border-amber-500"
+                    )}
+                  >
+                    {useKesForRevenue ? "Mode: KES" : "Mode: Gold"}
+                  </button>
               </div>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">{useKesForRevenue ? "KES" : "G"}</span>

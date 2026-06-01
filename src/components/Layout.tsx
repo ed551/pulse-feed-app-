@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { 
   Home, Users, PlusSquare, Gem, User, ShieldAlert, Bell, FileText, Lock, Headphones, Settings, Beaker,
   Sun, Moon, CloudRain, Cloud, CloudLightning, Clock, Watch, BellRing, StickyNote, Tv,
-  Fingerprint, HeartPulse, MapPin, Phone, MessageCircle, Gamepad2, Globe, BrainCircuit,
+  Fingerprint, HeartPulse, MapPin, Phone, MessageCircle, Gamepad2, Globe, BrainCircuit, Database,
   Languages, Ticket, Snowflake, Calendar, Smartphone, Monitor, PhoneCall, Wrench, Building2,
   Calculator, LayoutGrid, Power, RefreshCw, ArrowUpCircle, ArrowDownCircle, XCircle, RotateCcw, Edit3, DollarSign, LogOut, Wallet, X, Send, Search, CheckCircle2, Plus, ShieldCheck, Zap, LineChart,
   Volume2, VolumeX, Share2, Brain, TrendingUp, TrendingDown, Minus, Menu, GraduationCap, Eye, Loader2, Video, Type, Radio, Megaphone, BarChart2, Smile, Crown, Filter, Sparkles, Camera, Heart, Youtube, Layers, Map, AlertTriangle, ExternalLink
@@ -46,7 +46,7 @@ import { setDoc, doc, arrayUnion, serverTimestamp, getDocFromServer, updateDoc }
 export default function Layout() {
   const { currentUser, userData, logout, isFacebookApp } = useAuth();
   const { t } = useTranslation();
-  const { convert } = useCurrencyConverter();
+  const { convert, formatCurrency } = useCurrencyConverter();
 
   const weatherTypes = [
     { type: t('weather_sunny'), icon: Sun, color: 'text-orange-500', bg: 'from-orange-500/20 to-yellow-500/20', glow: 'drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]', symbol: '☀️', temp: '--°C', tempValue: 25 },
@@ -164,7 +164,8 @@ export default function Layout() {
     { name: 'Coop Bank API', icon: Building2, color: 'text-indigo-500', label: t('coop_bank') },
     { name: 'Terms', icon: FileText, color: 'text-teal-500', label: t('terms') },
     { name: 'Privacy', icon: ShieldCheck, color: 'text-indigo-500', label: t('privacy') },
-    { name: 'Ads', icon: Gem, color: 'text-green-500', label: t('ads') }
+    { name: 'Ads', icon: Gem, color: 'text-green-500', label: t('ads') },
+    { name: 'Binance API', icon: Database, color: 'text-amber-500', label: 'Binance' }
   ];
 
   const handleCategoryClick = (categoryName: string) => {
@@ -186,6 +187,10 @@ export default function Layout() {
     }
     if (categoryName === 'Ads') {
       navigate('/ads');
+      return;
+    }
+    if (categoryName === 'Binance API') {
+      navigate('/binance');
       return;
     }
     if (categoryName === 'Toggle Frame') {
@@ -417,7 +422,7 @@ export default function Layout() {
     };
     window.addEventListener('market-intel-update', handleManualUpdate);
 
-    const interval = setInterval(updateMarketPrediction, 60000); // Check every minute
+    const interval = setInterval(updateMarketPrediction, 3600000); // Check every hour instead of every minute
     return () => {
       clearInterval(interval);
       window.removeEventListener('market-intel-update', handleManualUpdate);
@@ -584,7 +589,7 @@ export default function Layout() {
         const tempDiff = Math.abs(newWeather.tempValue - prevTempRef.current);
         const typeChanged = newWeather.type !== prevTypeRef.current;
         const now = Date.now();
-        const analysisCooldown = 2 * 60 * 60 * 1000;
+        const analysisCooldown = 12 * 60 * 60 * 1000; // 12 hours instead of 2 hours
         const cachedAnalysis = localStorage.getItem('weather_analysis');
         const cachedAnalysisTime = parseInt(localStorage.getItem('weather_analysis_time') || '0');
         
@@ -635,54 +640,10 @@ export default function Layout() {
     console.error("Weather Fetch Error after retries:", lastError?.message || lastError);
     setWeatherStatus('healing');
     
-    // Smart Self-Healing via Gemini Search
-    try {
-      setWeatherHealProgress(20);
-      const searchResponse = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
-        contents: [{ role: "user", parts: [{ text: `What is the current weather in ${city}? Provide temperature in Celsius and general condition.` }] }],
-        tools: [{ googleSearch: {} }],
-        toolConfig: { includeServerSideToolInvocations: true }
-      });
-      setWeatherHealProgress(60);
-      
-      if (searchResponse.text) {
-        const analysis = await generateContentWithRetry({
-          model: "gemini-3-flash-preview",
-          contents: [{ role: "user", parts: [{ text: `Extract temperature (number only) and condition from this weather report: "${searchResponse.text}". Format: TEMP: [number] | CONDITION: [Hot/Sunny, Cold/Chilly, Rainy, Cloudy/Fair, Stormy]` }] }],
-        });
-        
-        const text = analysis.text || "";
-        const tempMatch = text.match(/TEMP:\s*(\d+)/);
-        const condMatch = text.match(/CONDITION:\s*([^|]+)/);
-        
-        if (tempMatch && condMatch) {
-          const temp = parseInt(tempMatch[1]);
-          const cond = condMatch[1].trim();
-          
-          const foundIndex = weatherTypes.findIndex(t => t.type.toLowerCase().includes(cond.toLowerCase()));
-          const typeIndex = foundIndex === -1 ? 3 : foundIndex;
-          const healedWeather = {
-            ...weatherTypes[typeIndex],
-            temp: `${temp}°C`,
-            tempValue: temp
-          };
-          
-          setCurrentWeather(healedWeather);
-          setWeatherAnalysis(`Smart Brain recovered weather data: ${searchResponse.text.substring(0, 100)}...`);
-          setWeatherHealProgress(100);
-          setWeatherStatus('complete');
-          setTimeout(() => {
-            setWeatherStatus('idle');
-            setWeatherHealProgress(0);
-          }, 5000);
-          return;
-        }
-      }
-    } catch (healErr) {
-      console.error("Smart Healing Failed:", healErr);
-    }
-
+    // Smart Self-Healing (Disabled to prevent billing depletion loops)
+    console.error("Weather Fetch Error:", lastError?.message || lastError);
+    setWeatherStatus('idle');
+    
     // Final fallback
     if (!currentWeather) {
       setCurrentWeather({
@@ -1095,11 +1056,11 @@ export default function Layout() {
                   </span>
                 </div>
 
-                {/* USD Wallet Balance */}
-                <div className="hidden sm:flex items-center px-2 sm:px-3 py-1 bg-emerald-50 dark:bg-emerald-900/30 rounded-full border border-emerald-100 dark:border-emerald-800 shadow-sm group">
-                  <DollarSign className="w-3.5 h-3.5 sm:w-4 h-4 text-emerald-600 mr-1 sm:mr-1.5 group-hover:scale-110 transition-transform" />
-                  <span className="text-[10px] sm:text-xs font-black text-emerald-800 dark:text-emerald-300">
-                    {(userData?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {/* Gold Wallet Balance */}
+                <div className="hidden sm:flex items-center px-2 sm:px-3 py-1 bg-amber-50 dark:bg-amber-900/30 rounded-full border border-amber-100 dark:border-amber-800 shadow-sm group">
+                  <Gem className="w-3.5 h-3.5 sm:w-4 h-4 text-amber-600 mr-1 sm:mr-1.5 group-hover:scale-110 transition-transform" />
+                  <span className="text-[10px] sm:text-xs font-black text-amber-800 dark:text-amber-300">
+                    {formatCurrency(userData?.balance || 0)}
                   </span>
                 </div>
 

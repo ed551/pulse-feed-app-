@@ -34,6 +34,7 @@ import {
 import { generateContentWithRetry } from '../lib/ai';
 import { cn } from '../lib/utils';
 import { marketBrain } from '../lib/marketEngine';
+import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 
 // Mock data generator for 30 days of Gold price movement
 const generateGoldData = () => {
@@ -59,7 +60,53 @@ const generateGoldData = () => {
 };
 
 export default function GoldGraph() {
-  const [data, setData] = useState(generateGoldData());
+  const { convert: formatCurrency } = useCurrencyConverter();
+  const [data, setData] = useState<any[]>([]);
+  const [realPrice, setRealPrice] = useState<number | null>(null);
+  const [dataLoading, setDataLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchRealData = async () => {
+      try {
+        const response = await fetch('/api/binance/prices');
+        const result = await response.json();
+        if (result.success) {
+          const paxg = result.prices.find((p: any) => p.symbol === 'PAXGUSDT');
+          if (paxg && paxg.price) {
+            const price = parseFloat(paxg.price);
+            setRealPrice(price);
+            
+            // For now, we still generate a trend but base it on the real current price
+            const mockHistory = [];
+            const now = new Date();
+            let tempPrice = price;
+            for (let i = 30; i >= 0; i--) {
+              const date = new Date(now);
+              date.setDate(date.getDate() - i);
+              const change = (Math.random() - 0.48) * 20;
+              tempPrice += change;
+              mockHistory.push({
+                date: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+                price: parseFloat(tempPrice.toFixed(2)),
+                timestamp: date.getTime()
+              });
+              // Ensure the last one is the real price
+              if (i === 0) mockHistory[mockHistory.length - 1].price = price;
+            }
+            setData(mockHistory);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch Binance prices:", err);
+        setData(generateGoldData());
+      } finally {
+        setDataLoading(false);
+      }
+    };
+
+    fetchRealData();
+  }, []);
+
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [prediction, setPrediction] = useState<{
     direction: 'UP' | 'DOWN' | 'SIDEWAYS';
@@ -70,14 +117,14 @@ export default function GoldGraph() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [timeframe, setTimeframe] = useState<'7D' | '30D' | 'ALL'>('30D');
 
-  const currentPrice = data[data.length - 1].price;
-  const startPrice = data[0].price;
+  const currentPrice = data.length > 0 ? data[data.length - 1].price : 2400;
+  const startPrice = data.length > 0 ? data[0].price : 2350.45;
   const priceChange = currentPrice - startPrice;
-  const percentChange = (priceChange / startPrice) * 100;
+  const percentChange = startPrice !== 0 ? (priceChange / startPrice) * 100 : 0;
 
   // Forecast data for the chart projection
   const chartData = useMemo(() => {
-    if (!prediction) return data;
+    if (!prediction || data.length === 0) return data;
     
     const lastPoint = data[data.length - 1];
     const forecastPoints = [];
@@ -163,9 +210,9 @@ export default function GoldGraph() {
 
           <div className="flex items-center gap-4">
             <div className="text-right">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Spot Price (KES/g)</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Spot Price (Gold)</p>
               <div className="flex items-center gap-2">
-                <span className="text-3xl font-black text-gray-900 dark:text-white">{currentPrice.toLocaleString()}</span>
+                <span className="text-3xl font-black text-gray-900 dark:text-white">{formatCurrency(currentPrice)}</span>
                 <span className={`flex items-center text-xs font-bold px-2 py-0.5 rounded-full ${priceChange >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                   {priceChange >= 0 ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
                   {Math.abs(percentChange).toFixed(2)}%

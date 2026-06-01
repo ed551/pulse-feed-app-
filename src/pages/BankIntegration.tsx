@@ -119,6 +119,23 @@ const BankingPortal: React.FC = () => {
             </p>
           </div>
 
+          {/* Binance Status Banner */}
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mb-8 p-4 bg-amber-500/10 border-2 border-amber-500/30 rounded-2xl flex items-center gap-4 text-amber-600 dark:text-amber-400"
+          >
+            <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center shrink-0">
+              <Globe className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h3 className="font-black text-sm uppercase tracking-tight">Active Withdrawal Protocol: BINANCE API</h3>
+              <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest leading-tight">
+                Withdrawals are fully enabled via Binance API KEY & SECRET. Co-op Bank integration is currently maintained as a secondary redundancy layer.
+              </p>
+            </div>
+          </motion.div>
+
           {/* Navigation Tabs */}
           <div className="flex gap-2 p-1 bg-slate-200/50 dark:bg-slate-800/50 backdrop-blur-md rounded-2xl mb-8 overflow-x-auto no-scrollbar">
             {[

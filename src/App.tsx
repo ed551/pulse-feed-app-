@@ -36,6 +36,7 @@ const EducationHub = lazy(() => import("./pages/EducationHub"));
 const GoldGraph = lazy(() => import("./pages/GoldGraph"));
 const PasskeyAuth = lazy(() => import("./pages/PasskeyAuth"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
+const BinanceHub = lazy(() => import("./pages/BinanceHub"));
 
 import HealthChecker from "./components/HealthChecker";
 import { IdleAILock } from "./components/IdleAILock";
@@ -211,6 +212,7 @@ export default function App() {
                   } />
                   <Route path="passkey-auth" element={<PasskeyAuth />} />
                   <Route path="verify-email" element={<VerifyEmail />} />
+                  <Route path="binance" element={<BinanceHub />} />
                 </Route>
               </Routes>
             </Suspense>

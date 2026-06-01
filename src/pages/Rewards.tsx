@@ -31,7 +31,8 @@ import {
   Trash2, 
   ShieldAlert, 
   Zap, 
-  Gem 
+  Gem,
+  Database
 } from "lucide-react";
 import { mpesa_handler, unified_participant_payout, rewards_policy, equal_distribution_protocol, merchant_of_record_tax_remittance } from "../lib/engines";
 import { useCurrencyConverter } from "../hooks/useCurrencyConverter";
@@ -108,7 +109,10 @@ export default function Rewards() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [amount, setAmount] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [payoutMethod, setPayoutMethod] = useState<'paypal' | 'stripe' | 'bank'>('paypal');
+  const [payoutMethod, setPayoutMethod] = useState<'paypal' | 'stripe' | 'bank' | 'binance'>('binance');
+  const [binanceAddress, setBinanceAddress] = useState('');
+  const [binanceCoin, setBinanceCoin] = useState<'USDT' | 'PAXG'>('USDT');
+  const [binanceNetwork, setBinanceNetwork] = useState('TRX');
   const [payoutEmail, setPayoutEmail] = useState("");
   const [payoutAmount, setPayoutAmount] = useState("");
   const [bankDetails, setBankDetails] = useState({
@@ -122,6 +126,7 @@ export default function Rewards() {
   const points = userData?.points || 0; // Gold mg
   const goldBalance = points;
   const balanceKES = points / 10; // 10 mg Gold = 1 KES
+  const balanceUSD = points / 1300; // Legacy assumed rate for display consistency if needed, but we'll use convert
   const membershipLevel = userData?.membershipLevel || 'bronze';
 
   const canWithdrawNow = useMemo(() => {
@@ -199,7 +204,7 @@ export default function Rewards() {
       if (numAmount < minAmount) throw new Error(`Minimum withdrawal is KES ${minAmount}`);
       
       const currentRate = rates['KES'] || 130;
-      const kesBalance = balanceKES;
+      const kesBalance = points / 10;
 
       const last24h = Date.now() - (24 * 60 * 60 * 1000);
       const recentWithdrawalsKES = transactions
@@ -216,10 +221,11 @@ export default function Rewards() {
       else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitKES = 65000; // ~500 USD
           
       if (recentWithdrawalsKES + requestedKES > limitKES && !totp && !usePasskey) {
-        setScaError(`Daily velocity limit of KES ${limitKES.toLocaleString()} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is KES 650,000.`);
+        setScaError(`Daily velocity limit reach with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is KES 650,000.`);
       }
 
-      if (!isDeveloper && numAmount > balanceKES) throw new Error("Insufficient reserve for this withdrawal request.");
+      const balanceKESCheck = points / 10;
+      if (!isDeveloper && numAmount > balanceKESCheck) throw new Error("Insufficient reserve for this withdrawal request.");
 
       const isQueued = !canWithdrawNow;
       
@@ -327,7 +333,86 @@ export default function Rewards() {
     }
   };
 
+  const handleBinanceWithdraw = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean, totp?: string) => {
+    if (e) e.preventDefault();
+    if (!payoutAmount) return;
+
+    if (!pin && !usePasskey && !totp && !isDeveloper && !process.env.SKIP_SCA) {
+      setScaPendingAction(() => (p: string, up?: boolean, t?: string) => handleBinanceWithdraw(undefined, p, up, t));
+      setShowSCAModal(true);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      if (!binanceAddress) throw new Error("Binance Wallet Address is required");
+      
+      const numAmount = parseFloat(payoutAmount);
+      if (numAmount < 10 && !isDeveloper) throw new Error("Minimum Binance withdrawal is $10");
+
+      const response = await fetch('/api/binance/withdraw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          asset: binanceCoin,
+          address: binanceAddress,
+          amount: numAmount,
+          network: binanceNetwork,
+          scaToken: pin,
+          usePasskey,
+          totpCode: totp,
+          userId: currentUser?.uid
+        })
+      });
+
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || "Binance withdrawal failed");
+
+      if (currentUser && db) {
+        const txRef = collection(db, 'users', currentUser.uid, 'transactions');
+        const pointsToDeduct = Math.floor(numAmount * 1000); // 1000 mg Gold = $1 USD approx
+
+        const txData = {
+          amount: numAmount,
+          currency: binanceCoin,
+          type: 'binance',
+          status: 'pending',
+          address: binanceAddress,
+          network: binanceNetwork,
+          timestamp: serverTimestamp(),
+          reference: result.data.id || `BIN-${Date.now()}`,
+          details: `Binance ${binanceCoin} withdrawal`,
+          pointsDeducted: pointsToDeduct,
+          previousPoints: points,
+          remainingPoints: points - pointsToDeduct,
+          userId: currentUser.uid,
+          userEmail: currentUser.email
+        };
+
+        await addDoc(txRef, txData);
+        
+        const userRef = doc(db, 'users', currentUser.uid);
+        await updateDoc(userRef, {
+          points: increment(-pointsToDeduct),
+          balance: increment(-numAmount)
+        });
+      }
+
+      setSuccess(`Success! ${numAmount} ${binanceCoin} withdrawal initiated to ${binanceAddress}`);
+      setPayoutAmount("");
+      setBinanceAddress("");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleInternationalPayout = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean, totp?: string) => {
+    if (payoutMethod === 'binance') {
+      return handleBinanceWithdraw(e, pin, usePasskey, totp);
+    }
     if (e) e.preventDefault();
     if (!payoutAmount) return;
 
@@ -496,11 +581,11 @@ export default function Rewards() {
   };
 
   const handleWithdrawMax = () => {
-    setAmount(Math.floor(balanceKES).toString());
+    setAmount(Math.floor(points / 10).toString());
   };
 
   const handleWithdrawAllInternational = () => {
-    setPayoutAmount(balanceKES.toFixed(2));
+    setPayoutAmount((points / 10).toFixed(2));
   };
 
   const handleSyncWallet = async () => {
@@ -1146,7 +1231,7 @@ export default function Rewards() {
           )}
         >
           <Globe className="w-4 h-4" />
-          <span>International</span>
+          <span>Global & Crypto</span>
         </button>
         <button 
           onClick={() => setActiveTab('history')}
@@ -1834,8 +1919,9 @@ export default function Rewards() {
                     <span>Select Payout Method</span>
                   </h3>
 
-                  <div className="grid grid-cols-3 gap-4 mb-8">
+                  <div className="grid grid-cols-4 gap-4 mb-8">
                     {[
+                      { id: 'binance', label: 'Binance', icon: Database },
                       { id: 'paypal', label: 'PayPal', icon: Gem },
                       { id: 'stripe', label: 'Stripe', icon: CreditCard },
                       { id: 'bank', label: 'Bank', icon: Landmark }
@@ -1846,18 +1932,62 @@ export default function Rewards() {
                         className={cn(
                           "p-4 rounded-2xl border-2 transition-all flex flex-col items-center space-y-2",
                           payoutMethod === method.id 
-                            ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400" 
+                            ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400" 
                             : "border-gray-100 dark:border-gray-700 hover:border-purple-200 dark:hover:border-purple-800 text-gray-500"
                         )}
                       >
                         <method.icon className="w-6 h-6" />
-                        <span className="text-xs font-bold">{method.label}</span>
+                        <span className="text-[10px] font-black uppercase tracking-tighter">{method.label}</span>
                       </button>
                     ))}
                   </div>
 
-                  <form onSubmit={handleInternationalPayout} className="space-y-6">
-                    {payoutMethod !== 'bank' ? (
+                  <form onSubmit={payoutMethod === 'binance' ? handleBinanceWithdraw : handleInternationalPayout} className="space-y-6">
+                    {payoutMethod === 'binance' ? (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Asset</label>
+                             <select 
+                               value={binanceCoin}
+                               onChange={(e) => setBinanceCoin(e.target.value as any)}
+                               className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-gray-900 dark:text-white font-medium"
+                             >
+                               <option value="USDT">USDT (Stablecoin)</option>
+                               <option value="PAXG">PAX Gold (Real Gold)</option>
+                             </select>
+                          </div>
+                          <div className="space-y-2">
+                             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Network</label>
+                             <select 
+                               value={binanceNetwork}
+                               onChange={(e) => setBinanceNetwork(e.target.value)}
+                               className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-gray-900 dark:text-white font-medium"
+                             >
+                               <option value="TRX">TRC20 (Best for USDT)</option>
+                               <option value="ETH">ERC20 (Ethereum)</option>
+                               <option value="BSC">BEP20 (Binance Smart Chain)</option>
+                               <option value="SOL">SOL (Solana)</option>
+                             </select>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Wallet Address</label>
+                          <div className="relative">
+                            <Database className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            <input
+                              type="text"
+                              placeholder="Paste your Binance address here"
+                              value={binanceAddress}
+                              onChange={(e) => setBinanceAddress(e.target.value)}
+                              className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-gray-900 dark:text-white font-mono text-xs"
+                            />
+                          </div>
+                          <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest px-2">Ensure network matches the address to avoid losing funds.</p>
+                        </div>
+                      </div>
+                    ) : payoutMethod !== 'bank' ? (
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                           {payoutMethod === 'paypal' ? 'PayPal Email' : 'Stripe Email'}
@@ -1915,26 +2045,26 @@ export default function Rewards() {
                     )}
 
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount (KES)</label>
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount ({payoutMethod === 'binance' ? 'Gold Value' : 'KES'})</label>
                       <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">KES</span>
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">{payoutMethod === 'binance' ? '$' : 'KES'}</span>
                         <input
                           type="number"
                           placeholder="0.00"
                           value={payoutAmount}
                           onChange={(e) => setPayoutAmount(e.target.value)}
-                          className="w-full pl-10 pr-16 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-purple-500 transition-all text-gray-900 dark:text-white font-medium"
+                          className="w-full pl-10 pr-16 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-gray-900 dark:text-white font-medium"
                         />
                         <button
                           type="button"
-                          onClick={handleWithdrawAllInternational}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase tracking-widest text-purple-600 bg-purple-50 px-2 py-1 rounded-md hover:bg-purple-100 transition-colors"
+                          onClick={() => setPayoutAmount(payoutMethod === 'binance' ? (userData?.balance || 0).toString() : balanceKES.toFixed(2))}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase tracking-widest text-amber-600 bg-amber-50 px-2 py-1 rounded-md hover:bg-amber-100 transition-colors"
                         >
                           Max
                         </button>
                       </div>
-                      <p className="text-[10px] text-gray-500 mt-1">
-                        Equivalent to {payoutAmount ? Math.round(parseFloat(payoutAmount) * 10) : 0} Gold mg
+                      <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest font-bold">
+                        Value: {payoutAmount ? convert(parseFloat(payoutAmount), payoutMethod === 'binance' ? 'USD' : 'KES') : convert(0)}
                       </p>
                     </div>
 
@@ -1967,7 +2097,10 @@ export default function Rewards() {
                     <button
                       type="submit"
                       disabled={isLoading || (!canWithdrawNow && !isDeveloper)}
-                      className="w-full py-4 bg-purple-600 text-white font-black rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center space-x-2 shadow-lg shadow-purple-500/20"
+                      className={cn(
+                        "w-full py-4 text-white font-black rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center space-x-2 shadow-lg",
+                        payoutMethod === 'binance' ? "bg-amber-500 shadow-amber-500/20" : "bg-purple-600 shadow-purple-500/20"
+                      )}
                     >
                       {isLoading ? (
                         <>
@@ -1980,7 +2113,7 @@ export default function Rewards() {
                           <span>Locked until {nextRedemptionDate.split(':')[1] || nextRedemptionDate}</span>
                         </>
                       ) : (
-                        <span>Request International Payout</span>
+                        <span>{payoutMethod === 'binance' ? `Withdraw ${binanceCoin} to Binance` : 'Request International Payout'}</span>
                       )}
                     </button>
                   </form>

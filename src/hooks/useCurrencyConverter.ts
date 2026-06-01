@@ -5,53 +5,63 @@ export interface ExchangeRates {
 }
 
 export const useCurrencyConverter = () => {
-  const [rates, setRates] = useState<ExchangeRates>({ USD: 1 });
-  const [currency, setCurrency] = useState<string>('USD');
+  // Default rates (Base: 1 USD)
+  const [rates, setRates] = useState<ExchangeRates>({ 
+    USD: 1,
+    KES: 130, // authoritative local rate
+    GOLD: 1 
+  });
+  const [currency, setCurrency] = useState<string>('GOLD');
   const [loading, setLoading] = useState(true);
+  const [goldPriceUSD, setGoldPriceUSD] = useState<number>(2350); // Fallback price per troy ounce
 
   useEffect(() => {
     // Load saved currency
     const savedCurrency = localStorage.getItem('preferred_currency');
     if (savedCurrency) {
       setCurrency(savedCurrency);
+    } else {
+      // Default to GOLD for this app
+      setCurrency('GOLD');
     }
     
-    // Standardized Exchange Rates (Base: 1 USD)
-    setRates(prev => ({ 
-      ...prev, 
-      USD: 1,
-      KES: 130,
-      G: 1300,   // 1 USD = 1300 mg Gold
-      PTS: 1300  // 1 USD = 1300 Points
-    }));
-
-    // Fetch exchange rates
-    const fetchRates = async () => {
+    // Fetch exchange rates and crypto prices (PAXG for Gold)
+    const fetchData = async () => {
       try {
-        const response = await fetch('/api/rates');
+        const response = await fetch('/api/binance/prices');
         if (response.ok) {
           const data = await response.json();
-          // Merge with custom overrides safely
-          setRates(prev => ({ 
-            ...prev, 
-            ...data.rates, 
-            USD: 1,
-            KES: 130, // Override with authoritative local rate
-            G: 1300, 
-            PTS: 1300
-          }));
-        } else {
-          const err = await response.json().catch(() => ({}));
-          console.error('Exchange rate API returned error:', err);
+          const prices = data.prices || [];
+          
+          const paxgTicker = prices.find((p: any) => p.symbol === 'PAXGUSDT');
+          if (paxgTicker) {
+            const price = parseFloat(paxgTicker.price);
+            setGoldPriceUSD(price);
+            
+            // 1 PAXG = 1 Troy Ounce = 31.1035 grams = 31,103.5 mg
+            // We want to know how many mg are in 1 USD
+            // mgPerUSD = 31103.5 / price
+            const mgPerUSD = 31103.5 / price;
+            
+            setRates(prev => ({ 
+              ...prev, 
+              USD: 1,
+              KES: 130,
+              GOLD: mgPerUSD 
+            }));
+          }
         }
       } catch (error) {
-        console.error('Failed to fetch exchange rates:', error);
+        console.error('Failed to fetch real-time gold rates:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchRates();
+    fetchData();
+    // Refresh every 5 minutes
+    const interval = setInterval(fetchData, 300000);
+    return () => clearInterval(interval);
   }, []);
 
   const changeCurrency = (newCurrency: string) => {
@@ -59,23 +69,40 @@ export const useCurrencyConverter = () => {
     localStorage.setItem('preferred_currency', newCurrency);
   };
 
-  const convert = (amountInBalance: number): string => {
-    // Standard: 1300 mg Gold (Points) = $1.00
-    if (currency === 'PTS' || currency === 'G') {
-      const goldMg = amountInBalance * 1300;
-      return `${Math.floor(goldMg).toLocaleString()} Gold mg`;
+  const convert = (amount: number, fromCurrency: string = 'USD'): string => {
+    if (isNaN(amount)) return '0.00 Gold mg';
+
+    // Convert input to USD base first
+    const rateFrom = rates[fromCurrency] || 1;
+    const amountInUSD = fromCurrency === 'USD' ? amount : amount / rateFrom;
+
+    if (currency === 'GOLD') {
+      const rate = rates['GOLD'] || (31103.5 / 2350);
+      const mg = amountInUSD * rate;
+      
+      if (mg >= 1000) {
+        return `${(mg / 1000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} Gold g`;
+      }
+      return `${Math.floor(mg).toLocaleString()} Gold mg`;
     }
 
-    // Default rate check
-    const rate = rates[currency] || (currency === 'KES' ? 130 : 1);
-    const converted = amountInBalance * rate;
-    
-    return new Intl.NumberFormat('en-KE', {
+    if (currency === 'KES') {
+      const rate = rates['KES'] || 130;
+      return new Intl.NumberFormat('en-KE', {
+        style: 'currency',
+        currency: 'KES',
+      }).format(amountInUSD * rate);
+    }
+
+    // Default to USD formatting
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(converted);
+      currency: 'USD',
+    }).format(amountInUSD);
+  };
+
+  const formatCurrency = (amountInUSD: number): string => {
+    return convert(amountInUSD);
   };
 
   return {
@@ -83,6 +110,7 @@ export const useCurrencyConverter = () => {
     rates,
     changeCurrency,
     convert,
+    formatCurrency,
     loading,
     availableCurrencies: Object.keys(rates).sort()
   };

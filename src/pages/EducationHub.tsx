@@ -43,6 +43,7 @@ import { getEducationCourses, getLastSyncInfo, Course } from '../lib/education';
 import { useAuth } from '../contexts/AuthContext';
 import { useRevenue } from '../contexts/RevenueContext';
 import { useNotifications } from '../hooks/useNotifications';
+import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 import { revenue_distribution_engine } from '../lib/engines';
 import { doc, updateDoc, increment, arrayUnion } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -94,6 +95,7 @@ export default function EducationHub() {
   const { currentUser, userData } = useAuth();
   const { showNotification } = useNotifications();
   const { addPlatformRevenue } = useRevenue();
+  const { convert, formatCurrency } = useCurrencyConverter();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncInfo, setSyncInfo] = useState<any>(null);
@@ -152,7 +154,7 @@ export default function EducationHub() {
       await addPlatformRevenue(developerShare / 10, `Course Enrollment Fee: ${course.title} (Developer 80% Share)`);
 
       showNotification("Education Milestone", { 
-        body: `Welcome to ${course.title}! You've been rewarded ${userShare} points (20% share) while 80% (KES ${developerShare/10}) fuels global engineering.` 
+        body: `Welcome to ${course.title}! You've been rewarded ${userShare} mg Gold (20% share) while 80% (${formatCurrency(developerShare / 1300)}) fuels global engineering.` 
       });
       setSelectedCourse(null);
     } catch (err) {

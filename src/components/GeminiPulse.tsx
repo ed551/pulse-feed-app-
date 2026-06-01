@@ -23,6 +23,23 @@ export default function GeminiPulse() {
 
   useEffect(() => {
     async function fetchInsights() {
+      const cacheKey = 'pulse_gemini_insights';
+      const cacheTimeKey = 'pulse_gemini_insights_time';
+      const now = Date.now();
+      const cached = localStorage.getItem(cacheKey);
+      const cachedTime = parseInt(localStorage.getItem(cacheTimeKey) || '0');
+      
+      // Cache for 1 hour
+      if (cached && (now - cachedTime < 3600000)) {
+        try {
+          setInsights(JSON.parse(cached));
+          setLoading(false);
+          return;
+        } catch (e) {
+          localStorage.removeItem(cacheKey);
+        }
+      }
+
       setLoading(true);
       try {
         // In a real app, we'd fetch actual data to feed Gemini
@@ -43,7 +60,10 @@ export default function GeminiPulse() {
         const jsonMatch = text.match(/\[.*\]/s);
         if (jsonMatch) {
           const data = JSON.parse(jsonMatch[0]);
-          setInsights(data.map((d: any, i: number) => ({ ...d, id: `insight-${i}` })));
+          const results = data.map((d: any, i: number) => ({ ...d, id: `insight-${i}` }));
+          setInsights(results);
+          localStorage.setItem('pulse_gemini_insights', JSON.stringify(results));
+          localStorage.setItem('pulse_gemini_insights_time', Date.now().toString());
         } else {
           throw new Error("Invalid output format");
         }

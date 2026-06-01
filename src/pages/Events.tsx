@@ -188,7 +188,7 @@ export default function Events() {
       // Check for payment if price exists
       if (event.price && event.price > 0) {
         if ((userData?.balance || 0) < event.price) {
-          alert(`Insufficient reserve. This event costs KES ${event.price.toFixed(2)}.`);
+          alert(`Insufficient reserve. This event costs ${convert(event.price)}.`);
           return;
         }
 

@@ -7,6 +7,7 @@ import {
   GraduationCap
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 import { useAuth } from '../contexts/AuthContext';
 import { useRevenue } from '../contexts/RevenueContext';
 import { useNavigate } from 'react-router-dom';
@@ -83,6 +84,7 @@ const TIERS = [
 
 export default function Membership() {
   const { currentUser, userData } = useAuth();
+  const { convert: formatCurrency } = useCurrencyConverter();
   const isDeveloper = currentUser?.email === 'edwinmuoha@gmail.com';
   const { deductBalance } = useRevenue();
   const navigate = useNavigate();
@@ -249,14 +251,10 @@ export default function Membership() {
               </div>
             </div>
 
-            <div className="flex items-baseline gap-1 mb-8">
-              <span className="text-5xl font-black text-gray-900 dark:text-white tracking-tighter">
-                ${tier.price}
+            <div className="flex items-baseline gap-1 mb-8 text-gray-900 dark:text-white">
+              <span className="text-5xl font-black tracking-tighter">
+                {formatCurrency(tier.price)}
               </span>
-              <span className="text-xl font-bold text-gray-400">
-                .00
-              </span>
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">KES</span>
             </div>
 
             <div className="space-y-4 mb-10 flex-1">

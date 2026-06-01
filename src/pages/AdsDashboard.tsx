@@ -8,7 +8,7 @@ import { useState } from "react";
 export default function AdsDashboard() {
   const { userData } = useAuth();
   const { addRevenue } = useRevenue();
-  const { convert } = useCurrencyConverter();
+  const { convert: formatCurrency } = useCurrencyConverter();
   const navigate = useNavigate();
   const [isWatching, setIsWatching] = useState(false);
 
@@ -27,10 +27,11 @@ export default function AdsDashboard() {
     await addRevenue(userShareInPoints / 100, platformShareInUSD, "High-Yield Ad Engagement", "ad");
     
     setIsWatching(false);
+    const rewardFormatted = formatCurrency(userShareInPoints / 100);
     window.dispatchEvent(new CustomEvent('show-notification', { 
       detail: { 
         title: "High-Yield Reward!", 
-        body: `BOOM! You earned ${userShareInPoints} Community Points from this premium ad session!` 
+        body: `BOOM! You earned ${rewardFormatted} from this premium ad session!` 
       } 
     }));
   };
@@ -47,7 +48,7 @@ export default function AdsDashboard() {
       <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg text-white flex flex-col md:flex-row items-center justify-between">
         <div>
           <h2 className="text-green-100 font-medium uppercase tracking-wider text-sm mb-1">Your Ad Revenue Share</h2>
-          <div className="text-4xl font-black">${(userData?.adRevenue || 0).toFixed(2)}</div>
+          <div className="text-4xl font-black">{formatCurrency(userData?.adRevenue || 0)}</div>
           <p className="text-green-100 text-sm mt-2">Earned from your engagement and content views.</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 mt-4 md:mt-0">
@@ -77,7 +78,7 @@ export default function AdsDashboard() {
               <Gem className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-3xl font-bold text-gray-900 dark:text-white">$15.57</div>
+          <div className="text-3xl font-bold text-gray-900 dark:text-white">{formatCurrency(15.57)}</div>
           <div className="flex items-center mt-2 text-sm text-green-600 dark:text-green-400 font-medium">
             <TrendingUp className="w-4 h-4 mr-1" />
             +12.5% from last month
@@ -144,7 +145,7 @@ export default function AdsDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Community Rewards Pool</h3>
-            <div className="text-3xl font-black text-green-500 mb-2">$7,786.00</div>
+            <div className="text-3xl font-black text-green-500 mb-2">{formatCurrency(7786.00)}</div>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Distributed back to users via the Rewards system for viewing ads, creating content, and participating in the community.
               <br/><br/>
@@ -178,7 +179,7 @@ export default function AdsDashboard() {
               </div>
               <div>
                 <div className="font-bold text-gray-900 dark:text-white">User Payout: @sarah_j</div>
-                <div className="text-xs text-gray-500">Net: $42.00 (Gross: $50.00) • M-Pesa</div>
+                <div className="text-xs text-gray-500">Net: {formatCurrency(42.00)} (Gross: {formatCurrency(50.00)}) • M-Pesa</div>
               </div>
             </div>
             <span className="text-xs font-bold text-green-500 flex items-center"><CheckCircle className="w-3 h-3 mr-1"/> Completed</span>
@@ -191,7 +192,7 @@ export default function AdsDashboard() {
               </div>
               <div>
                 <div className="font-bold text-gray-900 dark:text-white">Tax Remission: KRA (Kenya)</div>
-                <div className="text-xs text-gray-500">Amount: $8.00 (16% VAT/WHT) • Ref: TX-99281</div>
+                <div className="text-xs text-gray-500">Amount: {formatCurrency(8.00)} (16% VAT/WHT) • Ref: TX-99281</div>
               </div>
             </div>
             <span className="text-xs font-bold text-blue-500 flex items-center"><CheckCircle className="w-3 h-3 mr-1"/> Remitted</span>
@@ -204,7 +205,7 @@ export default function AdsDashboard() {
               </div>
               <div>
                 <div className="font-bold text-gray-900 dark:text-white">Tax Remission: IRS (USA)</div>
-                <div className="text-xs text-gray-500">Amount: $12.48 (30% WHT) • Ref: TX-99282</div>
+                <div className="text-xs text-gray-500">Amount: {formatCurrency(12.48)} (30% WHT) • Ref: TX-99282</div>
               </div>
             </div>
             <span className="text-xs font-bold text-yellow-500 flex items-center"><Clock className="w-3 h-3 mr-1"/> Pending Batch</span>

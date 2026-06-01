@@ -19,17 +19,17 @@ export const ai = isValidApiKey ? new GoogleGenAI({
   httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
 }) : null;
 
-const MAX_RETRIES = 100;
-const INITIAL_DELAY = 20000;
+const MAX_RETRIES = 5;
+const INITIAL_DELAY = 30000;
 
 let requestQueue: Promise<void> = Promise.resolve();
-const MIN_REQUEST_INTERVAL = 15000; 
+const MIN_REQUEST_INTERVAL = 20000; 
 
 async function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export async function generateContentWithRetry(params: any): Promise<GenerateContentResponse> {
+export async function generateContentWithRetry(params: any): Promise<any> {
   // 1. Detect Environment & Proxy if needed
   const isBrowser = typeof window !== 'undefined';
   
@@ -118,7 +118,8 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
         // Robust 'text' property reconstruction for browser callers
         if (data && !data.text) {
           try {
-            const parts = data.candidates?.[0]?.content?.parts || [];
+            const rawResponse = data.response || data;
+            const parts = rawResponse.candidates?.[0]?.content?.parts || [];
             const textContent = parts.filter((p: any) => p.text).map((p: any) => p.text).join('');
             if (textContent) data.text = textContent;
           } catch (e) {}
@@ -159,13 +160,34 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
     
     while (retries <= MAX_RETRIES) {
       try {
-        if (params && !params.model) params.model = 'gemini-1.5-flash';
+        if (params && !params.model) params.model = 'gemini-3-flash-preview';
+        
+        // Normalize contents format per AGENTS.md
+        if (params.contents && !Array.isArray(params.contents) && typeof params.contents === 'string') {
+          params.contents = [{ role: 'user', parts: [{ text: params.contents }] }];
+        } else if (params.prompt && !params.contents) {
+          params.contents = [{ role: 'user', parts: [{ text: params.prompt }] }];
+          delete params.prompt;
+        }
+
         const response = await (ai as any).models.generateContent(params);
+        
+        // Final normalization to ensure .text is a string for all callers
+        const responseText = (typeof response.text === 'function') ? response.text() : 
+                           (response.text || response.response?.candidates?.[0]?.content?.parts?.[0]?.text || "");
+        
+        // Wrap response to be ultra-compatible with varied client expectations
+        const result = {
+          text: responseText,
+          response: response.response || response,
+          candidates: response.candidates || response.response?.candidates || []
+        };
+
         // Release queue after success plus interval
         const release = currentRelease;
         currentRelease = null;
         if (release) setTimeout(release, MIN_REQUEST_INTERVAL);
-        return response;
+        return result;
       } catch (error: any) {
         const errorString = error?.message || (error?.toString ? error.toString() : "");
         const status = error?.status || 
@@ -189,54 +211,47 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
         
           // Model Fallback Logic (Sync with server.ts)
           if ((isQuotaExceeded || isProxyError || isNotFound || isDepleted)) {
+            retries++;
             const oldModel = params.model;
             
             if (isQuotaExceeded || isDepleted) {
-              retries++;
-              const waitTime = isDepleted ? 5000 : 15000; // 5s for billing fallback, 15s for quota
-              console.warn(`[Client AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Attempt ${retries}. Waiting ${waitTime/1000}s before proactive fallback...`);
+              const waitTime = isDepleted ? 60000 : 30000; // 60s for billing fallback, 30s for quota
+              console.warn(`[Client AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Mandatory recovery delay of ${waitTime/1000}s. (Attempt ${retries}/${MAX_RETRIES})`);
               
-              if (currentRelease) {
-                currentRelease();
-                currentRelease = null;
+              if (isDepleted && retries >= 1) {
+                console.error("[Client AI] Billing/Quota issues detected. Please check your AI Studio credits.");
+                throw error;
               }
+
+              // HOLD THE LOCK to prevent loop hammering
               await delay(waitTime);
-              await acquireLock();
             }
 
             const currentModel = params.model;
-            // Robust Fallback Sequence (Prioritizing stable flash models)
-            if (currentModel === 'gemini-1.5-flash') {
-              params.model = 'gemini-1.5-flash-8b';
-            } else if (currentModel === 'gemini-1.5-flash-8b') {
-              params.model = 'gemini-1.5-flash-001';
-            } else if (currentModel === 'gemini-1.5-flash-001') {
-              params.model = 'gemini-1.5-flash-002';
-            } else if (currentModel === 'gemini-flash-latest') {
-              params.model = 'gemini-1.5-flash';
-            } else if (currentModel === 'gemini-3-flash-preview') {
-              params.model = 'gemini-2.0-flash';
-            } else if (currentModel === 'gemini-2.0-flash') {
+            // Robust Fallback Sequence based on User Instructions (AGENTS.md)
+            if (currentModel === 'gemini-3-flash-preview') {
               params.model = 'gemini-3.5-flash';
             } else if (currentModel === 'gemini-3.5-flash') {
+              params.model = 'gemini-flash-latest';
+            } else if (currentModel === 'gemini-flash-latest') {
               params.model = 'gemini-3.1-flash-lite';
             } else if (currentModel === 'gemini-3.1-flash-lite') {
-              params.model = 'gemini-1.5-pro';
-            } else if (currentModel === 'gemini-1.5-pro') {
-              params.model = 'gemini-1.5-pro-002';
+              params.model = 'gemini-3.1-pro-preview';
             } else if (currentModel === 'gemini-3.1-pro-preview') {
-              params.model = 'gemini-1.5-pro';
-            } else {
-              // Loop back to a high-availability model if somehow stuck
+              params.model = 'gemini-1.5-flash';
+            } else if (currentModel === 'gemini-1.5-flash') {
               params.model = 'gemini-1.5-flash-8b';
+            } else {
+              // Loop back to primary
+              params.model = 'gemini-3-flash-preview';
             }
             
-            if (params.model === oldModel) {
-              console.error(`[Client AI] All model fallbacks exhausted for ${oldModel}`);
+            if (retries >= MAX_RETRIES) {
+              console.error(`[Client AI] All model fallbacks and retries exhausted (${MAX_RETRIES}).`);
               throw error;
             }
             
-            console.warn(`[Client AI] Falling back from ${oldModel} to ${params.model}`);
+            console.warn(`[Client AI] Falling back from ${oldModel} to ${params.model} (Attempt ${retries}/${MAX_RETRIES})`);
             continue;
           }
 
@@ -245,14 +260,9 @@ export async function generateContentWithRetry(params: any): Promise<GenerateCon
           retries++;
           // Exponential backoff with jitter and increased delay for higher retries
           const backoffDelay = (INITIAL_DELAY * Math.pow(1.5, retries)) + (Math.random() * 2000); 
-          console.warn(`AI service under load (Status: ${status}). Retrying in ${Math.round(backoffDelay)}ms... (Attempt ${retries}/${MAX_RETRIES})`);
+          console.warn(`AI service under load (Status: ${status}). Mandatory recovery delay of ${Math.round(backoffDelay)}ms... (Attempt ${retries}/${MAX_RETRIES})`);
           
-          if (currentRelease) {
-            currentRelease();
-            currentRelease = null;
-          }
           await delay(backoffDelay);
-          await acquireLock();
 
           continue;
         }

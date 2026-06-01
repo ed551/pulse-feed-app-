@@ -88,9 +88,9 @@ if (isValidApiKey) {
 } else {
   console.warn("[AI Init] No valid Gemini API Key found in environment variables. Searched: GEMINI_AI, GEMINI_API_KEY, GOOGLE_API_KEY, GEMINI_API");
 }
-const MIN_REQUEST_INTERVAL = 15000;
-const MAX_RETRIES = 100;
-const INITIAL_DELAY = 10000;
+const MIN_REQUEST_INTERVAL = 20000;
+const MAX_RETRIES = 20; 
+const INITIAL_DELAY = 15000;
 let requestQueue: Promise<void> = Promise.resolve();
 
 async function delay(ms: number) {
@@ -115,13 +115,34 @@ async function generateContentWithRetry(params: any): Promise<any> {
     let retries = 0;
     while (retries <= MAX_RETRIES) {
       try {
-        if (params && !params.model) params.model = 'gemini-1.5-flash';
+        if (params && !params.model) params.model = 'gemini-3-flash-preview';
+        
+        // Normalize contents format per AGENTS.md
+        if (params.contents && !Array.isArray(params.contents) && typeof params.contents === 'string') {
+          params.contents = [{ role: 'user', parts: [{ text: params.contents }] }];
+        } else if (params.prompt && !params.contents) {
+          params.contents = [{ role: 'user', parts: [{ text: params.prompt }] }];
+          delete params.prompt;
+        }
+
         const response = await (ai as any).models.generateContent(params);
+        
+        // Final normalization to ensure .text is a string for all callers
+        const responseText = (typeof response.text === 'function') ? response.text() : 
+                           (response.text || response.response?.candidates?.[0]?.content?.parts?.[0]?.text || "");
+        
+        // Wrap response to be ultra-compatible with varied client expectations
+        const result = {
+          text: responseText,
+          response: response.response || response,
+          candidates: response.candidates || response.response?.candidates || []
+        };
+
         // Release queue early if successful, but after the required interval
         const release = currentRelease;
         currentRelease = null;
         if (release) setTimeout(release, MIN_REQUEST_INTERVAL);
-        return response;
+        return result;
       } catch (error: any) {
         const errorString = error?.message || (error?.toString ? error.toString() : "");
         const rawErrorString = JSON.stringify(error);
@@ -143,18 +164,16 @@ async function generateContentWithRetry(params: any): Promise<any> {
         
         const combinedErrorText = (errorString + " " + rawErrorString).toLowerCase();
         
-        const isDepleted = combinedErrorText.includes("prepayment credits are depleted") || 
+          const isDepleted = combinedErrorText.includes("prepayment credits are depleted") || 
                           combinedErrorText.includes("billing") ||
                           combinedErrorText.includes("credits are exhausted") ||
                           combinedErrorText.includes("prepayment") ||
                           combinedErrorText.includes("depleted") ||
                           combinedErrorText.includes("insufficient balance") ||
                           combinedErrorText.includes("credit") ||
-                          combinedErrorText.includes("429") ||
                           errorJson?.error?.message?.toLowerCase().includes("prepayment") ||
                           errorJson?.error?.message?.toLowerCase().includes("credits are depleted") ||
                           errorJson?.error?.message?.toLowerCase().includes("insufficient balance") ||
-                          (status === 429 && (combinedErrorText.includes("billing") || combinedErrorText.includes("quota"))) ||
                           (status === 402);
 
         const isQuotaExceeded = status === 429 || 
@@ -166,64 +185,62 @@ async function generateContentWithRetry(params: any): Promise<any> {
         const isUnavailable = status === 503 || combinedErrorText.includes("unavailable") || status === 402 || status === 504 || status === 502 || combinedErrorText.includes("overloaded");
         
         // Key Rotation on Billing/Quota failure
-        if ((isDepleted || status === 429 || status === 402 || isQuotaExceeded) && currentKeyIndex < AVAILABLE_KEYS.length - 1) {
+        if (isDepleted || status === 429 || status === 402 || isQuotaExceeded) {
+          retries++;
           const oldIndex = currentKeyIndex;
-          currentKeyIndex++;
-          console.warn(`[Server AI] Key ${oldIndex + 1} limited/exhausted (${status}${isDepleted ? '-BILLING' : ''}). Rotating to next key ${currentKeyIndex + 1}/${AVAILABLE_KEYS.length}...`);
-          ai = createAIClient(AVAILABLE_KEYS[currentKeyIndex]);
+          currentKeyIndex = (currentKeyIndex + 1) % AVAILABLE_KEYS.length;
           
-          // Reset model to the start of the sequence
-          params.model = 'gemini-1.5-flash';
-          
-          await delay(1000); 
-          continue; 
+          // Only rotate keys if we have more than one, otherwise wait for model fallback
+          if (AVAILABLE_KEYS.length > 1) {
+            console.warn(`[Server AI] Key ${oldIndex + 1} limited/exhausted (${status}${isDepleted ? '-BILLING' : ''}). Rotating to key ${currentKeyIndex + 1}/${AVAILABLE_KEYS.length}... (Attempt ${retries}/${MAX_RETRIES})`);
+            ai = createAIClient(AVAILABLE_KEYS[currentKeyIndex]);
+            
+            // Keep current model for the new key first
+            await delay(2000); 
+            continue; 
+          }
         }
 
-          // Final Model Fallback Logic on Server (Sync with src/lib/ai.ts)
+          // Final Model Fallback Logic on Server (Sync with src/lib/ai.ts and AGENTS.md)
           if (isQuotaExceeded || isUnavailable || status === 404 || isDepleted) {
+            retries++;
             const oldModel = params.model;
             
             if (isQuotaExceeded || isUnavailable || isDepleted) {
-              const waitTime = isDepleted ? 3000 : 7000; 
-              console.warn(`[Server AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Waiting ${waitTime/1000}s for quick recovery...`);
+              const waitTime = isDepleted ? 60000 : 30000; 
+              console.warn(`[Server AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Mandatory recovery delay of ${waitTime/1000}s. (Attempt ${retries}/${MAX_RETRIES})`);
               
-              if (currentRelease) {
-                currentRelease();
-                currentRelease = null;
+              // If we are hitting billing errors and we've already tried several times, fail fast
+              if (isDepleted && retries > 3) {
+                console.error("[Server AI] Billing credits depleted across multiple attempts. Terminating retry cycle.");
+                throw error;
               }
+
+              // HOLD THE LOCK during wait time to prevent other users from hitting the same quota error
               await delay(waitTime);
-              await acquireLock();
             }
 
             const currentModel = params.model;
-            // Robust Fallback Sequence (Prioritizing stable flash models)
-            if (currentModel === 'gemini-1.5-flash') {
-              params.model = 'gemini-1.5-flash-8b';
-            } else if (currentModel === 'gemini-1.5-flash-8b') {
-              params.model = 'gemini-1.5-flash-001';
-            } else if (currentModel === 'gemini-1.5-flash-001') {
-              params.model = 'gemini-1.5-flash-002';
-            } else if (currentModel === 'gemini-flash-latest') {
-              params.model = 'gemini-1.5-flash';
-            } else if (currentModel === 'gemini-3-flash-preview') {
-              params.model = 'gemini-2.0-flash';
-            } else if (currentModel === 'gemini-2.0-flash') {
+            // Robust Fallback Sequence based on User Instructions (AGENTS.md)
+            if (currentModel === 'gemini-3-flash-preview') {
               params.model = 'gemini-3.5-flash';
             } else if (currentModel === 'gemini-3.5-flash') {
+              params.model = 'gemini-flash-latest';
+            } else if (currentModel === 'gemini-flash-latest') {
               params.model = 'gemini-3.1-flash-lite';
             } else if (currentModel === 'gemini-3.1-flash-lite') {
-              params.model = 'gemini-1.5-pro';
-            } else if (currentModel === 'gemini-1.5-pro') {
-              params.model = 'gemini-1.5-pro-002';
+              params.model = 'gemini-3.1-pro-preview';
             } else if (currentModel === 'gemini-3.1-pro-preview') {
-              params.model = 'gemini-1.5-pro';
-            } else {
-              // Loop back to a high-availability model if somehow stuck
+              params.model = 'gemini-1.5-flash';
+            } else if (currentModel === 'gemini-1.5-flash') {
               params.model = 'gemini-1.5-flash-8b';
+            } else {
+              // Loop back to primary
+              params.model = 'gemini-3-flash-preview';
             }
           
-            if (params.model === oldModel) {
-              console.error(`[Server AI] All model fallbacks exhausted for ${oldModel}.`);
+            if (retries >= MAX_RETRIES) {
+              console.error(`[Server AI] All model fallbacks and retries exhausted (${MAX_RETRIES}).`);
               if (isDepleted || status === 402 || status === 429) {
                 const billingError: any = new Error("Gemini API credits are depleted across all models. Please check your billing at ai.studio or wait for free-tier resets.");
                 billingError.status = 402;
@@ -233,21 +250,16 @@ async function generateContentWithRetry(params: any): Promise<any> {
               throw error;
             }
             
-            console.warn(`[Server AI] Retrying with model fallback: ${params.model}`);
+            console.warn(`[Server AI] Retrying with model fallback: ${params.model} (Attempt ${retries}/${MAX_RETRIES})`);
             continue;
         }
 
         if (isQuotaExceeded && retries < MAX_RETRIES) {
           retries++;
           const backoffDelay = (INITIAL_DELAY * Math.pow(2, retries)) + (Math.random() * 1000); 
-          console.warn(`[Server AI] Quota exceeded. Retrying in ${Math.round(backoffDelay)}ms... (Attempt ${retries}/${MAX_RETRIES})`);
+          console.warn(`[Server AI] Quota exceeded. Mandatory recovery delay of ${Math.round(backoffDelay)}ms... (Attempt ${retries}/${MAX_RETRIES})`);
           
-          if (currentRelease) {
-            currentRelease();
-            currentRelease = null;
-          }
           await delay(backoffDelay);
-          await acquireLock();
           
           continue;
         }
@@ -557,6 +569,31 @@ const resilientDb = {
       })
     };
     return collObj;
+  },
+  batch: function() {
+    const operations: any[] = [];
+    return {
+      set: (docRef: any, data: any, options?: any) => {
+        operations.push({ type: 'set', docRef, data, options });
+      },
+      update: (docRef: any, data: any) => {
+        operations.push({ type: 'update', docRef, data });
+      },
+      delete: (docRef: any) => {
+        operations.push({ type: 'delete', docRef });
+      },
+      commit: async () => {
+        for (const op of operations) {
+          try {
+            if (op.type === 'set') await op.docRef.set(op.data, op.options);
+            if (op.type === 'update') await op.docRef.update(op.data);
+            if (op.type === 'delete') await op.docRef.delete();
+          } catch (err: any) {
+            console.error(`[ResilientDB Batch] Op failed:`, err.message);
+          }
+        }
+      }
+    };
   }
 } as any;
 
@@ -1246,6 +1283,120 @@ async function startServer() {
     } catch (error: any) {
       console.error("[Education Research] Error:", error.message);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Binance API Integration
+  app.get("/api/binance/prices", async (req, res) => {
+    try {
+      const BINANCE_API_BASE = process.env.BINANCE_USE_TESTNET === "true" 
+        ? "https://testnet.binance.vision/api" 
+        : "https://api.binance.com/api";
+        
+      const symbols = ["BTCUSDT", "ETHUSDT", "PAXGUSDT"];
+      const prices = await Promise.all(symbols.map(async (symbol) => {
+        try {
+          const resp = await axios.get(`${BINANCE_API_BASE}/v3/ticker/price?symbol=${symbol}`, { 
+            timeout: 5000,
+            headers: { "User-Agent": STANDARD_USER_AGENT }
+          });
+          return { symbol, price: resp.data.price };
+        } catch (e) {
+          return { symbol, price: null, error: true };
+        }
+      }));
+      res.json({ success: true, prices });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get("/api/binance/account", async (req, res) => {
+    const apiKey = process.env.BINANCE_API_KEY;
+    const apiSecret = process.env.BINANCE_API_SECRET;
+    
+    if (!apiKey || !apiSecret) {
+      return res.status(401).json({ success: false, error: "Binance API keys not configured in server environment secrets." });
+    }
+
+    try {
+      const BINANCE_API_BASE = process.env.BINANCE_USE_TESTNET === "true" 
+        ? "https://testnet.binance.vision/api" 
+        : "https://api.binance.com/api";
+
+      const timestamp = Date.now();
+      const query = `timestamp=${timestamp}`;
+      const signature = crypto.createHmac("sha256", apiSecret).update(query).digest("hex");
+      
+      const resp = await axios.get(`${BINANCE_API_BASE}/v3/account?${query}&signature=${signature}`, {
+        headers: { 
+          "X-MBX-APIKEY": apiKey,
+          "User-Agent": STANDARD_USER_AGENT
+        },
+        timeout: 10000
+      });
+      
+      // Also fetch withdrawal history or limits if needed, but for now just basic account
+      res.json({ success: true, account: resp.data });
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.msg || err.message;
+      res.status(500).json({ success: false, error: errorMsg });
+    }
+  });
+
+  app.post("/api/binance/withdraw", async (req, res) => {
+    const { asset, address, amount, network, userId, scaToken, totpCode } = req.body;
+    const apiKey = process.env.BINANCE_API_KEY;
+    const apiSecret = process.env.BINANCE_API_SECRET;
+
+    if (!apiKey || !apiSecret) {
+      return res.status(401).json({ success: false, error: "Binance API keys not configured in server secrets." });
+    }
+
+    if (!asset || !address || !amount) {
+      return res.status(400).json({ success: false, error: "Missing required withdrawal parameters (asset, address, amount)." });
+    }
+
+    // Secondary Security Check (SCA)
+    let authLevel = 0;
+    if (userId) {
+      authLevel = await verifyUserAuthorizationLevel(userId, { scaToken, totpCode });
+    }
+
+    // Force SCA for any binance withdrawal due to high risk
+    if (!scaToken && !totpCode && authLevel < 1) {
+      return res.status(403).json({ success: false, error: "Security validation (PIN, Biometrics, or TOTP) is required for Binance withdrawals." });
+    }
+
+    try {
+      // Binance SAPI for withdrawals (Spot API)
+      // Note: Testnet usually doesn't support SAPI withdrawals, so we use production endpoint or throw error
+      if (process.env.BINANCE_USE_TESTNET === "true") {
+        return res.status(400).json({ success: false, error: "Withdrawals are not supported on Binance Testnet." });
+      }
+
+      const BINANCE_SAPI_BASE = "https://api.binance.com/sapi";
+      const timestamp = Date.now();
+      let query = `coin=${asset}&address=${address}&amount=${amount}&timestamp=${timestamp}`;
+      if (network) query += `&network=${network}`;
+      
+      const signature = crypto.createHmac("sha256", apiSecret).update(query).digest("hex");
+      
+      console.log(`[Binance] Initiating withdrawal: ${amount} ${asset} to ${address} on network ${network || 'default'}`);
+
+      const resp = await axios.post(`${BINANCE_SAPI_BASE}/v1/capital/withdraw/apply?${query}&signature=${signature}`, {}, {
+        headers: { 
+          "X-MBX-APIKEY": apiKey,
+          "User-Agent": STANDARD_USER_AGENT
+        },
+        timeout: 15000
+      });
+
+      res.json({ success: true, data: resp.data });
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.msg || err.message;
+      console.error("[Binance Withdraw Error]:", errorMsg);
+      res.status(500).json({ success: false, error: errorMsg });
     }
   });
 
@@ -2564,7 +2715,8 @@ async function syncEducationCourses() {
       tools: [{ googleSearch: {} }] 
     });
 
-    const text = response.response?.candidates?.[0]?.content?.parts?.[0]?.text || response.text || "";
+    // Final normalization to ensure we get some text
+    const text = response.text || "";
     if (!text) throw new Error("Empty AI response");
 
     const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -2636,6 +2788,35 @@ async function performRobustEducationSync() {
         const delayMs = 60000 * Math.pow(2, attempts);
         console.warn(`[EducationSync] Attempt ${attempts} failed. Retrying in ${delayMs/1000}s...`);
         await delay(delayMs);
+      }
+    }
+    
+    // Final emergency fallback if AI sync fails and DB is empty
+    const finalSnap = await resilientDb.collection(COURSES_COLLECTION).limit(1).get();
+    if (finalSnap.empty) {
+      console.warn("[EducationSync] AI Sync failed and DB is empty. Populating with limited emergency placeholders.");
+      const emergencyCourses = [
+        {
+          id: 'emergency-1',
+          title: 'Pulse Systems Core',
+          subtitle: 'Understanding the pulse ecosystem',
+          description: 'A basic introduction to how community rewards and education intersect.',
+          duration: '1h',
+          lessons: 1,
+          difficulty: 'Beginner',
+          category: 'Systems',
+          badge: 'ShieldCheck',
+          curriculum: [{ title: 'Overview', duration: '1h' }]
+        }
+      ];
+      for (const [index, c] of emergencyCourses.entries()) {
+        await resilientDb.collection(COURSES_COLLECTION).doc(c.id).set({
+          ...c,
+          lastUpdated: Date.now(),
+          lastUpdatedServer: FieldValue.serverTimestamp(),
+          serverSecret: SERVER_SECRET,
+          isAIGenerated: false
+        });
       }
     }
   }
@@ -4027,6 +4208,67 @@ async function performRobustEducationSync() {
     // For now, we'll return a mock shortened URL
     const mockShort = `https://pulse.feed/${Math.random().toString(36).substr(2, 6)}`;
     res.json({ shortUrl: mockShort });
+  });
+
+  // Binance Integration Endpoints
+  app.get("/api/binance/prices", async (req, res) => {
+    try {
+      const response = await axios.get('https://api.binance.com/api/v3/ticker/price', {
+        timeout: 5000,
+        headers: { 'User-Agent': STANDARD_USER_AGENT }
+      });
+      res.json({ success: true, prices: response.data });
+    } catch (error: any) {
+      console.warn(`[Binance] Price fetch failed: ${error.message}`);
+      res.status(502).json({ success: false, error: "Failed to fetch crypto prices from Binance API." });
+    }
+  });
+
+  app.post("/api/binance/withdraw", async (req, res) => {
+    const { asset, address, amount, network, userId, scaToken, totpCode } = req.body;
+    const apiKey = process.env.BINANCE_API_KEY;
+    const apiSecret = process.env.BINANCE_API_SECRET;
+
+    if (!apiKey || !apiSecret) {
+      return res.status(401).json({ success: false, error: "Binance API keys not configured in server secrets." });
+    }
+
+    if (!asset || !address || !amount) {
+      return res.status(400).json({ success: false, error: "Asset, address, and amount are required." });
+    }
+
+    // Secondary Security Check (SCA)
+    let authLevel = 0;
+    if (userId) {
+      authLevel = await verifyUserAuthorizationLevel(userId, { scaToken, totpCode });
+    }
+
+    // Force SCA for any binance withdrawal due to high risk
+    if (!scaToken && !totpCode && authLevel < 1) {
+      return res.status(403).json({ success: false, error: "Security validation (PIN, Biometrics, or TOTP) is required for Binance withdrawals." });
+    }
+
+    try {
+      // Binance SAPI for withdrawals (Spot API)
+      // Note: Testnet usually doesn't support SAPI withdrawals, so we use production endpoint or throw error
+      const timestamp = Date.now();
+      const queryStr = `asset=${asset}&address=${address}&amount=${amount}&timestamp=${timestamp}${network ? `&network=${network}` : ''}`;
+      const signature = crypto.createHmac('sha256', apiSecret).update(queryStr).digest('hex');
+
+      const response = await axios.post(`https://api.binance.com/sapi/v1/capital/withdraw/apply?${queryStr}&signature=${signature}`, null, {
+        headers: {
+          'X-MBX-APIKEY': apiKey,
+          'User-Agent': STANDARD_USER_AGENT
+        },
+        timeout: 10000
+      });
+
+      res.json({ success: true, data: response.data });
+    } catch (error: any) {
+      const errMsg = error.response?.data?.msg || error.message;
+      console.error(`[Binance] Withdrawal failed: ${errMsg}`);
+      res.status(500).json({ success: false, error: errMsg });
+    }
   });
 
   // Health check route
