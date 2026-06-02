@@ -137,7 +137,7 @@ export default function Home() {
       type: 'sponsored',
       company: 'CloudScale',
       title: 'Scale your business with ease',
-      description: 'Enterprise-grade cloud infrastructure for startups. Get 62.5 Gold mg in credits when you sign up today.',
+      description: 'Enterprise-grade cloud infrastructure for startups. Get 0.0625 Gold g in credits when you sign up today.',
       imageUrl: 'https://picsum.photos/seed/cloud/800/400',
       cta: 'Get Credits',
       link: 'https://google.com'
@@ -147,7 +147,7 @@ export default function Home() {
       type: 'sponsored',
       company: 'Pulse Rewards',
       title: 'Earn more with Pulse Feeds',
-      description: 'Did you know you can earn up to 0.625 Gold mg/month by just engaging with the community? Check your rewards dashboard.',
+      description: 'Did you know you can earn up to 0.000625 Gold g/month by just engaging with the community? Check your rewards dashboard.',
       imageUrl: 'https://picsum.photos/seed/rewards/800/400',
       cta: 'Check Rewards',
       link: '/rewards'

@@ -151,16 +151,18 @@ export default function Rewards() {
   });
 
   const isLive = true; // Default to live mode
-  const points = userData?.points || 0; // Gold mg
+  const points = userData?.points || 0; // Gold g
   const goldBalance = points;
-  const balanceKES = points / 10; // 10 mg Gold = 1 KES
-  const balanceUSD = points / 1300; // Legacy assumed rate for display consistency if needed, but we'll use convert
+  const balanceKES = points * 100; // 1g Gold = 100 KES (Since 10mg was 1 KES)
+  const balanceUSD = points / 1.3; // 1.3g Gold = 1 USD
   const membershipLevel = userData?.membershipLevel || 'bronze';
 
   const canWithdrawNow = useMemo(() => {
     const now = new Date();
-    return now.getDate() === 1;
-  }, []);
+    const isFirstOfMonth = now.getDate() === 1;
+    const hasEnoughGoldForImmediate = (userData?.points || 0) >= 130; // 100 USD = 130 Gold g
+    return isFirstOfMonth || hasEnoughGoldForImmediate;
+  }, [userData?.points]);
 
   const nextRedemptionDate = useMemo(() => {
     const now = new Date();
@@ -228,11 +230,18 @@ export default function Rewards() {
       }
 
       const numAmount = parseFloat(amount);
+      
+      // Balance Check: 100 USD equivalent in gold (130 g)
+      const MIN_BALANCE_FOR_WITHDRAWAL = 130;
+      if (points < MIN_BALANCE_FOR_WITHDRAWAL) {
+        throw new Error(`A minimum balance of 100 USD equivalent in gold (130 g) is required in the account to enable withdrawals. Your current balance is ${points.toLocaleString()} g.`);
+      }
+
       const minAmount = isDeveloper ? 1 : 100;
       if (numAmount < minAmount) throw new Error(`Minimum withdrawal is KES ${minAmount}`);
       
       const currentRate = rates['KES'] || 130;
-      const kesBalance = points / 10;
+      const kesBalance = points * 100;
 
       const last24h = Date.now() - (24 * 60 * 60 * 1000);
       const recentWithdrawalsKES = transactions
@@ -245,7 +254,7 @@ export default function Rewards() {
       // Velocity Limit Check
       const requestedKES = numAmount;
       let limitKES = 6500; // ~50 USD
-      if (isDeveloper) limitKES = 1300000000; // Unrestricted for system fixes
+      if (isDeveloper) limitKES = 1300000; // Unrestricted for system fixes (Adjusted scaling)
       else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitKES = 65000; // ~500 USD
           
       if (recentWithdrawalsKES + requestedKES > limitKES && !totp && !usePasskey) {
@@ -308,7 +317,7 @@ export default function Rewards() {
             // Log transaction to Firestore
             if (currentUser && db) {
               const txRef = collection(db, 'users', currentUser.uid, 'transactions');
-              const pointsToDeduct = Math.floor(numAmount * 10); // 10 mg Gold = 1 KES
+              const pointsToDeduct = numAmount / 100; // 1g Gold = 100 KES
               const usdAmount = numAmount / 130; // 130 KES = 1 USD
 
               const txData = {
@@ -377,6 +386,13 @@ export default function Rewards() {
       if (!binanceAddress) throw new Error("Binance Wallet Address is required");
       
       const numAmount = parseFloat(payoutAmount);
+
+      // Balance Check: 100 USD equivalent in gold (130 g)
+      const MIN_BALANCE_FOR_WITHDRAWAL = 130;
+      if (points < MIN_BALANCE_FOR_WITHDRAWAL) {
+        throw new Error(`A minimum balance of 100 USD equivalent in gold (130 g) is required in the account to enable withdrawals. Your current balance is ${points.toLocaleString()} g.`);
+      }
+
       if (numAmount < 10 && !isDeveloper) throw new Error("Minimum Binance withdrawal is $10");
 
       // Calculation: If withdrawing PAXG, we must convert USD to PAXG Units (1 PAXG = 1 Ounce)
@@ -405,7 +421,7 @@ export default function Rewards() {
 
       if (currentUser && db) {
         const txRef = collection(db, 'users', currentUser.uid, 'transactions');
-        const pointsToDeduct = Math.floor(numAmount * 1000); // 1000 mg Gold = $1 USD approx
+        const pointsToDeduct = numAmount * 1.3; // 1.3g Gold = $1 USD approx
 
         const txData = {
           amount: numAmount,
@@ -469,6 +485,13 @@ export default function Rewards() {
       }
 
       const numAmount = parseFloat(payoutAmount);
+
+      // Balance Check: 100 USD equivalent in gold (130 g)
+      const MIN_BALANCE_FOR_WITHDRAWAL = 130;
+      if (points < MIN_BALANCE_FOR_WITHDRAWAL) {
+        throw new Error(`A minimum balance of 100 USD equivalent in gold (130 g) is required in the account to enable withdrawals. Your current balance is ${points.toLocaleString()} g.`);
+      }
+
       const minAmount = isDeveloper ? 1 : 1300; 
       if (numAmount < minAmount) throw new Error(`Minimum withdrawal is KES ${minAmount}`); 
       
@@ -482,7 +505,7 @@ export default function Rewards() {
 
       // Velocity Limit Check
       let limitKES = 6500; 
-      if (isDeveloper) limitKES = 1300000000;
+      if (isDeveloper) limitKES = 1300000;
       else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitKES = 65000; 
           
       if (recentWithdrawalsKES + numAmount > limitKES && !totp && !usePasskey) {
@@ -534,7 +557,7 @@ export default function Rewards() {
         const txRef = collection(db, 'users', currentUser.uid, 'transactions');
         
         const reference = result.transactionId || `REV-INT-${Date.now()}`;
-        const pointsToDeduct = Math.floor(numAmount * 10); // 10 mg Gold = 1 KES
+        const pointsToDeduct = numAmount / 100; // 1g Gold = 100 KES
         
         const txData = {
           amount: numAmount,
@@ -580,7 +603,7 @@ export default function Rewards() {
           source: 'withdrawal',
           reason: `International Payout (${payoutMethod})`,
           timestamp: serverTimestamp(),
-          unit: 'Gold mg'
+          unit: 'Gold g'
         }).catch(err => console.error("Error logging points ledger:", err));
       }
       
@@ -615,11 +638,11 @@ export default function Rewards() {
   };
 
   const handleWithdrawMax = () => {
-    setAmount(Math.floor(points / 10).toString());
+    setAmount((points * 100).toString());
   };
 
   const handleWithdrawAllInternational = () => {
-    setPayoutAmount((points / 10).toFixed(2));
+    setPayoutAmount((points * 100).toFixed(2));
   };
 
   const handleSyncWallet = async () => {
@@ -639,7 +662,7 @@ export default function Rewards() {
         if (data.type === 'deduction' || data.type === 'redemption') totalPoints += (data.amount || 0); // Ledger amounts are negative for deductions
       });
 
-      const calculatedBalanceKes = totalPoints / 10; // KES 1 per 10 mg Gold
+      const calculatedBalanceKes = totalPoints * 100; // KES 100 per 1 g Gold
 
       // 2. Update user document to match ledger
       const userRef = doc(db, 'users', currentUser.uid);
@@ -649,7 +672,7 @@ export default function Rewards() {
         lastSyncAt: serverTimestamp()
       });
 
-      setSuccess(`Wallet synchronized! Found ${totalPoints} total points from ledger.`);
+      setSuccess(`Wallet synchronized! Found ${totalPoints.toFixed(4)} total g from ledger.`);
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       console.error("Sync error:", err);
@@ -665,13 +688,13 @@ export default function Rewards() {
     try {
       const userRef = doc(db, 'users', currentUser.uid);
       await updateDoc(userRef, {
-        points: 6337,
+        points: 6.337,
         balanceKes: 633.7,
         isPointsRecovered: true,
         isRestoredTo6337: true,
         recoveredAt: serverTimestamp()
       });
-      setSuccess("Full balance of 6,337 Gold mg successfully restored!");
+      setSuccess("Full balance of 6.337 Gold g successfully restored!");
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
       setError("Restoration failed. Please try again.");
@@ -784,7 +807,8 @@ export default function Rewards() {
             <span className="text-[10px] font-black text-indigo-100 bg-white/10 px-2 py-0.5 rounded uppercase tracking-widest border border-white/20">Monthly Schedule</span>
           </div>
           <p className="text-xs font-medium text-white/80 max-w-2xl leading-relaxed mb-4">
-            To maintain structural financial integrity, user withdrawals are batched and disbursed on the <span className="font-black text-white underline decoration-white/30 underline-offset-4">1st of every month</span>.
+            To maintain structural financial integrity, user withdrawals are batched and disbursed on the <span className="font-black text-white underline decoration-white/30 underline-offset-4">1st of every month</span>. 
+            <span className="block mt-2 font-bold text-indigo-100 italic">Exception: Accounts with an equivalent of 100 USD or more in gold (130 g) can initiate immediate withdrawals at any time.</span>
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-sm mx-auto md:mx-0">
             <div className="flex items-center gap-3 px-3 py-2 bg-black/15 rounded-xl border border-white/5">
@@ -1420,7 +1444,7 @@ export default function Rewards() {
                       className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center transition-all shadow-lg shadow-orange-500/20 active:scale-95 animate-pulse"
                     >
                       <RotateCcw className="w-3 h-3 mr-2" />
-                      {isRecovering ? 'Restoring...' : 'Restore 6,337 Gold mg'}
+                      {isRecovering ? 'Restoring...' : 'Restore 6.337 Gold g'}
                     </button>
                   )}
                 </div>
@@ -1483,7 +1507,7 @@ export default function Rewards() {
                   <div className="flex justify-between items-end text-white">
                     <div>
                       <p className="text-[10px] opacity-70 uppercase font-bold">Earned Today</p>
-                      <p className="text-xl font-black">{totalEarnedToday} <span className="text-xs font-normal opacity-70">Gold mg</span></p>
+                      <p className="text-xl font-black">{totalEarnedToday} <span className="text-xs font-normal opacity-70">Gold g</span></p>
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] opacity-70 uppercase font-bold">Current Reserve</p>
@@ -2213,7 +2237,7 @@ export default function Rewards() {
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
-                      <span>Minimum withdrawal: KES 1,300 (~13,000 Gold mg)</span>
+                      <span>Minimum withdrawal: KES 1,300 (~13 Gold g)</span>
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />

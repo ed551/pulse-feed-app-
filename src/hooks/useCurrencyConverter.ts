@@ -38,16 +38,15 @@ export const useCurrencyConverter = () => {
             const price = parseFloat(paxgTicker.price);
             setGoldPriceUSD(price);
             
-            // 1 PAXG = 1 Troy Ounce = 31.1035 grams = 31,103.5 mg
-            // We want to know how many mg are in 1 USD
-            // mgPerUSD = 31103.5 / price
-            const mgPerUSD = 31103.5 / price;
+            // 1 PAXG = 1 Troy Ounce = 31.1035 grams
+            // We want to know how many grams are in 1 USD
+            const gPerUSD = 31.1035 / price;
             
             setRates(prev => ({ 
               ...prev, 
               USD: 1,
               KES: 130,
-              GOLD: mgPerUSD 
+              GOLD: gPerUSD 
             }));
           }
         }
@@ -70,20 +69,17 @@ export const useCurrencyConverter = () => {
   };
 
   const convert = (amount: number, fromCurrency: string = 'USD'): string => {
-    if (isNaN(amount)) return '0.00 Gold mg';
+    if (isNaN(amount)) return '0.00 Gold g';
 
     // Convert input to USD base first
     const rateFrom = rates[fromCurrency] || 1;
     const amountInUSD = fromCurrency === 'USD' ? amount : amount / rateFrom;
 
     if (currency === 'GOLD') {
-      const rate = rates['GOLD'] || (31103.5 / 2350);
-      const mg = amountInUSD * rate;
+      const rate = rates['GOLD'] || (31.1035 / 2350);
+      const grams = amountInUSD * rate;
       
-      if (mg >= 1000) {
-        return `${(mg / 1000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} Gold g`;
-      }
-      return `${Math.floor(mg).toLocaleString()} Gold mg`;
+      return `${grams.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} Gold g`;
     }
 
     if (currency === 'KES') {

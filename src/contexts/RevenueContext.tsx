@@ -70,7 +70,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const IDLE_THRESHOLD = idleThreshold;
   const EARNING_INTERVAL = 30000; // Check every 30s locally
   const SYNC_INTERVAL = 300000; // Sync to DB every 5 mins
-  const ACTIVE_POINTS_PER_INTERVAL = 16; // 16 Gold mg per 30s
+  const ACTIVE_POINTS_PER_INTERVAL = 0.016; // 0.016 Gold g per 30s
   
   const monitorBehaviorWithAI = async () => {
     if (!currentUser || isAnalyzingBehavior || Date.now() - lastBehaviorCheckRef.current < 60000) return;
@@ -94,10 +94,10 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const prompt = `Analyze user behavioral pattern for Pulse Feeds platform (Gold-Based Economy). 
       User ID: ${currentUser.uid}
       Session Persistence: ${activeSeconds}s
-      Gold Accrual: ${totalEarnedToday} mg
+      Gold Accrual: ${totalEarnedToday} g
       Idle Status: ${isIdle}
       
-      If the user is idle for more than 10 minutes OR has accrued more than 4000 mg gold in one session without movement, recommend [LOCKOUT].
+      If the user is idle for more than 10 minutes OR has accrued more than 4 g gold in one session without movement, recommend [LOCKOUT].
       Otherwise return [STABLE].`;
 
       const result = await generateContentWithRetry({
@@ -124,12 +124,12 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   useEffect(() => {
     if (currentUser && db && userData && !pointsLocked) {
-      const expectedPoints = Math.floor((userData.balance || 0) * 1300);
+      const expectedPoints = (userData.balance || 0) * 1.3;
       const currentPoints = userData.points || 0;
       const diff = Math.abs(expectedPoints - currentPoints);
       
-      // If discrepancy > 10 mg (minimal) and not recently synced, heal it
-      if (diff > 10) {
+      // If discrepancy > 0.01 g (minimal) and not recently synced, heal it
+      if (diff > 0.01) {
         console.log(`[Self-Healing] Syncing points to balance: ${currentPoints} -> ${expectedPoints}`);
         const userRef = doc(db, 'users', currentUser.uid);
         updateDoc(userRef, {
@@ -259,8 +259,8 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
     const userRef = doc(db, 'users', currentUser.uid);
     const statsRef = doc(db, 'platform', 'stats');
 
-    // 1300 Points per $1.00 (10 mg Gold = 1 KES, 130 KES = 1 USD)
-    const pointsToAdd = userUsdAmount > 0 ? Math.max(1, Math.floor(userUsdAmount * 1300)) : 0;
+    // 1.3 Grams per $1.00 (0.01 g Gold = 1 KES, 130 KES = 1 USD)
+    const pointsToAdd = userUsdAmount > 0 ? Math.max(0.001, userUsdAmount * 1.3) : 0;
     
     // Update User Data with specific revenue source tracking
     const updateData: any = {
@@ -417,7 +417,7 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
 
       const userRef = doc(db, 'users', currentUser.uid);
       // 1300 Points per $1.00
-      const pointsToDeduct = Math.floor(usdAmount * 1300);
+      const pointsToDeduct = usdAmount * 1.3;
 
       await updateDoc(userRef, {
         balance: increment(-usdAmount),
@@ -470,10 +470,10 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
       earningIntervalRef.current = setInterval(() => {
         if (pointsLocked) return;
         
-        // Accumulate locally: 16 mg Gold per interval
-        const userPts = Math.floor(ACTIVE_POINTS_PER_INTERVAL);
-        const userUsd = userPts / 1300; // 1300 points = $1.00 (Standard Gold Economy)
-        const platUsd = (0.5 * ACTIVE_POINTS_PER_INTERVAL) / 1300; // Platform takes 50% extra from air
+        // Accumulate locally: 0.016 g Gold per interval
+        const userPts = ACTIVE_POINTS_PER_INTERVAL;
+        const userUsd = userPts / 1.3; // 1.3 grams = $1.00 (Standard Gold Economy)
+        const platUsd = (0.5 * ACTIVE_POINTS_PER_INTERVAL) / 1.3; // Platform takes 50% extra from air
 
         pendingUserPointsRef.current += userPts;
         pendingUserValueRef.current += userUsd;

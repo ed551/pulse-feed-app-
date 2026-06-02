@@ -318,7 +318,7 @@ export default function BinanceHub() {
                   <h2 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tighter">Physical Gold Reserve Coverage</h2>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 font-medium leading-relaxed">
-                  The platform uses PAX Gold (PAXG) to back community "Gold mg" points. 1 PAXG is verifiable 1:1 with a LBMA-approved gold bar in London vaults.
+                  The platform uses PAX Gold (PAXG) to back community "Gold g" points. 1 PAXG is verifiable 1:1 with a LBMA-approved gold bar in London vaults.
                 </p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 bg-white/50 dark:bg-slate-900/50 rounded-2xl border border-white dark:border-slate-800">

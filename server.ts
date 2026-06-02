@@ -1853,15 +1853,31 @@ async function startServer() {
       const reference = payout.id;
 
       // ENFORCE MONTHLY BATCHING: Only process on the 1st of the month OR if it's a Platform Treasury move
+      // OR if the user has an equivalent of 100 USD of gold (130,000 mg)
       const today = new Date();
       const isFirstOfMonth = today.getDate() === 1;
+      
+      // Fetch user data to check points balance
+      let userPoints = 0;
+      let userEmail = '';
+      if (payout.userId) {
+        const userSnap = await resilientDb.collection('users').doc(payout.userId).get();
+        if (userSnap.exists) {
+          const uData = userSnap.data();
+          userPoints = uData.points || 0;
+          userEmail = uData.email || '';
+        }
+      }
+
+      const hasEnoughGoldForImmediate = userPoints >= 130;
       const isInternalPlatformMove = payout.source === 'platform_treasury_movement' || 
                                      payout.userId === 'platform-admin' || 
                                      payout.userId === 'portal-admin' ||
-                                     payout.userId === 'EDWINMUOHA';
+                                     payout.userId === 'EDWINMUOHA' ||
+                                     userEmail === 'edwinmuoha@gmail.com';
       
-      if (!isFirstOfMonth && !isInternalPlatformMove) {
-        console.log(`[Queue] Skipping ${reference} - Monthly batching active. (Next cycle: 1st of next month)`);
+      if (!isFirstOfMonth && !isInternalPlatformMove && !hasEnoughGoldForImmediate) {
+        console.log(`[Queue] Skipping ${reference} - Monthly batching active. (Balance: ${userPoints} mg, Next cycle: 1st of next month)`);
         isPayoutProcessing = false;
         return;
       }
@@ -2186,21 +2202,21 @@ async function startServer() {
         const userDoc = await resilientDb.collection('users').doc(userId).get();
         if (!userDoc.exists) return res.status(404).json({ success: false, error: "USER_NOT_FOUND" });
         
-        const points = userDoc.data()?.points || 0; // Gold mg
+        const points = userDoc.data()?.points || 0; // Gold g
         const amountKes = parseFloat(amount);
-        const requiredPoints = amountKes * 10; // Assuming 10 mg Gold = 1 KES (approx for logic)
+        const requiredPoints = amountKes / 100; // 1g Gold = 100 KES
         
         if (points < requiredPoints) {
-          return res.status(400).json({ success: false, error: "INSUFFICIENT_BALANCE", message: `Insufficient Gold mg for this withdrawal. Need ${requiredPoints} mg.` });
+          return res.status(400).json({ success: false, error: "INSUFFICIENT_BALANCE", message: `Insufficient Gold grams for this withdrawal. Need ${requiredPoints.toFixed(4)} g. Your balance: ${points.toFixed(4)} g` });
         }
         
-        // Deduct points (Gold mg)
+        // Deduct points (Gold g)
         await resilientDb.collection('users').doc(userId).update({
           points: FieldValue.increment(-requiredPoints),
           totalWithdrawalsKes: FieldValue.increment(amountKes),
           serverSecret: SERVER_SECRET
         });
-        console.log(`[Deduction] Deducted ${requiredPoints} Gold mg from ${userId} for KES ${amountKes} M-Pesa payout.`);
+        console.log(`[Deduction] Deducted ${requiredPoints} Gold g from ${userId} for KES ${amountKes} M-Pesa payout.`);
       } catch (deductionErr: any) {
         return res.status(500).json({ success: false, error: "DEDUCTION_FAILED", message: deductionErr.message });
       }
@@ -2419,10 +2435,10 @@ async function startServer() {
         const userDoc = await resilientDb.collection('users').doc(userId).get();
         const points = userDoc.data()?.points || 0;
         const amountKes = parseFloat(amount);
-        const requiredPoints = amountKes * 10;
+        const requiredPoints = amountKes / 100;
         
         if (points < requiredPoints) {
-          return res.status(400).json({ success: false, error: "INSUFFICIENT_BALANCE", message: `Insufficient Gold mg for this withdrawal. Need ${requiredPoints} mg.` });
+          return res.status(400).json({ success: false, error: "INSUFFICIENT_BALANCE", message: `Insufficient Gold grams for this withdrawal. Need ${requiredPoints.toFixed(4)} g.` });
         }
         
         await resilientDb.collection('users').doc(userId).update({
@@ -3138,10 +3154,10 @@ async function performRobustEducationSync() {
         
         const points = userDoc.data()?.points || 0;
         const amountKes = parseFloat(amount);
-        const requiredPoints = amountKes * 10;
+        const requiredPoints = amountKes / 100;
         
         if (points < requiredPoints) {
-          return res.status(400).json({ success: false, error: "INSUFFICIENT_BALANCE", message: `Insufficient Gold mg for this withdrawal. Need ${requiredPoints} mg.` });
+          return res.status(400).json({ success: false, error: "INSUFFICIENT_BALANCE", message: `Insufficient Gold grams for this withdrawal. Need ${requiredPoints.toFixed(4)} g.` });
         }
         
         // Deduct balance
@@ -4154,7 +4170,7 @@ async function performRobustEducationSync() {
           platformAmount = totalAmount;
       }
 
-      const pointsToAdd = userAmount > 0 ? Math.max(1, Math.floor(userAmount * 12.5)) : 0;
+      const pointsToAdd = userAmount > 0 ? Math.max(0.001, userAmount * 1.3) : 0;
       const timestamp = FieldValue.serverTimestamp();
 
       // Update User Data (if user earns)

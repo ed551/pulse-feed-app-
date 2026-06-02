@@ -1631,7 +1631,7 @@ export default function Layout() {
                         <span className="text-xs font-bold text-yellow-700 dark:text-yellow-300">Liquidity Reserve</span>
                       </div>
                       <p className="text-lg font-black text-yellow-900 dark:text-yellow-100">
-                        {userData?.points?.toLocaleString() || '0'} <span className="text-xs font-bold opacity-60 uppercase">Gold mg</span>
+                        {userData?.points?.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 }) || '0'} <span className="text-xs font-bold opacity-60 uppercase">Gold g</span>
                       </p>
                       <p className="text-[8px] font-black text-yellow-700/60 uppercase tracking-tighter">
                         +{userData?.points.toLocaleString() || 0} Points Accumulation
