@@ -259,8 +259,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const initialData = {
                   uid: user.uid,
                   email: user.email,
-                  displayName: user.displayName,
-                  photoURL: user.photoURL,
+                  displayName: user.displayName || null,
+                  photoURL: user.photoURL || null,
                   role: user.email === 'edwinmuoha@gmail.com' ? 'admin' : 'user',
                   points: 500, // 500 Community Points
                   balance: 40, // Initial $40.00 USD
@@ -282,8 +282,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   const publicRef = doc(db, 'users_public', user.uid);
                   await setDoc(publicRef, {
                     uid: user.uid,
-                    displayName: user.displayName,
-                    photoURL: user.photoURL,
+                    displayName: user.displayName || null,
+                    photoURL: user.photoURL || null,
                     role: user.email === 'edwinmuoha@gmail.com' ? 'admin' : 'user',
                     status: "Hey there! I'm using Pulse Feeds.",
                     isOnline: true,
@@ -355,8 +355,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const initialData = {
           uid: result.user.uid,
           email: result.user.email,
-          displayName: name,
-          photoURL: result.user.photoURL,
+          displayName: name || null,
+          photoURL: result.user.photoURL || null,
           role: result.user.email === 'edwinmuoha@gmail.com' ? 'admin' : 'user',
           points: 500, // 500 Community Points
           balance: 40, // Initial $40.00 USD
@@ -377,8 +377,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const publicRef = doc(db, 'users_public', result.user.uid);
         await setDoc(publicRef, {
           uid: result.user.uid,
-          displayName: name,
-          photoURL: result.user.photoURL,
+          displayName: name || null,
+          photoURL: result.user.photoURL || null,
           role: result.user.email === 'edwinmuoha@gmail.com' ? 'admin' : 'user',
           status: "Hey there! I'm using Pulse Feeds.",
           isOnline: true,

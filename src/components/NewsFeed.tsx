@@ -112,24 +112,34 @@ export default function NewsFeed() {
     }
 
     try {
-      // Try direct parse first
-      parsed = JSON.parse(cleanText);
+      // Try direct parse first with basic cleaning
+      const possibleJson = cleanText.replace(/```json/g, '').replace(/```/g, '').trim();
+      parsed = JSON.parse(possibleJson);
     } catch (e) {
       console.warn("[NewsFeed] Direct JSON parse failed, attempting extraction...", e);
       // Fallback to extraction if it contains markdown or surrounding text
-      const jsonMatch = cleanText.match(/\[\s*{[\s\S]*}\s*\]/);
-      if (jsonMatch) {
+      // More robust regex for JSON array
+      const arrayMatch = cleanText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      if (arrayMatch) {
         try {
-          parsed = JSON.parse(jsonMatch[0]);
+          parsed = JSON.parse(arrayMatch[0]);
         } catch (innerErr) {
-          console.error("[NewsFeed] Extraction parse failed:", innerErr);
-          // Even more desperate extraction: find all objects
-          const objectsMatch = cleanText.match(/{[\s\S]*?}/g);
-          if (objectsMatch) {
-            parsed = objectsMatch.map(objStr => {
-              try { return JSON.parse(objStr); } catch (e) { return null; }
-            }).filter(o => o !== null);
-          }
+          console.error("[NewsFeed] Array extraction parse failed:", innerErr);
+        }
+      }
+      
+      if (!parsed || !Array.isArray(parsed) || parsed.length === 0) {
+        // Desperate extraction: even more aggressive regex to find all objects
+        const objectsMatch = cleanText.match(/\{"id":[\s\S]*?\}/g);
+        if (objectsMatch) {
+          parsed = objectsMatch.map(objStr => {
+            try { 
+              // Fix common AI JSON errors like missing quotes or trailing commas
+              let fixed = objStr.trim();
+              if (fixed.endsWith(',')) fixed = fixed.slice(0, -1);
+              return JSON.parse(fixed); 
+            } catch (e) { return null; }
+          }).filter(o => o !== null);
         }
       }
     }

@@ -21,7 +21,7 @@ service cloud.firestore {
     }
     
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9._\\-:]+$');
     }
 
     function incoming() {
@@ -34,7 +34,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && 
-             (request.auth.token.email == "edwinmuoha@gmail.com" || 
+             (request.auth.token.get('email', '') == "edwinmuoha@gmail.com" || 
               (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
                get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') in ['admin', 'platform-admin', 'portal-admin']));
     }
@@ -55,11 +55,11 @@ service cloud.firestore {
       // Basic type validation for common fields - only check types if fields exist
       return (!('uid' in data) || (data.uid is string)) &&
              (!('email' in data) || (data.email is string || data.email == null)) &&
-             (!('role' in data) || (data.role in ['admin', 'user'])) &&
+             (!('role' in data) || (data.get('role', 'user') in ['admin', 'user', 'platform-admin', 'portal-admin'])) &&
              (!('points' in data) || (data.points is number)) &&
              (!('balance' in data) || (data.balance is number)) &&
              (!('displayName' in data) || (data.displayName is string || data.displayName == null)) &&
-             (!('serverSecret' in data) || (data.serverSecret == "pulse-feeds-server-secret-2026"));
+             (!('serverSecret' in data) || (data.get('serverSecret', '') == "pulse-feeds-server-secret-2026"));
     }
 
     function isValidUserCreate(data) {
@@ -67,7 +67,7 @@ service cloud.firestore {
       return (data.get('serverSecret', '') == "pulse-feeds-server-secret-2026") || 
              (data.keys().hasAll(['uid', 'role', 'createdAt']) &&
               isValidUserSchema(data) &&
-              (data.role != 'admin' || request.auth.token.email == "edwinmuoha@gmail.com"));
+              (data.get('role', 'user') != 'admin' || request.auth.token.get('email', '') == "edwinmuoha@gmail.com"));
     }
 
     function isValidPost(data) {
@@ -216,8 +216,11 @@ service cloud.firestore {
 
     match /users_public/{userId} {
       allow read: if isSignedIn();
-      allow create: if (isOwner(userId) || incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") && (!('role' in incoming()) || incoming().role == 'user' || request.auth.token.email == "edwinmuoha@gmail.com" || incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026");
-      allow update: if (isOwner(userId) || incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") && immutable('uid') && (immutable('role') || isAdmin() || incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026");
+      allow create: if (isOwner(userId) || incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") && 
+                    (!('role' in incoming()) || incoming().get('role', 'user') == 'user' || request.auth.token.get('email', '') == "edwinmuoha@gmail.com" || incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026");
+      allow update: if (isOwner(userId) || incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") && 
+                    immutable('uid') && 
+                    (immutable('role') || isAdmin() || incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026");
       allow delete: if isAdmin();
     }
 

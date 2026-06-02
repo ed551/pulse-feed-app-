@@ -115,6 +115,8 @@ export default function PlatformDashboard() {
   const [activeTab, setActiveTab] = useState<'financial' | 'withdrawals' | 'moderation' | 'infrastructure' | 'mitigation' | 'membership' | 'audit' | 'intelligence'>('financial');
   const [aiReport, setAiReport] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiBreakerStatus, setAiBreakerStatus] = useState<{ isTripped: boolean, error?: string, cooldownRemaining?: number } | null>(null);
+  const [isResettingAI, setIsResettingAI] = useState(false);
   
   // Automated Operational Growth Engine
   useEffect(() => {
@@ -309,9 +311,9 @@ export default function PlatformDashboard() {
   };
 
   const runGeminiAnalysis = async () => {
-    const breaker = getAIBreakerStatus();
+    const breaker = await fetch('/api/ai/status').then(r => r.json()).catch(() => getAIBreakerStatus());
     if (breaker.isTripped) {
-      setAiReport("The Intelligence Engine is currently in power-save mode. Please use the Audit Engine for manual health verification.");
+      setAiReport(`Intelligence Engine Locked: ${breaker.error || 'Permission Denied'}. Please reset the AI Circuit Breaker below.`);
       return;
     }
     setIsAnalyzing(true);
@@ -345,6 +347,37 @@ export default function PlatformDashboard() {
       setIsAnalyzing(false);
     }
   };
+
+  const handleResetAI = async () => {
+    setIsResettingAI(true);
+    try {
+      const resp = await fetch('/api/ai/reset', { method: 'POST' });
+      if (resp.ok) {
+        setSuccess("AI Engine successfully reactivated.");
+        fetchAIBreakerStatus();
+      }
+    } catch (e) {
+      setError("Failed to reset AI system.");
+    } finally {
+      setIsResettingAI(false);
+    }
+  };
+
+  const fetchAIBreakerStatus = async () => {
+    try {
+      const resp = await fetch('/api/ai/status');
+      const data = await resp.json();
+      setAiBreakerStatus(data);
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    if (activeTab === 'intelligence') {
+      fetchAIBreakerStatus();
+      const interval = setInterval(fetchAIBreakerStatus, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab]);
 
   const reports = [
     { id: 1, user: 'Spammer123', reason: 'Inappropriate content', status: 'pending' },
@@ -2300,6 +2333,50 @@ export default function PlatformDashboard() {
               <div className="space-y-6">
                 <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-3xl border border-gray-100 dark:border-gray-800">
                   <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-4">Neural Pulse Metrics</h3>
+                  {/* AI Circuit Breaker Status */}
+                  {aiBreakerStatus?.isTripped && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mb-6 p-5 bg-rose-500/10 border-2 border-rose-500/30 rounded-2xl relative overflow-hidden group"
+                    >
+                      <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:rotate-12 transition-transform">
+                        <ShieldAlert className="w-12 h-12 text-rose-500" />
+                      </div>
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-8 h-8 bg-rose-500 rounded-lg flex items-center justify-center text-white">
+                          <ShieldAlert className="w-4 h-4" />
+                        </div>
+                        <h4 className="text-sm font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest">Circuit Breaker Tripped</h4>
+                      </div>
+                      <p className="text-[10px] text-rose-600/70 dark:text-rose-400/70 font-bold mb-4 line-clamp-2 italic">
+                        "{aiBreakerStatus.error || 'Lightning dunning decision: DENY'}"
+                      </p>
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex-1 space-y-1">
+                          <div className="h-1 bg-rose-500/10 rounded-full overflow-hidden">
+                            <motion.div 
+                              initial={{ width: "100%" }}
+                              animate={{ width: "0%" }}
+                              transition={{ duration: 1800, ease: "linear" }}
+                              className="h-full bg-rose-500"
+                            />
+                          </div>
+                          <p className="text-[8px] font-black text-rose-500/50 uppercase tracking-widest">
+                            Cooldown: {Math.round((aiBreakerStatus.cooldownRemaining || 0) / 60000)}m Remaining
+                          </p>
+                        </div>
+                        <button
+                          onClick={handleResetAI}
+                          disabled={isResettingAI}
+                          className="px-4 py-2 bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-rose-700 active:scale-95 transition-all shadow-lg shadow-rose-600/20 disabled:opacity-50"
+                        >
+                          {isResettingAI ? "Resetting..." : "Manual Reset"}
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+
                   <div className="space-y-4">
                     <div>
                       <div className="flex justify-between text-[10px] font-black text-gray-500 mb-1">
