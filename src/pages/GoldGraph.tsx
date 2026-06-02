@@ -65,7 +65,7 @@ export default function GoldGraph() {
   const [realPrice, setRealPrice] = useState<number | null>(null);
   const [btcPrice, setBtcPrice] = useState<number | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'USD' | 'BTC'>('BTC');
+  const [viewMode, setViewMode] = useState<'USD' | 'BTC'>('USD');
 
   useEffect(() => {
     const fetchRealData = async () => {
@@ -123,6 +123,12 @@ export default function GoldGraph() {
   }, []);
 
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [predictions, setPredictions] = useState<{
+    p1d: { direction: 'UP' | 'DOWN' | 'SIDEWAYS'; confidence: number; target: number; reasoning: string };
+    p7d: { direction: 'UP' | 'DOWN' | 'SIDEWAYS'; confidence: number; target: number; reasoning: string };
+    p15d: { direction: 'UP' | 'DOWN' | 'SIDEWAYS'; confidence: number; target: number; reasoning: string };
+    p30d: { direction: 'UP' | 'DOWN' | 'SIDEWAYS'; confidence: number; target: number; reasoning: string };
+  } | null>(null);
   const [prediction, setPrediction] = useState<{
     direction: 'UP' | 'DOWN' | 'SIDEWAYS';
     confidence: number;
@@ -174,12 +180,19 @@ export default function GoldGraph() {
   const runAiPrediction = async () => {
     const breaker = getAIBreakerStatus();
     if (breaker.isTripped) {
-      setAiAnalysis("Market synchronization is currently in power-save mode. Using technical baseline.");
-      setPrediction({
-        direction: 'SIDEWAYS',
+      setAiAnalysis("Market synchronization in power-save mode. Using technical baseline.");
+      const mockResult = {
+        direction: 'SIDEWAYS' as const,
         confidence: 45,
         target: currentPrice * 1.002,
         reasoning: "Baseline technical analysis active while AI engine is offline."
+      };
+      setPrediction(mockResult);
+      setPredictions({
+        p1d: mockResult,
+        p7d: mockResult,
+        p15d: mockResult,
+        p30d: mockResult
       });
       return;
     }
@@ -188,41 +201,44 @@ export default function GoldGraph() {
     try {
       const prompt = `
         Analyze the Gold Market for Pulse Feeds Gold Ecosystem.
-        Current Price: ${currentPrice} mg.
+        Current Price: ${currentPrice} USD (Spot).
         30-Day Trend: ${percentChange.toFixed(2)}%.
         
-        Provide a 7-day technical prediction in STRICT JSON format:
+        Provide smart technical predictions for 1 day, 7 days, 15 days, and 30 days in STRICT JSON format:
         {
-          "direction": "UP", "DOWN", or "SIDEWAYS",
-          "confidence": (0-100),
-          "target": (predicted price in mg),
-          "reasoning": "brief 1-sentence analytical insight"
+          "p1d": { "direction": "UP", "confidence": 85, "target": 2405, "reasoning": "..." },
+          "p7d": { "direction": "UP", "confidence": 75, "target": 2420, "reasoning": "..." },
+          "p15d": { "direction": "DOWN", "confidence": 60, "target": 2380, "reasoning": "..." },
+          "p30d": { "direction": "UP", "confidence": 70, "target": 2450, "reasoning": "..." }
         }
       `;
       
       const response = await generateContentWithRetry({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.4,
+          temperature: 0.3,
           responseMimeType: "application/json"
         }
       });
 
       if (response.candidates?.[0]?.content?.parts?.[0]?.text) {
         const result = JSON.parse(response.candidates[0].content.parts[0].text);
-        setPrediction(result);
-        setAiAnalysis(result.reasoning);
+        setPredictions(result);
         
-        // Push to global Market Intel in header/menu
+        // Use 7-day as the primary one for the chart
+        const primary = result.p7d;
+        setPrediction(primary);
+        setAiAnalysis(primary.reasoning);
+        
         marketBrain.updatePrediction({
-          direction: result.direction.toLowerCase() as any,
-          confidence: result.confidence,
-          analysis: result.reasoning
+          direction: primary.direction.toLowerCase() as any,
+          confidence: primary.confidence,
+          analysis: primary.reasoning
         });
       }
     } catch (error) {
       console.error("AI Analysis failed:", error);
-      setAiAnalysis("Market signals are currently divergent. Neutral stance recommended.");
+      setAiAnalysis("Market signals divergent. Neutral stance recommended.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -232,41 +248,45 @@ export default function GoldGraph() {
     runAiPrediction();
   }, []);
 
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 pb-24">
-      {/* Header */}
-      <div className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 p-6">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-2xl flex items-center justify-center">
-              <Gem className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
+   return (
+    <div className="min-h-screen bg-slate-950 text-white pb-24 overflow-x-hidden">
+      {/* Immersive Header */}
+      <div className="bg-slate-900/5 backdrop-blur-xl border-b border-white/5 p-8">
+        <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-center gap-6">
+            <div className="w-16 h-16 bg-yellow-500/10 rounded-3xl flex items-center justify-center border border-yellow-500/20 shadow-[0_0_30px_-5px_rgba(234,179,8,0.2)]">
+              <Gem className="w-8 h-8 text-yellow-500" />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-                Gold Market Terminal
-                <span className="text-[10px] bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-2 py-0.5 rounded-full uppercase tracking-widest">Live</span>
+              <h1 className="text-3xl font-black text-white flex items-center gap-3">
+                Gold Intel Matrix
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full uppercase tracking-[0.2em] font-black border border-emerald-500/30">Neural Active</span>
               </h1>
-              <div className="flex items-center gap-2 mt-1">
-                <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Real-time commodity tracking & AI forecasting</p>
+              <div className="flex items-center gap-3 mt-2">
+                <p className="text-slate-400 text-sm font-bold uppercase tracking-widest opacity-60">High-Fidelity Market Core</p>
+                <div className="w-1 h-1 bg-slate-700 rounded-full" />
                 <button 
                   onClick={() => setViewMode(viewMode === 'USD' ? 'BTC' : 'USD')}
-                  className="px-2 py-0.5 bg-amber-500/10 rounded-full text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest border border-amber-500/20 hover:bg-amber-500/20 transition-all cursor-pointer"
+                  className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-[10px] font-black text-white uppercase tracking-widest border border-white/10 transition-all"
                 >
-                  {viewMode === 'USD' ? 'View PAXG/BTC' : 'View PAXG/USD'}
+                  Switch to {viewMode === 'USD' ? 'BTC' : 'USD'}
                 </button>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-8">
             <div className="text-right">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Spot Price ({viewMode})</p>
-              <div className="flex items-center gap-2">
-                <span className="text-3xl font-black text-gray-900 dark:text-white">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">Spot Index ({viewMode})</p>
+              <div className="flex items-baseline gap-3">
+                <span className="text-5xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
                   {viewMode === 'USD' ? formatCurrency(currentPrice) : `${currentPrice.toFixed(8)} BTC`}
                 </span>
-                <span className={`flex items-center text-xs font-bold px-2 py-0.5 rounded-full ${priceChange >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                  {priceChange >= 0 ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
+                <span className={cn(
+                  "flex items-center text-xs font-black px-3 py-1 rounded-lg border",
+                  priceChange >= 0 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                )}>
+                  {priceChange >= 0 ? <TrendingUp className="w-3 h-3 mr-2" /> : <TrendingDown className="w-3 h-3 mr-2" />}
                   {Math.abs(percentChange).toFixed(2)}%
                 </span>
               </div>
@@ -275,256 +295,248 @@ export default function GoldGraph() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto p-6 space-y-6">
-        {/* Main Chart Area */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-3xl border border-gray-200 dark:border-slate-800 p-6 shadow-sm"
-          >
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-2">
-                <LineChart className="w-5 h-5 text-gray-400" />
-                <h3 className="font-bold text-gray-900 dark:text-white uppercase tracking-wider text-xs">Price History</h3>
-              </div>
-              <div className="flex bg-gray-100 dark:bg-slate-800 p-1 rounded-xl">
-                {['7D', '30D', 'ALL'].map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setTimeframe(t as any)}
-                    className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${timeframe === t ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="h-[350px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#eab308" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#eab308" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorForecast" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.1} />
-                  <XAxis 
-                    dataKey="date" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }}
-                  />
-                  <YAxis 
-                    domain={['auto', 'auto']}
-                    axisLine={false} 
-                    tickLine={false}
-                    tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#1e293b', 
-                      border: 'none', 
-                      borderRadius: '12px',
-                      color: '#fff',
-                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
-                    }}
-                    itemStyle={{ color: '#fbbf24', fontWeight: 800 }}
-                    formatter={(val: number) => [viewMode === 'BTC' ? `${val.toFixed(8)} BTC` : formatCurrency(val), 'Price']}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="displayPrice" 
-                    stroke="#eab308" 
-                    strokeWidth={3}
-                    dot={(props: any) => {
-                      if (props.payload.isForecast) {
-                        return <circle cx={props.cx} cy={props.cy} r={3} fill="#8b5cf6" stroke="none" />;
-                      }
-                      return null;
-                    }}
-                    fillOpacity={1} 
-                    fill="url(#colorPrice)" 
-                  />
-                  {prediction && (
-                    <ReferenceLine 
-                      y={viewMode === 'BTC' && btcPrice ? (prediction.target / btcPrice) : prediction.target} 
-                      stroke="#8b5cf6" 
-                      strokeDasharray="3 3" 
-                      label={{ 
-                        value: 'AI Target', 
-                        position: 'right', 
-                        fill: '#8b5cf6', 
-                        fontSize: 10, 
-                        fontWeight: 900 
-                      }} 
-                    />
-                  )}
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </motion.div>
-
-          {/* AI Insights Panel */}
-          <div className="space-y-6">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.1 }}
-              className="bg-slate-900 border-2 border-purple-500/30 text-white rounded-3xl p-6 shadow-[0_0_40px_-10px_rgba(139,92,246,0.3)] relative overflow-hidden"
-            >
-              <div className="absolute top-0 right-0 p-4 opacity-10">
-                <Brain size={120} className="text-purple-400" />
-              </div>
-              
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">
-                    <Zap className="w-4 h-4 text-purple-400" />
-                  </div>
-                  <h3 className="font-black text-xs uppercase tracking-widest text-purple-400">The Brain: Prediction Engine</h3>
-                </div>
-                <ShieldCheck className="w-4 h-4 text-emerald-400 opacity-50" />
-              </div>
-
-              <div className="space-y-6 relative z-10">
-                {/* Movement Indicator Gauge */}
-                <div className="bg-slate-800/50 rounded-2xl p-4 border border-white/5">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Movement Potential</span>
-                    <span className={cn(
-                      "text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest",
-                      prediction?.direction === 'UP' ? 'bg-emerald-500/20 text-emerald-400' :
-                      prediction?.direction === 'DOWN' ? 'bg-rose-500/20 text-rose-400' :
-                      'bg-slate-700 text-slate-400'
-                    )}>
-                      {isAnalyzing ? 'Scanning...' : prediction?.direction || 'Standing By'}
-                    </span>
-                  </div>
-                  
-                  <div className="relative h-2 bg-slate-700 rounded-full overflow-hidden">
-                    <motion.div 
-                      initial={{ width: 0 }}
-                      animate={{ width: isAnalyzing ? '100%' : `${prediction?.confidence || 0}%` }}
-                      className={cn(
-                        "absolute inset-y-0 left-0 transition-all duration-1000",
-                        prediction?.direction === 'UP' ? 'bg-emerald-500' :
-                        prediction?.direction === 'DOWN' ? 'bg-rose-500' :
-                        'bg-purple-500'
-                      )}
-                    />
-                    {isAnalyzing && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
-                    )}
-                  </div>
-                  
-                  <div className="flex justify-between mt-2">
-                    <span className="text-[9px] font-bold text-slate-500 italic">Caution</span>
-                    <span className="text-[9px] font-bold text-slate-400">{prediction?.confidence || 0}% Confidence</span>
-                    <span className="text-[9px] font-bold text-slate-500 italic">High conviction</span>
-                  </div>
-                </div>
-
-                {/* Target & Reasoning */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 bg-slate-800/50 rounded-2xl border border-white/5">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Target className="w-3 h-3 text-purple-400" />
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">AI Price Target</p>
-                    </div>
-                    {isAnalyzing ? (
-                      <div className="h-5 bg-slate-700 rounded animate-pulse w-2/3" />
-                    ) : (
-                      <p className="text-lg font-black text-white">{prediction?.target?.toLocaleString() || '---'}</p>
-                    )}
-                  </div>
-                  <div className="p-4 bg-slate-800/50 rounded-2xl border border-white/5">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Clock className="w-3 h-3 text-slate-400" />
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">Timeline</p>
-                    </div>
-                    <p className="text-lg font-black text-white">7 Days</p>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-slate-800/50 rounded-2xl border border-white/5">
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <ChevronRight className="w-3 h-3 text-purple-400" />
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">The Brain's Logic</p>
-                  </div>
-                  {isAnalyzing ? (
-                    <div className="space-y-2">
-                      <div className="h-3 bg-slate-700 rounded animate-pulse w-full" />
-                      <div className="h-3 bg-slate-700 rounded animate-pulse w-4/5" />
-                    </div>
-                  ) : (
-                    <p className="text-xs font-medium text-slate-300 leading-relaxed italic">
-                      "{aiAnalysis || 'Waiting for market data synchronization...'}"
-                    </p>
-                  )}
+      <div className="max-w-[1600px] mx-auto p-8 lg:p-12 space-y-12">
+        {/* Core Prediction Matrix */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[
+            { label: 'Short Term', time: '1 Day', key: 'p1d', icon: Zap },
+            { label: 'Medium Term', time: '7 Days', key: 'p7d', icon: Target },
+            { label: 'Expansionary', time: '15 Days', key: 'p15d', icon: Activity },
+            { label: 'Macro Trend', time: '30 Days', key: 'p30d', icon: ShieldCheck },
+          ].map((item, idx) => {
+            const p = predictions?.[item.key as keyof typeof predictions];
+            return (
+              <motion.div
+                key={item.key}
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.1 }}
+                className="bg-slate-900/40 backdrop-blur-sm border border-white/5 rounded-[2.5rem] p-8 hover:border-white/10 transition-all group relative overflow-hidden"
+              >
+                <div className="absolute -right-4 -top-4 opacity-[0.03] group-hover:opacity-[0.05] transition-opacity">
+                  <item.icon size={120} />
                 </div>
                 
+                <div className="flex items-center justify-between mb-8">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-1">{item.label}</span>
+                    <span className="text-xl font-black text-white">{item.time}</span>
+                  </div>
+                  <div className={cn(
+                    "w-12 h-12 rounded-2xl flex items-center justify-center border",
+                    p?.direction === 'UP' ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" :
+                    p?.direction === 'DOWN' ? "bg-rose-500/10 border-rose-500/20 text-rose-400" :
+                    "bg-slate-800 border-white/5 text-slate-400"
+                  )}>
+                    {p?.direction === 'UP' ? <ArrowUpRight className="w-6 h-6" /> : 
+                     p?.direction === 'DOWN' ? <ArrowDownRight className="w-6 h-6" /> : 
+                     <Activity className="w-6 h-6" />}
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div>
+                    <div className="flex justify-between items-end mb-2">
+                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Confidence</span>
+                       <span className="text-xs font-black text-white">{p?.confidence || 0}%</span>
+                    </div>
+                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${p?.confidence || 0}%` }}
+                        className={cn(
+                          "h-full rounded-full transition-all duration-1000",
+                          p?.direction === 'UP' ? "bg-emerald-500" :
+                          p?.direction === 'DOWN' ? "bg-rose-500" :
+                          "bg-slate-600"
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-6 border-t border-white/5">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 text-center">Smart Target</p>
+                    <p className={cn(
+                      "text-3xl font-black text-center tracking-tighter",
+                      p?.direction === 'UP' ? "text-emerald-400" :
+                      p?.direction === 'DOWN' ? "text-rose-400" :
+                      "text-white"
+                    )}>
+                      {viewMode === 'USD' ? `$${p?.target?.toLocaleString()}` : `${(p?.target / (btcPrice || 1)).toFixed(8)}`}
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Visual Terminal */}
+          <div className="lg:col-span-2 space-y-8">
+            <motion.div 
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="bg-slate-900/60 backdrop-blur-md rounded-[3rem] border border-white/10 p-10 relative"
+            >
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-6 mb-12">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-white/5 rounded-2xl flex items-center justify-center">
+                    <LineChart className="w-5 h-5 text-yellow-500" />
+                  </div>
+                  <h3 className="text-xl font-black text-white tracking-tight">Market Momentum</h3>
+                </div>
+                
+                <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/5">
+                  {['7D', '30D', 'ALL'].map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setTimeframe(t as any)}
+                      className={cn(
+                        "px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                        timeframe === t ? "bg-white text-black shadow-lg" : "text-slate-500 hover:text-white"
+                      )}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="h-[500px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData}>
+                    <defs>
+                      <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#eab308" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#eab308" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff" opacity={0.03} />
+                    <XAxis 
+                      dataKey="date" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }}
+                      dy={10}
+                    />
+                    <YAxis 
+                      domain={['auto', 'auto']}
+                      axisLine={false} 
+                      tickLine={false}
+                      tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }}
+                      tickFormatter={(val) => viewMode === 'USD' ? `$${val}` : `${val.toFixed(2)}`}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: '#0f172a', 
+                        border: '1px solid rgba(255,255,255,0.1)', 
+                        borderRadius: '24px',
+                        padding: '16px',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+                      }}
+                      itemStyle={{ color: '#fbbf24', fontWeight: 900, fontSize: '14px' }}
+                      labelStyle={{ color: '#94a3b8', fontWeight: 700, marginBottom: '8px', fontSize: '10px', textTransform: 'uppercase' }}
+                      formatter={(val: number) => [viewMode === 'BTC' ? `${val.toFixed(8)} BTC` : formatCurrency(val), 'Market Price']}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="displayPrice" 
+                      stroke="#fbbf24" 
+                      strokeWidth={4}
+                      fillOpacity={1} 
+                      fill="url(#colorPrice)" 
+                      animationDuration={2000}
+                    />
+                    {prediction && (
+                      <ReferenceLine 
+                        y={viewMode === 'BTC' && btcPrice ? (prediction.target / btcPrice) : prediction.target} 
+                        stroke="#8b5cf6" 
+                        strokeDasharray="5 5" 
+                        strokeWidth={2}
+                        label={{ 
+                          value: 'NEURAL TARGET', 
+                          position: 'top', 
+                          fill: '#8b5cf6', 
+                          fontSize: 10, 
+                          fontWeight: 900,
+                          letterSpacing: '0.1em'
+                        }} 
+                      />
+                    )}
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.div>
+          </div>
+
+          <div className="space-y-8">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden group"
+            >
+              <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
+                <Brain size={140} />
+              </div>
+              
+              <div className="relative z-10 space-y-8">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-xl font-black tracking-tight">The Indicator Brain</h4>
+                    <p className="text-indigo-100/60 text-xs font-bold uppercase tracking-widest">Global Payout Insights</p>
+                  </div>
+                </div>
+
+                <div className="p-6 bg-black/20 rounded-3xl backdrop-blur-xl border border-white/10">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Activity className="w-4 h-4 text-emerald-400" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">Live Analytical Core</span>
+                  </div>
+                  <p className="text-sm font-medium leading-relaxed italic opacity-90">
+                    "{aiAnalysis || 'Synthesizing global commodity flows and community withdrawal velocity...'}"
+                  </p>
+                </div>
+
                 <button 
                   onClick={runAiPrediction}
                   disabled={isAnalyzing}
-                  className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-slate-700 transition-all py-4 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20 active:scale-95"
+                  className="w-full bg-white text-indigo-700 hover:bg-slate-50 transition-all py-5 rounded-3xl text-sm font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 shadow-xl active:scale-95 disabled:opacity-50"
                 >
                   {isAnalyzing ? (
-                    <>
-                      <motion.div 
-                        animate={{ rotate: 360 }}
-                        transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                      >
-                        <Brain className="w-4 h-4" />
-                      </motion.div>
-                      <span>Brain Thinking...</span>
-                    </>
+                    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
+                      <Brain className="w-5 h-5" />
+                    </motion.div>
                   ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      <span>Synchronize Predictions</span>
-                    </>
+                    <Zap className="w-5 h-5" />
                   )}
+                  {isAnalyzing ? 'Re-Syncing...' : 'Matrix Synchronize'}
                 </button>
               </div>
             </motion.div>
 
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-200 dark:border-slate-800 p-6"
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <BarChart3 className="w-4 h-4 text-gray-400" />
-                <h3 className="font-bold text-gray-900 dark:text-white uppercase tracking-wider text-xs">Market Metrics</h3>
+            <div className="bg-slate-900/40 backdrop-blur-md rounded-[3rem] border border-white/5 p-10 space-y-8">
+              <div className="flex items-center gap-4">
+                <BarChart3 className="w-5 h-5 text-slate-500" />
+                <h4 className="text-lg font-black text-white uppercase tracking-widest text-xs">Platform Liquidity</h4>
               </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-gray-50 dark:bg-slate-800/50 rounded-2xl">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Vol (24h)</p>
-                  <p className="text-lg font-black text-gray-900 dark:text-white">$4.2B</p>
-                </div>
-                <div className="p-4 bg-gray-50 dark:bg-slate-800/50 rounded-2xl">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Spread</p>
-                  <p className="text-lg font-black text-gray-900 dark:text-white">0.05%</p>
-                </div>
-                <div className="p-4 bg-gray-50 dark:bg-slate-800/50 rounded-2xl">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Index Price</p>
-                  <p className="text-lg font-black text-gray-900 dark:text-white">${(currentPrice * 0.998).toFixed(2)}</p>
-                </div>
-                <div className="p-4 bg-gray-50 dark:bg-slate-800/50 rounded-2xl">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Depth</p>
-                  <p className="text-lg font-black text-gray-900 dark:text-white">99.9%</p>
-                </div>
+
+              <div className="grid grid-cols-1 gap-6">
+                {[
+                  { label: '24h Global Vol', val: '$8.4B', color: 'text-blue-400' },
+                  { label: 'Network Spread', val: '0.042%', color: 'text-emerald-400' },
+                  { label: 'Treasury Depth', val: '99.85%', color: 'text-indigo-400' },
+                ].map((stat, i) => (
+                  <div key={i} className="flex items-center justify-between p-4 bg-black/20 rounded-2xl border border-white/5">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{stat.label}</span>
+                    <span className={cn("text-lg font-black", stat.color)}>{stat.val}</span>
+                  </div>
+                ))}
               </div>
-            </motion.div>
+            </div>
           </div>
         </div>
       </div>
