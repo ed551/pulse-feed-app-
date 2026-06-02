@@ -27,7 +27,7 @@ import {
   Target
 } from 'lucide-react';
 import { GoogleGenAI, Modality } from "@google/genai";
-import { generateContentWithRetry } from '../lib/ai';
+import { generateContentWithRetry, getAIBreakerStatus } from '../lib/ai';
 import { cn } from '../lib/utils';
 import { useLocation } from 'react-router-dom';
 import { db, auth } from '../lib/firebase';
@@ -57,6 +57,11 @@ export default function AIAssistant() {
   const handleScanPage = async () => {
     setIsLoading(true);
     try {
+      const breaker = getAIBreakerStatus();
+      if (breaker.isTripped) {
+        throw new Error("AI Service Suspended (Breaker Tripped)");
+      }
+
       const mainContent = document.querySelector('main') || document.body;
       const text = mainContent.innerText.substring(0, 5000); // Sample limit
       
@@ -189,6 +194,21 @@ export default function AIAssistant() {
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
+    const breaker = getAIBreakerStatus();
+    if (breaker.isTripped) {
+      setMessages(prev => [...prev, {
+        role: 'user',
+        text: input,
+        timestamp: Date.now()
+      }, {
+        role: 'model',
+        text: "The AI Intelligence engine is currently in Maintenance Mode due to upstream service limits. I can still help you with basic navigation, but complex queries are restricted. Please check back later!",
+        timestamp: Date.now()
+      }]);
+      setInput('');
+      return;
+    }
+
     const userMsg: Message = {
       role: 'user',
       text: input,
@@ -306,8 +326,13 @@ export default function AIAssistant() {
                 <div>
                   <h3 className="text-sm font-bold">Pulse AI Navigator</h3>
                   <div className="flex items-center gap-1">
-                    <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-                    <span className="text-[10px] opacity-80">Intelligence Engine</span>
+                    <div className={cn(
+                      "w-1.5 h-1.5 rounded-full",
+                      getAIBreakerStatus().isTripped ? "bg-amber-400" : "bg-green-400 animate-pulse"
+                    )} />
+                    <span className="text-[10px] opacity-80">
+                      {getAIBreakerStatus().isTripped ? "Maintenance Mode" : "Intelligence Engine"}
+                    </span>
                   </div>
                 </div>
               </div>

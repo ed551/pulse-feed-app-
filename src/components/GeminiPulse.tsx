@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, TrendingUp, BrainCircuit, Loader2, ArrowRight, Zap, Target, Heart } from 'lucide-react';
-import { generateContentWithRetry } from '../lib/ai';
+import { generateContentWithRetry, getAIBreakerStatus } from '../lib/ai';
 import { db } from '../lib/firebase';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { cn } from '../lib/utils';
@@ -42,6 +42,11 @@ export default function GeminiPulse() {
 
       setLoading(true);
       try {
+        const breaker = getAIBreakerStatus();
+        if (breaker.isTripped) {
+          throw new Error("AI Service Suspended (Breaker Tripped)");
+        }
+
         // In a real app, we'd fetch actual data to feed Gemini
         // For this widget, we'll ask Gemini to generate "The State of Pulse" 
         // based on the vision of the community.

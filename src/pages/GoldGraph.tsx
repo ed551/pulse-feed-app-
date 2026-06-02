@@ -31,7 +31,7 @@ import {
   Area,
   ReferenceLine
 } from 'recharts';
-import { generateContentWithRetry } from '../lib/ai';
+import { generateContentWithRetry, getAIBreakerStatus } from '../lib/ai';
 import { cn } from '../lib/utils';
 import { marketBrain } from '../lib/marketEngine';
 import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
@@ -63,7 +63,9 @@ export default function GoldGraph() {
   const { convert: formatCurrency } = useCurrencyConverter();
   const [data, setData] = useState<any[]>([]);
   const [realPrice, setRealPrice] = useState<number | null>(null);
+  const [btcPrice, setBtcPrice] = useState<number | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'USD' | 'BTC'>('BTC');
 
   useEffect(() => {
     const fetchRealData = async () => {
@@ -72,11 +74,15 @@ export default function GoldGraph() {
         const result = await response.json();
         if (result.success) {
           const paxg = result.prices.find((p: any) => p.symbol === 'PAXGUSDT');
-          if (paxg && paxg.price) {
+          const btc = result.prices.find((p: any) => p.symbol === 'BTCUSDT');
+          
+          if (paxg && paxg.price && btc && btc.price) {
             const price = parseFloat(paxg.price);
+            const btcVal = parseFloat(btc.price);
             setRealPrice(price);
+            setBtcPrice(btcVal);
             
-            // For now, we still generate a trend but base it on the real current price
+            // Generate trend based on the real current price
             const mockHistory = [];
             const now = new Date();
             let tempPrice = price;
@@ -85,13 +91,22 @@ export default function GoldGraph() {
               date.setDate(date.getDate() - i);
               const change = (Math.random() - 0.48) * 20;
               tempPrice += change;
+              
+              const pUsd = parseFloat(tempPrice.toFixed(2));
+              // Slightly fluctuate BTC price too for the BTC view
+              const pBtc = pUsd / (btcVal + ((Math.random() - 0.5) * 500));
+              
               mockHistory.push({
                 date: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-                price: parseFloat(tempPrice.toFixed(2)),
+                price: pUsd,
+                priceBtc: parseFloat(pBtc.toFixed(8)),
                 timestamp: date.getTime()
               });
-              // Ensure the last one is the real price
-              if (i === 0) mockHistory[mockHistory.length - 1].price = price;
+              
+              if (i === 0) {
+                mockHistory[mockHistory.length - 1].price = price;
+                mockHistory[mockHistory.length - 1].priceBtc = price / btcVal;
+              }
             }
             setData(mockHistory);
           }
@@ -117,31 +132,58 @@ export default function GoldGraph() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [timeframe, setTimeframe] = useState<'7D' | '30D' | 'ALL'>('30D');
 
-  const currentPrice = data.length > 0 ? data[data.length - 1].price : 2400;
-  const startPrice = data.length > 0 ? data[0].price : 2350.45;
+  const timeframeData = useMemo(() => {
+    const count = timeframe === '7D' ? 7 : (timeframe === '30D' ? 30 : data.length);
+    const subset = data.slice(-count);
+    return subset.map(d => ({
+      ...d,
+      displayPrice: viewMode === 'BTC' ? d.priceBtc : d.price
+    }));
+  }, [data, timeframe, viewMode]);
+
+  const currentPrice = timeframeData.length > 0 ? timeframeData[timeframeData.length - 1].displayPrice : 0;
+  const startPrice = timeframeData.length > 0 ? timeframeData[0].displayPrice : 0;
   const priceChange = currentPrice - startPrice;
   const percentChange = startPrice !== 0 ? (priceChange / startPrice) * 100 : 0;
 
   // Forecast data for the chart projection
   const chartData = useMemo(() => {
-    if (!prediction || data.length === 0) return data;
+    if (!prediction || timeframeData.length === 0) return timeframeData;
     
-    const lastPoint = data[data.length - 1];
+    const lastPoint = timeframeData[timeframeData.length - 1];
     const forecastPoints = [];
-    const step = (prediction.target - lastPoint.price) / 3;
+    
+    // Scale prediction target if in BTC mode
+    const targetValue = viewMode === 'BTC' && btcPrice 
+      ? (prediction.target / btcPrice) 
+      : prediction.target;
+
+    const step = (targetValue - lastPoint.displayPrice) / 3;
     
     for (let i = 1; i <= 3; i++) {
       forecastPoints.push({
         date: `Forecast ${i}`,
-        price: parseFloat((lastPoint.price + step * i).toFixed(2)),
+        displayPrice: parseFloat((lastPoint.displayPrice + step * i).toFixed(viewMode === 'BTC' ? 8 : 2)),
         isForecast: true
       });
     }
     
-    return [...data, ...forecastPoints];
-  }, [data, prediction]);
+    return [...timeframeData, ...forecastPoints];
+  }, [timeframeData, prediction, viewMode, btcPrice]);
 
   const runAiPrediction = async () => {
+    const breaker = getAIBreakerStatus();
+    if (breaker.isTripped) {
+      setAiAnalysis("Market synchronization is currently in power-save mode. Using technical baseline.");
+      setPrediction({
+        direction: 'SIDEWAYS',
+        confidence: 45,
+        target: currentPrice * 1.002,
+        reasoning: "Baseline technical analysis active while AI engine is offline."
+      });
+      return;
+    }
+
     setIsAnalyzing(true);
     try {
       const prompt = `
@@ -204,15 +246,25 @@ export default function GoldGraph() {
                 Gold Market Terminal
                 <span className="text-[10px] bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-2 py-0.5 rounded-full uppercase tracking-widest">Live</span>
               </h1>
-              <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Real-time commodity tracking & AI forecasting</p>
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">Real-time commodity tracking & AI forecasting</p>
+                <button 
+                  onClick={() => setViewMode(viewMode === 'USD' ? 'BTC' : 'USD')}
+                  className="px-2 py-0.5 bg-amber-500/10 rounded-full text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest border border-amber-500/20 hover:bg-amber-500/20 transition-all cursor-pointer"
+                >
+                  {viewMode === 'USD' ? 'View PAXG/BTC' : 'View PAXG/USD'}
+                </button>
+              </div>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
             <div className="text-right">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Spot Price (Gold)</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Spot Price ({viewMode})</p>
               <div className="flex items-center gap-2">
-                <span className="text-3xl font-black text-gray-900 dark:text-white">{formatCurrency(currentPrice)}</span>
+                <span className="text-3xl font-black text-gray-900 dark:text-white">
+                  {viewMode === 'USD' ? formatCurrency(currentPrice) : `${currentPrice.toFixed(8)} BTC`}
+                </span>
                 <span className={`flex items-center text-xs font-bold px-2 py-0.5 rounded-full ${priceChange >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                   {priceChange >= 0 ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
                   {Math.abs(percentChange).toFixed(2)}%
@@ -284,10 +336,11 @@ export default function GoldGraph() {
                       boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
                     }}
                     itemStyle={{ color: '#fbbf24', fontWeight: 800 }}
+                    formatter={(val: number) => [viewMode === 'BTC' ? `${val.toFixed(8)} BTC` : formatCurrency(val), 'Price']}
                   />
                   <Area 
                     type="monotone" 
-                    dataKey="price" 
+                    dataKey="displayPrice" 
                     stroke="#eab308" 
                     strokeWidth={3}
                     dot={(props: any) => {
@@ -301,7 +354,7 @@ export default function GoldGraph() {
                   />
                   {prediction && (
                     <ReferenceLine 
-                      y={prediction.target} 
+                      y={viewMode === 'BTC' && btcPrice ? (prediction.target / btcPrice) : prediction.target} 
                       stroke="#8b5cf6" 
                       strokeDasharray="3 3" 
                       label={{ 

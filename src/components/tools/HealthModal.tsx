@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { HeartPulse, Loader2, ClipboardCheck, Sparkles, Activity, Moon, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { generateContentWithRetry } from '../../lib/ai';
+import { generateContentWithRetry, getAIBreakerStatus } from '../../lib/ai';
 import { useHealth } from '../../contexts/HealthContext';
 import Markdown from 'react-markdown';
 
@@ -31,6 +31,19 @@ export default function HealthModal() {
     setReport(null);
 
     try {
+      const breaker = getAIBreakerStatus();
+      if (breaker.isTripped) {
+        setReport(`### Pulse Health Status: Standard Baseline
+**Status**: The AI Intelligence engine is in power-save mode.
+**Analysis**: Using default biometric safety ranges for your current age and profile.
+**Plan**: 
+1. Maintain regular hydration.
+2. Aim for 7-8 hours of sleep.
+3. Check back once AI capacity is restored for a deeper personal analysis.`);
+        setIsScanning(false);
+        return;
+      }
+
       const prompt = `As a professional AI Health Consultant for Pulse Feeds, provide a CONCISE and BRIEF health report.
 Scan Date: ${metrics.lastScanDate || new Date().toLocaleString()}
 Current Metrics:

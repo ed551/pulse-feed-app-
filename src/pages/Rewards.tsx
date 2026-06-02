@@ -111,8 +111,36 @@ export default function Rewards() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [payoutMethod, setPayoutMethod] = useState<'paypal' | 'stripe' | 'bank' | 'binance'>('binance');
   const [binanceAddress, setBinanceAddress] = useState('');
-  const [binanceCoin, setBinanceCoin] = useState<'USDT' | 'PAXG'>('USDT');
-  const [binanceNetwork, setBinanceNetwork] = useState('TRX');
+  const [binanceCoin, setBinanceCoin] = useState<'USDT' | 'PAXG'>('PAXG');
+  const [binanceNetwork, setBinanceNetwork] = useState('ETH');
+  const [paxgBtcRate, setPaxgBtcRate] = useState<number | null>(null);
+  const [paxgPrice, setPaxgPrice] = useState<number | null>(null);
+  const [btcPrice, setBtcPrice] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetchPaxgBtc = async () => {
+      try {
+        const resp = await fetch('/api/binance/prices');
+        const data = await resp.json();
+        if (data.success) {
+          const paxgUsdt = data.prices.find((p: any) => p.symbol === 'PAXGUSDT')?.price;
+          const btcUsdt = data.prices.find((p: any) => p.symbol === 'BTCUSDT')?.price;
+          if (paxgUsdt && btcUsdt) {
+            const p = parseFloat(paxgUsdt);
+            const b = parseFloat(btcUsdt);
+            setPaxgPrice(p);
+            setBtcPrice(b);
+            setPaxgBtcRate(p / b);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch PAXG/BTC rate:", e);
+      }
+    };
+    fetchPaxgBtc();
+    const interval = setInterval(fetchPaxgBtc, 60000);
+    return () => clearInterval(interval);
+  }, []);
   const [payoutEmail, setPayoutEmail] = useState("");
   const [payoutAmount, setPayoutAmount] = useState("");
   const [bankDetails, setBankDetails] = useState({
@@ -351,13 +379,19 @@ export default function Rewards() {
       const numAmount = parseFloat(payoutAmount);
       if (numAmount < 10 && !isDeveloper) throw new Error("Minimum Binance withdrawal is $10");
 
+      // Calculation: If withdrawing PAXG, we must convert USD to PAXG Units (1 PAXG = 1 Ounce)
+      let withdrawQuantity = numAmount;
+      if (binanceCoin === 'PAXG' && paxgPrice) {
+        withdrawQuantity = numAmount / paxgPrice;
+      }
+
       const response = await fetch('/api/binance/withdraw', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           asset: binanceCoin,
           address: binanceAddress,
-          amount: numAmount,
+          amount: withdrawQuantity,
           network: binanceNetwork,
           scaToken: pin,
           usePasskey,
@@ -1944,17 +1978,43 @@ export default function Rewards() {
 
                   <form onSubmit={payoutMethod === 'binance' ? handleBinanceWithdraw : handleInternationalPayout} className="space-y-6">
                     {payoutMethod === 'binance' ? (
-                      <div className="space-y-4">
+                      <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                        {binanceCoin === 'PAXG' && paxgBtcRate && (
+                          <motion.div 
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/30 rounded-2xl flex items-center justify-between mb-4 shadow-sm"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500 font-black">
+                                <TrendingUp className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest leading-none mb-1">Real-time Trading Pair</p>
+                                <p className="text-sm font-black text-gray-900 dark:text-white">PAXG / BTC</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-lg font-black text-amber-600 dark:text-amber-400">{paxgBtcRate.toFixed(8)}</p>
+                              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Binance Market Depth</p>
+                            </div>
+                          </motion.div>
+                        )}
+
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
                              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Asset</label>
                              <select 
                                value={binanceCoin}
-                               onChange={(e) => setBinanceCoin(e.target.value as any)}
-                               className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-gray-900 dark:text-white font-medium"
+                               onChange={(e) => {
+                                 const val = e.target.value as any;
+                                 setBinanceCoin(val);
+                                 setBinanceNetwork(val === 'PAXG' ? 'ETH' : 'TRX');
+                               }}
+                               className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-gray-900 dark:text-white font-medium shadow-sm"
                              >
+                               <option value="PAXG">PAX Gold (PAXG)</option>
                                <option value="USDT">USDT (Stablecoin)</option>
-                               <option value="PAXG">PAX Gold (Real Gold)</option>
                              </select>
                           </div>
                           <div className="space-y-2">
@@ -1962,29 +2022,38 @@ export default function Rewards() {
                              <select 
                                value={binanceNetwork}
                                onChange={(e) => setBinanceNetwork(e.target.value)}
-                               className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-gray-900 dark:text-white font-medium"
+                               className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-gray-900 dark:text-white font-medium shadow-sm"
                              >
-                               <option value="TRX">TRC20 (Best for USDT)</option>
-                               <option value="ETH">ERC20 (Ethereum)</option>
-                               <option value="BSC">BEP20 (Binance Smart Chain)</option>
-                               <option value="SOL">SOL (Solana)</option>
+                               {binanceCoin === 'PAXG' ? (
+                                 <>
+                                   <option value="ETH">ERC20 (Ethereum)</option>
+                                   <option value="BSC">BEP20 (Binance Smart Chain)</option>
+                                 </>
+                               ) : (
+                                 <>
+                                   <option value="TRX">TRC20 (Best for USDT)</option>
+                                   <option value="ETH">ERC20 (Ethereum)</option>
+                                   <option value="BSC">BEP20 (Binance Smart Chain)</option>
+                                   <option value="SOL">SOL (Solana)</option>
+                                 </>
+                               )}
                              </select>
                           </div>
                         </div>
 
                         <div className="space-y-2">
-                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Wallet Address</label>
+                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Binance Wallet Address</label>
                           <div className="relative">
                             <Database className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                             <input
                               type="text"
-                              placeholder="Paste your Binance address here"
+                              placeholder={`Paste your Binance ${binanceCoin} address here`}
                               value={binanceAddress}
                               onChange={(e) => setBinanceAddress(e.target.value)}
-                              className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-gray-900 dark:text-white font-mono text-xs"
+                              className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-gray-900 dark:text-white font-mono text-xs shadow-sm"
                             />
                           </div>
-                          <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest px-2">Ensure network matches the address to avoid losing funds.</p>
+                          <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest px-2">Ensure network ({binanceNetwork}) matches the address to avoid losing funds.</p>
                         </div>
                       </div>
                     ) : payoutMethod !== 'bank' ? (
@@ -2066,6 +2135,20 @@ export default function Rewards() {
                       <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest font-bold">
                         Value: {payoutAmount ? convert(parseFloat(payoutAmount), payoutMethod === 'binance' ? 'USD' : 'KES') : convert(0)}
                       </p>
+                      {payoutMethod === 'binance' && binanceCoin === 'PAXG' && paxgPrice && (
+                        <div className="mt-2 p-3 bg-amber-500/5 rounded-xl border border-amber-500/10 space-y-1">
+                          <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest flex justify-between">
+                            <span>Est. PAXG Quantity:</span>
+                            <span>{(parseFloat(payoutAmount || '0') / paxgPrice).toFixed(6)} PAXG</span>
+                          </p>
+                          {paxgBtcRate && (
+                            <p className="text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest flex justify-between">
+                              <span>Est. BTC Value (PAXG/BTC):</span>
+                              <span>{((parseFloat(payoutAmount || '0') / paxgPrice) * paxgBtcRate).toFixed(8)} BTC</span>
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <AnimatePresence mode="wait">

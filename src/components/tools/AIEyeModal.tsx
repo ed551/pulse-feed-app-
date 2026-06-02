@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
-import { Camera, X, Loader2, Volume2, VolumeX, Sparkles } from 'lucide-react';
+import { Camera, X, Loader2, Volume2, VolumeX, Sparkles, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { generateContentWithRetry } from '../../lib/ai';
+import { generateContentWithRetry, getAIBreakerStatus } from '../../lib/ai';
 import { Modality } from '@google/genai';
 import { db } from '../../lib/firebase';
 import { setDoc, doc, arrayUnion } from 'firebase/firestore';
@@ -53,6 +53,13 @@ export default function AIEyeModal({ onClose }: AIEyeModalProps) {
     
     setIsAnalyzing(true);
     setAiAdvice(null);
+
+    const breaker = getAIBreakerStatus();
+    if (breaker.isTripped) {
+      setAiAdvice("The AI Intelligence engine is currently in Maintenance Mode. Image analysis and life-coaching features are temporarily restricted. Please use standard platform features for now.");
+      setIsAnalyzing(false);
+      return;
+    }
 
     const canvas = canvasRef.current;
     const video = videoRef.current;

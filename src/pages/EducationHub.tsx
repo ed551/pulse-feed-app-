@@ -47,6 +47,7 @@ import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 import { revenue_distribution_engine } from '../lib/engines';
 import { doc, updateDoc, increment, arrayUnion } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { getAIBreakerStatus } from '../lib/ai';
 
 const categoryIcons: Record<string, React.ReactNode> = {
   'Technology': <BrainCircuit className="w-6 h-6 text-purple-500" />,
@@ -177,6 +178,17 @@ export default function EducationHub() {
   };
 
   const fetchLessonResearch = async (lesson: any, course: Course) => {
+    const breaker = getAIBreakerStatus();
+    if (breaker.isTripped) {
+      setLessonResearch({
+        overview: `Master the core principles of ${lesson.title} as part of your ${course.title} curriculum.`,
+        objectives: ["Understand foundational concepts", "Practical application skills", "Strategic integration"],
+        keyConcepts: ["Precision intelligence is currently in power-save mode. Please proceed with the lesson and discuss these concepts in the community feed for peer insights."],
+        communityImpact: "This knowledge empowers you to lead with data and strategic insight."
+      });
+      return;
+    }
+
     setResearching(true);
     setLessonResearch(null);
     let retries = 0;

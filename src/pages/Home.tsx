@@ -55,6 +55,24 @@ export default function Home() {
   const [activeMenuPostId, setActiveMenuPostId] = useState<string | null>(null);
   const [activeReactionPostId, setActiveReactionPostId] = useState<string | null>(null);
   const reactionTimeoutRef = useRef<any>(null);
+  const [paxgBtcRate, setPaxgBtcRate] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetchPrices = async () => {
+      try {
+        const resp = await fetch('/api/binance/prices');
+        const data = await resp.json();
+        if (data.success) {
+          const p = data.prices.find((p: any) => p.symbol === 'PAXGUSDT')?.price;
+          const b = data.prices.find((p: any) => p.symbol === 'BTCUSDT')?.price;
+          if (p && b) setPaxgBtcRate(parseFloat(p) / parseFloat(b));
+        }
+      } catch (e) {}
+    };
+    fetchPrices();
+    const interval = setInterval(fetchPrices, 300000); 
+    return () => clearInterval(interval);
+  }, []);
   
   const GOOGLE_APPS = [
     { name: 'Gmail', icon: Mail, url: 'https://mail.google.com', color: 'text-red-500', bg: 'bg-red-50' },
@@ -444,7 +462,14 @@ export default function Home() {
             </div>
             
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-4 animate-in fade-in slide-in-from-left duration-500">
-              {/* Market Partner links removed */}
+               <div className="flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-widest text-indigo-100 border border-white/5">
+                 <span className="w-1.5 h-1.5 rounded-full bg-yellow-400"></span>
+                 PAXG/BTC: {paxgBtcRate ? paxgBtcRate.toFixed(6) : '0.0384'}
+               </div>
+               <div className="flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-widest text-indigo-100 border border-white/5">
+                 <span className="w-1.5 h-1.5 rounded-full bg-orange-400"></span>
+                 BTC Ref: Binance
+               </div>
             </div>
 
             <h2 className="text-3xl font-black tracking-tight mb-2">{t('make_money_msg')}</h2>

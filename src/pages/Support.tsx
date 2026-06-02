@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Headphones, Mail, MessageCircle, Phone, FileText, Send, X, Loader2, User, Bot } from "lucide-react";
 import { privacy_engine, auto_translation_engine, email_system_reporter } from "../lib/engines";
-import { generateContentWithRetry } from "../lib/ai";
+import { generateContentWithRetry, getAIBreakerStatus } from "../lib/ai";
 import { motion, AnimatePresence } from "motion/react";
 
 interface Message {
@@ -33,6 +33,17 @@ export default function Support() {
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!inputValue.trim() || isTyping) return;
+
+    const breaker = getAIBreakerStatus();
+    if (breaker.isTripped) {
+      const userMessage = inputValue.trim();
+      setMessages(prev => [...prev, 
+        { role: 'user', content: userMessage },
+        { role: 'model', content: "The AI Support Desk is currently in Maintenance Mode due to high global demand. Please check our FAQ or email support@pulsefeeds.com for immediate assistance." }
+      ]);
+      setInputValue("");
+      return;
+    }
 
     const userMessage = inputValue.trim();
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);

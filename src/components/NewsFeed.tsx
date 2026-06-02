@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Newspaper, RefreshCw, ExternalLink, Sparkles, TrendingUp, Clock, Globe } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { generateContentWithRetry } from '../lib/ai';
+import { generateContentWithRetry, getAIBreakerStatus } from '../lib/ai';
 
 interface NewsItem {
   id: string;
@@ -53,6 +53,11 @@ export default function NewsFeed() {
 
     setIsLoading(true);
     try {
+      const breaker = getAIBreakerStatus();
+      if (breaker.isTripped) {
+        throw new Error("AI Service Suspended (Breaker Tripped)");
+      }
+
       const prompt = `Generate 8 highly relevant current news items for a platform called Pulse Feeds.
       Include a mix of 4 International news items and 4 Local news items.
       ${location ? `Context for Local News: User's approximate location is ${location}.` : "Context for Local News: Focus on high-vibrancy community achievements and grass-roots impact."}

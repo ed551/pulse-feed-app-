@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { GoogleGenAI, Modality } from "@google/genai";
-import { generateContentWithRetry } from "../lib/ai";
+import { generateContentWithRetry, getAIBreakerStatus } from "../lib/ai";
 import { cn } from "../lib/utils";
 import { saveInsight } from "../lib/insights";
 import { 
@@ -296,6 +296,14 @@ export default function Layout() {
   const speakSystemStatus = async () => {
     if (isSpeaking) return;
     setIsSpeaking(true);
+
+    const breaker = getAIBreakerStatus();
+    if (breaker.isTripped) {
+      speak("The AI system is currently in power-save mode. Intelligence services are partially restricted for community stability.");
+      setIsSpeaking(false);
+      return;
+    }
+
     try {
       const statusMessage = "Pulse Feeds is currently in development. To be fully functional, I need a secure backend connection, valid API keys for all integrated services, and a verified administrative account. System health is currently optimal, but these components are required for full feature deployment.";
       
@@ -354,6 +362,8 @@ export default function Layout() {
       const now = new Date();
       const currentHour = now.getHours();
       
+      const breaker = getAIBreakerStatus();
+
       // Day begins at 9am. If before 9am, use yesterday's seed.
       const effectiveDate = new Date(now);
       if (currentHour < 9) {
@@ -365,7 +375,7 @@ export default function Layout() {
       setMarketData({ ...prediction });
 
       // Smart Analysis via Gemini (Once per day)
-      if (lastMarketAnalysisDateRef.current !== dateStr) {
+      if (lastMarketAnalysisDateRef.current !== dateStr && !breaker.isTripped) {
         try {
           const prompt = `Provide a smart, professional 1-sentence market analysis for community points and earnings today. The predicted direction is ${prediction.direction}. Mention one potential economic driver.`;
           const response = await generateContentWithRetry({

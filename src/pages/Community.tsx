@@ -14,7 +14,7 @@ import { useRevenue } from '../contexts/RevenueContext';
 import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, doc, updateDoc, increment, addDoc, serverTimestamp, orderBy, limit } from 'firebase/firestore';
-import { generateContentWithRetry } from '../lib/ai';
+import { generateContentWithRetry, getAIBreakerStatus } from '../lib/ai';
 
 // Fix for default marker icons in Leaflet with React
 // Removed as we are switching to Google Maps
@@ -280,6 +280,11 @@ export default function Community() {
 
     // Generate AI Community Summary
     const generateSummary = async () => {
+      const breaker = getAIBreakerStatus();
+      if (breaker.isTripped) {
+        setAiSummary("Precision intelligence is currently in power-save mode. The community continues to thrive through active engagement and shared goals!");
+        return;
+      }
       try {
         const summary = await generateContentWithRetry({
           model: "gemini-3-flash-preview",
@@ -353,11 +358,17 @@ export default function Community() {
 
     try {
       // AI Analysis of the problem
-      const aiPrompt = `Analyze this community problem report: "${newReport.title} - ${newReport.description}". Provide a 1-sentence assessment of its impact and priority.`;
-      const aiResponse = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
-        contents: [{ role: "user", parts: [{ text: aiPrompt }] }]
-      });
+      let aiAnalysisResult = 'Awaiting further assessment.';
+      const breaker = getAIBreakerStatus();
+      
+      if (!breaker.isTripped) {
+        const aiPrompt = `Analyze this community problem report: "${newReport.title} - ${newReport.description}". Provide a 1-sentence assessment of its impact and priority.`;
+        const aiResponse = await generateContentWithRetry({
+          model: "gemini-3-flash-preview",
+          contents: [{ role: "user", parts: [{ text: aiPrompt }] }]
+        });
+        aiAnalysisResult = aiResponse.text || aiAnalysisResult;
+      }
 
       await addDoc(collection(db, 'community_reports'), {
         ...newReport,
@@ -369,7 +380,7 @@ export default function Community() {
         upvotes: 0,
         lat: newReportLatLng?.lat || -1.286389 + (Math.random() - 0.5) * 0.1,
         lng: newReportLatLng?.lng || 36.817223 + (Math.random() - 0.5) * 0.1,
-        aiAnalysis: aiResponse.text || 'Awaiting further assessment.'
+        aiAnalysis: aiAnalysisResult
       });
 
       setShowReportModal(false);

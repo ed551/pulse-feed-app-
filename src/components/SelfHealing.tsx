@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { saveInsight } from '../lib/insights';
 import { SelfUpdateEngine, ai_auto_diagnostics, automated_hotfix_compiler } from '../lib/engines';
-import { generateContentWithRetry } from '../lib/ai';
+import { generateContentWithRetry, getAIBreakerStatus } from '../lib/ai';
 import { reconnectFirestore } from '../lib/firebase';
 import { Shield, Zap, RefreshCw, AlertCircle } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -110,6 +110,15 @@ export default function SelfHealing() {
   const attemptHeal = async (message: string) => {
     setHealStatus('healing');
     try {
+      // Check for breaker status
+      const breaker = getAIBreakerStatus();
+      if (breaker.isTripped) {
+        setLastDiagnosis("DIAGNOSIS: AI Intelligence Engine is in power-save mode. | HEAL: Using standard safety protocols.");
+        setHealStatus('complete');
+        setTimeout(() => setHealStatus('idle'), 5000);
+        return;
+      }
+
       // Check for offline status first
       if (!navigator.onLine) {
          setLastDiagnosis("DIAGNOSIS: Network connection lost. | HEAL: Please check your internet connection.");

@@ -92,12 +92,18 @@ const MIN_REQUEST_INTERVAL = 20000;
 const MAX_RETRIES = 20; 
 const INITIAL_DELAY = 15000;
 let requestQueue: Promise<void> = Promise.resolve();
+let isAIBreakerTripped = false;
+let breakerErrorText = "";
 
 async function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function generateContentWithRetry(params: any): Promise<any> {
+  if (isAIBreakerTripped) {
+    throw new Error(`AI Service Suspended: ${breakerErrorText}`);
+  }
+  
   if (!ai) {
     throw new Error("Gemini API key is not configured in server environment.");
   }
@@ -183,7 +189,20 @@ async function generateContentWithRetry(params: any): Promise<any> {
                                 errorJson?.error?.status === "RESOURCE_EXHAUSTED";
 
         const isUnavailable = status === 503 || combinedErrorText.includes("unavailable") || status === 402 || status === 504 || status === 502 || combinedErrorText.includes("overloaded");
+        const isBlocked = status === 403 || combinedErrorText.includes("permission denied") || combinedErrorText.includes("dunning") || combinedErrorText.includes("lightning dunning");
         
+        // Blocked/Dunning is terminal
+        if (isBlocked) {
+          isAIBreakerTripped = true;
+          breakerErrorText = errorString;
+          console.error(`[Server AI] CIRCUIT BREAKER TRIPPED (Status 403): ${errorString}. Stopping all future AI interactions to prevent resource exhaustion.`);
+          if (currentRelease) {
+            currentRelease();
+            currentRelease = null;
+          }
+          throw error;
+        }
+
         // Key Rotation on Billing/Quota failure
         if (isDepleted || status === 429 || status === 402 || isQuotaExceeded) {
           retries++;
@@ -1213,6 +1232,14 @@ async function startServer() {
         });
       }
 
+      if (isAIBreakerTripped) {
+        return res.status(403).json({ 
+          error: `AI Service Suspended: ${breakerErrorText}`,
+          status: 403,
+          code: "AI_SUSPENDED"
+        });
+      }
+
       const { params } = req.body;
       if (!params) {
         return res.status(400).json({ error: "Missing parameters", status: 400 });
@@ -1257,6 +1284,15 @@ async function startServer() {
       
       if (!lessonTitle || !courseTitle) {
         return res.status(400).json({ error: "Missing lesson or course info" });
+      }
+
+      if (isAIBreakerTripped) {
+        return res.json({
+          overview: `Master the core principles of ${lessonTitle} as part of your ${courseTitle} curriculum.`,
+          objectives: ["Understand foundational concepts", "Practical application skills", "Strategic integration"],
+          keyConcepts: ["AI Research curation is currently in power-save mode. This lesson has been indexed matching community standards."],
+          communityImpact: "This knowledge empowers you to lead with data and strategic insight."
+        });
       }
 
       const prompt = `Research and provide deep academic content for a lesson titled "${lessonTitle}" within the course "${courseTitle}". 
@@ -2680,6 +2716,10 @@ async function startServer() {
  * Researches trending online courses quarterly (every 3 months)
  */
 async function syncEducationCourses() {
+  if (isAIBreakerTripped) {
+    console.log("[EducationHub] Circuit breaker active. Skipping automated curation to prevent resource exhaustion.");
+    return;
+  }
   console.log("[EducationHub] Starting automated quarterly academic research...");
   try {
     const prompt = `Research and curate a list of 8 premium, trending online educational courses from globally recognized platforms:
@@ -2764,6 +2804,7 @@ async function syncEducationCourses() {
  * Triggers refresh if existing data is older than 3 months.
  */
 async function performRobustEducationSync() {
+  if (isAIBreakerTripped) return;
   const COURSES_COLLECTION = 'education_courses';
   const syncSnap = await resilientDb.collection('system').doc('education_sync').get();
   const lastSync = syncSnap.data()?.lastSuccessfulSync?.toMillis() || 0;
@@ -3147,6 +3188,14 @@ async function performRobustEducationSync() {
     }
 
     try {
+      if (isAIBreakerTripped) {
+        return res.json({
+          approved: false,
+          riskLevel: "hi",
+          reasoning: "AI Circuit Breaker is active. Automated risk arbitration is currently disabled. Please contact a Level 4 Administrator for manual neural override.",
+          expiryHours: 0
+        });
+      }
       console.log(`[Neural Bypass] Initiating risk analysis for ${userId}. Requested Limit: $${requestedLimit}`);
       
       // 2. Fetch System Health for AI Context

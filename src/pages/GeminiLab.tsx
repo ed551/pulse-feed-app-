@@ -15,7 +15,7 @@ import {
   Globe
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { generateContentWithRetry } from "../lib/ai";
+import { generateContentWithRetry, getAIBreakerStatus } from "../lib/ai";
 
 const MODELS = [
   { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', desc: 'Next-gen performance' },
@@ -52,6 +52,25 @@ export default function GeminiLab() {
 
   const runExperiment = async () => {
     if (!prompt.trim() && !selectedImage) return;
+
+    const breaker = getAIBreakerStatus();
+    if (breaker.isTripped) {
+      const userMsg: LabMessage = {
+        role: 'user',
+        text: prompt,
+        timestamp: Date.now(),
+        image: selectedImage || undefined
+      };
+      const modelMsg: LabMessage = {
+        role: 'model',
+        text: "The Gemini Lab Engine is currently offline as the community works to restore neural equilibrium. Standard operations will resume shortly.",
+        timestamp: Date.now() + 100
+      };
+      setMessages(prev => [...prev, userMsg, modelMsg]);
+      setPrompt('');
+      setSelectedImage(null);
+      return;
+    }
 
     setIsLoading(true);
     const userMsg: LabMessage = {
@@ -176,11 +195,24 @@ export default function GeminiLab() {
       <div className="space-y-6 mb-8">
         {messages.length === 0 ? (
           <div className="py-20 flex flex-col items-center justify-center text-center px-8">
-            <div className="w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center mb-4">
-              <Sparkles className="w-8 h-8 text-zinc-700" />
-            </div>
-            <h2 className="text-lg font-medium text-zinc-400">Ready for Input</h2>
-            <p className="text-sm text-zinc-600 mt-2">Start an experiment by typing a prompt or uploading an image below.</p>
+            {getAIBreakerStatus().isTripped ? (
+              <div className="p-6 bg-rose-500/10 border border-rose-500/30 rounded-3xl mb-4 max-w-sm">
+                <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-3" />
+                <h2 className="text-lg font-bold text-rose-400">AI Service Suspended</h2>
+                <p className="text-xs text-zinc-500 mt-2">
+                  The AI engine is currently offline due to upstream billing limits or administrative hold. 
+                  Please check back later or contribute to the community to restore services.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center mb-4">
+                  <Sparkles className="w-8 h-8 text-zinc-700" />
+                </div>
+                <h2 className="text-lg font-medium text-zinc-400">Ready for Input</h2>
+                <p className="text-sm text-zinc-600 mt-2">Start an experiment by typing a prompt or uploading an image below.</p>
+              </>
+            )}
           </div>
         ) : (
           messages.map((msg, i) => (

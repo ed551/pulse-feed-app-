@@ -5,7 +5,7 @@ import { usePosts } from '../hooks/usePosts';
 import { useAuth } from '../contexts/AuthContext';
 import { moderateContent } from '../services/moderationService';
 import { useNotifications } from '../hooks/useNotifications';
-import { generateContentWithRetry } from '../lib/ai';
+import { generateContentWithRetry, getAIBreakerStatus } from '../lib/ai';
 import { generateAvatar } from '../services/imageService';
 import { cn } from '../lib/utils';
 
@@ -40,6 +40,11 @@ export default function CreatePostModal({ type: initialType, onClose }: CreatePo
   const CATEGORIES = ['General', 'Elite', 'Tech', 'News', 'Gaming', 'Finance', 'Life', 'Announcement'];
 
   const handleAiGenerate = async (mode: 'draft' | 'refine' | 'poll') => {
+    const breaker = getAIBreakerStatus();
+    if (breaker.isTripped) {
+      setError("AI Services are currently in power-save mode. Please write your post manually for now.");
+      return;
+    }
     setIsGenerating(true);
     setError(null);
     try {
@@ -83,6 +88,11 @@ export default function CreatePostModal({ type: initialType, onClose }: CreatePo
   };
 
   const handleAiGenerateImage = async () => {
+    const breaker = getAIBreakerStatus();
+    if (breaker.isTripped) {
+      setError("AI Image Generation is currently unavailable due to upstream maintenance.");
+      return;
+    }
     if (!content.trim() && !title.trim()) {
       setError("Please add a title or content to describe the image.");
       return;

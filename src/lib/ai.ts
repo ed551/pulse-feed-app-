@@ -24,12 +24,23 @@ const INITIAL_DELAY = 30000;
 
 let requestQueue: Promise<void> = Promise.resolve();
 const MIN_REQUEST_INTERVAL = 20000; 
+let isAIBreakerTripped = false;
+let breakerErrorText = "";
+
+export const getAIBreakerStatus = () => ({
+  isTripped: isAIBreakerTripped,
+  errorText: breakerErrorText
+});
 
 async function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export async function generateContentWithRetry(params: any): Promise<any> {
+  if (isAIBreakerTripped) {
+    throw new Error(`AI Service Suspended: ${breakerErrorText}`);
+  }
+
   // 1. Detect Environment & Proxy if needed
   const isBrowser = typeof window !== 'undefined';
   
@@ -105,6 +116,15 @@ export async function generateContentWithRetry(params: any): Promise<any> {
                             combinedErrorText.includes("depleted");
           const isRetryable = response.status === 503 || response.status === 429 || response.status === 504 || response.status === 502 || response.status === 500;
           
+          const isBlocked = response.status === 403 || combinedErrorText.includes("permission denied") || combinedErrorText.includes("dunning") || combinedErrorText.includes("lightning dunning");
+          
+          if (isBlocked) {
+            isAIBreakerTripped = true;
+            breakerErrorText = data?.error || errorMsg;
+            console.error(`[AI Proxy] CIRCUIT BREAKER TRIPPED: ${breakerErrorText}. Stopping all future AI interactions for this session.`);
+            throw new Error(breakerErrorText);
+          }
+
           if (isRetryable && proxyRetries < MAX_PROXY_RETRIES) {
             proxyRetries++;
             const backoff = (isBilling ? 6000 : 3000) * proxyRetries;
@@ -208,6 +228,18 @@ export async function generateContentWithRetry(params: any): Promise<any> {
         const isQuotaExceeded = status === 429 || combinedErrorText.includes("quota") || combinedErrorText.includes("resource_exhausted");
         const isProxyError = status === 500 || status === 503 || status === 504 || combinedErrorText.includes("xhr error") || combinedErrorText.includes("failed to fetch") || status === 502;
         const isNotFound = status === 404;
+        const isBlocked = status === 403 || combinedErrorText.includes("permission denied") || combinedErrorText.includes("dunning") || combinedErrorText.includes("lightning dunning");
+
+        // Blocked/Dunning is terminal - stop immediately
+        if (isBlocked) {
+          isAIBreakerTripped = true;
+          breakerErrorText = errorString;
+          console.error(`[Client AI] CIRCUIT BREAKER TRIPPED: ${errorString}. Access Denied - stopping all future retries.`);
+          const release = currentRelease;
+          currentRelease = null;
+          if (release) release();
+          throw error;
+        }
         
           // Model Fallback Logic (Sync with server.ts)
           if ((isQuotaExceeded || isProxyError || isNotFound || isDepleted)) {

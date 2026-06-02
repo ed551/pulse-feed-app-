@@ -198,20 +198,19 @@ export default function BinanceHub() {
 
               <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-800/50 rounded-2xl border border-yellow-500/20">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-yellow-500/10 rounded-xl flex items-center justify-center text-yellow-500 font-black">G</div>
+                  <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500 font-black">G</div>
                   <div>
                     <p className="font-black text-sm text-gray-900 dark:text-white">PAX Gold (Real Gold)</p>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">PAXG/USDT</p>
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">PAXG / BTC Dealing</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-black text-gray-900 dark:text-white">{formatCurrency(parseFloat(paxgPrice || '0'))}/oz</p>
+                  <p className="font-black text-amber-600 dark:text-amber-400">
+                    {paxgPrice && btcPrice ? (parseFloat(paxgPrice) / parseFloat(btcPrice)).toFixed(8) : "0.00000000"}
+                  </p>
                   <div className="flex flex-col items-end">
-                    <p className="text-[10px] text-yellow-600 dark:text-yellow-400 font-bold uppercase tracking-tighter">
-                      {formatCurrency(parseFloat(paxgPrice || '0') / 31.1035)} / gram
-                    </p>
                     <p className="text-[10px] text-gray-400 font-medium">
-                      {formatCurrency(parseFloat(paxgPrice || '0') / 31103.5)} / mg
+                      Market Rate: {formatCurrency(parseFloat(paxgPrice || '0'))}
                     </p>
                   </div>
                 </div>

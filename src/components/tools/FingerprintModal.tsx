@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Fingerprint } from 'lucide-react';
 import { motion } from 'motion/react';
-import { generateContentWithRetry } from '../../lib/ai';
+import { generateContentWithRetry, getAIBreakerStatus } from '../../lib/ai';
 import { Modality } from '@google/genai';
 import { useNotifications } from '../../hooks/useNotifications';
 import { saveInsight } from '../../lib/insights';
@@ -72,6 +72,12 @@ export default function FingerprintModal({ onClose, onSuccess }: FingerprintModa
     (window as any).__isGeneratingAdvice = true;
 
     try {
+      const breaker = getAIBreakerStatus();
+      if (breaker.isTripped) {
+        showNotification("Security Verified", { body: "Biometric Identity confirmed via standard protocol. AI Insight unit is in power-save mode." });
+        return;
+      }
+
       const prompt = `Act as a multi-domain AI consultant (Health, Security, Wealth, Life). 
       Based on a simulated deep biometric fingerprint scan, generate a comprehensive report.
       Include:

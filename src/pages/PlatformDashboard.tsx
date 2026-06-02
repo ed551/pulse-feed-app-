@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { generateContentWithRetry } from '../lib/ai';
+import { generateContentWithRetry, getAIBreakerStatus } from '../lib/ai';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, getDocs, query, doc, onSnapshot, updateDoc, increment, addDoc, serverTimestamp, getCountFromServer, orderBy, limit, deleteDoc } from 'firebase/firestore';
 import { 
@@ -309,6 +309,11 @@ export default function PlatformDashboard() {
   };
 
   const runGeminiAnalysis = async () => {
+    const breaker = getAIBreakerStatus();
+    if (breaker.isTripped) {
+      setAiReport("The Intelligence Engine is currently in power-save mode. Please use the Audit Engine for manual health verification.");
+      return;
+    }
     setIsAnalyzing(true);
     try {
       const dataString = `
