@@ -596,7 +596,7 @@ const translations: Record<string, Record<string, string>> = {
     tag_photo: '标记照片',
     edit_privacy: '编辑隐私',
     points_restored: '积分已完全恢复！',
-    points_restored_desc: '根据您经过验证的余额截图，6,337 积分已成功存入您的账户。',
+    points_restored_desc: '根据您经过验证的余额截图，6.337 Gold g 已成功存入您的账户。',
     recovery_error: '恢复错误',
     recovery_error_desc: '恢复积分失败。请重试或联系支持。',
     points_restoration_available: '可进行积分修复',

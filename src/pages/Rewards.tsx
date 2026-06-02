@@ -157,12 +157,7 @@ export default function Rewards() {
   const balanceUSD = points / 1.3; // 1.3g Gold = 1 USD
   const membershipLevel = userData?.membershipLevel || 'bronze';
 
-  const canWithdrawNow = useMemo(() => {
-    const now = new Date();
-    const isFirstOfMonth = now.getDate() === 1;
-    const hasEnoughGoldForImmediate = (userData?.points || 0) >= 130; // 100 USD = 130 Gold g
-    return isFirstOfMonth || hasEnoughGoldForImmediate;
-  }, [userData?.points]);
+  const canWithdrawNow = true; // 1st of month no longer mandatory
 
   const nextRedemptionDate = useMemo(() => {
     const now = new Date();
@@ -261,7 +256,7 @@ export default function Rewards() {
         setScaError(`Daily velocity limit reach with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is KES 650,000.`);
       }
 
-      const balanceKESCheck = points / 10;
+      const balanceKESCheck = points * 100;
       if (!isDeveloper && numAmount > balanceKESCheck) throw new Error("Insufficient reserve for this withdrawal request.");
 
       const isQueued = !canWithdrawNow;
@@ -802,30 +797,14 @@ export default function Rewards() {
         </div>
         <div className="relative z-10 text-center md:text-left flex-1">
           <div className="flex flex-col md:flex-row md:items-center gap-2 mb-2">
-            <h3 className="text-base font-black text-white uppercase tracking-wider">Automated Payout Cycle</h3>
+            <h3 className="text-base font-black text-white uppercase tracking-wider">On-Demand Payout Cycle</h3>
             <span className="hidden md:block w-1.5 h-1.5 bg-white/50 rounded-full" />
-            <span className="text-[10px] font-black text-indigo-100 bg-white/10 px-2 py-0.5 rounded uppercase tracking-widest border border-white/20">Monthly Schedule</span>
+            <span className="text-[10px] font-black text-emerald-100 bg-white/10 px-2 py-0.5 rounded uppercase tracking-widest border border-white/20">Fluid Schedule</span>
           </div>
           <p className="text-xs font-medium text-white/80 max-w-2xl leading-relaxed mb-4">
-            To maintain structural financial integrity, user withdrawals are batched and disbursed on the <span className="font-black text-white underline decoration-white/30 underline-offset-4">1st of every month</span>. 
-            <span className="block mt-2 font-bold text-indigo-100 italic">Exception: Accounts with an equivalent of 100 USD or more in gold (130 g) can initiate immediate withdrawals at any time.</span>
+            Financial integrity maintained through real-time verification. User withdrawals are processed <span className="font-black text-white underline decoration-white/30 underline-offset-4">on-demand</span> with no mandatory monthly waiting period. 
+            <span className="block mt-2 font-bold text-indigo-100 italic">Security: Standard velocity limits apply to all immediate disbursements.</span>
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-sm mx-auto md:mx-0">
-            <div className="flex items-center gap-3 px-3 py-2 bg-black/15 rounded-xl border border-white/5">
-              <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-              <div className="flex flex-col">
-                <span className="text-[8px] font-black text-indigo-200 uppercase tracking-[0.2em] leading-none mb-1">Next Payment</span>
-                <span className="text-xs font-bold text-white tracking-tight">June 1, 2026</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 px-3 py-2 bg-black/15 rounded-xl border border-white/5">
-              <ShieldCheck className="w-3 h-3 text-indigo-200" />
-              <div className="flex flex-col">
-                <span className="text-[8px] font-black text-indigo-200 uppercase tracking-[0.2em] leading-none mb-1">Status</span>
-                <span className="text-xs font-bold text-white tracking-tight">Batch Queued</span>
-              </div>
-            </div>
-          </div>
         </div>
       </motion.div>
 
@@ -1279,7 +1258,7 @@ export default function Rewards() {
           )}
         >
           <Smartphone className="w-4 h-4" />
-          <span>Withdrawals (KES)</span>
+          <span>Withdrawals</span>
         </button>
         <button 
           onClick={() => setActiveTab('international')}
@@ -1338,13 +1317,13 @@ export default function Rewards() {
                   Live Account Balance & Accumulation
                 </span>
                 <div className="text-6xl font-black mb-1 flex items-center gap-2">
-                  KES {balanceKES.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {points.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })} Gold g
                 </div>
                 <div className="text-xl font-bold text-white/90 mb-2">
-                  US$ {(userData?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ≈ KES {balanceKES.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className="text-sm font-bold text-white/70 mb-4">
-                  ≈ {(points / 1000).toFixed(3)} g Gold Balance
+                  US$ {(userData?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className="text-xl font-bold opacity-95 mb-4 flex items-center">
                   <Zap className="w-5 h-5 mr-2 text-yellow-300" />
@@ -1481,9 +1460,9 @@ export default function Rewards() {
                   </div>
                   <div className="text-left">
                     <p className="text-[10px] text-white/70">Next Settlement Gate</p>
-                    <p className="text-lg font-black text-white">{nextRedemptionDate}</p>
+                    <p className="text-lg font-black text-white">Instant</p>
                     <p className="text-[10px] text-white/60">
-                      Consolidated Monthly Batching (1st of Month)
+                      Real-time On-Demand Processing
                     </p>
                   </div>
                 </div>
@@ -1521,7 +1500,7 @@ export default function Rewards() {
                     onClick={() => setActiveTab('local')}
                     className="bg-white text-amber-700 hover:bg-yellow-50 px-8 py-3 rounded-full font-bold shadow-md transition-all flex-1"
                   >
-                    Withdraw Funds (KES)
+                    Withdraw Funds
                   </button>
                 </div>
               </div>
@@ -1539,7 +1518,7 @@ export default function Rewards() {
                   <br/><br/>
                   <strong>3. Platform Payments:</strong> To ensure the long-term sustainability of our high-performance AI infrastructure, all direct platform payments—including Advanced AI Lab access, Event tickets, and Marketplace transactions—belong 100% to the platform treasury. Specialized revenue from Education Hub course enrollments and AI training follow an 80/20 split (80% platform, 20% user reward).
                   <br/><br/>
-                  <strong>4. Rewards & Withdrawals:</strong> All earnings are batched and processed in standard monthly cycles on the 1st of each month. You can queue your withdrawal at any time, and it will be settled during the next available batch gate.
+                  <strong>4. Rewards & Withdrawals:</strong> All earnings are processed in real-time on-demand. You can initiate your withdrawal at any time, and it will be settled instantly.
                   <br/><br/>
                   <strong>Tax Compliance:</strong> The platform operates via a global Merchant of Record (MoR). This means your local and international taxes (e.g., VAT, WHT) are automatically calculated, withheld, and legally remitted directly to your country's tax authority (like KRA, IRS, or HMRC) on your behalf.
                 </p>
@@ -1634,13 +1613,13 @@ export default function Rewards() {
                     <Landmark className="w-32 h-32" />
                   </div>
                   <div className="relative z-10 space-y-4">
-                    <p className="text-blue-100 font-bold uppercase tracking-widest text-xs">Local Wallet Balance (KES)</p>
+                    <p className="text-blue-100 font-bold uppercase tracking-widest text-xs">Local Wallet Balance (Gold g)</p>
                     <h2 className="text-5xl font-black tracking-tighter">
-                      KES {balanceKES.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {points.toLocaleString(undefined, { minimumFractionDigits: 4 })} Gold g
                     </h2>
                     <div className="flex items-center space-x-2 text-blue-100 text-sm">
                       <ShieldCheck className="w-4 h-4" />
-                      <span>Secure local payout processing</span>
+                      <span>≈ KES {balanceKES.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>
                 </div>
@@ -1776,24 +1755,32 @@ export default function Rewards() {
                     )}
 
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount (KES)</label>
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Withdrawal Value</label>
                       <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">KES</span>
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">G</span>
                         <input
                           type="number"
                           placeholder="0.00"
-                          value={amount}
-                          onChange={(e) => setAmount(e.target.value)}
-                          className="w-full pl-14 pr-16 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all text-gray-900 dark:text-white font-medium"
+                          value={amount ? (parseFloat(amount) / 100).toFixed(4) : ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setAmount(val ? (parseFloat(val) * 100).toString() : "");
+                          }}
+                          className="w-full pl-10 pr-16 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all text-gray-900 dark:text-white font-medium"
                         />
                         <button
                           type="button"
-                          onClick={handleWithdrawMax}
+                          onClick={() => setAmount((points * 100).toString())}
                           className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 transition-colors"
                         >
                           Max
                         </button>
                       </div>
+                      {amount && (
+                        <p className="text-[10px] font-bold text-blue-500 px-2">
+                          ≈ KES {parseFloat(amount).toLocaleString()} will be disbursed
+                        </p>
+                      )}
                     </div>
 
                     <AnimatePresence mode="wait">
@@ -1955,14 +1942,14 @@ export default function Rewards() {
                     <Globe className="w-32 h-32" />
                   </div>
                   <div className="relative z-10 space-y-4">
-                    <p className="text-purple-100 font-bold uppercase tracking-widest text-xs">International Payouts (KES)</p>
-                      <h2 className="text-5xl font-black tracking-tighter">
-                        KES {balanceKES.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </h2>
-                    <div className="flex items-center space-x-2 text-purple-100 text-sm">
-                      <CheckCircle className="w-4 h-4" />
-                      <span>Available for withdrawal globally in KES</span>
-                    </div>
+                        <p className="text-purple-100 font-bold uppercase tracking-widest text-xs">International Payouts (Gold g)</p>
+                        <h2 className="text-5xl font-black tracking-tighter">
+                          {points.toLocaleString(undefined, { minimumFractionDigits: 4 })} Gold g
+                        </h2>
+                        <div className="flex items-center space-x-2 text-purple-100 text-sm">
+                          <CheckCircle className="w-4 h-4" />
+                          <span>≈ KES {balanceKES.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        </div>
                   </div>
                 </div>
 
@@ -2233,7 +2220,7 @@ export default function Rewards() {
                   <ul className="space-y-3 text-xs text-gray-500 dark:text-gray-400">
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
-                      <span>Processing time: {isDeveloper ? "Instant (Developer Priority)" : "1st of every month"}</span>
+                      <span>Processing time: Instant (On-Demand)</span>
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />

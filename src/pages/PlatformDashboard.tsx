@@ -242,7 +242,7 @@ export default function PlatformDashboard() {
       return;
     }
 
-    if (!window.confirm(`CRITICAL: You are about to process the monthly batch for ${queuedCount} requests totaling ${formatCurrency(queuedBatchTotal)}. This will initiate active payouts. Continue?`)) {
+    if (!window.confirm(`CRITICAL: You are about to process the on-demand queue for ${queuedCount} requests totaling ${formatCurrency(queuedBatchTotal)}. This will initiate active payouts. Continue?`)) {
       return;
     }
 
@@ -257,7 +257,7 @@ export default function PlatformDashboard() {
         batch.update(doc(db, 'withdrawals', w.id), {
           status: 'success',
           processedAt: serverTimestamp(),
-          batchRef: `BATCH-${new Date().toISOString().split('T')[0]}`
+          batchRef: `ONDEMAND-${new Date().toISOString().split('T')[0]}`
         });
 
         // Update user's transaction status
@@ -270,7 +270,7 @@ export default function PlatformDashboard() {
       }
 
       await batch.commit();
-      setSuccess(`Successfully processed monthly batch: ${queuedCount} payouts finalized.`);
+      setSuccess(`Successfully processed on-demand queue: ${queuedCount} payouts finalized.`);
       handleRefresh();
     } catch (err: any) {
       setError(`Batch processing failed: ${err.message}`);
@@ -466,7 +466,7 @@ export default function PlatformDashboard() {
       // IF unit is missing:
       // - Platform Revenue is ALMOST ALWAYS KES or USD (large amounts).
       // - Standard revenue/payouts < 100 are likely Gold g.
-      const isPoints = tx.unit === 'POINTS' || tx.unit === 'G' || tx.unit === 'Gold mg' || tx.unit === 'Gold g' || (!tx.unit && Math.abs(platformAmtRaw) < 100 && tx.type !== 'platform_revenue' && tx.type !== 'expense');
+      const isPoints = tx.unit === 'POINTS' || tx.unit === 'G' || tx.unit === 'Gold g' || (!tx.unit && Math.abs(platformAmtRaw) < 100 && tx.type !== 'platform_revenue' && tx.type !== 'expense');
       const isKes = tx.unit === 'KES' || tx.currency === 'KES';
       
       let platformAmt = platformAmtRaw;
@@ -1976,9 +1976,9 @@ export default function PlatformDashboard() {
                   <Calendar className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
               </div>
               <div>
-                  <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider mb-0.5">Monthly Settlement Protocol</p>
+                  <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider mb-0.5">On-Demand Settlement Protocol</p>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                    Withdrawals are disbursed on the <span className="font-bold text-indigo-600 dark:text-indigo-400">1st of every month</span>.
+                    Withdrawals are disbursed <span className="font-bold text-indigo-600 dark:text-indigo-400">on-demand (Instant)</span>.
                   </p>
               </div>
             </div>
@@ -1998,7 +1998,7 @@ export default function PlatformDashboard() {
                   <Zap className={cn("w-4 h-4", queuedBatchTotal > 0 ? "text-white" : "text-gray-400")} />
                 </div>
                 <div>
-                  <p className={cn("text-[10px] font-black uppercase tracking-widest", queuedBatchTotal > 0 ? "text-purple-100" : "text-gray-400")}>Upcoming Monthly Batch</p>
+                  <p className={cn("text-[10px] font-black uppercase tracking-widest", queuedBatchTotal > 0 ? "text-purple-100" : "text-gray-400")}>On-Demand Pending Queue</p>
                   <p className={cn("text-sm font-black", queuedBatchTotal > 0 ? "text-white" : "text-gray-400")}>{formatCurrency(queuedBatchTotal)}</p>
                 </div>
               </div>

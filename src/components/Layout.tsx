@@ -1062,7 +1062,7 @@ export default function Layout() {
                 <div className="flex items-center px-2 sm:px-3 py-1 bg-yellow-50 dark:bg-yellow-900/30 rounded-full border border-yellow-100 dark:border-yellow-800 shadow-sm group">
                   <Layers className="w-3.5 h-3.5 sm:w-4 h-4 text-yellow-600 mr-1 sm:mr-1.5 group-hover:scale-110 transition-transform" />
                   <span className="text-[10px] sm:text-xs font-black text-yellow-800 dark:text-yellow-300">
-                    {((userData?.points || 0) / 1000).toFixed(3)} <span className="text-[8px] opacity-70">g</span>
+                    {(userData?.points || 0).toFixed(3)} <span className="text-[8px] opacity-70">g</span>
                   </span>
                 </div>
 
@@ -1634,7 +1634,7 @@ export default function Layout() {
                         {userData?.points?.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 }) || '0'} <span className="text-xs font-bold opacity-60 uppercase">Gold g</span>
                       </p>
                       <p className="text-[8px] font-black text-yellow-700/60 uppercase tracking-tighter">
-                        +{userData?.points.toLocaleString() || 0} Points Accumulation
+                        +{userData?.points.toLocaleString(undefined, { maximumFractionDigits: 4 }) || 0} g Accumulation
                       </p>
                     </div>
                     <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-2xl border border-yellow-100 dark:border-yellow-800/50 flex flex-col gap-1">
@@ -1643,7 +1643,7 @@ export default function Layout() {
                         <span className="text-xs font-bold text-yellow-700 dark:text-yellow-300">Market Intel</span>
                       </div>
                       <div className="flex items-baseline gap-1">
-                        <p className="text-lg font-black text-yellow-900 dark:text-yellow-100">{marketData?.symbol || 'Points'}</p>
+                        <p className="text-lg font-black text-yellow-900 dark:text-yellow-100">{marketData?.symbol || 'Gold g'}</p>
                         <span className="text-[10px] font-bold text-yellow-600">{marketData?.direction === 'up' ? '▲' : '▼'} {marketData?.confidence || '--'}%</span>
                       </div>
                     </div>

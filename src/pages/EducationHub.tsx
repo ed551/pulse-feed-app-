@@ -139,8 +139,8 @@ export default function EducationHub() {
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // 80/20 Revenue Split for Course Enrollment & AI Training
-      // Total Enrollment Fee/Value: 1000 Points
-      const totalEnrollmentValue = 1000;
+      // Total Enrollment Fee/Value: 1.0 Gold g (~100 KES)
+      const totalEnrollmentValue = 1.0;
       const userShare = totalEnrollmentValue * 0.2; // 20% to user
       const developerShare = totalEnrollmentValue * 0.8; // 80% to developer (as Platform Revenue)
 
@@ -151,11 +151,11 @@ export default function EducationHub() {
         experience: increment(250)
       });
 
-      // Log Developer/Platform Share (10 mg Gold = 1 KES)
-      await addPlatformRevenue(developerShare / 10, `Course Enrollment Fee: ${course.title} (Developer 80% Share)`);
+      // Log Developer/Platform Share (1g Gold = 100 KES)
+      await addPlatformRevenue(developerShare * 0.77, `Course Enrollment Fee: ${course.title} (Developer 80% Share)`);
 
       showNotification("Education Milestone", { 
-        body: `Welcome to ${course.title}! You've been rewarded ${userShare} mg Gold (20% share) while 80% (${formatCurrency(developerShare / 1300)}) fuels global engineering.` 
+        body: `Welcome to ${course.title}! You've been rewarded ${userShare.toFixed(4)} Gold g (20% share) while 80% (${formatCurrency(developerShare * 100)}) fuels global engineering.` 
       });
       setSelectedCourse(null);
     } catch (err) {
@@ -261,7 +261,7 @@ export default function EducationHub() {
       }
 
       // Distribute rewards for learning
-      const rewardPoints = 25;
+      const rewardPoints = 0.025; // 0.025g Gold (~2.5 KES)
       const { userShare } = revenue_distribution_engine(rewardPoints, 'education');
 
       await updateDoc(doc(db, 'users', currentUser.uid), {
@@ -271,7 +271,7 @@ export default function EducationHub() {
       });
 
       showNotification("Lesson Completed", { 
-        body: `Great job! You earned ${userShare} points for completing "${activeLesson.title}".` 
+        body: `Great job! You earned ${userShare.toFixed(4)} Gold g for completing "${activeLesson.title}".` 
       });
       setActiveLesson(null);
     } catch (err) {

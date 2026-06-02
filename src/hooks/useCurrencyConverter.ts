@@ -9,11 +9,11 @@ export const useCurrencyConverter = () => {
   const [rates, setRates] = useState<ExchangeRates>({ 
     USD: 1,
     KES: 130, // authoritative local rate
-    GOLD: 1 
+    GOLD: 31.1035 / 2375.40 // ~0.01309 g per USD
   });
   const [currency, setCurrency] = useState<string>('GOLD');
   const [loading, setLoading] = useState(true);
-  const [goldPriceUSD, setGoldPriceUSD] = useState<number>(2350); // Fallback price per troy ounce
+  const [goldPriceUSD, setGoldPriceUSD] = useState<number>(2375.40); // Neural Stabilizer fallback Troy Ounce price
 
   useEffect(() => {
     // Load saved currency
@@ -34,24 +34,30 @@ export const useCurrencyConverter = () => {
           const prices = data.prices || [];
           
           const paxgTicker = prices.find((p: any) => p.symbol === 'PAXGUSDT');
-          if (paxgTicker) {
+          if (paxgTicker && paxgTicker.price) {
             const price = parseFloat(paxgTicker.price);
-            setGoldPriceUSD(price);
             
-            // 1 PAXG = 1 Troy Ounce = 31.1035 grams
-            // We want to know how many grams are in 1 USD
-            const gPerUSD = 31.1035 / price;
-            
-            setRates(prev => ({ 
-              ...prev, 
-              USD: 1,
-              KES: 130,
-              GOLD: gPerUSD 
-            }));
+            if (!isNaN(price) && price > 0) {
+              setGoldPriceUSD(price);
+              
+              // 1 PAXG = 1 Troy Ounce = 31.1035 grams
+              // We want to know how many grams are in 1 USD
+              const gPerUSD = 31.1035 / price;
+              
+              setRates(prev => ({ 
+                ...prev, 
+                USD: 1,
+                KES: 130,
+                GOLD: gPerUSD 
+              }));
+            }
           }
+        } else {
+          console.warn('Gold rate fetch returned non-OK status. Using fallback.');
         }
       } catch (error) {
-        console.error('Failed to fetch real-time gold rates:', error);
+        // Reduced log severity as we have fallbacks
+        console.warn('Real-time gold rates unavailable, staying with current rates.');
       } finally {
         setLoading(false);
       }
@@ -76,7 +82,7 @@ export const useCurrencyConverter = () => {
     const amountInUSD = fromCurrency === 'USD' ? amount : amount / rateFrom;
 
     if (currency === 'GOLD') {
-      const rate = rates['GOLD'] || (31.1035 / 2350);
+      const rate = rates['GOLD'] || (31.1035 / 2375.40);
       const grams = amountInUSD * rate;
       
       return `${grams.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} Gold g`;
