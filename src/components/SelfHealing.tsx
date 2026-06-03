@@ -84,6 +84,7 @@ export default function SelfHealing() {
       const isAIUnavailable = message.includes("AI service is temporarily unavailable") || 
                               message.toLowerCase().includes("billing") || 
                               message.toLowerCase().includes("depleted") ||
+                              message.toLowerCase().includes("dunning") ||
                               message.toLowerCase().includes("quota");
 
       if (isAIUnavailable) {

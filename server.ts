@@ -229,14 +229,16 @@ async function generateContentWithRetry(params: any): Promise<any> {
         // Blocked/Dunning is terminal
         if (isBlocked) {
           isAIBreakerTripped = true;
-          breakerErrorText = errorString;
+          breakerErrorText = combinedErrorText.includes("dunning")
+            ? "Gemini API Blocked: Project billing restricted (Dunning). Please resolve this in your Google Cloud Console Billing dashboard to restore AI features."
+            : errorString;
           breakerTrippedAt = Date.now();
-          console.error(`[Server AI] CIRCUIT BREAKER TRIPPED (Status 403): ${errorString}. Stopping all future AI interactions for 30 minutes to prevent resource exhaustion.`);
+          console.error(`[Server AI] CIRCUIT BREAKER TRIPPED (Status 403): ${breakerErrorText}. Stopping all future AI interactions for 30 minutes to prevent resource exhaustion.`);
           if (currentRelease) {
             currentRelease();
             currentRelease = null;
           }
-          throw error;
+          throw new Error(breakerErrorText);
         }
 
         // Key Rotation on Billing/Quota failure
@@ -348,9 +350,9 @@ if (!authenticator || typeof authenticator.verify !== 'function') {
 // Initialize Firebase Configuration
 let firebaseConfig: any;
 try {
-  const configPath = fs.existsSync(path.join(__dirname, "firebase-applet-config.json"))
-    ? path.join(__dirname, "firebase-applet-config.json")
-    : path.join(__dirname, "..", "firebase-applet-config.json");
+  const configPath = fs.existsSync(path.join(process.cwd(), "firebase-applet-config.json"))
+    ? path.join(process.cwd(), "firebase-applet-config.json")
+    : path.join(process.cwd(), "..", "firebase-applet-config.json");
     
   if (fs.existsSync(configPath)) {
     firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
@@ -1494,9 +1496,9 @@ async function startServer() {
         timeout: 10000
       });
       
-      // Filter interesting balances (USDT, PAXG, BTC)
+      // Filter interesting balances (PAXG, BTC)
       const balances = resp.data.balances.filter((b: any) => 
-        parseFloat(b.free) > 0 || parseFloat(b.locked) > 0
+        (parseFloat(b.free) > 0 || parseFloat(b.locked) > 0) && (b.asset === 'PAXG' || b.asset === 'BTC' || b.asset === 'ETH')
       );
 
       res.json({ success: true, account: { ...resp.data, balances } });
@@ -4427,53 +4429,7 @@ async function performRobustEducationSync() {
     res.json({ shortUrl: mockShort });
   });
 
-
-  app.post("/api/binance/withdraw", async (req, res) => {
-    const { asset, address, amount, network, userId, scaToken, totpCode } = req.body;
-    const apiKey = process.env.BINANCE_API_KEY;
-    const apiSecret = process.env.BINANCE_API_SECRET;
-
-    if (!apiKey || !apiSecret) {
-      return res.status(401).json({ success: false, error: "Binance API keys not configured in server secrets." });
-    }
-
-    if (!asset || !address || !amount) {
-      return res.status(400).json({ success: false, error: "Asset, address, and amount are required." });
-    }
-
-    // Secondary Security Check (SCA)
-    let authLevel = 0;
-    if (userId) {
-      authLevel = await verifyUserAuthorizationLevel(userId, { scaToken, totpCode });
-    }
-
-    // Force SCA for any binance withdrawal due to high risk
-    if (!scaToken && !totpCode && authLevel < 1) {
-      return res.status(403).json({ success: false, error: "Security validation (PIN, Biometrics, or TOTP) is required for Binance withdrawals." });
-    }
-
-    try {
-      // Binance SAPI for withdrawals (Spot API)
-      // Note: Testnet usually doesn't support SAPI withdrawals, so we use production endpoint or throw error
-      const timestamp = Date.now();
-      const queryStr = `asset=${asset}&address=${address}&amount=${amount}&timestamp=${timestamp}${network ? `&network=${network}` : ''}`;
-      const signature = crypto.createHmac('sha256', apiSecret).update(queryStr).digest('hex');
-
-      const response = await axios.post(`https://api.binance.com/sapi/v1/capital/withdraw/apply?${queryStr}&signature=${signature}`, null, {
-        headers: {
-          'X-MBX-APIKEY': apiKey,
-          'User-Agent': STANDARD_USER_AGENT
-        },
-        timeout: 10000
-      });
-
-      res.json({ success: true, data: response.data });
-    } catch (error: any) {
-      const errMsg = error.response?.data?.msg || error.message;
-      console.error(`[Binance] Withdrawal failed: ${errMsg}`);
-      res.status(500).json({ success: false, error: errMsg });
-    }
-  });
+  // Duplicate Binance withdraw route removed (using the one defined earlier in startServer)
 
   // Health check route
   app.get("/health", (req, res) => {
@@ -4509,6 +4465,11 @@ async function performRobustEducationSync() {
       simulationLocked: true,
       details: isForbidden ? "API_GATEWAY_RESTRICTION" : undefined
     });
+  });
+
+  // Final 404 JSON fallback for API routes
+  app.use("/api/*", (req, res) => {
+    res.status(404).json({ success: false, error: `Route ${req.method} ${req.path} not found.` });
   });
 
   // Vite middleware for development

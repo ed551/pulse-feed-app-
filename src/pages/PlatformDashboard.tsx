@@ -310,6 +310,13 @@ export default function PlatformDashboard() {
         })
       });
 
+      const contentType = resp.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await resp.text();
+        console.error("[Platform Dispatch] Expected JSON, got:", text.substring(0, 500));
+        throw new Error(`Dispatch System Error: Received invalid response format (${resp.status}). Please check server logs.`);
+      }
+
       const result = await resp.json();
       if (!result.success) throw new Error(result.error || "Binance dispatch failed");
 

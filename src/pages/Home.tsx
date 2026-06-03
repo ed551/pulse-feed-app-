@@ -61,6 +61,10 @@ export default function Home() {
     const fetchPrices = async () => {
       try {
         const resp = await fetch('/api/binance/prices');
+        const contentType = resp.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+           throw new Error("Invalid pricing response");
+        }
         const data = await resp.json();
         if (data.success) {
           const p = data.prices.find((p: any) => p.symbol === 'PAXGUSDT')?.price;

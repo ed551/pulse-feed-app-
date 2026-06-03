@@ -121,6 +121,10 @@ export default function Rewards() {
     const fetchPaxgBtc = async () => {
       try {
         const resp = await fetch('/api/binance/prices');
+        const contentType = resp.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+           throw new Error("Invalid pricing response");
+        }
         const data = await resp.json();
         if (data.success) {
           const paxgUsdt = data.prices.find((p: any) => p.symbol === 'PAXGUSDT')?.price;
@@ -372,6 +376,12 @@ export default function Rewards() {
     setIsCheckingBinanceBalance(true);
     try {
       const response = await fetch(`/api/binance/balance/${asset}`);
+      
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error(`Server returned non-JSON response (${response.status})`);
+      }
+
       const data = await response.json();
       if (data.success) {
         setBinanceBalance({ free: data.free, locked: data.locked });
@@ -430,6 +440,13 @@ export default function Rewards() {
           userId: currentUser?.uid
         })
       });
+
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("[Binance] Expected JSON, got:", text.substring(0, 500));
+        throw new Error(`Server Error: Received unexpected response format (${response.status}). The Binance service might be down or restricted.`);
+      }
 
       const result = await response.json();
       if (!result.success) throw new Error(result.error || "Binance withdrawal failed");

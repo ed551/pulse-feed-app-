@@ -247,7 +247,7 @@ export default function BinanceHub() {
                         {calculateTotalBalance(account.balances, prices, formatCurrency)}
                       </span>
                     </div>
-                    <p className="text-[10px] font-bold text-slate-500">Locked Assets: 0.00 USDT</p>
+                    <p className="text-[10px] font-bold text-slate-500">Locked Assets: 0.00 PAXG</p>
                   </div>
 
                   <div className="space-y-3">

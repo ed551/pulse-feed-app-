@@ -120,7 +120,9 @@ export async function generateContentWithRetry(params: any): Promise<any> {
           
           if (isBlocked) {
             isAIBreakerTripped = true;
-            breakerErrorText = data?.error || errorMsg;
+            breakerErrorText = combinedErrorText.includes("dunning") 
+              ? "Your Google Cloud Project billing has been restricted (Dunning). Please check your GCP console billing settings to restore Gemini API access."
+              : (data?.error || errorMsg);
             console.error(`[AI Proxy] CIRCUIT BREAKER TRIPPED: ${breakerErrorText}. Stopping all future AI interactions for this session.`);
             throw new Error(breakerErrorText);
           }
@@ -233,12 +235,14 @@ export async function generateContentWithRetry(params: any): Promise<any> {
         // Blocked/Dunning is terminal - stop immediately
         if (isBlocked) {
           isAIBreakerTripped = true;
-          breakerErrorText = errorString;
-          console.error(`[Client AI] CIRCUIT BREAKER TRIPPED: ${errorString}. Access Denied - stopping all future retries.`);
+          breakerErrorText = combinedErrorText.includes("dunning")
+            ? "Google Gemini API Error: Project billing is restricted (Dunning). Please check your GCP console billing dashboard."
+            : errorString;
+          console.error(`[Client AI] CIRCUIT BREAKER TRIPPED: ${breakerErrorText}. Access Denied - stopping all future retries.`);
           const release = currentRelease;
           currentRelease = null;
           if (release) release();
-          throw error;
+          throw new Error(breakerErrorText);
         }
         
           // Model Fallback Logic (Sync with server.ts)
