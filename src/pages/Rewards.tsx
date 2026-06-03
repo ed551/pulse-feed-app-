@@ -365,6 +365,26 @@ export default function Rewards() {
     }
   };
 
+  const [binanceBalance, setBinanceBalance] = useState<{ free: string, locked: string } | null>(null);
+  const [isCheckingBinanceBalance, setIsCheckingBinanceBalance] = useState(false);
+
+  const checkBinanceAssetBalance = async (asset: string) => {
+    setIsCheckingBinanceBalance(true);
+    try {
+      const response = await fetch(`/api/binance/balance/${asset}`);
+      const data = await response.json();
+      if (data.success) {
+        setBinanceBalance({ free: data.free, locked: data.locked });
+      } else {
+        throw new Error(data.error || "Failed to fetch balance");
+      }
+    } catch (err: any) {
+      setError(`Binance Balance Check Failed: ${err.message}`);
+    } finally {
+      setIsCheckingBinanceBalance(false);
+    }
+  };
+
   const handleBinanceWithdraw = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean, totp?: string) => {
     if (e) e.preventDefault();
     if (!payoutAmount) return;
@@ -447,6 +467,9 @@ export default function Rewards() {
       setSuccess(`Success! ${numAmount} ${binanceCoin} withdrawal initiated to ${binanceAddress}`);
       setPayoutAmount("");
       setBinanceAddress("");
+
+      // Automatically refresh balance after 5 seconds to show update on Binance
+      setTimeout(() => checkBinanceAssetBalance(binanceCoin), 5000);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -2064,6 +2087,21 @@ export default function Rewards() {
                               className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-gray-900 dark:text-white font-mono text-xs shadow-sm"
                             />
                           </div>
+                          
+                          <div className="mt-4 p-4 bg-amber-500/5 rounded-2xl border border-amber-500/10 flex items-center justify-between">
+                            <div>
+                               <p className="text-[10px] font-black text-amber-600/60 uppercase tracking-widest">Binance {binanceCoin} Balance</p>
+                               <p className="text-lg font-black text-amber-600">{binanceBalance ? `${binanceBalance.free} ${binanceCoin}` : '---'}</p>
+                            </div>
+                            <button 
+                              onClick={() => checkBinanceAssetBalance(binanceCoin)}
+                              disabled={isCheckingBinanceBalance}
+                              className="px-4 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all disabled:opacity-50"
+                            >
+                              {isCheckingBinanceBalance ? 'Checking...' : 'Check Balance'}
+                            </button>
+                          </div>
+                          
                           <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest px-2">Ensure network ({binanceNetwork}) matches the address to avoid losing funds.</p>
                         </div>
                       </div>

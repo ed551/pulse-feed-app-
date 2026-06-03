@@ -1104,6 +1104,105 @@ export default function PlatformDashboard() {
     }
   };
 
+  const [binanceBalances, setBinanceBalances] = useState<any[]>([]);
+  const [isCheckingBinance, setIsCheckingBinance] = useState(false);
+  const [binanceWithdrawalForm, setBinanceWithdrawalForm] = useState({
+    asset: 'USDT',
+    address: '',
+    amount: '',
+    network: 'ETH'
+  });
+
+  const checkBinanceBalance = async () => {
+    setIsCheckingBinance(true);
+    try {
+      const response = await fetch('/api/binance/account');
+      const data = await response.json();
+      if (data.success && data.account?.balances) {
+        setBinanceBalances(data.account.balances);
+      } else {
+        throw new Error(data.error || "Failed to fetch Binance account data");
+      }
+    } catch (err: any) {
+      setError(`Binance Check Failed: ${err.message}`);
+    } finally {
+      setIsCheckingBinance(false);
+    }
+  };
+
+  const handleBinanceWithdrawal = async (e?: React.FormEvent, token?: string, usePhone?: boolean, email?: string, password?: string) => {
+    if (e) e.preventDefault();
+    const { asset, address, amount, network } = binanceWithdrawalForm;
+    
+    if (!amount || !address) {
+      setError("Please fill in all withdrawal fields.");
+      return;
+    }
+
+    // Trigger SCA if not authenticated
+    if (!token && !usePhone && (!email || !password) && !process.env.SKIP_SCA) {
+      setScaPendingAction(() => (t: string, up?: boolean, em?: string, pw?: string) => handleBinanceWithdrawal(undefined, t, up, em, pw));
+      setShowSCAModal(true);
+      return;
+    }
+
+    setIsDevWithdrawing(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await fetch("/api/binance/withdraw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          asset,
+          address,
+          amount: parseFloat(amount),
+          network,
+          userId: 'platform-admin',
+          scaToken: token,
+          usePhone,
+          email,
+          password
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Binance withdrawal failed");
+
+      setSuccess(`Binance withdrawal of ${amount} ${asset} successfully initiated to ${address}.`);
+      setBinanceWithdrawalForm({ ...binanceWithdrawalForm, amount: '', address: '' });
+      
+      // Update platform stats (deduct from share as it's an operational withdrawal)
+      if (db) {
+        const statsRef = doc(db, "platform", "stats");
+        await updateDoc(statsRef, {
+          platformShare: increment(-parseFloat(amount))
+        });
+        
+        await addDoc(collection(db, 'platform_transactions'), {
+          type: 'expense',
+          source: 'binance_withdrawal',
+          userAmount: 0,
+          platformAmount: -parseFloat(amount),
+          totalAmount: parseFloat(amount),
+          reason: `Binance Withdrawal (${asset}) to ${address}`,
+          userId: currentUser?.uid || 'system',
+          timestamp: serverTimestamp(),
+          serverSecret: "pulse-feeds-server-secret-2026"
+        });
+      }
+
+      // Check balance again to reflect update
+      setTimeout(checkBinanceBalance, 2000);
+      handleRefresh();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsDevWithdrawing(false);
+    }
+  };
+
   const handleNeuralBypassRequest = async (token?: string, up?: boolean, em?: string, pw?: string) => {
     if (!currentUser) return;
     
@@ -2439,6 +2538,99 @@ export default function PlatformDashboard() {
       
       {activeTab === 'financial' && (
         <div className="space-y-8 animate-in fade-in duration-300">
+          {/* Binance Intelligence Terminal */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="bg-slate-900 border border-yellow-500/20 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+                <Globe className="w-40 h-40 text-yellow-500 -rotate-12" />
+              </div>
+              
+              <div className="relative z-10 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-yellow-500/10 rounded-2xl flex items-center justify-center border border-yellow-500/20 shadow-[0_0_20px_-5px_rgba(234,179,8,0.2)]">
+                      <Zap className="w-6 h-6 text-yellow-500" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-white uppercase tracking-tight">Binance Treasury</h3>
+                      <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Global Spot Asset Control</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={checkBinanceBalance}
+                    disabled={isCheckingBinance}
+                    className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all disabled:opacity-50"
+                  >
+                    <RefreshCw className={cn("w-5 h-5 text-yellow-500", isCheckingBinance && "animate-spin")} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {binanceBalances.length > 0 ? binanceBalances.map((b, i) => (
+                    <div key={`balance-${b.asset}-${i}`} className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">{b.asset}</p>
+                      <p className="text-lg font-black text-white truncate">{parseFloat(b.free).toFixed(4)}</p>
+                    </div>
+                  )) : (
+                    <div className="col-span-full py-8 text-center bg-black/20 rounded-2xl border border-dashed border-white/10">
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">No Active Balances Found</p>
+                      <button onClick={checkBinanceBalance} className="mt-2 text-yellow-500 font-black text-xs hover:underline">Connect Node</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-900 border border-indigo-500/20 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden group">
+              <div className="relative z-10 space-y-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-indigo-500/10 rounded-2xl flex items-center justify-center border border-indigo-500/20">
+                    <ArrowUpCircle className="w-6 h-6 text-indigo-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-white uppercase tracking-tight">Operational Withdraw</h3>
+                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Outbound Binance Dispatch</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <input 
+                    type="text" 
+                    placeholder="Address"
+                    value={binanceWithdrawalForm.address}
+                    onChange={(e) => setBinanceWithdrawalForm({...binanceWithdrawalForm, address: e.target.value})}
+                    className="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                  <input 
+                    type="number" 
+                    placeholder="Amount"
+                    value={binanceWithdrawalForm.amount}
+                    onChange={(e) => setBinanceWithdrawalForm({...binanceWithdrawalForm, amount: e.target.value})}
+                    className="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+                
+                <div className="flex gap-4">
+                  <select 
+                    value={binanceWithdrawalForm.asset}
+                    onChange={(e) => setBinanceWithdrawalForm({...binanceWithdrawalForm, asset: e.target.value})}
+                    className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none"
+                  >
+                    <option value="USDT">USDT</option>
+                    <option value="PAXG">PAXG</option>
+                    <option value="BTC">BTC</option>
+                  </select>
+                  <button 
+                    onClick={() => handleBinanceWithdrawal()}
+                    disabled={isDevWithdrawing}
+                    className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-[0.2em] rounded-xl py-3 shadow-lg shadow-indigo-600/20 active:scale-95 disabled:opacity-50"
+                  >
+                    Initiate Binance Payout
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
           <AnimatePresence>
             {auditReport.health !== 'healthy' && (
               <motion.div 

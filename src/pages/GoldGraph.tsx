@@ -63,9 +63,19 @@ const TROY_OZ_TO_GRAMS = 31.1034768;
 
 export default function GoldGraph() {
   const { convert: formatCurrency } = useCurrencyConverter();
+  
+  const formatUSD = (val: number) => {
+    return new Intl.NumberFormat('en-US', { 
+      style: 'currency', 
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(val);
+  };
+
   const [data, setData] = useState<any[]>([]);
-  const [realPrice, setRealPrice] = useState<number>(2458.30);
-  const [btcPrice, setBtcPrice] = useState<number>(40120);
+  const [realPrice, setRealPrice] = useState<number>(4452.34);
+  const [btcPrice, setBtcPrice] = useState<number>(67100);
   const [dataLoading, setDataLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'USD' | 'BTC'>('USD');
 
@@ -108,6 +118,7 @@ export default function GoldGraph() {
               
               mockHistory.push({
                 date: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+                height: 100,
                 price: pUsd,
                 priceBtc: parseFloat(pBtc.toFixed(8)),
                 timestamp: date.getTime()
@@ -127,9 +138,9 @@ export default function GoldGraph() {
         }
       } catch (err) {
         console.warn("Market fetch fallback active:", err);
-        // Robust Fallback (Gold ~$2450, BTC ~$40k to hit ~0.06 ratio user requested)
-        const basePrice = 2458.30; 
-        const fallbackBtc = 40120;
+        // Robust Fallback (Gold ~$4452, BTC ~$67.1k to hit ~0.066 ratio user requested)
+        const basePrice = 4452.34; 
+        const fallbackBtc = 67100;
         setRealPrice(basePrice);
         setBtcPrice(fallbackBtc);
         
@@ -167,10 +178,10 @@ export default function GoldGraph() {
     p15d: { direction: 'UP' | 'DOWN' | 'SIDEWAYS'; confidence: number; target: number; reasoning: string };
     p30d: { direction: 'UP' | 'DOWN' | 'SIDEWAYS'; confidence: number; target: number; reasoning: string };
   }>({
-    p1d: { direction: 'UP', confidence: 85, target: 2475.50, reasoning: 'Stability index high.' },
-    p7d: { direction: 'UP', confidence: 75, target: 2510.20, reasoning: 'Trend projection positive.' },
-    p15d: { direction: 'SIDEWAYS', confidence: 50, target: 2490.80, reasoning: 'Consolidation phase expected.' },
-    p30d: { direction: 'UP', confidence: 60, target: 2550.00, reasoning: 'Long-term growth bias.' }
+    p1d: { direction: 'UP', confidence: 88, target: 4485.50, reasoning: 'Strong momentum crossover vs BTC liquidity.' },
+    p7d: { direction: 'UP', confidence: 82, target: 4540.20, reasoning: 'Predictive neural trend indicates major breakout.' },
+    p15d: { direction: 'UP', confidence: 75, target: 4610.80, reasoning: 'Consolidation complete; entering high-profit phase.' },
+    p30d: { direction: 'UP', confidence: 78, target: 4850.00, reasoning: 'Long-term macro accumulation signals strong alpha.' }
   });
   const [prediction, setPrediction] = useState<{
     direction: 'UP' | 'DOWN' | 'SIDEWAYS';
@@ -269,8 +280,9 @@ export default function GoldGraph() {
         }
       });
 
-      if (response.candidates?.[0]?.content?.parts?.[0]?.text) {
-        const result = JSON.parse(response.candidates[0].content.parts[0].text);
+      const responseText = response.text || response.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (responseText) {
+        const result = JSON.parse(responseText);
         setPredictions(result);
         
         // Use 7-day as the primary one for the chart
@@ -329,8 +341,8 @@ export default function GoldGraph() {
               <div className="flex items-baseline gap-3">
                 <span className="text-5xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
                   {viewMode === 'USD' 
-                    ? (realPrice ? formatCurrency(realPrice) : "$2,458.30") 
-                    : (realPrice && btcPrice ? (realPrice / btcPrice).toFixed(6) : "0.061274")
+                    ? (realPrice ? formatUSD(realPrice) : "$4,452.34") 
+                    : (realPrice && btcPrice ? (realPrice / btcPrice).toFixed(5) : "0.06636")
                   }
                 </span>
                 <span className={cn(
@@ -347,84 +359,6 @@ export default function GoldGraph() {
       </div>
 
       <div className="max-w-[1600px] mx-auto p-8 lg:p-12 space-y-12">
-        {/* Core Prediction Matrix */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[
-            { label: 'Short Term', time: '1 Day', key: 'p1d', icon: Zap },
-            { label: 'Medium Term', time: '7 Days', key: 'p7d', icon: Target },
-            { label: 'Expansionary', time: '15 Days', key: 'p15d', icon: Activity },
-            { label: 'Macro Trend', time: '30 Days', key: 'p30d', icon: ShieldCheck },
-          ].map((item, idx) => {
-            const p = predictions?.[item.key as keyof typeof predictions];
-            return (
-              <motion.div
-                key={item.key}
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.1 }}
-                className="bg-slate-900/40 backdrop-blur-sm border border-white/5 rounded-[2.5rem] p-8 hover:border-white/10 transition-all group relative overflow-hidden"
-              >
-                <div className="absolute -right-4 -top-4 opacity-[0.03] group-hover:opacity-[0.05] transition-opacity">
-                  <item.icon size={120} />
-                </div>
-                
-                <div className="flex items-center justify-between mb-8">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-1">{item.label}</span>
-                    <span className="text-xl font-black text-white">{item.time}</span>
-                  </div>
-                  <div className={cn(
-                    "w-12 h-12 rounded-2xl flex items-center justify-center border",
-                    p?.direction === 'UP' ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" :
-                    p?.direction === 'DOWN' ? "bg-rose-500/10 border-rose-500/20 text-rose-400" :
-                    "bg-slate-800 border-white/5 text-slate-400"
-                  )}>
-                    {p?.direction === 'UP' ? <ArrowUpRight className="w-6 h-6" /> : 
-                     p?.direction === 'DOWN' ? <ArrowDownRight className="w-6 h-6" /> : 
-                     <Activity className="w-6 h-6" />}
-                  </div>
-                </div>
-
-                <div className="space-y-6">
-                  <div>
-                    <div className="flex justify-between items-end mb-2">
-                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Confidence</span>
-                       <span className="text-xs font-black text-white">{p?.confidence || 0}%</span>
-                    </div>
-                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                      <motion.div 
-                        initial={{ width: 0 }}
-                        animate={{ width: `${p?.confidence || 0}%` }}
-                        className={cn(
-                          "h-full rounded-full transition-all duration-1000",
-                          p?.direction === 'UP' ? "bg-emerald-500" :
-                          p?.direction === 'DOWN' ? "bg-rose-500" :
-                          "bg-slate-600"
-                        )}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="pt-6 border-t border-white/5">
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 text-center">Smart Target</p>
-                    <p className={cn(
-                      "text-3xl font-black text-center tracking-tighter",
-                      p?.direction === 'UP' ? "text-emerald-400" :
-                      p?.direction === 'DOWN' ? "text-rose-400" :
-                      "text-white"
-                    )}>
-                      {viewMode === 'USD' 
-                        ? (p?.target ? `$${p.target.toLocaleString()}` : "---") 
-                        : (p?.target && btcPrice ? (p.target / btcPrice).toFixed(6) : "---")
-                      }
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Visual Terminal */}
           <div className="lg:col-span-2 space-y-8">
@@ -520,6 +454,63 @@ export default function GoldGraph() {
                     )}
                   </AreaChart>
                 </ResponsiveContainer>
+              </div>
+            </motion.div>
+
+            {/* AI Percentage Predictions Area */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-slate-900/40 backdrop-blur-xl border border-white/5 rounded-[2.5rem] p-10"
+            >
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-10 h-10 bg-indigo-500/10 rounded-2xl flex items-center justify-center border border-indigo-500/20">
+                  <Sparkles className="w-5 h-5 text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-white tracking-tight">Neural Momentum Delta</h3>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Percentage Variance Projection</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                {[
+                  { label: 'Next 24h', key: 'p1d' },
+                  { label: 'Next 7 Days', key: 'p7d' },
+                  { label: 'Next 15 Days', key: 'p15d' },
+                  { label: 'Next 30 Days', key: 'p30d' },
+                ].map((pItem) => {
+                  const p = predictions[pItem.key as keyof typeof predictions];
+                  // Calculate local percentage based on current price if target exists
+                  const targetChange = p?.target ? ((p.target - (realPrice || 2430)) / (realPrice || 2430)) * 100 : 0;
+                  
+                  return (
+                    <div key={pItem.key} className="bg-black/40 rounded-3xl p-8 border border-white/5 flex flex-col items-center justify-center text-center">
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">{pItem.label}</p>
+                      
+                      {targetChange >= 0 ? (
+                        <div className="flex items-center text-emerald-400 font-black text-4xl mb-2">
+                          <TrendingUp className="w-6 h-6 mr-2" />
+                          +{targetChange.toFixed(2)}%
+                        </div>
+                      ) : (
+                        <div className="flex items-center text-rose-400 font-black text-4xl mb-2">
+                          <TrendingDown className="w-6 h-6 mr-2" />
+                          {targetChange.toFixed(2)}%
+                        </div>
+                      )}
+                      
+                      <div className={cn(
+                        "text-[9px] font-black px-3 py-1 rounded-full uppercase border mt-4",
+                        targetChange >= 1 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                        targetChange <= -1 ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
+                        "bg-slate-500/10 text-slate-400 border-slate-500/20"
+                      )}>
+                        {targetChange > 2 ? 'Strong Growth' : targetChange > 0.5 ? 'Mild Uptrend' : Math.abs(targetChange) < 0.5 ? 'Consolidation' : 'Correction Risk'}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </motion.div>
           </div>

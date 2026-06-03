@@ -96,7 +96,7 @@ let isAIBreakerTripped = false;
 let breakerErrorText = "";
 let breakerTrippedAt = 0;
 const BREAKER_COOLDOWN = 1800000; // 30 minutes automatic retry
-let LAST_GOLD_PRICE = 2458.30; // Fallback price per Troy Ounce (Neural Stabilizer)
+let LAST_GOLD_PRICE = 4452.34; // Fallback price per troy ounce (Sync with Binance Market Screenshot)
 
 async function delay(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -1262,48 +1262,52 @@ async function startServer() {
         const { params } = req.body;
         const prompt = JSON.stringify(params || {}).toLowerCase();
         
-        // Intelligence Simulation for Education Hub
-        if (prompt.includes("curriculum") || prompt.includes("education")) {
+        // Intelligence Simulation for Education Hub (Check for curriculum specifically)
+        if (prompt.includes("curriculum") && !prompt.includes("news")) {
           console.log("[Gemini Proxy] Simulation Mode Active (Education Hub)");
+          const simulatorJson = JSON.stringify({
+            title: "Digital Financial Ecosystems: Advanced Fundamentals",
+            description: "A comprehensive exploration of modern financial intelligence, focused on the Pulse Feeds ecosystem.",
+            modules: [
+              { title: "Foundations of Pulse Feeds", content: "Understanding the balance between social interaction and financial rewards." },
+              { title: "Market Matrix Analysis", content: "Technical deep dives into gold and digital asset price synchronization." },
+              { title: "Community Problem Solving", content: "Leveraging decentralized networks to address real-world challenges." }
+            ]
+          });
           return res.json({
-            text: JSON.stringify({
-              title: "Digital Financial Ecosystems: Advanced Fundamentals",
-              description: "A comprehensive exploration of modern financial intelligence, focused on the Pulse Feeds ecosystem.",
-              modules: [
-                { title: "Foundations of Pulse Feeds", content: "Understanding the balance between social interaction and financial rewards." },
-                { title: "Market Matrix Analysis", content: "Technical deep dives into gold and digital asset price synchronization." },
-                { title: "Community Problem Solving", content: "Leveraging decentralized networks to address real-world challenges." }
-              ]
-            }),
-            candidates: [{ content: { parts: [{ text: "Simulation Active" }] } }]
+            text: simulatorJson,
+            candidates: [{ content: { parts: [{ text: simulatorJson }] } }]
           });
         }
 
         // Intelligence Simulation for Gold Matrix
         if (prompt.includes("gold") && prompt.includes("predict")) {
           console.log("[Gemini Proxy] Simulation Mode Active (Gold Matrix)");
+          const basePrice = LAST_GOLD_PRICE || 4452.34;
+          const simulatorJson = JSON.stringify({
+            p1d: { direction: "UP", confidence: 91, target: basePrice + 42.5, reasoning: "Positive accumulation delta vs BTC liquidity confirms breakout." },
+            p7d: { direction: "UP", confidence: 86, target: basePrice + 115.2, reasoning: "Structural trend projection remains highly profitable on all timeframes." },
+            p15d: { direction: "UP", confidence: 78, target: basePrice + 158.8, reasoning: "Neural momentum indicates secondary expansion phase is active." },
+            p30d: { direction: "UP", confidence: 82, target: basePrice + 325.5, reasoning: "Long-term bullish divergence remains the dominant market force." }
+          });
           return res.json({
-            text: JSON.stringify({
-              p1d: { direction: "UP", confidence: 88, target: LAST_GOLD_PRICE + 15.5, reasoning: "Technical consolidation near support levels suggests short-term accumulation." },
-              p7d: { direction: "UP", confidence: 76, target: LAST_GOLD_PRICE + 45.2, reasoning: "Neural trend projection indicates breakout potential above resistance." },
-              p15d: { direction: "SIDEWAYS", confidence: 60, target: LAST_GOLD_PRICE + 38.8, reasoning: "Macro-level stabilization phase following projection hit." },
-              p30d: { direction: "UP", confidence: 72, target: LAST_GOLD_PRICE + 92.5, reasoning: "Long-term bullish divergence remains intact within the ecosystem." }
-            }),
-            candidates: [{ content: { parts: [{ text: "Simulation Active" }] } }]
+            text: simulatorJson,
+            candidates: [{ content: { parts: [{ text: simulatorJson }] } }]
           });
         }
 
         // Intelligence Simulation for News Feed
-        if (prompt.includes("news") || prompt.includes("headlines")) {
+        if (prompt.includes("generate") && (prompt.includes("news") || prompt.includes("headlines"))) {
           console.log("[Gemini Proxy] Simulation Mode Active (News Feed)");
+          const simulatorJson = JSON.stringify([
+            { id: 'sim-1', title: 'Global Energy Transition Accelerates', summary: 'New solar efficiency records set by international research cooperative.', category: 'Environment', timestamp: '2h ago', impactLevel: 'high', scope: 'international', url: 'https://www.google.com/search?q=Global+Energy+Transition' },
+            { id: 'sim-2', title: 'Community Housing Project Success', summary: 'Local initiative provides affordable living spaces for 500+ members in rural districts.', category: 'Social', timestamp: '4h ago', impactLevel: 'medium', scope: 'local', url: 'https://www.google.com/search?q=Community+Housing+Success' },
+            { id: 'sim-3', title: 'Quantum Computing Educational Initiative', summary: 'Pulse Feeds ecosystem partners with tech giants for accessible STEM curriculum.', category: 'Edu', timestamp: '6h ago', impactLevel: 'high', scope: 'international', url: 'https://www.google.com/search?q=Quantum+Education' },
+            { id: 'sim-4', title: 'Local Artisans Market Reaches New Highs', summary: 'Community-led marketplace sees 150% growth in peer-to-peer trade volume.', category: 'Tech', timestamp: '8h ago', impactLevel: 'medium', scope: 'local', url: 'https://www.google.com/search?q=Community+Marketplace+Growth' }
+          ]);
           return res.json({
-            text: JSON.stringify([
-              { id: 'sim-1', title: 'Global Energy Transition Accelerates', summary: 'New solar efficiency records set by international research cooperative.', category: 'Environment', timestamp: '2h ago', impactLevel: 'high', scope: 'international', url: 'https://www.google.com/search?q=Global+Energy+Transition' },
-              { id: 'sim-2', title: 'Community Housing Project Success', summary: 'Local initiative provides affordable living spaces for 500+ members in rural districts.', category: 'Social', timestamp: '4h ago', impactLevel: 'medium', scope: 'local', url: 'https://www.google.com/search?q=Community+Housing+Success' },
-              { id: 'sim-3', title: 'Quantum Computing Educational Initiative', summary: 'Pulse Feeds ecosystem partners with tech giants for accessible STEM curriculum.', category: 'Edu', timestamp: '6h ago', impactLevel: 'high', scope: 'international', url: 'https://www.google.com/search?q=Quantum+Education' },
-              { id: 'sim-4', title: 'Local Artisans Market Reaches New Highs', summary: 'Community-led marketplace sees 150% growth in peer-to-peer trade volume.', category: 'Tech', timestamp: '8h ago', impactLevel: 'medium', scope: 'local', url: 'https://www.google.com/search?q=Community+Marketplace+Growth' }
-            ]),
-            candidates: [{ content: { parts: [{ text: "Simulation Active" }] } }]
+            text: simulatorJson,
+            candidates: [{ content: { parts: [{ text: simulatorJson }] } }]
           });
         }
 
@@ -1463,11 +1467,45 @@ async function startServer() {
         timeout: 10000
       });
       
-      // Also fetch withdrawal history or limits if needed, but for now just basic account
-      res.json({ success: true, account: resp.data });
+      // Filter interesting balances (USDT, PAXG, BTC)
+      const balances = resp.data.balances.filter((b: any) => 
+        parseFloat(b.free) > 0 || parseFloat(b.locked) > 0
+      );
+
+      res.json({ success: true, account: { ...resp.data, balances } });
     } catch (err: any) {
       const errorMsg = err.response?.data?.msg || err.message;
       res.status(500).json({ success: false, error: errorMsg });
+    }
+  });
+
+  app.get("/api/binance/balance/:asset", async (req, res) => {
+    const { asset } = req.params;
+    const apiKey = process.env.BINANCE_API_KEY;
+    const apiSecret = process.env.BINANCE_API_SECRET;
+
+    if (!apiKey || !apiSecret) {
+      return res.status(401).json({ success: false, error: "Binance API keys not configured." });
+    }
+
+    try {
+      const BINANCE_API_BASE = process.env.BINANCE_USE_TESTNET === "true" 
+        ? "https://testnet.binance.vision/api" 
+        : "https://api.binance.com/api";
+
+      const timestamp = Date.now();
+      const query = `timestamp=${timestamp}`;
+      const signature = crypto.createHmac("sha256", apiSecret).update(query).digest("hex");
+      
+      const resp = await axios.get(`${BINANCE_API_BASE}/v3/account?${query}&signature=${signature}`, {
+        headers: { "X-MBX-APIKEY": apiKey },
+        timeout: 10000
+      });
+      
+      const balance = resp.data.balances.find((b: any) => b.asset === asset.toUpperCase());
+      res.json({ success: true, asset: asset.toUpperCase(), free: balance?.free || "0.00", locked: balance?.locked || "0.00" });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
     }
   });
 

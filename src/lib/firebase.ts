@@ -30,10 +30,10 @@ const getDb = () => {
   console.log(`[Firebase] Initializing Firestore with Database ID: ${dbId || '(default)'} in Project: ${firebaseConfig.projectId}`);
   
   try {
-    // We force long polling for maximum stability in restricted environments.
-    // Host is implicitly handled by the SDK for regional databases unless overridden.
+    // Attempt standard initialization first, fall back to long polling if it fails or is forced
+    // In restricted container environments, sometimes standard (gRPC) works better than simulated long polling over HTTP
     return initializeFirestore(app, {
-      experimentalForceLongPolling: true,
+      experimentalAutoDetectLongPolling: true,
     }, dbId);
   } catch (e: any) {
     if (e.message.includes('already exists')) {
@@ -41,7 +41,11 @@ const getDb = () => {
       return getFirestore(app, dbId);
     }
     console.error('[Firebase] Error during initializeFirestore:', e);
-    return undefined;
+    
+    // Desperate fallback with force long polling
+    return initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+    }, dbId);
   }
 };
 

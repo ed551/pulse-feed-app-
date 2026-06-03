@@ -60,17 +60,17 @@ export default function NewsFeed() {
 
       const prompt = `Generate 8 highly relevant current news items for a platform called Pulse Feeds.
       Include a mix of 4 International news items and 4 Local news items.
-      ${location ? `Context for Local News: User's approximate location is ${location}.` : "Context for Local News: Focus on high-vibrancy community achievements and grass-roots impact."}
+      ${location ? `Context for Local News: User's approximate location is ${location}.` : "Context for Local News: Focus on community achievements."}
       
       Requirements:
-      - USE REAL NEWS from the last 24-48 hours. Use the Google Search tool to find actual headlines and valid source URLs.
-      - DO NOT generate placeholder URLs like example.com. EVERY item must have a real, working URL to a news article.
-      - Focus on social impact, community achievements, real-world issue detection, and educational milestones.
-      - Format: JSON array of objects with: id (string), title (string), summary (string), category (string), timestamp (string), impactLevel ('high'|'medium'|'low'), scope ('local'|'international'), url (string).
-      - Categories should be specific like 'Science', 'Environment', 'Co-op', 'Edu', 'Tech', 'Social'.`;
+      - USE REAL NEWS from the last 24 hours. Use Google Search.
+      - FORMAT AS A PURE JSON ARRAY. NO TEXT BEFORE OR AFTER.
+      - Every item must have a real, working news URL.
+      - Array of objects: { id, title, summary, category, timestamp, impactLevel ('high'|'medium'|'low'), scope ('local'|'international'), url }.
+      - Categories: 'Science', 'Environment', 'Co-op', 'Edu', 'Tech', 'Social'.`;
 
       const response = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.5-flash", // Using 3.5 for better following of JSON instructions when using tools
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         tools: [{ googleSearch: {} }],
         toolConfig: { includeServerSideToolInvocations: true },
@@ -81,15 +81,13 @@ export default function NewsFeed() {
       
       const textResponse = response.text;
       if (!textResponse || textResponse.trim().length < 5) {
-        console.warn("Empty or too short AI response for news. Retrying with fallback model...");
-        // Secondary attempt without search if search failed
+        console.warn("Empty AI response. Retrying with non-grounded fallback...");
         const retryResponse = await generateContentWithRetry({
-          model: "gemini-flash-latest", 
-          contents: [{ role: "user", parts: [{ text: prompt + " (Fallback mode: Keep it very simple)" }] }],
+          model: "gemini-3-flash-preview", 
+          contents: [{ role: "user", parts: [{ text: prompt + " \nONLY OUTPUT JSON ARRAY." }] }],
           generationConfig: { responseMimeType: "application/json" }
         });
-        
-        if (!retryResponse.text) throw new Error("AI returned empty response after fallback retry.");
+        if (!retryResponse.text) throw new Error("AI returned empty response twice.");
         return handleParsedNews(retryResponse.text, now);
       }
 
