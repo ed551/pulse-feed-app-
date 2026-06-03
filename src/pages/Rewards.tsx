@@ -111,7 +111,7 @@ export default function Rewards() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [payoutMethod, setPayoutMethod] = useState<'paypal' | 'stripe' | 'bank' | 'binance'>('binance');
   const [binanceAddress, setBinanceAddress] = useState('');
-  const [binanceCoin, setBinanceCoin] = useState<'USDT' | 'PAXG'>('PAXG');
+  const [binanceCoin, setBinanceCoin] = useState<'PAXG'>('PAXG');
   const [binanceNetwork, setBinanceNetwork] = useState('ETH');
   const [paxgBtcRate, setPaxgBtcRate] = useState<number | null>(null);
   const [paxgPrice, setPaxgPrice] = useState<number | null>(null);
@@ -2052,18 +2052,10 @@ export default function Rewards() {
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
                              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Asset</label>
-                             <select 
-                               value={binanceCoin}
-                               onChange={(e) => {
-                                 const val = e.target.value as any;
-                                 setBinanceCoin(val);
-                                 setBinanceNetwork(val === 'PAXG' ? 'ETH' : 'TRX');
-                               }}
-                               className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-gray-900 dark:text-white font-medium shadow-sm"
-                             >
-                               <option value="PAXG">PAX Gold (PAXG)</option>
-                               <option value="USDT">USDT (Stablecoin)</option>
-                             </select>
+                             <div className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border border-amber-500/10 rounded-2xl text-gray-900 dark:text-white font-black shadow-sm flex items-center justify-between">
+                               <span>PAX Gold (PAXG)</span>
+                               <Gem className="w-4 h-4 text-amber-500" />
+                             </div>
                           </div>
                           <div className="space-y-2">
                              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Network</label>
@@ -2072,19 +2064,8 @@ export default function Rewards() {
                                onChange={(e) => setBinanceNetwork(e.target.value)}
                                className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-gray-900 dark:text-white font-medium shadow-sm"
                              >
-                               {binanceCoin === 'PAXG' ? (
-                                 <>
-                                   <option value="ETH">ERC20 (Ethereum)</option>
-                                   <option value="BSC">BEP20 (Binance Smart Chain)</option>
-                                 </>
-                               ) : (
-                                 <>
-                                   <option value="TRX">TRC20 (Best for USDT)</option>
-                                   <option value="ETH">ERC20 (Ethereum)</option>
-                                   <option value="BSC">BEP20 (Binance Smart Chain)</option>
-                                   <option value="SOL">SOL (Solana)</option>
-                                 </>
-                               )}
+                               <option value="ETH">ERC20 (Ethereum)</option>
+                               <option value="BSC">BEP20 (Binance Smart Chain)</option>
                              </select>
                           </div>
                         </div>

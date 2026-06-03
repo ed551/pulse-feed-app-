@@ -125,6 +125,8 @@ const BREAKER_COOLDOWN = 1800000; // 30 minutes automatic retry
 let LAST_GOLD_PRICE = 4452.34; // Fallback price per troy ounce (Sync with Binance Market Screenshot)
 
 async function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 async function generateContentWithRetry(params: any): Promise<any> {
   // Check for automatic reset
@@ -339,8 +341,9 @@ if (!authenticator || typeof authenticator.verify !== 'function') {
   console.error("CRITICAL: otplib authenticator failed to load properly or missing verify method!");
 }
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Using global __dirname and __filename available in CJS
+// const __filename = fileURLToPath(import.meta.url);
+// const __dirname = path.dirname(__filename);
 
 // Initialize Firebase Configuration
 let firebaseConfig: any;
@@ -368,6 +371,8 @@ try {
     firestoreDatabaseId: process.env.FIREBASE_FIRESTORE_DATABASE_ID || "(default)"
   };
 }
+
+const detectedProjectId = firebaseConfig.projectId;
 
 // Validation check to prevent crashes later
 if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "placeholder") {
@@ -403,19 +408,8 @@ try {
 }
 
 
-// Log project and database details for debugging
-const detectedProjectId = firebaseAdminApp.options.projectId || process.env.GOOGLE_CLOUD_PROJECT || firebaseConfig.projectId;
-try {
-  // Try to get service account email
-  const metadata = await axios.get('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email', {
-    headers: { 'Metadata-Flavor': 'Google' },
-    timeout: 1000
-  });
-  console.log(`Firebase Identity: SA='${metadata.data}', Project='${detectedProjectId}'`);
-} catch (e) {
-  console.log(`Firebase Identity: Project='${detectedProjectId}', Database='${firebaseConfig.firestoreDatabaseId || "(default)"}'`);
-}
-console.log("Firebase Dashboard Link: https://console.firebase.google.com/project/" + detectedProjectId + "/firestore/databases/" + (firebaseConfig.firestoreDatabaseId || "(default)") + "/data");
+// Project metadata moved to startServer to avoid top-level await in CJS
+
 
 // Initialize Firestore
 // We now initialize BOTH Admin and Client SDKs.
@@ -1135,6 +1129,19 @@ try {
 }
 
 async function startServer() {
+  // --- Init Metadata & Identity (Moved from top-level for CJS compat) ---
+  const detectedProjectId = firebaseAdminApp.options.projectId || process.env.GOOGLE_CLOUD_PROJECT || firebaseConfig.projectId;
+  try {
+    const metadataResponse = await axios.get('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email', {
+      headers: { 'Metadata-Flavor': 'Google' },
+      timeout: 1000
+    });
+    console.log(`Firebase Identity: SA='${metadataResponse.data}', Project='${detectedProjectId}'`);
+  } catch (e) {
+    console.log(`Firebase Identity: Project='${detectedProjectId}', Database='${firebaseConfig.firestoreDatabaseId || "(default)"}'`);
+  }
+  console.log("Firebase Dashboard Link: https://console.firebase.google.com/project/" + detectedProjectId + "/firestore/databases/" + (firebaseConfig.firestoreDatabaseId || "(default)") + "/data");
+
   console.log("Starting server...");
   
   // Verify Firestore and perform auto-discovery if needed in background
@@ -4516,7 +4523,7 @@ async function performRobustEducationSync() {
   } else {
     console.log("Starting server in production mode...");
     // Robust path resolution for production
-    const distPath = __dirname.endsWith("dist") ? __dirname : path.join(__dirname, "dist");
+    const distPath = path.join(process.cwd(), "dist");
     console.log("Serving static files from:", distPath);
     app.use(express.static(distPath));
     app.get("*", (req, res) => {

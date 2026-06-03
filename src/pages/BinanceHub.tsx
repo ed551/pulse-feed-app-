@@ -173,7 +173,7 @@ export default function BinanceHub() {
                   <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500 font-black">₿</div>
                   <div>
                     <p className="font-black text-sm text-gray-900 dark:text-white">Bitcoin</p>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">BTC/USDT</p>
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">BTC Price Index</p>
                   </div>
                 </div>
                 <div className="text-right">
@@ -187,7 +187,7 @@ export default function BinanceHub() {
                   <div className="w-10 h-10 bg-indigo-500/10 rounded-xl flex items-center justify-center text-indigo-500 font-black">Ξ</div>
                   <div>
                     <p className="font-black text-sm text-gray-900 dark:text-white">Ethereum</p>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">ETH/USDT</p>
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">ETH Price Index</p>
                   </div>
                 </div>
                 <div className="text-right">
@@ -209,8 +209,8 @@ export default function BinanceHub() {
                     {paxgPrice && btcPrice ? (parseFloat(paxgPrice) / parseFloat(btcPrice)).toFixed(8) : "0.00000000"}
                   </p>
                   <div className="flex flex-col items-end">
-                    <p className="text-[10px] text-gray-400 font-medium">
-                      Market Rate: {formatCurrency(parseFloat(paxgPrice || '0'))}
+                    <p className="text-[10px] text-gray-400 font-medium italic opacity-60">
+                      Physical Reserve Unit
                     </p>
                   </div>
                 </div>

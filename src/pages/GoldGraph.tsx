@@ -77,7 +77,7 @@ export default function GoldGraph() {
   const [realPrice, setRealPrice] = useState<number>(4452.34);
   const [btcPrice, setBtcPrice] = useState<number>(67100);
   const [dataLoading, setDataLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'USD' | 'BTC'>('USD');
+  const viewMode: 'USD' | 'BTC' = 'BTC';
 
   useEffect(() => {
     const fetchRealData = async () => {
@@ -325,25 +325,19 @@ export default function GoldGraph() {
               <div className="flex items-center gap-3 mt-2">
                 <p className="text-slate-400 text-sm font-bold uppercase tracking-widest opacity-60">High-Fidelity Market Core</p>
                 <div className="w-1 h-1 bg-slate-700 rounded-full" />
-                <button 
-                  onClick={() => setViewMode(viewMode === 'USD' ? 'BTC' : 'USD')}
-                  className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-[10px] font-black text-white uppercase tracking-widest border border-white/10 transition-all"
-                >
-                  Switch to {viewMode === 'USD' ? 'BTC' : 'USD'}
-                </button>
+                <div className="px-3 py-1 bg-amber-500/10 rounded-lg text-[10px] font-black text-amber-500 uppercase tracking-widest border border-amber-500/20">
+                  BTC Liquidity Pool
+                </div>
               </div>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-8">
             <div className="text-right">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">Spot Index ({viewMode} / Oz)</p>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">Spot Index (BTC / Oz)</p>
               <div className="flex items-baseline gap-3">
                 <span className="text-5xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
-                  {viewMode === 'USD' 
-                    ? (realPrice ? formatUSD(realPrice) : "$4,452.34") 
-                    : (realPrice && btcPrice ? (realPrice / btcPrice).toFixed(5) : "0.06636")
-                  }
+                  {(realPrice && btcPrice ? (realPrice / btcPrice).toFixed(5) : "0.06636")}
                 </span>
                 <span className={cn(
                   "flex items-center text-xs font-black px-3 py-1 rounded-lg border",
@@ -413,7 +407,7 @@ export default function GoldGraph() {
                       axisLine={false} 
                       tickLine={false}
                       tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }}
-                      tickFormatter={(val) => viewMode === 'USD' ? `$${val.toFixed(2)}` : `${val.toFixed(6)}`}
+                      tickFormatter={(val) => `${val.toFixed(6)}`}
                     />
                     <Tooltip 
                       contentStyle={{ 
@@ -425,7 +419,7 @@ export default function GoldGraph() {
                       }}
                       itemStyle={{ color: '#fbbf24', fontWeight: 900, fontSize: '14px' }}
                       labelStyle={{ color: '#94a3b8', fontWeight: 700, marginBottom: '8px', fontSize: '10px', textTransform: 'uppercase' }}
-                      formatter={(val: number) => [viewMode === 'BTC' ? `${val.toFixed(8)} BTC` : formatCurrency(val), 'Spot Index']}
+                      formatter={(val: number) => [`${val.toFixed(8)} BTC`, 'Spot Index']}
                     />
                     <Area 
                       type="monotone" 
@@ -438,7 +432,7 @@ export default function GoldGraph() {
                     />
                     {prediction && (
                       <ReferenceLine 
-                        y={viewMode === 'BTC' && btcPrice ? (prediction.target / btcPrice) : prediction.target} 
+                        y={btcPrice ? (prediction.target / btcPrice) : prediction.target} 
                         stroke="#8b5cf6" 
                         strokeDasharray="5 5" 
                         strokeWidth={2}
