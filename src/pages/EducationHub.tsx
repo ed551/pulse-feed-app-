@@ -96,7 +96,7 @@ export default function EducationHub() {
   const { currentUser, userData } = useAuth();
   const { showNotification } = useNotifications();
   const { addPlatformRevenue } = useRevenue();
-  const { convert, formatCurrency } = useCurrencyConverter();
+  const { convert, formatReward, formatCurrency } = useCurrencyConverter();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncInfo, setSyncInfo] = useState<any>(null);
@@ -155,7 +155,7 @@ export default function EducationHub() {
       await addPlatformRevenue(developerShare * 0.77, `Course Enrollment Fee: ${course.title} (Developer 80% Share)`);
 
       showNotification("Education Milestone", { 
-        body: `Welcome to ${course.title}! You've been rewarded ${userShare.toFixed(4)} Gold g (20% share) while 80% (${formatCurrency(developerShare * 100)}) fuels global engineering.` 
+        body: `Welcome to ${course.title}! You've been rewarded ${formatReward(userShare)} (20% share) while 80% (${formatCurrency(developerShare * 100)}) fuels global engineering.` 
       });
       setSelectedCourse(null);
     } catch (err) {
@@ -271,7 +271,7 @@ export default function EducationHub() {
       });
 
       showNotification("Lesson Completed", { 
-        body: `Great job! You earned ${userShare.toFixed(4)} Gold g for completing "${activeLesson.title}".` 
+        body: `Great job! You earned ${formatReward(userShare)} for completing "${activeLesson.title}".` 
       });
       setActiveLesson(null);
     } catch (err) {

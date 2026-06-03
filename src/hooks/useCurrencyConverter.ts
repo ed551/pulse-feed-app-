@@ -9,11 +9,13 @@ export const useCurrencyConverter = () => {
   const [rates, setRates] = useState<ExchangeRates>({ 
     USD: 1,
     KES: 130, // authoritative local rate
-    GOLD: 31.1035 / 2375.40 // ~0.01309 g per USD
+    GOLD: 31.1035 / 2375.40, // ~0.01309 g per USD
+    BTC: 1 / 67000
   });
   const [currency, setCurrency] = useState<string>('GOLD');
   const [loading, setLoading] = useState(true);
-  const [goldPriceUSD, setGoldPriceUSD] = useState<number>(2375.40); // Neural Stabilizer fallback Troy Ounce price
+  const [goldPriceUSD, setGoldPriceUSD] = useState<number>(2375.40); 
+  const [btcPriceUSD, setBtcPriceUSD] = useState<number>(67000);
 
   useEffect(() => {
     // Load saved currency
@@ -34,22 +36,22 @@ export const useCurrencyConverter = () => {
           const prices = data.prices || [];
           
           const paxgTicker = prices.find((p: any) => p.symbol === 'PAXGUSDT');
+          const btcTicker = prices.find((p: any) => p.symbol === 'BTCUSDT');
+          
           if (paxgTicker && paxgTicker.price) {
             const price = parseFloat(paxgTicker.price);
-            
             if (!isNaN(price) && price > 0) {
               setGoldPriceUSD(price);
-              
-              // 1 PAXG = 1 Troy Ounce = 31.1035 grams
-              // We want to know how many grams are in 1 USD
               const gPerUSD = 31.1035 / price;
-              
-              setRates(prev => ({ 
-                ...prev, 
-                USD: 1,
-                KES: 130,
-                GOLD: gPerUSD 
-              }));
+              setRates(prev => ({ ...prev, GOLD: gPerUSD }));
+            }
+          }
+
+          if (btcTicker && btcTicker.price) {
+            const btcPrice = parseFloat(btcTicker.price);
+            if (!isNaN(btcPrice) && btcPrice > 0) {
+              setBtcPriceUSD(btcPrice);
+              setRates(prev => ({ ...prev, BTC: 1 / btcPrice }));
             }
           }
         } else {
@@ -75,17 +77,23 @@ export const useCurrencyConverter = () => {
   };
 
   const convert = (amount: number, fromCurrency: string = 'USD'): string => {
-    if (isNaN(amount)) return '0.00 Gold g';
+    if (isNaN(amount)) return '0.00 Gold/BTC';
 
     // Convert input to USD base first
     const rateFrom = rates[fromCurrency] || 1;
     const amountInUSD = fromCurrency === 'USD' ? amount : amount / rateFrom;
 
-    if (currency === 'GOLD') {
-      const rate = rates['GOLD'] || (31.1035 / 2375.40);
-      const grams = amountInUSD * rate;
-      
-      return `${grams.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} Gold g`;
+    if (currency === 'GOLD' || currency === 'BTC_GOLD') {
+      const gRate = rates['GOLD'] || (31.1035 / 2375.40);
+      const grams = amountInUSD * gRate;
+      const btcRate = rates['BTC'] || (1 / 67000);
+      const btc = amountInUSD * btcRate;
+      return `${grams.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 4 })} Gold / ${btc.toFixed(8)} BTC`;
+    }
+
+    if (currency === 'BTC') {
+      const btcRate = rates['BTC'] || (1/67000);
+      return `${(amountInUSD * btcRate).toFixed(8)} BTC`;
     }
 
     if (currency === 'KES') {
@@ -103,6 +111,14 @@ export const useCurrencyConverter = () => {
     }).format(amountInUSD);
   };
 
+  const formatReward = (points: number): string => {
+    // 1 point = 1 gram of Gold internally
+    // BTC value = points * (BTC_per_USD / GOLD_per_USD)
+    const btcRatio = (rates['BTC'] / rates['GOLD']) || 0.001139;
+    const btc = points * btcRatio;
+    return `${points.toFixed(4)} Gold / ${btc.toFixed(8)} BTC`;
+  };
+
   const formatCurrency = (amountInUSD: number): string => {
     return convert(amountInUSD);
   };
@@ -112,6 +128,7 @@ export const useCurrencyConverter = () => {
     rates,
     changeCurrency,
     convert,
+    formatReward,
     formatCurrency,
     loading,
     availableCurrencies: Object.keys(rates).sort()

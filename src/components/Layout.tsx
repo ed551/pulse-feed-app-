@@ -46,7 +46,7 @@ import { setDoc, doc, arrayUnion, serverTimestamp, getDocFromServer, updateDoc }
 export default function Layout() {
   const { currentUser, userData, logout, isFacebookApp } = useAuth();
   const { t } = useTranslation();
-  const { convert, formatCurrency } = useCurrencyConverter();
+  const { convert, formatReward, formatCurrency, rates } = useCurrencyConverter();
 
   const weatherTypes = [
     { type: t('weather_sunny'), icon: Sun, color: 'text-orange-500', bg: 'from-orange-500/20 to-yellow-500/20', glow: 'drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]', symbol: '☀️', temp: '--°C', tempValue: 25 },
@@ -1061,8 +1061,8 @@ export default function Layout() {
                 {/* Points Balance Display */}
                 <div className="flex items-center px-2 sm:px-3 py-1 bg-yellow-50 dark:bg-yellow-900/30 rounded-full border border-yellow-100 dark:border-yellow-800 shadow-sm group">
                   <Layers className="w-3.5 h-3.5 sm:w-4 h-4 text-yellow-600 mr-1 sm:mr-1.5 group-hover:scale-110 transition-transform" />
-                  <span className="text-[10px] sm:text-xs font-black text-yellow-800 dark:text-yellow-300">
-                    {(userData?.points || 0).toFixed(3)} <span className="text-[8px] opacity-70">g</span>
+                  <span className="text-[10px] sm:text-xs font-black text-yellow-800 dark:text-yellow-300 flex items-center gap-1">
+                    {formatReward(userData?.points || 0)}
                   </span>
                 </div>
 
@@ -1631,10 +1631,10 @@ export default function Layout() {
                         <span className="text-xs font-bold text-yellow-700 dark:text-yellow-300">Liquidity Reserve</span>
                       </div>
                       <p className="text-lg font-black text-yellow-900 dark:text-yellow-100">
-                        {userData?.points?.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 }) || '0'} <span className="text-xs font-bold opacity-60 uppercase">Gold g</span>
+                        {formatReward(userData?.points || 0)}
                       </p>
                       <p className="text-[8px] font-black text-yellow-700/60 uppercase tracking-tighter">
-                        +{userData?.points.toLocaleString(undefined, { maximumFractionDigits: 4 }) || 0} g Accumulation
+                        +{formatReward(userData?.points || 0)} Accumulation
                       </p>
                     </div>
                     <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-2xl border border-yellow-100 dark:border-yellow-800/50 flex flex-col gap-1">
@@ -1643,7 +1643,7 @@ export default function Layout() {
                         <span className="text-xs font-bold text-yellow-700 dark:text-yellow-300">Market Intel</span>
                       </div>
                       <div className="flex items-baseline gap-1">
-                        <p className="text-lg font-black text-yellow-900 dark:text-yellow-100">{marketData?.symbol || 'Gold g'}</p>
+                        <p className="text-lg font-black text-yellow-900 dark:text-yellow-100">{marketData?.symbol || 'Gold/BTC/KES'}</p>
                         <span className="text-[10px] font-bold text-yellow-600">{marketData?.direction === 'up' ? '▲' : '▼'} {marketData?.confidence || '--'}%</span>
                       </div>
                     </div>

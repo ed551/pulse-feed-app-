@@ -69,7 +69,7 @@ export default function Rewards() {
   const { currentUser, userData } = useAuth();
   const isDeveloper = currentUser?.email === 'edwinmuoha@gmail.com';
   const { isIdle, activeSeconds, totalEarnedToday, addPlatformRevenue, syncActiveTimeRewards } = useRevenue();
-  const { currency, availableCurrencies, changeCurrency, convert, loading, rates } = useCurrencyConverter();
+  const { currency, availableCurrencies, changeCurrency, convert, formatReward, loading, rates } = useCurrencyConverter();
   const [activeTab, setActiveTab] = useState<'overview' | 'local' | 'international' | 'history'>('overview');
   const [showSCAModal, setShowSCAModal] = useState(false);
   const [authMethod, setAuthMethod] = useState<'pin' | 'passkey' | 'totp' | 'sms' | 'password'>('pin');
@@ -638,7 +638,7 @@ export default function Rewards() {
           source: 'withdrawal',
           reason: `International Payout (${payoutMethod})`,
           timestamp: serverTimestamp(),
-          unit: 'Gold g'
+          unit: 'Gold/BTC'
         }).catch(err => console.error("Error logging points ledger:", err));
       }
       
@@ -729,7 +729,7 @@ export default function Rewards() {
         isRestoredTo6337: true,
         recoveredAt: serverTimestamp()
       });
-      setSuccess("Full balance of 6.337 Gold g successfully restored!");
+      setSuccess("Full balance of 6.337 Gold/BTC successfully restored!");
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
       setError("Restoration failed. Please try again.");
@@ -1356,10 +1356,10 @@ export default function Rewards() {
                 <span className="text-white/80 font-medium uppercase tracking-wider mb-2">
                   Live Account Balance & Accumulation
                 </span>
-                <div className="text-6xl font-black mb-1 flex items-center gap-2">
-                  {points.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })} Gold g
+                <div className="text-3xl sm:text-5xl lg:text-6xl font-black mb-1 flex items-center gap-2 text-center">
+                  {formatReward(points)}
                 </div>
-                <div className="text-xl font-bold text-white/90 mb-2">
+                <div className="text-lg font-bold text-white/80 mb-2">
                   ≈ KES {balanceKES.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className="text-sm font-bold text-white/70 mb-4">
@@ -1463,7 +1463,7 @@ export default function Rewards() {
                       className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center transition-all shadow-lg shadow-orange-500/20 active:scale-95 animate-pulse"
                     >
                       <RotateCcw className="w-3 h-3 mr-2" />
-                      {isRecovering ? 'Restoring...' : 'Restore 6.337 Gold g'}
+                      {isRecovering ? 'Restoring...' : 'Restore 6.337 Gold/BTC'}
                     </button>
                   )}
                 </div>
@@ -1526,7 +1526,7 @@ export default function Rewards() {
                   <div className="flex justify-between items-end text-white">
                     <div>
                       <p className="text-[10px] opacity-70 uppercase font-bold">Earned Today</p>
-                      <p className="text-xl font-black">{totalEarnedToday} <span className="text-xs font-normal opacity-70">Gold g</span></p>
+                      <p className="text-xl font-black">{formatReward(totalEarnedToday)}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] opacity-70 uppercase font-bold">Current Reserve</p>
@@ -1653,9 +1653,9 @@ export default function Rewards() {
                     <Landmark className="w-32 h-32" />
                   </div>
                   <div className="relative z-10 space-y-4">
-                    <p className="text-blue-100 font-bold uppercase tracking-widest text-xs">Local Wallet Balance (Gold g)</p>
-                    <h2 className="text-5xl font-black tracking-tighter">
-                      {points.toLocaleString(undefined, { minimumFractionDigits: 4 })} Gold g
+                    <p className="text-blue-100 font-bold uppercase tracking-widest text-xs">Local Wallet Balance (Gold/BTC)</p>
+                    <h2 className="text-3xl sm:text-5xl font-black tracking-tighter">
+                      {formatReward(points)}
                     </h2>
                     <div className="flex items-center space-x-2 text-blue-100 text-sm">
                       <ShieldCheck className="w-4 h-4" />
@@ -1982,9 +1982,9 @@ export default function Rewards() {
                     <Globe className="w-32 h-32" />
                   </div>
                   <div className="relative z-10 space-y-4">
-                        <p className="text-purple-100 font-bold uppercase tracking-widest text-xs">International Payouts (Gold g)</p>
-                        <h2 className="text-5xl font-black tracking-tighter">
-                          {points.toLocaleString(undefined, { minimumFractionDigits: 4 })} Gold g
+                        <p className="text-purple-100 font-bold uppercase tracking-widest text-xs">International Payouts (Gold/BTC)</p>
+                        <h2 className="text-3xl sm:text-5xl font-black tracking-tighter">
+                          {formatReward(points)}
                         </h2>
                         <div className="flex items-center space-x-2 text-purple-100 text-sm">
                           <CheckCircle className="w-4 h-4" />
@@ -2288,7 +2288,7 @@ export default function Rewards() {
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
-                      <span>Minimum withdrawal: KES 1,300 (~13 Gold g)</span>
+                      <span>Minimum withdrawal: KES 1,300 (~0.4 Gold/BTC)</span>
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />

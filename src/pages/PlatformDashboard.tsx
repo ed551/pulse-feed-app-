@@ -33,7 +33,7 @@ export default function PlatformDashboard() {
   const navigate = useNavigate();
   const { currentUser, userData } = useAuth();
   const { addPlatformRevenue, addPlatformExpense } = useRevenue();
-  const { convert, rates } = useCurrencyConverter();
+  const { convert, formatReward, rates } = useCurrencyConverter();
   const TARGET_STATIC_IP = "35.214.40.75";
 
   const formatCurrency = (usdAmount: number) => {
@@ -604,7 +604,7 @@ export default function PlatformDashboard() {
       // IF unit is missing:
       // - Platform Revenue is ALMOST ALWAYS KES or USD (large amounts).
       // - Standard revenue/payouts < 100 are likely Gold g.
-      const isPoints = tx.unit === 'POINTS' || tx.unit === 'G' || tx.unit === 'Gold g' || (!tx.unit && Math.abs(platformAmtRaw) < 100 && tx.type !== 'platform_revenue' && tx.type !== 'expense');
+      const isPoints = tx.unit === 'POINTS' || tx.unit === 'G' || tx.unit === 'Gold g' || tx.unit === 'Gold/BTC' || (!tx.unit && Math.abs(platformAmtRaw) < 100 && tx.type !== 'platform_revenue' && tx.type !== 'expense');
       const isKes = tx.unit === 'KES' || tx.currency === 'KES';
       
       let platformAmt = platformAmtRaw;
@@ -2061,11 +2061,9 @@ export default function PlatformDashboard() {
                             <td className="px-6 py-4 text-right font-black font-mono">
                               <span className={cn((tx.type === 'revenue' || tx.type === 'platform_revenue' || (tx.platformAmount || 0) > 0) ? "text-green-600" : "text-red-600")}>
                                 {(tx.type === 'revenue' || tx.type === 'platform_revenue' || (tx.platformAmount || 0) > 0) ? '+' : '-'}{
-                                  tx.unit === 'GOLD' 
-                                    ? `${Math.abs(tx.platformAmount || tx.totalAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} G`
-                                    : tx.unit === 'Points'
-                                      ? `${Math.abs(tx.platformAmount || tx.totalAmount || 0).toLocaleString()} Pts`
-                                      : formatCurrency(Math.abs(tx.platformAmount || tx.totalAmount || 0))
+                                  tx.unit === 'GOLD' || tx.unit === 'Points' || tx.unit === 'Gold g' || tx.unit === 'Gold/BTC'
+                                    ? formatReward(Math.abs(tx.platformAmount || tx.totalAmount || 0))
+                                    : formatCurrency(Math.abs(tx.platformAmount || tx.totalAmount || 0))
                                 }
                               </span>
                             </td>
@@ -2988,7 +2986,7 @@ export default function PlatformDashboard() {
                 </div>
                 <div className="text-right border-l border-gray-100 dark:border-gray-800 pl-6">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Your User Points</p>
-                  <p className="text-2xl font-black text-orange-500">{(userData?.points || 0).toLocaleString()}</p>
+                  <p className="text-2xl font-black text-orange-500">{formatReward(userData?.points || 0)}</p>
                 </div>
               </div>
             </div>
@@ -3585,7 +3583,7 @@ export default function PlatformDashboard() {
                       useKesForReturn ? "bg-blue-600 text-white border-blue-600" : "bg-amber-500 text-white border-amber-500"
                     )}
                   >
-                    {useKesForReturn ? "Mode: KES" : "Mode: Gold"}
+                    {useKesForReturn ? "Mode: KES" : "Mode: Gold/BTC"}
                   </button>
                 </div>
                 <div className="relative">
@@ -3684,7 +3682,7 @@ export default function PlatformDashboard() {
                       useKesForRevenue ? "bg-green-600 text-white border-green-600" : "bg-amber-500 text-white border-amber-500"
                     )}
                   >
-                    {useKesForRevenue ? "Mode: KES" : "Mode: Gold"}
+                    {useKesForRevenue ? "Mode: KES" : "Mode: Gold/BTC"}
                   </button>
               </div>
               <div className="relative">
@@ -3743,7 +3741,7 @@ export default function PlatformDashboard() {
 
           <form onSubmit={handleLogPlatformExpense} className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">Amount (Gold)</label>
+              <label className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">Amount (Gold/BTC)</label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">G</span>
                 <input
@@ -3904,10 +3902,10 @@ export default function PlatformDashboard() {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-gray-900 dark:text-white font-black text-sm">
-                    {(user.points || 0).toLocaleString()}
+                    {formatReward(user.points || 0)}
                   </td>
                   <td className="px-6 py-4 text-green-600 dark:text-green-400 font-black text-sm">
-                    {(user.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} G
+                    {(user.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
                   </td>
                   <td className="px-6 py-4">
                     <span className={cn(
