@@ -95,12 +95,36 @@ let requestQueue: Promise<void> = Promise.resolve();
 let isAIBreakerTripped = false;
 let breakerErrorText = "";
 let breakerTrippedAt = 0;
+// Binance Environment Detection
+const getBinanceApiKey = () => {
+  const exact = process.env.BINANCE_API_KEY;
+  if (exact) return exact.trim();
+  const found = Object.keys(process.env).find(k => k.toUpperCase().includes('BINANCE') && k.toUpperCase().includes('KEY'));
+  return found ? process.env[found]?.trim() : undefined;
+};
+
+const getBinanceApiSecret = () => {
+  const exact = process.env.BINANCE_API_SECRET;
+  if (exact) return exact.trim();
+  const found = Object.keys(process.env).find(k => (k.toUpperCase().includes('BINANCE') && k.toUpperCase().includes('SECRET')) || k.toUpperCase().includes('API_SECRET'));
+  return found ? process.env[found]?.trim() : undefined;
+};
+
+// Log Detection Status
+console.log("[Binance Status] Found API Key:", !!getBinanceApiKey());
+console.log("[Binance Status] Found API Secret:", !!getBinanceApiSecret());
+if (!getBinanceApiKey() || !getBinanceApiSecret()) {
+  console.log("[Binance Status] Available non-VITE keys starting with BINANCE:", Object.keys(process.env).filter(k => k.startsWith('BINANCE')));
+}
+
+const BINANCE_USE_TESTNET = process.env.BINANCE_USE_TESTNET === "true";
+const BINANCE_API_BASE = BINANCE_USE_TESTNET ? "https://testnet.binance.vision/api" : "https://api.binance.com/api";
+const BINANCE_SAPI_BASE = "https://api.binance.com/sapi";
+
 const BREAKER_COOLDOWN = 1800000; // 30 minutes automatic retry
 let LAST_GOLD_PRICE = 4452.34; // Fallback price per troy ounce (Sync with Binance Market Screenshot)
 
 async function delay(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 async function generateContentWithRetry(params: any): Promise<any> {
   // Check for automatic reset
@@ -1443,18 +1467,14 @@ async function startServer() {
   });
 
   app.get("/api/binance/account", async (req, res) => {
-    const apiKey = process.env.BINANCE_API_KEY;
-    const apiSecret = process.env.BINANCE_API_SECRET;
+    const apiKey = getBinanceApiKey();
+    const apiSecret = getBinanceApiSecret();
     
     if (!apiKey || !apiSecret) {
       return res.status(401).json({ success: false, error: "Binance API keys not configured in server environment secrets." });
     }
 
     try {
-      const BINANCE_API_BASE = process.env.BINANCE_USE_TESTNET === "true" 
-        ? "https://testnet.binance.vision/api" 
-        : "https://api.binance.com/api";
-
       const timestamp = Date.now();
       const query = `timestamp=${timestamp}`;
       const signature = crypto.createHmac("sha256", apiSecret).update(query).digest("hex");
@@ -1481,18 +1501,14 @@ async function startServer() {
 
   app.get("/api/binance/balance/:asset", async (req, res) => {
     const { asset } = req.params;
-    const apiKey = process.env.BINANCE_API_KEY;
-    const apiSecret = process.env.BINANCE_API_SECRET;
+    const apiKey = getBinanceApiKey();
+    const apiSecret = getBinanceApiSecret();
 
     if (!apiKey || !apiSecret) {
       return res.status(401).json({ success: false, error: "Binance API keys not configured." });
     }
 
     try {
-      const BINANCE_API_BASE = process.env.BINANCE_USE_TESTNET === "true" 
-        ? "https://testnet.binance.vision/api" 
-        : "https://api.binance.com/api";
-
       const timestamp = Date.now();
       const query = `timestamp=${timestamp}`;
       const signature = crypto.createHmac("sha256", apiSecret).update(query).digest("hex");
@@ -1511,8 +1527,8 @@ async function startServer() {
 
   app.post("/api/binance/withdraw", async (req, res) => {
     const { asset, address, amount, network, userId, scaToken, totpCode } = req.body;
-    const apiKey = process.env.BINANCE_API_KEY;
-    const apiSecret = process.env.BINANCE_API_SECRET;
+    const apiKey = getBinanceApiKey();
+    const apiSecret = getBinanceApiSecret();
 
     if (!apiKey || !apiSecret) {
       return res.status(401).json({ success: false, error: "Binance API keys not configured in server secrets." });

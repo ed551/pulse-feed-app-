@@ -1287,11 +1287,11 @@ export default function Rewards() {
           onClick={() => setActiveTab('international')}
           className={cn(
             "flex-1 py-2.5 px-4 text-sm font-bold rounded-xl transition-all flex items-center justify-center space-x-2 whitespace-nowrap",
-            activeTab === 'international' ? "bg-white dark:bg-gray-700 text-purple-600 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+            activeTab === 'international' ? "bg-white dark:bg-gray-700 text-amber-600 shadow-sm" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
           )}
         >
           <Globe className="w-4 h-4" />
-          <span>Global & Crypto</span>
+          <span>Binance & Global</span>
         </button>
         <button 
           onClick={() => setActiveTab('history')}
@@ -1989,26 +1989,40 @@ export default function Rewards() {
 
                   <div className="grid grid-cols-4 gap-4 mb-8">
                     {[
-                      { id: 'binance', label: 'Binance', icon: Database },
-                      { id: 'paypal', label: 'PayPal', icon: Gem },
-                      { id: 'stripe', label: 'Stripe', icon: CreditCard },
-                      { id: 'bank', label: 'Bank', icon: Landmark }
+                      { id: 'binance', label: 'Binance (Direct)', icon: Database, color: 'bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-amber-500/10' },
+                      { id: 'paypal', label: 'PayPal', icon: Gem, color: 'border-blue-100 hover:border-blue-200' },
+                      { id: 'stripe', label: 'Stripe', icon: CreditCard, color: 'border-indigo-100 hover:border-indigo-200' },
+                      { id: 'bank', label: 'SWIFT Bank', icon: Landmark, color: 'border-gray-100 hover:border-purple-200' }
                     ].map((method) => (
                       <button
                         key={method.id}
                         onClick={() => setPayoutMethod(method.id as any)}
                         className={cn(
-                          "p-4 rounded-2xl border-2 transition-all flex flex-col items-center space-y-2",
+                          "p-4 rounded-2xl border-2 transition-all flex flex-col items-center space-y-2 relative overflow-hidden group",
                           payoutMethod === method.id 
-                            ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400" 
-                            : "border-gray-100 dark:border-gray-700 hover:border-purple-200 dark:hover:border-purple-800 text-gray-500"
+                            ? (method.id === 'binance' ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400" : "border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400")
+                            : cn("text-gray-500 dark:border-gray-700", method.color)
                         )}
                       >
-                        <method.icon className="w-6 h-6" />
+                        {method.id === 'binance' && (
+                          <div className="absolute -top-1 -right-1">
+                               <div className="bg-amber-500 text-[8px] font-black text-white px-2 py-1 rounded-bl-lg transform rotate-2">BETA</div>
+                          </div>
+                        )}
+                        <method.icon className={cn("w-6 h-6", payoutMethod === method.id && "scale-110 transition-transform")} />
                         <span className="text-[10px] font-black uppercase tracking-tighter">{method.label}</span>
                       </button>
                     ))}
                   </div>
+
+                  {payoutMethod === 'binance' && (
+                    <div className="mb-6 p-4 bg-amber-500/5 rounded-2xl border border-dashed border-amber-500/20">
+                      <h4 className="text-sm font-black text-amber-600 uppercase tracking-tight mb-1">Binance Gateway Active</h4>
+                      <p className="text-[10px] text-amber-600/70 font-bold uppercase tracking-widest leading-relaxed">
+                        Funds are dispatched directly via Binance API. Ensure your Binance Wallet Address is correct and supports {binanceCoin} on the {binanceNetwork} network to avoid fund loss.
+                      </p>
+                    </div>
+                  )}
 
                   <form onSubmit={payoutMethod === 'binance' ? handleBinanceWithdraw : handleInternationalPayout} className="space-y-6">
                     {payoutMethod === 'binance' ? (
@@ -2088,17 +2102,31 @@ export default function Rewards() {
                             />
                           </div>
                           
-                          <div className="mt-4 p-4 bg-amber-500/5 rounded-2xl border border-amber-500/10 flex items-center justify-between">
+                          <div className={cn(
+                            "p-4 rounded-2xl flex items-start gap-4",
+                            error?.includes("Binance API keys not configured") 
+                              ? "bg-red-500/10 border border-red-500/20" 
+                              : "bg-amber-500/5 border border-amber-500/10"
+                          )}>
+                            <div className="p-2 bg-amber-500/10 rounded-lg">
+                              <ShieldAlert className="w-5 h-5 text-amber-500" />
+                            </div>
                             <div>
-                               <p className="text-[10px] font-black text-amber-600/60 uppercase tracking-widest">Binance {binanceCoin} Balance</p>
-                               <p className="text-lg font-black text-amber-600">{binanceBalance ? `${binanceBalance.free} ${binanceCoin}` : '---'}</p>
+                               <p className="text-[10px] font-black text-amber-600/60 uppercase tracking-widest">Binance Status</p>
+                               <p className="text-sm font-bold text-amber-600">{binanceBalance ? "Node Connected" : "Connection Pending"}</p>
+                               {error?.includes("Binance API keys not configured") && (
+                                 <p className="text-[10px] text-red-500 font-bold mt-1">
+                                   Please add BINANCE_API_KEY and BINANCE_API_SECRET to your App Secrets (top-right gear icon) to enable real payouts.
+                                 </p>
+                               )}
                             </div>
                             <button 
+                              type="button"
                               onClick={() => checkBinanceAssetBalance(binanceCoin)}
                               disabled={isCheckingBinanceBalance}
-                              className="px-4 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all disabled:opacity-50"
+                              className="ml-auto px-4 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all disabled:opacity-50 shadow-lg shadow-amber-500/20"
                             >
-                              {isCheckingBinanceBalance ? 'Checking...' : 'Check Balance'}
+                              {isCheckingBinanceBalance ? 'Syncing...' : 'Check Balance'}
                             </button>
                           </div>
                           
