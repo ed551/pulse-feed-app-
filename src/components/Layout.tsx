@@ -120,6 +120,15 @@ export default function Layout() {
     return () => window.removeEventListener('pulse-app-lock', handleLockRequest);
   }, [currentUser?.email]);
 
+  const [circuitBreaker, setCircuitBreaker] = useState(getAIBreakerStatus());
+
+  useEffect(() => {
+    const checkBreaker = setInterval(() => {
+      setCircuitBreaker(getAIBreakerStatus());
+    }, 5000);
+    return () => clearInterval(checkBreaker);
+  }, []);
+
   const mainRef = useRef<HTMLDivElement>(null);
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -149,6 +158,7 @@ export default function Layout() {
     { path: '/gold', icon: Gem, label: t('gold_graph') },
     { path: '/groups', icon: Users, label: t('groups') },
     { path: '/rewards', icon: Layers, label: t('rewards') },
+    { path: '/profile', icon: User, label: t('profile') },
     { path: '/audio', icon: Headphones, label: 'Audio' },
     { path: '/education', icon: GraduationCap, label: 'Education' }
   ];
@@ -161,7 +171,6 @@ export default function Layout() {
     { name: 'Indoor Games', icon: Gamepad2, color: 'text-pink-500', label: t('indoor_games') },
     { name: 'Outdoor Games', icon: Map, color: 'text-emerald-500', label: t('outdoor_games') },
     { name: 'Toggle Frame', icon: Smartphone, color: 'text-purple-500', label: t('toggle_frame') },
-    { name: 'Coop Bank API', icon: Building2, color: 'text-indigo-500', label: t('coop_bank') },
     { name: 'Terms', icon: FileText, color: 'text-teal-500', label: t('terms') },
     { name: 'Privacy', icon: ShieldCheck, color: 'text-indigo-500', label: t('privacy') },
     { name: 'Ads', icon: Gem, color: 'text-green-500', label: t('ads') },
@@ -169,10 +178,7 @@ export default function Layout() {
   ];
 
   const handleCategoryClick = (categoryName: string) => {
-    if (categoryName === 'Coop Bank API') {
-      navigate('/bank-integration');
-      return;
-    }
+    setActiveCategory(categoryName);
     if (categoryName === 'Rewards') {
       navigate('/rewards');
       return;
@@ -968,6 +974,18 @@ export default function Layout() {
       )}>
         {/* AI Lockout Warning */}
         <AnimatePresence>
+          {circuitBreaker.isTripped && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="bg-rose-600 text-white py-1.5 px-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 overflow-hidden whitespace-nowrap border-b border-white/10"
+            >
+              <AlertTriangle className="w-3 h-3 flex-shrink-0 animate-pulse text-amber-300" />
+              <span>AI Service Restricted: Billing Restoration Required via Google Cloud Dashboard</span>
+              <AlertTriangle className="w-3 h-3 flex-shrink-0 animate-pulse text-amber-300" />
+            </motion.div>
+          )}
           {pointsLocked && (
             <motion.div 
               initial={{ height: 0, opacity: 0 }}
@@ -1066,7 +1084,7 @@ export default function Layout() {
                   </span>
                 </div>
 
-                {/* Gold Wallet Balance */}
+                {/* PAXG Wallet Balance */}
                 <div className="hidden sm:flex items-center px-2 sm:px-3 py-1 bg-amber-50 dark:bg-amber-900/30 rounded-full border border-amber-100 dark:border-amber-800 shadow-sm group">
                   <Gem className="w-3.5 h-3.5 sm:w-4 h-4 text-amber-600 mr-1 sm:mr-1.5 group-hover:scale-110 transition-transform" />
                   <span className="text-[10px] sm:text-xs font-black text-amber-800 dark:text-amber-300">
@@ -1643,7 +1661,7 @@ export default function Layout() {
                         <span className="text-xs font-bold text-yellow-700 dark:text-yellow-300">Market Intel</span>
                       </div>
                       <div className="flex items-baseline gap-1">
-                        <p className="text-lg font-black text-yellow-900 dark:text-yellow-100">{marketData?.symbol || 'Gold/BTC/KES'}</p>
+                        <p className="text-lg font-black text-yellow-900 dark:text-yellow-100">{marketData?.symbol || 'Gold / USDT / KES'}</p>
                         <span className="text-[10px] font-bold text-yellow-600">{marketData?.direction === 'up' ? '▲' : '▼'} {marketData?.confidence || '--'}%</span>
                       </div>
                     </div>

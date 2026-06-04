@@ -70,7 +70,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const IDLE_THRESHOLD = idleThreshold;
   const EARNING_INTERVAL = 30000; // Check every 30s locally
   const SYNC_INTERVAL = 300000; // Sync to DB every 5 mins
-  const ACTIVE_POINTS_PER_INTERVAL = 0.016; // 0.016 Gold g per 30s
+  const ACTIVE_POINTS_PER_INTERVAL = 0.016; // 0.016 PAXG per 30s
   
   const monitorBehaviorWithAI = async () => {
     if (!currentUser || isAnalyzingBehavior || Date.now() - lastBehaviorCheckRef.current < 60000) return;
@@ -91,13 +91,13 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
       };
 
-      const prompt = `Analyze user behavioral pattern for Pulse Feeds platform (Gold-Based Economy). 
+      const prompt = `Analyze user behavioral pattern for Pulse Feeds platform (PAXG-Based Economy). 
       User ID: ${currentUser.uid}
       Session Persistence: ${activeSeconds}s
-      Gold Accrual: ${totalEarnedToday} g
+      PAXG Accrual: ${totalEarnedToday} PAXG
       Idle Status: ${isIdle}
       
-      If the user is idle for more than 10 minutes OR has accrued more than 4 g gold in one session without movement, recommend [LOCKOUT].
+      If the user is idle for more than 10 minutes OR has accrued more than 0.1 PAXG in one session without movement, recommend [LOCKOUT].
       Otherwise return [STABLE].`;
 
       const result = await generateContentWithRetry({
@@ -259,7 +259,7 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
     const userRef = doc(db, 'users', currentUser.uid);
     const statsRef = doc(db, 'platform', 'stats');
 
-    // 1.3 Grams per $1.00 (0.01 g Gold = 1 KES, 130 KES = 1 USD)
+    // PAXG economy logic (0.01 PAXG = 1 KES context fallback)
     const pointsToAdd = userUsdAmount > 0 ? Math.max(0.001, userUsdAmount * 1.3) : 0;
     
     // Update User Data with specific revenue source tracking
@@ -470,9 +470,9 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
       earningIntervalRef.current = setInterval(() => {
         if (pointsLocked) return;
         
-        // Accumulate locally: 0.016 g Gold per interval
+        // Accumulate locally: 0.016 PAXG per interval
         const userPts = ACTIVE_POINTS_PER_INTERVAL;
-        const userUsd = userPts / 1.3; // 1.3 grams = $1.00 (Standard Gold Economy)
+        const userUsd = userPts / 1.3; // PAXG Economy 
         const platUsd = (0.5 * ACTIVE_POINTS_PER_INTERVAL) / 1.3; // Platform takes 50% extra from air
 
         pendingUserPointsRef.current += userPts;

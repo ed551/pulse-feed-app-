@@ -200,8 +200,8 @@ export default function BinanceHub() {
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500 font-black">G</div>
                   <div>
-                    <p className="font-black text-sm text-gray-900 dark:text-white">PAX Gold (Real Gold)</p>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">PAXG / BTC Dealing</p>
+                    <p className="font-black text-sm text-gray-900 dark:text-white">PAXG</p>
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Binance Ticker</p>
                   </div>
                 </div>
                 <div className="text-right">
@@ -273,11 +273,11 @@ export default function BinanceHub() {
       </div>
       <div className="text-right">
         <p className="text-xs font-black text-gray-900 dark:text-white">
-          {isPAXG ? grams.toFixed(4) : amount.toFixed(4)}
-          <span className="ml-1 text-[9px] opacity-60 font-medium">{isPAXG ? 'g' : b.asset}</span>
+          {amount.toFixed(6)}
+          <span className="ml-1 text-[9px] opacity-60 font-medium">{b.asset}</span>
         </p>
-        <p className="text-[10px] font-black text-yellow-600">
-           {isPAXG ? `${points} mg GOLD` : formatCurrency(amount)}
+        <p className="text-[10px] font-black text-emerald-600">
+           {isPAXG ? `${amount.toFixed(6)} PAXG` : formatCurrency(amount)}
         </p>
       </div>
     </div>
@@ -304,27 +304,27 @@ export default function BinanceHub() {
           </motion.div>
         </div>
 
-        {/* Gold Reserve Coverage Analysis */}
+        {/* PAXG Reserve Coverage Analysis */}
         {account && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-900/10 dark:to-yellow-900/5 p-8 rounded-[2.5rem] border border-amber-200/50 dark:border-amber-800/30 shadow-xl shadow-amber-500/5"
+            className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/10 dark:to-teal-900/5 p-8 rounded-[2.5rem] border border-emerald-200/50 dark:border-emerald-800/30 shadow-xl shadow-emerald-500/5"
           >
             <div className="flex flex-col md:flex-row items-center justify-between gap-8">
               <div className="flex-1 space-y-4">
                 <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-amber-600" />
-                  <h2 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tighter">Physical Gold Reserve Coverage</h2>
+                  <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                  <h2 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tighter">PAXG Reserve Coverage</h2>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 font-medium leading-relaxed">
-                  The platform uses PAX Gold (PAXG) to back community "Gold g" points. 1 PAXG is verifiable 1:1 with a LBMA-approved gold bar in London vaults.
+                  The platform uses PAX Gold (PAXG) to back all community rewards. 1 PAXG is verifiable 1:1 with a LBMA-approved gold bar in London vaults.
                 </p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 bg-white/50 dark:bg-slate-900/50 rounded-2xl border border-white dark:border-slate-800">
-                    <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-1">Total Grams Held</p>
+                    <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Total PAXG Held</p>
                     <p className="text-2xl font-black text-gray-900 dark:text-white">
-                      {(parseFloat(account.balances.find((b: any) => b.asset === 'PAXG')?.free || '0') * 31.1035).toFixed(3)}g
+                      {(parseFloat(account.balances.find((b: any) => b.asset === 'PAXG')?.free || '0')).toFixed(6)} PAXG
                     </p>
                   </div>
                   <div className="p-4 bg-white/50 dark:bg-slate-900/50 rounded-2xl border border-white dark:border-slate-800">
@@ -334,22 +334,22 @@ export default function BinanceHub() {
                 </div>
               </div>
               
-              <div className="w-full md:w-auto flex flex-col items-center justify-center p-8 bg-white dark:bg-slate-900 rounded-[2rem] border border-amber-100 dark:border-slate-800 shadow-inner">
+              <div className="w-full md:w-auto flex flex-col items-center justify-center p-8 bg-white dark:bg-slate-900 rounded-[2rem] border border-emerald-100 dark:border-slate-800 shadow-inner">
                 <div className="text-center mb-4">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Current Gold Value</p>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Current PAXG Value</p>
                   <p className="text-4xl font-black text-gray-900 dark:text-whitetracking-tighter">
-                    {formatCurrency(parseFloat(paxgPrice || '0') / 31.1035)}
-                    <span className="text-sm font-bold text-gray-400 ml-1">/g</span>
+                    {formatCurrency(parseFloat(paxgPrice || '0'))}
+                    <span className="text-sm font-bold text-gray-400 ml-1">/PAXG</span>
                   </p>
                 </div>
                 <div className="h-2 w-48 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden mb-4">
                   <motion.div 
                     initial={{ width: 0 }}
                     animate={{ width: '85%' }}
-                    className="h-full bg-gradient-to-r from-amber-400 to-yellow-600"
+                    className="h-full bg-gradient-to-r from-emerald-400 to-teal-600"
                   />
                 </div>
-                <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Audited by Binance Smart Link</p>
+                <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Audited by Binance Smart Link</p>
               </div>
             </div>
           </motion.div>

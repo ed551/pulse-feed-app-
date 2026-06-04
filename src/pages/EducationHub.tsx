@@ -139,8 +139,8 @@ export default function EducationHub() {
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // 80/20 Revenue Split for Course Enrollment & AI Training
-      // Total Enrollment Fee/Value: 1.0 Gold g (~100 KES)
-      const totalEnrollmentValue = 1.0;
+      // Total Enrollment Fee/Value: 0.001 PAXG (~2.6 USD)
+      const totalEnrollmentValue = 0.001;
       const userShare = totalEnrollmentValue * 0.2; // 20% to user
       const developerShare = totalEnrollmentValue * 0.8; // 80% to developer (as Platform Revenue)
 
@@ -151,8 +151,8 @@ export default function EducationHub() {
         experience: increment(250)
       });
 
-      // Log Developer/Platform Share (1g Gold = 100 KES)
-      await addPlatformRevenue(developerShare * 0.77, `Course Enrollment Fee: ${course.title} (Developer 80% Share)`);
+      // Log Developer/Platform Share (Convert PAXG to local currency estimation)
+      await addPlatformRevenue(developerShare * 2600, `Course Enrollment Fee: ${course.title} (Developer 80% Share)`);
 
       showNotification("Education Milestone", { 
         body: `Welcome to ${course.title}! You've been rewarded ${formatReward(userShare)} (20% share) while 80% (${formatCurrency(developerShare * 100)}) fuels global engineering.` 
@@ -261,7 +261,7 @@ export default function EducationHub() {
       }
 
       // Distribute rewards for learning
-      const rewardPoints = 0.025; // 0.025g Gold (~2.5 KES)
+      const rewardPoints = 0.00001; // ~0.026 USD in PAXG
       const { userShare } = revenue_distribution_engine(rewardPoints, 'education');
 
       await updateDoc(doc(db, 'users', currentUser.uid), {

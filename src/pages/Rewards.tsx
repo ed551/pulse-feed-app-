@@ -155,10 +155,10 @@ export default function Rewards() {
   });
 
   const isLive = true; // Default to live mode
-  const points = userData?.points || 0; // Gold g
-  const goldBalance = points;
-  const balanceKES = points * 100; // 1g Gold = 100 KES (Since 10mg was 1 KES)
-  const balanceUSD = points / 1.3; // 1.3g Gold = 1 USD
+  const points = userData?.points || 0; // PAXG Points (internally grams)
+  const paxgBalance = points / 31.1035;
+  const balanceKES = points * 100; // 1g PAXG internal = 100 KES
+  const balanceUSD = points / 1.3; // 1.3g PAXG internal = 1 USD
   const membershipLevel = userData?.membershipLevel || 'bronze';
 
   const canWithdrawNow = true; // 1st of month no longer mandatory
@@ -230,10 +230,10 @@ export default function Rewards() {
 
       const numAmount = parseFloat(amount);
       
-      // Balance Check: 100 USD equivalent in gold (130 g)
+      // Balance Check: 100 USD equivalent in PAXG (~4.18 PAXG)
       const MIN_BALANCE_FOR_WITHDRAWAL = 130;
       if (points < MIN_BALANCE_FOR_WITHDRAWAL) {
-        throw new Error(`A minimum balance of 100 USD equivalent in gold (130 g) is required in the account to enable withdrawals. Your current balance is ${points.toLocaleString()} g.`);
+        throw new Error(`A minimum balance of 100 USD equivalent in PAXG (~4.18 PAXG) is required in the account to enable withdrawals. Your current balance is ${formatReward(points)}.`);
       }
 
       const minAmount = isDeveloper ? 1 : 100;
@@ -453,7 +453,7 @@ export default function Rewards() {
 
       if (currentUser && db) {
         const txRef = collection(db, 'users', currentUser.uid, 'transactions');
-        const pointsToDeduct = numAmount * 1.3; // 1.3g Gold = $1 USD approx
+        const pointsToDeduct = numAmount * 1.3; // 1.3g = $1 USD approx
 
         const txData = {
           amount: numAmount,
@@ -638,7 +638,7 @@ export default function Rewards() {
           source: 'withdrawal',
           reason: `International Payout (${payoutMethod})`,
           timestamp: serverTimestamp(),
-          unit: 'Gold/BTC'
+          unit: 'PAXG'
         }).catch(err => console.error("Error logging points ledger:", err));
       }
       
@@ -729,7 +729,7 @@ export default function Rewards() {
         isRestoredTo6337: true,
         recoveredAt: serverTimestamp()
       });
-      setSuccess("Full balance of 6.337 Gold/BTC successfully restored!");
+      setSuccess("Full balance of 6.337 PAXG successfully restored!");
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
       setError("Restoration failed. Please try again.");
@@ -817,7 +817,7 @@ export default function Rewards() {
 
   const achievements = [
     { id: 1, title: 'Early Adopter', desc: 'Joined during the beta phase.', icon: Award, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30' },
-    { id: 2, title: 'Gold Predictor', desc: 'Correctly predicted gold movement 5 times.', icon: TrendingUp, color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
+    { id: 2, title: 'PAXG Predictor', desc: 'Correctly predicted PAXG movement 5 times.', icon: TrendingUp, color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
     { id: 3, title: 'Community Pillar', desc: 'Received 100+ likes on a single post.', icon: Layers, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
   ];
 
@@ -1463,7 +1463,7 @@ export default function Rewards() {
                       className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center transition-all shadow-lg shadow-orange-500/20 active:scale-95 animate-pulse"
                     >
                       <RotateCcw className="w-3 h-3 mr-2" />
-                      {isRecovering ? 'Restoring...' : 'Restore 6.337 Gold/BTC'}
+                      {isRecovering ? 'Restoring...' : 'Restore 6.337 PAXG'}
                     </button>
                   )}
                 </div>
@@ -1653,7 +1653,7 @@ export default function Rewards() {
                     <Landmark className="w-32 h-32" />
                   </div>
                   <div className="relative z-10 space-y-4">
-                    <p className="text-blue-100 font-bold uppercase tracking-widest text-xs">Local Wallet Balance (Gold/BTC)</p>
+                    <p className="text-blue-100 font-bold uppercase tracking-widest text-xs">Local Wallet Balance (PAXG)</p>
                     <h2 className="text-3xl sm:text-5xl font-black tracking-tighter">
                       {formatReward(points)}
                     </h2>
@@ -1982,7 +1982,7 @@ export default function Rewards() {
                     <Globe className="w-32 h-32" />
                   </div>
                   <div className="relative z-10 space-y-4">
-                        <p className="text-purple-100 font-bold uppercase tracking-widest text-xs">International Payouts (Gold/BTC)</p>
+                        <p className="text-purple-100 font-bold uppercase tracking-widest text-xs">International Payouts (PAXG/BTC)</p>
                         <h2 className="text-3xl sm:text-5xl font-black tracking-tighter">
                           {formatReward(points)}
                         </h2>
@@ -2056,7 +2056,7 @@ export default function Rewards() {
                               </div>
                               <div>
                                 <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest leading-none mb-1">Real-time Trading Pair</p>
-                                <p className="text-sm font-black text-gray-900 dark:text-white">PAXG / BTC</p>
+                                <p className="text-sm font-black text-gray-900 dark:text-white">PAXG</p>
                               </div>
                             </div>
                             <div className="text-right">
@@ -2189,7 +2189,7 @@ export default function Rewards() {
                     )}
 
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount ({payoutMethod === 'binance' ? 'Gold Value' : 'KES'})</label>
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount ({payoutMethod === 'binance' ? 'PAXG Value' : 'KES'})</label>
                       <div className="relative">
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">{payoutMethod === 'binance' ? '$' : 'KES'}</span>
                         <input
@@ -2288,7 +2288,7 @@ export default function Rewards() {
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
-                      <span>Minimum withdrawal: KES 1,300 (~0.4 Gold/BTC)</span>
+                      <span>Minimum withdrawal: KES 1,300 (~0.4 PAXG/BTC)</span>
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />

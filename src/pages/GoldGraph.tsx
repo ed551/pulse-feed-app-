@@ -36,10 +36,10 @@ import { cn } from '../lib/utils';
 import { marketBrain } from '../lib/marketEngine';
 import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 
-// Mock data generator for 30 days of Gold price movement
-const generateGoldData = () => {
+// Mock data generator for 30 days of PAXG price movement
+const generatePAXGData = () => {
   const data = [];
-  let currentPrice = 2350.45;
+  let currentPrice = 2450.45;
   const now = new Date();
 
   for (let i = 30; i >= 0; i--) {
@@ -138,8 +138,8 @@ export default function GoldGraph() {
         }
       } catch (err) {
         console.warn("Market fetch fallback active:", err);
-        // Robust Fallback (Gold ~$4452, BTC ~$67.1k to hit ~0.066 ratio user requested)
-        const basePrice = 4452.34; 
+        // Robust Fallback (PAXG ~$2652, BTC ~$67.10k)
+        const basePrice = 2652.34; 
         const fallbackBtc = 67100;
         setRealPrice(basePrice);
         setBtcPrice(fallbackBtc);
@@ -259,8 +259,10 @@ export default function GoldGraph() {
     setIsAnalyzing(true);
     try {
       const prompt = `
-        Analyze the Gold Market for Pulse Feeds Gold Ecosystem.
-        Current Price: ${currentPrice} USD (Spot Oz).
+        Analyze the PAXG Market for Pulse Feeds Reward Ecosystem.
+        Current PAXG Price: ${currentPrice} USDT.
+        Current BTC Price: ${btcPrice ? btcPrice : '--'} USDT.
+        PAXG/BTC Ratio: ${realPrice && btcPrice ? (realPrice / btcPrice).toFixed(6) : '--'}.
         30-Day Trend: ${percentChange.toFixed(2)}%.
         
         Provide smart technical predictions for 1 day, 7 days, 15 days, and 30 days in STRICT JSON format:
@@ -319,14 +321,14 @@ export default function GoldGraph() {
             </div>
             <div>
               <h1 className="text-3xl font-black text-white flex items-center gap-3">
-                Gold Intel Matrix
+                Gold graph page
                 <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full uppercase tracking-[0.2em] font-black border border-emerald-500/30">Neural Active</span>
               </h1>
               <div className="flex items-center gap-3 mt-2">
-                <p className="text-slate-400 text-sm font-bold uppercase tracking-widest opacity-60">High-Fidelity Market Core</p>
+                <p className="text-slate-400 text-sm font-bold uppercase tracking-widest opacity-60">High-Fidelity PAXG Core</p>
                 <div className="w-1 h-1 bg-slate-700 rounded-full" />
                 <div className="px-3 py-1 bg-amber-500/10 rounded-lg text-[10px] font-black text-amber-500 uppercase tracking-widest border border-amber-500/20">
-                  BTC Liquidity Pool
+                  PAXG/USDT & PAXG/BTC
                 </div>
               </div>
             </div>
@@ -334,10 +336,16 @@ export default function GoldGraph() {
 
           <div className="flex flex-wrap items-center gap-8">
             <div className="text-right">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">Spot Index (BTC / Oz)</p>
-              <div className="flex items-baseline gap-3">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">Spot Index (USDT / PAXG)</p>
+              <div className="flex items-baseline gap-3 mb-2">
                 <span className="text-5xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
-                  {(realPrice && btcPrice ? (realPrice / btcPrice).toFixed(5) : "0.06636")}
+                  {formatCurrency(realPrice)}
+                </span>
+              </div>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">Spot Index (BTC / PAXG)</p>
+              <div className="flex items-baseline gap-3">
+                <span className="text-5xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-600">
+                  {(realPrice && btcPrice ? (realPrice / btcPrice).toFixed(6) : "0.0352")}
                 </span>
                 <span className={cn(
                   "flex items-center text-xs font-black px-3 py-1 rounded-lg border",

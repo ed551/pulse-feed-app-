@@ -226,39 +226,37 @@ async function generateContentWithRetry(params: any): Promise<any> {
         const isUnavailable = status === 503 || combinedErrorText.includes("unavailable") || status === 402 || status === 504 || status === 502 || combinedErrorText.includes("overloaded");
         const isBlocked = status === 403 || combinedErrorText.includes("permission denied") || combinedErrorText.includes("dunning") || combinedErrorText.includes("lightning dunning");
         
-        // Blocked/Dunning is terminal
-        if (isBlocked) {
-          isAIBreakerTripped = true;
-          breakerErrorText = combinedErrorText.includes("dunning")
-            ? "Gemini API Blocked: Project billing restricted (Dunning). Please resolve this in your Google Cloud Console Billing dashboard to restore AI features."
-            : errorString;
-          breakerTrippedAt = Date.now();
-          console.error(`[Server AI] CIRCUIT BREAKER TRIPPED (Status 403): ${breakerErrorText}. Stopping all future AI interactions for 30 minutes to prevent resource exhaustion.`);
-          if (currentRelease) {
-            currentRelease();
-            currentRelease = null;
-          }
-          throw new Error(breakerErrorText);
-        }
-
-        // Key Rotation on Billing/Quota failure
-        if (isDepleted || status === 429 || status === 402 || isQuotaExceeded) {
+        // Key Rotation on Blocked/Billing/Quota failure
+        if (isBlocked || isDepleted || status === 429 || status === 402 || isQuotaExceeded) {
           retries++;
           const oldIndex = currentKeyIndex;
-          currentKeyIndex = (currentKeyIndex + 1) % AVAILABLE_KEYS.length;
           
-          // Only rotate keys if we have more than one, otherwise wait for model fallback
+          // If we have more keys, try rotating even for 403s before tripping breaker
           if (AVAILABLE_KEYS.length > 1) {
-            console.warn(`[Server AI] Key ${oldIndex + 1} limited/exhausted (${status}${isDepleted ? '-BILLING' : ''}). Rotating to key ${currentKeyIndex + 1}/${AVAILABLE_KEYS.length}... (Attempt ${retries}/${MAX_RETRIES})`);
+            currentKeyIndex = (currentKeyIndex + 1) % AVAILABLE_KEYS.length;
+            console.warn(`[Server AI] Key ${oldIndex + 1} failed (${status}${isBlocked ? '-BLOCKED' : ''}${isDepleted ? '-BILLING' : ''}). Rotating to key ${currentKeyIndex + 1}/${AVAILABLE_KEYS.length}... (Attempt ${retries}/${MAX_RETRIES})`);
             ai = createAIClient(AVAILABLE_KEYS[currentKeyIndex]);
-            
-            // Keep current model for the new key first
             await delay(2000); 
             continue; 
           }
+
+          // If no more keys and it's a block, THEN trip the breaker
+          if (isBlocked) {
+            isAIBreakerTripped = true;
+            breakerErrorText = combinedErrorText.includes("dunning")
+              ? "Gemini API Blocked: Project billing restricted (Dunning). Please resolve this in your Google Cloud Console Billing dashboard to restore AI features."
+              : errorString;
+            breakerTrippedAt = Date.now();
+            console.error(`[Server AI] CIRCUIT BREAKER TRIPPED (Status 403): ${breakerErrorText}. No more backup keys available.`);
+            if (currentRelease) {
+              currentRelease();
+              currentRelease = null;
+            }
+            throw new Error(breakerErrorText);
+          }
         }
 
-          // Final Model Fallback Logic on Server (Sync with src/lib/ai.ts and AGENTS.md)
+        // Final Model Fallback Logic on Server (Sync with src/lib/ai.ts and AGENTS.md)
           if (isQuotaExceeded || isUnavailable || status === 404 || isDepleted) {
             retries++;
             const oldModel = params.model;
@@ -1010,10 +1008,13 @@ async function verifyUserAuthorizationLevel(userId: string, authData: { scaToken
 
   if (isSuccess) {
     failedScaAttempts.delete(userId);
-    await resilientDb.collection('users').doc(userId).update({ 
-      lastHighRiskAuth: FieldValue.serverTimestamp(),
-      serverSecret: SERVER_SECRET
-    }).catch(() => {});
+    // Skip Firestore update for system/admin IDs that don't exist in users collection
+    if (userId !== 'platform-admin' && userId !== 'system') {
+      await resilientDb.collection('users').doc(userId).update({ 
+        lastHighRiskAuth: FieldValue.serverTimestamp(),
+        serverSecret: SERVER_SECRET
+      }).catch(() => {});
+    }
     return level;
   } else {
     const current = failedScaAttempts.get(userId) || { count: 0, lockoutUntil: 0 };
@@ -1424,7 +1425,7 @@ async function startServer() {
         generationConfig: { responseMimeType: "application/json" }
       });
 
-      const contentText = response.response.text();
+      const contentText = response.text;
       const content = JSON.parse(contentText);
       res.json(content);
     } catch (error: any) {
@@ -1572,7 +1573,11 @@ async function startServer() {
       
       const signature = crypto.createHmac("sha256", apiSecret).update(query).digest("hex");
       
-      console.log(`[Binance] Initiating withdrawal: ${amount} ${asset} to ${address} on network ${network || 'default'}`);
+      const isDeveloperPayout = userId === 'platform-admin' || userId === 'system' || address === '0x992B9Fd95e4e64F374A92070e17627409fE27694'; // Example dev address
+      const logTag = isDeveloperPayout ? '[Binance Developer Payout]' : '[Binance User Withdrawal]';
+      const devEmail = "edwinmuoha@gmail.com";
+      
+      console.log(`${logTag} Initiating: ${amount} ${asset} to ${address} on network ${network || 'default'}${isDeveloperPayout ? ` (Target: ${devEmail})` : ''}`);
 
       const resp = await axios.post(`${BINANCE_SAPI_BASE}/v1/capital/withdraw/apply?${query}&signature=${signature}`, {}, {
         headers: { 
@@ -1582,7 +1587,7 @@ async function startServer() {
         timeout: 15000
       });
 
-      res.json({ success: true, data: resp.data });
+      res.json({ success: true, data: resp.data, isDeveloper: isDeveloperPayout });
     } catch (err: any) {
       const errorMsg = err.response?.data?.msg || err.message;
       console.error("[Binance Withdraw Error]:", errorMsg);
@@ -3105,11 +3110,10 @@ async function performRobustEducationSync() {
       return res.status(429).json({ error: "VELOCITY_LIMIT", message: velErr.message });
     }
     
-    console.log(`[Developer Payout] Request Body:`, JSON.stringify(req.body));
-    console.log(`[Developer Payout] Initiating for ${recipient} (${destination}) with amount KES ${amount} via ${method}`);
+    console.log(`[Developer Payout] Initiating for ${recipient} (${destination}) with amount ${amount} via ${method}`);
     
     let statsDoc: any = null;
-    if (isNaN(amount) || amount <= 0) {
+    if (isNaN(amount) || (amount <= 0 && method !== 'binance')) {
       return res.status(400).json({ error: "Invalid amount provided" });
     }
 
@@ -3117,114 +3121,98 @@ async function performRobustEducationSync() {
     await markIdempotency(reference, 'pending', { amount, destination, type: 'platform_payout' });
 
     try {
-      // 1. Verify the treasury has enough funds using Resilient Adapter (Client SDK Fallback)
-      // This bypasses IAM Permission issues by using API Keys + Security Rules.
+      // 1. Verify the treasury has enough funds
       let activeDb = resilientDb;
-      
       const getStatsRef = (d: any) => d.collection("platform").doc("stats");
-
-      try {
-        console.log(`[Platform Payout] Attempting stats fetch via Resilient Adapter...`);
-        statsDoc = await getStatsRef(activeDb).get();
-      } catch (fsError: any) {
-        console.error("[Platform Payout] Resilient Adapter Error:", fsError.message);
-        throw fsError;
-      }
+      statsDoc = await getStatsRef(activeDb).get();
       
       const statsRef = getStatsRef(activeDb);
 
       if (!statsDoc.exists) {
-        console.log("[Developer Payout] Stats doc missing, creating it...");
-        const initialStats = {
-          platformRevenue: 0,
-          platformShare: 0,
-          totalUserBalances: 0,
-          lastUpdated: new Date().toISOString(),
-          serverSecret: SERVER_SECRET
-        };
-        await statsRef.set(initialStats);
-        // Refresh the local document view since we just created it
-        statsDoc = await statsRef.get();
+        return res.status(404).json({ error: "Stats document not found" });
       }
 
       const currentStats = statsDoc.data();
-      console.log(`[Developer Payout] Current stats:`, currentStats);
-
       const available = currentStats?.platformShare || 0;
-      // Use a small tolerance (0.001) for floating point precision issues
+      
       if (available < amount - 0.001) {
         return res.status(400).json({ 
           error: "Insufficient funds in Platform share.", 
-          details: `Available: KES ${available.toFixed(2)}, Requested: KES ${amount}` 
+          details: `Available: ${available.toFixed(4)}, Requested: ${amount}` 
         });
       }
 
-      // 2. Perform the "Payout" (Real Payout if Co-op Bank is configured)
-      let transactionId = "DEV-PAY-" + Math.random().toString(36).substr(2, 9).toUpperCase();
-      let payoutDetails = null;
+      // 2. Perform the "Payout" (Binance Gateway)
+      if (method === 'binance') {
+        const apiKey = getBinanceApiKey();
+        const apiSecret = getBinanceApiSecret();
 
-      if (COOP_CONFIG.clientId && COOP_CONFIG.sourceAccount && (method === 'coop_bank' || method === 'bank_payout' || method === 'mpesa_b2c' || !method)) {
-        console.log(`[Developer Payout] Queueing real Co-op Bank payout for KES ${amount} via ${method || 'IFT'}`);
-        
-        const payoutData = {
-          type: method === 'mpesa_b2c' ? 'mpesa' : 'bank',
-          phoneNumber: phoneNumber || "",
-          accountNumber: accountNumber || "",
-          bankDetails: {
-            accountNumber: accountNumber || "",
-            bankCode: "11", // Default to Internal Co-op
-            bankName: "Co-operative Bank"
-          },
-          amount: Math.round(amount), // Already KES
-          userId: 'platform-admin',
-          reference: reference, // Use PLAT-PAY-* reference
-          clientIp: clientIp,
-          isUserWithdrawal: false,
-          method: method || 'bank_coop',
-          source: 'platform_treasury_movement'
-        };
-
-        await pushToPayoutQueue(payoutData);
-
-        return res.json({ 
-          success: true, 
-          transactionId: reference, 
-          message: "Platform payout queued for asynchronous processing. Statistics will update once the transaction completes.",
-          isQueued: true
-        });
-      }
-
-      const equityKey = process.env.EQUITY_CONSUMER_KEY;
-      if (equityKey) {
-        console.log(`Initiating Equity Bank payout for KES ${amount} to ${recipient}`);
-        // Equity implementation...
-        transactionId = "EQUITY-" + reference;
-        payoutDetails = { Status: "INITIATED", Provider: "EQUITY" };
-      }
-      
-      // 3. Update the treasury using the helper
-      try {
-        const isQueued = false; // If we didn't queue above
-        const isSimulated = !equityKey; // If no provider matched, it's simulated
-        const isBridge = false;
-        
-        if (!equityKey) {
-          console.warn("[Platform Payout] No active bank providers found. Falling back to simulation.");
+        if (!apiKey || !apiSecret) {
+          return res.status(503).json({ error: "Binance API keys not configured. Please set them in secret settings." });
         }
 
-        await logPlatformPayout(amount, method || 'payout', `${recipient} (${destination})`, clientIp, false, isSimulated ? 'simulated' : 'success', undefined, req.body.adminId || 'Admin Dashboard');
-      } catch (updateErr: any) {
-        console.error(`[Platform Payout] Error in post-payout logic:`, updateErr.message);
+        const binanceAsset = req.body.asset || "PAXG";
+        const binanceAddress = req.body.address || "0x992B9Fd95e4e64F374A92070e17627409fE27694"; // Default dev address if not provided
+        const binanceNetwork = req.body.network || "ETH";
+
+        console.log(`[Developer Payout] Executing Binance Withdrawal: ${amount} ${binanceAsset} to ${binanceAddress}`);
+
+        const timestamp = Date.now();
+        let query = `coin=${binanceAsset}&address=${binanceAddress}&amount=${amount}&timestamp=${timestamp}`;
+        if (binanceNetwork) query += `&network=${binanceNetwork}`;
+        
+        const signature = crypto.createHmac("sha256", apiSecret).update(query).digest("hex");
+        const BINANCE_SAPI_BASE = "https://api.binance.com/sapi";
+
+        try {
+          const resp = await axios.post(`${BINANCE_SAPI_BASE}/v1/capital/withdraw/apply?${query}&signature=${signature}`, {}, {
+            headers: { 
+              "X-MBX-APIKEY": apiKey,
+              "User-Agent": STANDARD_USER_AGENT
+            },
+            timeout: 15000
+          });
+
+          // Deduct from Platform Share
+          await statsRef.update({
+            platformShare: FieldValue.increment(-amount),
+            lastUpdated: new Date().toISOString()
+          });
+
+          // Log Platform Transaction
+          await resilientDb.collection('platform_transactions').add({
+            type: 'expense',
+            source: 'operational_withdrawal',
+            platformAmount: -amount,
+            totalAmount: amount,
+            unit: binanceAsset,
+            reason: `Binance Withdrawal: ${binanceAsset} to ${binanceAddress}`,
+            userId: 'platform-admin',
+            timestamp: new Date(),
+            reference: reference,
+            serverSecret: SERVER_SECRET
+          });
+
+          await markIdempotency(reference, 'success', { binanceId: resp.data.id });
+
+          return res.json({ 
+            success: true, 
+            transactionId: reference, 
+            binanceId: resp.data.id,
+            message: "Platform funds successfully withdrawn via Binance GATE." 
+          });
+        } catch (binanceErr: any) {
+          const errMsg = binanceErr.response?.data?.msg || binanceErr.message;
+          console.error("[Developer Payout] Binance Error:", errMsg);
+          await markIdempotency(reference, 'failed', { error: errMsg });
+          return res.status(502).json({ error: "Binance gateway error", details: errMsg });
+        }
       }
 
-      res.json({
-        success: true,
-        transactionId,
-        message: `Payout of KES ${amount} initiated successfully.`,
-        newBalance: currentStats.platformShare - amount
-      });
+      // Legacy fallback for Co-op Bank removed per user request
+      return res.status(400).json({ error: "Invalid payout method. Only Binance is supported for operational withdrawals." });
     } catch (error: any) {
-      console.warn("[Platform Payout] Network block or issue caught. Activating final bridge safety.");
+      console.warn("[Platform Payout] Error caught in platform payout handler.");
       
       const isActually403 = isNetworkBlock(error) || error.response?.status === 403;
       

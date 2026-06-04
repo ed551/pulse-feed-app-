@@ -23,7 +23,7 @@ export const useCurrencyConverter = () => {
     if (savedCurrency) {
       setCurrency(savedCurrency);
     } else {
-      // Default to GOLD for this app
+      // Default to PAXG for this app
       setCurrency('GOLD');
     }
     
@@ -77,7 +77,7 @@ export const useCurrencyConverter = () => {
   };
 
   const convert = (amount: number, fromCurrency: string = 'USD'): string => {
-    if (isNaN(amount)) return '0.00 Gold/BTC';
+    if (isNaN(amount)) return '0.00 PAXG';
 
     // Convert input to USD base first
     const rateFrom = rates[fromCurrency] || 1;
@@ -86,9 +86,8 @@ export const useCurrencyConverter = () => {
     if (currency === 'GOLD' || currency === 'BTC_GOLD') {
       const gRate = rates['GOLD'] || (31.1035 / 2375.40);
       const grams = amountInUSD * gRate;
-      const btcRate = rates['BTC'] || (1 / 67000);
-      const btc = amountInUSD * btcRate;
-      return `${grams.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 4 })} Gold / ${btc.toFixed(8)} BTC`;
+      const paxg = grams / 31.1035;
+      return `${paxg.toFixed(6)} PAXG`;
     }
 
     if (currency === 'BTC') {
@@ -113,10 +112,9 @@ export const useCurrencyConverter = () => {
 
   const formatReward = (points: number): string => {
     // 1 point = 1 gram of Gold internally
-    // BTC value = points * (BTC_per_USD / GOLD_per_USD)
-    const btcRatio = (rates['BTC'] / rates['GOLD']) || 0.001139;
-    const btc = points * btcRatio;
-    return `${points.toFixed(4)} Gold / ${btc.toFixed(8)} BTC`;
+    // 1 PAXG = 1 Troy Ounce = 31.1035 grams
+    const paxg = points / 31.1035;
+    return `${paxg.toFixed(6)} PAXG`;
   };
 
   const formatCurrency = (amountInUSD: number): string => {

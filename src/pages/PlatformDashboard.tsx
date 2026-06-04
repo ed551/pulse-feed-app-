@@ -163,19 +163,19 @@ export default function PlatformDashboard() {
       console.log(`[Developer Expense] Processing automated monthly withdrawal of KSH ${amount} for ${currentMonth}...`);
 
       // 1. Log as Platform Expense (Deducts from platformShare)
-      await addPlatformExpense(amount, `Monthly Developer Operational, Engineering & Cooperative Bank Governance Fee (${currentMonth})`);
+      await addPlatformExpense(amount, `Monthly Developer Operational, Engineering & Binance Governance Fee (${currentMonth})`);
       
       // 2. Create Withdrawal Record
       await addDoc(collection(db, 'withdrawals'), {
         amount,
-        amountPoints: amount * 0.01, // 1g Gold = 100 KES
+        amountPoints: amount / (rates.goldKes || 310000), // Convert KES withdrawal to PAXG
         amountKes: amount,
         category: 'developer_expense',
         reference: refCode,
         status: 'success',
         timestamp: serverTimestamp(),
         userId: 'platform-admin',
-        userName: 'EDWIN MUOHA WATITU',
+        userName: 'Binance Treasury',
         userEmail: 'edwinmuoha@gmail.com',
         details: `Automated Developer Professional Services & Operational Fee - ${currentMonth}`
       });
@@ -196,8 +196,8 @@ export default function PlatformDashboard() {
       // Inject record
       await addDoc(collection(db, 'withdrawals'), {
         amount,
-        amountPoints: amount * 1.3, // 1.3g Gold = 1 USD
-        amountKes: amount * 130, // 130 KES = 1 USD
+        amountPoints: amount / (rates.goldUSD || 2600), // Convert USD withdrawal to PAXG
+        amountKes: amount * 150, // Approx KES
         category: 'operational',
         reference: refCode,
         status: 'success',
@@ -604,14 +604,14 @@ export default function PlatformDashboard() {
       // IF unit is missing:
       // - Platform Revenue is ALMOST ALWAYS KES or USD (large amounts).
       // - Standard revenue/payouts < 100 are likely Gold g.
-      const isPoints = tx.unit === 'POINTS' || tx.unit === 'G' || tx.unit === 'Gold g' || tx.unit === 'Gold/BTC' || (!tx.unit && Math.abs(platformAmtRaw) < 100 && tx.type !== 'platform_revenue' && tx.type !== 'expense');
+      const isPoints = tx.unit === 'POINTS' || tx.unit === 'G' || tx.unit === 'PAXG' || tx.unit === 'Gold g' || tx.unit === 'Gold/BTC' || tx.unit === 'PAXG / BTC' || (!tx.unit && Math.abs(platformAmtRaw) < 100 && tx.type !== 'platform_revenue' && tx.type !== 'expense');
       const isKes = tx.unit === 'KES' || tx.currency === 'KES';
       
       let platformAmt = platformAmtRaw;
       let grossAmt = grossAmtRaw;
 
       if (isPoints) {
-        // 1.3 Gold g = $1.00
+        // PAXG value calculation logic
         platformAmt = platformAmtRaw / 1.3;
         grossAmt = grossAmtRaw / 1.3;
       } else if (isKes) {
@@ -998,7 +998,7 @@ export default function PlatformDashboard() {
         userAmount: 0,
         platformAmount: amountUsd,
         totalAmount: amountUsd,
-        reason: `Manual Return of Funds to Treasury (${useKesForReturn ? 'KES' : 'Gold g'})`,
+        reason: `Manual Return of Funds to Treasury (${useKesForReturn ? 'KES' : 'PAXG'})`,
         userId: currentUser?.uid || 'system',
         timestamp: serverTimestamp(),
         serverSecret: "pulse-feeds-server-secret-2026"
@@ -1118,12 +1118,13 @@ export default function PlatformDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          method: "coop_bank",
-          accountNumber: platformAccountNumber,
+          method: "binance",
           amount: amountToWithdraw,
-          recipient: platformAccountName,
-          userId: platformUserId,
-          scaToken: token, // Critical inclusion
+          asset: "PAXG",
+          address: "0x992B9Fd95e4e64F374A92070e17627409fE27694", // Main Binance Hot Wallet
+          recipient: "Binance Treasury",
+          userId: "platform-admin",
+          scaToken: token,
           usePhone,
           email,
           password
@@ -1148,12 +1149,12 @@ export default function PlatformDashboard() {
       const kesAmount = amountToWithdraw * (rates['KES'] || 130);
       
       if (data.status === 'blocked') {
-        setError(`[FIREWALL BLOCK] Payout of ${formatCurrency(amountToWithdraw)} was blocked by the bank. It has been recorded as BLOCKED for manual resolution. No funds moved.`);
+        setError(`[GATEWAY BLOCK] Binance withdrawal of ${formatCurrency(amountToWithdraw)} was blocked. No funds moved.`);
         setSuccess(null);
       } else {
         setSuccess(data.isSimulated
-          ? `[IP BLOCK PROTECTION] Platform payout of ${formatCurrency(amountToWithdraw)} has been simulated. The bank's firewall is currently blocking the connection from out server IP. Your treasury has been updated internally.`
-          : `Platform payout of ${formatCurrency(amountToWithdraw)} (KES ${kesAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) successfully initiated for Co-op Bank Account 01100975259001.`);
+          ? `[SIMULATION] Binance payout of ${formatCurrency(amountToWithdraw)} has been simulated for testing.`
+          : `Platform payout of ${formatCurrency(amountToWithdraw)} has been successfully initiated via Binance GATE.`);
       }
       
       if (!withdrawAll) setDevWithdrawAmount("");
@@ -1276,21 +1277,31 @@ export default function PlatformDashboard() {
       if (!response.ok) throw new Error(data.error || "Binance withdrawal failed");
 
       setSuccess(`Binance withdrawal of ${amount} ${asset} successfully initiated to ${address}.`);
-      setBinanceWithdrawalForm({ ...binanceWithdrawalForm, amount: '', address: '' });
       
       // Update platform stats (deduct from share as it's an operational withdrawal)
       if (db) {
         const statsRef = doc(db, "platform", "stats");
+        
+        // BUG FIX: If withdrawing PAXG, we must deduct the USD value from platformShare
+        let usdDeduction = parseFloat(amount);
+        if (asset === 'PAXG' && goldPriceValue) {
+          usdDeduction = parseFloat(amount) * goldPriceValue;
+        } else if (asset === 'BTC' && btcPriceValue) {
+          usdDeduction = parseFloat(amount) * btcPriceValue;
+        }
+
         await updateDoc(statsRef, {
-          platformShare: increment(-parseFloat(amount))
+          platformShare: increment(-usdDeduction)
         });
         
         await addDoc(collection(db, 'platform_transactions'), {
           type: 'expense',
           source: 'binance_withdrawal',
           userAmount: 0,
-          platformAmount: -parseFloat(amount),
-          totalAmount: parseFloat(amount),
+          platformAmount: -usdDeduction,
+          totalAmount: usdDeduction,
+          assetAmount: parseFloat(amount),
+          assetSymbol: asset,
           reason: `Binance Withdrawal (${asset}) to ${address}`,
           userId: currentUser?.uid || 'system',
           timestamp: serverTimestamp(),
@@ -1298,6 +1309,8 @@ export default function PlatformDashboard() {
         });
       }
 
+      setBinanceWithdrawalForm({ ...binanceWithdrawalForm, amount: '', address: '' });
+      
       // Check balance again to reflect update
       setTimeout(checkBinanceBalance, 2000);
       handleRefresh();
@@ -2061,7 +2074,7 @@ export default function PlatformDashboard() {
                             <td className="px-6 py-4 text-right font-black font-mono">
                               <span className={cn((tx.type === 'revenue' || tx.type === 'platform_revenue' || (tx.platformAmount || 0) > 0) ? "text-green-600" : "text-red-600")}>
                                 {(tx.type === 'revenue' || tx.type === 'platform_revenue' || (tx.platformAmount || 0) > 0) ? '+' : '-'}{
-                                  tx.unit === 'GOLD' || tx.unit === 'Points' || tx.unit === 'Gold g' || tx.unit === 'Gold/BTC'
+                                  tx.unit === 'GOLD' || tx.unit === 'Points' || tx.unit === 'Gold g' || tx.unit === 'Gold/BTC' || tx.unit === 'PAXG' || tx.unit === 'PAXG / BTC'
                                     ? formatReward(Math.abs(tx.platformAmount || tx.totalAmount || 0))
                                     : formatCurrency(Math.abs(tx.platformAmount || tx.totalAmount || 0))
                                 }
@@ -2281,24 +2294,15 @@ export default function PlatformDashboard() {
                         <td className="px-6 py-4">
                           <div className="flex flex-col gap-0.5">
                             <span className="text-xs font-black text-gray-900 dark:text-gray-100 uppercase tracking-tight">
-                              {w.category === 'operational' ? 'EDWIN MUOHA WATITU' : (w.userName || 'Anonymous')}
+                              {w.userName || 'Anonymous'}
                             </span>
                             <span className="text-[11px] text-gray-500 font-mono flex items-center gap-1.5 leading-none">
-                              {w.category === 'operational' ? (
-                                <>
-                                  <ShieldCheck className="w-3 h-3 text-indigo-500" />
-                                  01100975259001
-                                </>
-                              ) : (
-                                <>
-                                  <User className="w-3 h-3 opacity-50" />
-                                  {w.userEmail}
-                                </>
-                              )}
+                              <User className="w-3 h-3 opacity-50" />
+                              {w.userEmail}
                             </span>
                             <div className="flex items-center gap-2 mt-1.5 opacity-60">
                               <span className="text-[9px] bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-1.5 py-0.5 rounded font-bold tracking-widest uppercase">
-                                ID: {w.category === 'operational' ? 'EDWINMUOHA' : w.userId?.slice(-6)}
+                                ID: {w.userId?.slice(-6)}
                               </span>
                             </div>
                           </div>
@@ -2664,7 +2668,7 @@ export default function PlatformDashboard() {
                     </div>
                     <div>
                       <h3 className="text-xl font-black text-white uppercase tracking-tight">Rewards Matrix</h3>
-                      <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Gold / BTC Convergence</p>
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">PAXG / Market Convergence</label>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -2675,7 +2679,7 @@ export default function PlatformDashboard() {
                 <div className="space-y-4">
                   <div className="p-4 bg-black/40 rounded-2xl border border-white/5">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">PAXG / BTC Ratio</p>
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">PAXG Market Ratio</p>
                       <span className="text-[10px] font-bold text-amber-500">+{((goldBtcRatio / 0.05) * 100 - 100).toFixed(2)}% Performance</span>
                     </div>
                     <p className="text-3xl font-black text-white tracking-tighter">{goldBtcRatio.toFixed(5)}</p>
@@ -2714,7 +2718,11 @@ export default function PlatformDashboard() {
                     </div>
                     <div>
                       <h3 className="text-xl font-black text-white uppercase tracking-tight">Binance Treasury</h3>
-                      <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Global Spot Asset Control</p>
+                      <p className="text-slate-500 text-[10px] font-bold flex items-center gap-1">
+                        <span className="uppercase tracking-widest">Global Spot Asset Control</span>
+                        <span className="text-yellow-500/50">•</span>
+                        <span className="text-yellow-500">edwinmuoha@gmail.com</span>
+                      </p>
                     </div>
                   </div>
                   <button 
@@ -2900,9 +2908,9 @@ export default function PlatformDashboard() {
                 </div>
                 <div className="text-[10px] font-black text-green-600 uppercase tracking-widest">Total In</div>
               </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Audit: Treasury Inflow</p>
-              <h3 className="text-3xl font-black text-green-600 dark:text-green-400">+{formatCurrency(totals.revenueIn + totals.refunds)}</h3>
-              <p className="text-xs text-gray-400 mt-2">Revenue + Returns to Treasury</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Total Platform Revenue</p>
+            <h3 className="text-3xl font-black text-green-600 dark:text-green-400">+{formatCurrency(stats.platformRevenue)}</h3>
+            <p className="text-xs text-gray-400 mt-2">Verified Gross Inflow</p>
             </motion.div>
 
             {/* Revenue Out */}
@@ -2918,15 +2926,13 @@ export default function PlatformDashboard() {
                 </div>
                 <div className="text-[10px] font-black text-red-600 uppercase tracking-widest">Total Out</div>
               </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Audit: Treasury Outflow</p>
-              <h3 className="text-3xl font-black text-red-600 dark:text-red-400">
-                -{formatCurrency(totals.payouts + totals.expenses)}
-              </h3>
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-[10px] text-gray-400">Withdrawals: -{formatCurrency(totals.payouts)}</span>
-                <span className="text-[10px] text-gray-400">•</span>
-                <span className="text-[10px] text-gray-400">Expenses: -{formatCurrency(totals.expenses)}</span>
-              </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Platform Outflow</p>
+            <h3 className="text-3xl font-black text-red-600 dark:text-red-400">
+              {formatCurrency(Math.abs(stats.platformRevenue - stats.platformShare))}
+            </h3>
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-[10px] text-gray-400">Total Deductions (Withdrawals & Expenses)</span>
+            </div>
             </motion.div>
 
             {/* Current Balance */}
@@ -2943,9 +2949,9 @@ export default function PlatformDashboard() {
                 </div>
                 <div className="px-2 py-1 bg-white/20 rounded-full text-[10px] font-bold uppercase tracking-widest">Audited</div>
               </div>
-              <p className="text-sm text-indigo-100 font-medium tracking-wide">Withdrawable Net Liquidity</p>
-              <h3 className="text-4xl font-black mt-1">{formatCurrency(netWithdrawableLiquidity)}</h3>
-              <p className="text-[10px] text-indigo-200 mt-2 font-bold uppercase tracking-widest tracking-tighter italic">Ledger Sum (Revenue - Expenses - Payouts)</p>
+            <p className="text-sm text-indigo-100 font-medium tracking-wide">Net Treasury Liquidity</p>
+            <h3 className="text-4xl font-black mt-1">{formatCurrency(stats.platformShare)}</h3>
+            <p className="text-[10px] text-indigo-200 mt-2 font-bold uppercase tracking-widest tracking-tighter italic">Official Platform Net Share</p>
             </motion.div>
 
             {/* Active Users */}
@@ -3121,27 +3127,19 @@ export default function PlatformDashboard() {
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {/* Main Integration Tools */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <motion.div 
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => navigate('/bank-integration')}
-              className="group cursor-pointer bg-gradient-to-br from-indigo-600 to-blue-700 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden"
-            >
-              <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:scale-110 transition-transform">
-                <Building2 className="w-32 h-32" />
+            <div className="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-xl border border-gray-100 dark:border-gray-700 space-y-6">
+              <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center text-indigo-600">
+                <Database className="w-6 h-6" />
               </div>
-              <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white mb-8">
-                <Building2 className="w-8 h-8" />
-              </div>
-              <h3 className="text-2xl font-black text-white mb-2">Banking Protocol</h3>
-              <p className="text-indigo-100 text-sm leading-relaxed mb-8 opacity-80">
-                Primary gateway for Co-operative Bank Kenya API operations. Manage IFT, Pesalink, and OAuth 2.0 flows.
+              <h3 className="text-xl font-black text-gray-900 dark:text-white mb-2">Integration Hub</h3>
+              <p className="text-gray-400 text-sm leading-relaxed mb-8 opacity-80">
+                Manage external protocols and endpoint security through this unified controller.
               </p>
-              <div className="flex items-center gap-2 text-white font-black text-xs uppercase tracking-[0.2em]">
-                <span>Execute Terminal</span>
-                <Zap className="w-4 h-4 fill-white animate-pulse" />
+              <div className="flex items-center gap-2 text-indigo-500 font-black text-xs uppercase tracking-[0.2em]">
+                <span>Hub Active</span>
+                <CheckCircle2 className="w-4 h-4 fill-indigo-500" />
               </div>
-            </motion.div>
+            </div>
 
             <div className="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-xl border border-gray-100 dark:border-gray-700 space-y-6">
               <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center text-emerald-600">
@@ -3224,7 +3222,7 @@ export default function PlatformDashboard() {
                   </div>
                 </div>
                 <p className="text-[10px] text-gray-400 mt-4 leading-relaxed">
-                  * If you see 403 Forbidden, ensure your secrets match the ones provided by Co-op Bank Developer Portal.
+                  * If you see 403 Forbidden, ensure your secrets match the ones provided by Binance Developer settings.
                 </p>
               </div>
             </div>
@@ -3293,7 +3291,7 @@ export default function PlatformDashboard() {
                   )}>
                     {networkAlerts.some(a => a.type === 'network_block') ? "ACTIVE BLOCK" : "BYPASSED"}
                   </p>
-                  <p className="text-[10px] text-gray-500 mt-1">Co-operative Bank Bridge</p>
+                  <p className="text-[10px] text-gray-500 mt-1">Binance Asset Bridge</p>
                 </div>
               </div>
 
@@ -3414,7 +3412,7 @@ export default function PlatformDashboard() {
                     Static IP Verified: 35.214.40.75
                   </div>
                   <p className="text-[10px] text-slate-400 leading-relaxed italic">
-                    "Application identity verified by Co-op Bank firewall. All outbound transactions from this server are pre-authorized for immediate settlement."
+                    "Application identity verified by internal security protocols. All outbound transactions from this server are pre-authorized for immediate settlement."
                   </p>
                 </div>
               </div>
@@ -3455,7 +3453,7 @@ export default function PlatformDashboard() {
                     <td className="py-4">
                       <span className="px-2 py-1 bg-red-100 text-red-700 text-[9px] font-bold rounded uppercase">Firewall Block</span>
                     </td>
-                    <td className="py-4 text-xs font-bold text-gray-700 dark:text-gray-300">Co-op Bank API Gateway</td>
+                    <td className="py-4 text-xs font-bold text-gray-700 dark:text-gray-300">Binance API Gateway</td>
                     <td className="py-4 text-xs text-gray-500">Static IP Certification</td>
                     <td className="py-4">
                       <span className="flex items-center gap-1.5 text-emerald-600 text-[10px] font-black uppercase">
@@ -3583,7 +3581,7 @@ export default function PlatformDashboard() {
                       useKesForReturn ? "bg-blue-600 text-white border-blue-600" : "bg-amber-500 text-white border-amber-500"
                     )}
                   >
-                    {useKesForReturn ? "Mode: KES" : "Mode: Gold/BTC"}
+                    {useKesForReturn ? "Mode: KES" : "Mode: PAXG"}
                   </button>
                 </div>
                 <div className="relative">
@@ -3596,7 +3594,7 @@ export default function PlatformDashboard() {
                     className="w-full pl-12 pr-20 py-4 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:outline-none focus:border-purple-500 transition-all font-bold"
                   />
                   <button 
-                    onClick={() => setDevWithdrawAmount(auditBalance.toFixed(2))}
+                    onClick={() => setDevWithdrawAmount(stats.platformShare.toFixed(2))}
                     className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-200 transition-colors"
                   >
                     Max
@@ -3612,7 +3610,7 @@ export default function PlatformDashboard() {
                   {[0.25, 0.5, 0.75].map((percent) => (
                     <button
                       key={percent}
-                      onClick={() => setDevWithdrawAmount((auditBalance * percent).toFixed(2))}
+                      onClick={() => setDevWithdrawAmount((stats.platformShare * percent).toFixed(2))}
                       className="flex-1 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl text-[10px] font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
                     >
                       {percent * 100}%
@@ -3642,10 +3640,10 @@ export default function PlatformDashboard() {
 
               <button
                 onClick={() => handlePlatformWithdrawal(true)}
-                disabled={isDevWithdrawing || auditBalance <= 0}
+                disabled={isDevWithdrawing || stats.platformShare <= 0}
                 className="w-full py-3 border-2 border-purple-600 text-purple-600 font-black rounded-2xl hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all"
               >
-                Withdraw All Available ({formatCurrency(auditBalance)})
+                Withdraw All Available ({formatCurrency(stats.platformShare)})
               </button>
 
               <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-2xl border border-purple-100 dark:border-purple-800">
@@ -3654,7 +3652,7 @@ export default function PlatformDashboard() {
                   Security Protocol
                 </div>
                 <p className="text-xs text-purple-600/70 dark:text-purple-400/70">
-                  Withdrawals are hardcoded to Co-op Bank Account 01100975259001 (EDWIN MUOHA WATITU). 
+                  Withdrawals are initiated to the certified developer account.
                   This ensures operational funds cannot be redirected even if the dashboard is compromised.
                 </p>
               </div>
@@ -3682,7 +3680,7 @@ export default function PlatformDashboard() {
                       useKesForRevenue ? "bg-green-600 text-white border-green-600" : "bg-amber-500 text-white border-amber-500"
                     )}
                   >
-                    {useKesForRevenue ? "Mode: KES" : "Mode: Gold/BTC"}
+                    {useKesForRevenue ? "Mode: KES" : "Mode: PAXG"}
                   </button>
               </div>
               <div className="relative">
@@ -3741,7 +3739,7 @@ export default function PlatformDashboard() {
 
           <form onSubmit={handleLogPlatformExpense} className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">Amount (Gold/BTC)</label>
+              <label className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">Amount (PAXG)</label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">G</span>
                 <input
@@ -3946,7 +3944,7 @@ export default function PlatformDashboard() {
               
               <p className="text-gray-600 dark:text-gray-400 mb-8 font-medium">
                 You are about to withdraw the entire Platform treasury of <span className="text-purple-600 font-black">{formatCurrency(auditBalance)}</span>. 
-                This action will be processed to Co-op Bank Account 01100975259001.
+                This action will be processed to your certified Binance wallet.
               </p>
 
               <div className="flex gap-4">
