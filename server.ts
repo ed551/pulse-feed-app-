@@ -81,24 +81,54 @@ let breakerErrorText = "";
 let breakerTrippedAt = 0;
 // Binance Environment Detection
 const getBinanceApiKey = () => {
-  const exact = process.env.BINANCE_API_KEY;
-  if (exact) return exact.trim();
-  const found = Object.keys(process.env).find(k => k.toUpperCase().includes('BINANCE') && k.toUpperCase().includes('KEY'));
-  return found ? process.env[found]?.trim() : undefined;
+  // Priority 1: Exact matches
+  if (process.env.BINANCE_API_KEY) return process.env.BINANCE_API_KEY.trim();
+  if (process.env.BINANCE_KEY) return process.env.BINANCE_KEY.trim();
+  
+  // Priority 2: VITE prefixed
+  if (process.env.VITE_BINANCE_API_KEY) return process.env.VITE_BINANCE_API_KEY.trim();
+  
+  // Priority 3: Fuzzy match
+  const found = Object.keys(process.env).find(k => 
+    k.toUpperCase().includes('BINANCE') && 
+    (k.toUpperCase().includes('KEY') || k.toUpperCase().includes('API')) &&
+    !k.toUpperCase().includes('SECRET')
+  );
+  if (found) return process.env[found]?.trim();
+
+  // Priority 4: User-provided hardcoded fallback (Emergency Correction)
+  return "hGSR4lD2JFxnsJ90Bjhy2trU1UvTXyiDBZe46Q0xyCXUZsP34KsFdUGtWcVVVYSr"; 
 };
 
 const getBinanceApiSecret = () => {
-  const exact = process.env.BINANCE_API_SECRET;
-  if (exact) return exact.trim();
-  const found = Object.keys(process.env).find(k => (k.toUpperCase().includes('BINANCE') && k.toUpperCase().includes('SECRET')) || k.toUpperCase().includes('API_SECRET'));
-  return found ? process.env[found]?.trim() : undefined;
+  // Priority 1: Exact matches
+  if (process.env.BINANCE_API_SECRET) return process.env.BINANCE_API_SECRET.trim();
+  if (process.env.BINANCE_SECRET) return process.env.BINANCE_SECRET.trim();
+  
+  // Priority 2: VITE prefixed
+  if (process.env.VITE_BINANCE_API_SECRET) return process.env.VITE_BINANCE_API_SECRET.trim();
+  
+  // Priority 3: Fuzzy match
+  const found = Object.keys(process.env).find(k => 
+    k.toUpperCase().includes('BINANCE') && 
+    (k.toUpperCase().includes('SECRET') || k.toUpperCase().includes('SEC'))
+  );
+  if (found) return process.env[found]?.trim();
+
+  // Priority 4: User-provided hardcoded fallback (Emergency Correction)
+  return "D4zKTsWTXrqEucgELaoLI9q5EiCeqvVVABW3EqzCNOB8GeFNnp8ldS3XHb133rab";
 };
 
-// Log Detection Status
-console.log("[Binance Status] Found API Key:", !!getBinanceApiKey());
-console.log("[Binance Status] Found API Secret:", !!getBinanceApiSecret());
+// Log Detection Status (Diagnostic)
+const binanceKeyName = Object.keys(process.env).find(k => k.toUpperCase().includes('BINANCE') && k.toUpperCase().includes('KEY'));
+const binanceSecretName = Object.keys(process.env).find(k => k.toUpperCase().includes('BINANCE') && k.toUpperCase().includes('SECRET'));
+
+console.log("[Binance Status] Found API Key:", !!getBinanceApiKey(), binanceKeyName ? `(via ${binanceKeyName})` : "(Not found)");
+console.log("[Binance Status] Found API Secret:", !!getBinanceApiSecret(), binanceSecretName ? `(via ${binanceSecretName})` : "(Not found)");
+
 if (!getBinanceApiKey() || !getBinanceApiSecret()) {
-  console.log("[Binance Status] Available non-VITE keys starting with BINANCE:", Object.keys(process.env).filter(k => k.startsWith('BINANCE')));
+  console.log("[Binance Status] Environment variables check:");
+  console.log("- ALL env keys:", Object.keys(process.env).filter(k => !k.includes('FIREBASE') && !k.includes('GOOGLE')).join(', '));
 }
 
 const BINANCE_USE_TESTNET = process.env.BINANCE_USE_TESTNET === "true";
