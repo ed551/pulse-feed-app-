@@ -1758,7 +1758,6 @@ export default function Rewards() {
                             <option value="">Select Bank</option>
                             <option value="Equity Bank">Equity Bank</option>
                             <option value="KCB Bank">KCB Bank</option>
-                            <option value="Co-operative Bank">Co-operative Bank</option>
                             <option value="Absa Bank">Absa Bank</option>
                             <option value="NCBA Bank">NCBA Bank</option>
                             <option value="Standard Chartered">Standard Chartered</option>

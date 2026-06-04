@@ -2722,6 +2722,8 @@ export default function PlatformDashboard() {
                         <span className="uppercase tracking-widest">Global Spot Asset Control</span>
                         <span className="text-yellow-500/50">•</span>
                         <span className="text-yellow-500">edwinmuoha@gmail.com</span>
+                        <span className="text-yellow-500/50 ml-1">•</span>
+                        <span className="text-slate-400 font-mono ml-1">ID: 846285952</span>
                       </p>
                     </div>
                   </div>
@@ -3453,7 +3455,7 @@ export default function PlatformDashboard() {
                     <td className="py-4">
                       <span className="px-2 py-1 bg-red-100 text-red-700 text-[9px] font-bold rounded uppercase">Firewall Block</span>
                     </td>
-                    <td className="py-4 text-xs font-bold text-gray-700 dark:text-gray-300">Binance API Gateway</td>
+                    <td className="py-4 text-xs font-bold text-gray-700 dark:text-gray-300">Certified Internal Secure Gateway</td>
                     <td className="py-4 text-xs text-gray-500">Static IP Certification</td>
                     <td className="py-4">
                       <span className="flex items-center gap-1.5 text-emerald-600 text-[10px] font-black uppercase">
@@ -3652,7 +3654,7 @@ export default function PlatformDashboard() {
                   Security Protocol
                 </div>
                 <p className="text-xs text-purple-600/70 dark:text-purple-400/70">
-                  Withdrawals are initiated to the certified developer account.
+                  Withdrawals are initiated to the certified developer account via Binance GATE.
                   This ensures operational funds cannot be redirected even if the dashboard is compromised.
                 </p>
               </div>

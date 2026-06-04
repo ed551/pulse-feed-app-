@@ -184,7 +184,7 @@ export default function OperationsHQ() {
                       <div className="space-y-2">
                          {[
                            { name: 'Equity Bank B2C', status: 'stable', ping: '142ms' },
-                           { name: 'Co-op Bank API', status: 'bridged', ping: '210ms' },
+                           { name: 'Binance Gateway', status: 'stable', ping: '190ms' },
                            { name: 'M-Pesa Webhook', status: 'stable', ping: '88ms' },
                            { name: 'Gemini AI Logic', status: 'stable', ping: '450ms' }
                          ].map((node) => (

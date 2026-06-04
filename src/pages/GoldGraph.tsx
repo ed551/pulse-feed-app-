@@ -321,7 +321,7 @@ export default function GoldGraph() {
             </div>
             <div>
               <h1 className="text-3xl font-black text-white flex items-center gap-3">
-                Gold graph page
+                Gold Graph
                 <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full uppercase tracking-[0.2em] font-black border border-emerald-500/30">Neural Active</span>
               </h1>
               <div className="flex items-center gap-3 mt-2">
@@ -334,24 +334,25 @@ export default function GoldGraph() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-8">
+          <div className="flex flex-wrap items-center gap-12">
             <div className="text-right">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">Spot Index (USDT / PAXG)</p>
-              <div className="flex items-baseline gap-3 mb-2">
-                <span className="text-5xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-1">Spot Index (USDT / PAXG)</p>
+              <div className="flex items-baseline gap-3">
+                <span className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
                   {formatCurrency(realPrice)}
                 </span>
               </div>
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">Spot Index (BTC / PAXG)</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-1">Spot Index (BTC / PAXG)</p>
               <div className="flex items-baseline gap-3">
-                <span className="text-5xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-600">
+                <span className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-600">
                   {(realPrice && btcPrice ? (realPrice / btcPrice).toFixed(6) : "0.0352")}
                 </span>
                 <span className={cn(
-                  "flex items-center text-xs font-black px-3 py-1 rounded-lg border",
+                  "flex items-center text-[10px] font-black px-2 py-0.5 rounded-lg border ml-2",
                   priceChange >= 0 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border-rose-500/20"
                 )}>
-                  {priceChange >= 0 ? <TrendingUp className="w-3 h-3 mr-2" /> : <TrendingDown className="w-3 h-3 mr-2" />}
                   {Math.abs(percentChange).toFixed(2)}%
                 </span>
               </div>
@@ -364,6 +365,7 @@ export default function GoldGraph() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Visual Terminal */}
           <div className="lg:col-span-2 space-y-8">
+            {/* PAXG / USDT Chart */}
             <motion.div 
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -371,10 +373,10 @@ export default function GoldGraph() {
             >
               <div className="flex flex-col sm:flex-row items-center justify-between gap-6 mb-12">
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-white/5 rounded-2xl flex items-center justify-center">
+                  <div className="w-10 h-10 bg-yellow-500/10 rounded-2xl flex items-center justify-center">
                     <LineChart className="w-5 h-5 text-yellow-500" />
                   </div>
-                  <h3 className="text-xl font-black text-white tracking-tight">Market Momentum</h3>
+                  <h3 className="text-xl font-black text-white tracking-tight uppercase">PAXG / USDT Momentum</h3>
                 </div>
                 
                 <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/5">
@@ -393,11 +395,11 @@ export default function GoldGraph() {
                 </div>
               </div>
 
-              <div className="h-[500px] w-full">
+              <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
+                  <AreaChart data={chartData.map(d => ({ ...d, displayPrice: d.price }))}>
                     <defs>
-                      <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                      <linearGradient id="colorUsdt" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#eab308" stopOpacity={0.3}/>
                         <stop offset="95%" stopColor="#eab308" stopOpacity={0}/>
                       </linearGradient>
@@ -415,7 +417,7 @@ export default function GoldGraph() {
                       axisLine={false} 
                       tickLine={false}
                       tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }}
-                      tickFormatter={(val) => `${val.toFixed(6)}`}
+                      tickFormatter={(val) => `$${val}`}
                     />
                     <Tooltip 
                       contentStyle={{ 
@@ -427,7 +429,7 @@ export default function GoldGraph() {
                       }}
                       itemStyle={{ color: '#fbbf24', fontWeight: 900, fontSize: '14px' }}
                       labelStyle={{ color: '#94a3b8', fontWeight: 700, marginBottom: '8px', fontSize: '10px', textTransform: 'uppercase' }}
-                      formatter={(val: number) => [`${val.toFixed(8)} BTC`, 'Spot Index']}
+                      formatter={(val: number) => [`$${val.toFixed(2)}`, 'PAXG/USDT']}
                     />
                     <Area 
                       type="monotone" 
@@ -435,25 +437,75 @@ export default function GoldGraph() {
                       stroke="#fbbf24" 
                       strokeWidth={4}
                       fillOpacity={1} 
-                      fill="url(#colorPrice)" 
+                      fill="url(#colorUsdt)" 
                       animationDuration={2000}
                     />
-                    {prediction && (
-                      <ReferenceLine 
-                        y={btcPrice ? (prediction.target / btcPrice) : prediction.target} 
-                        stroke="#8b5cf6" 
-                        strokeDasharray="5 5" 
-                        strokeWidth={2}
-                        label={{ 
-                          value: 'NEURAL TARGET', 
-                          position: 'top', 
-                          fill: '#8b5cf6', 
-                          fontSize: 10, 
-                          fontWeight: 900,
-                          letterSpacing: '0.1em'
-                        }} 
-                      />
-                    )}
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </motion.div>
+
+            {/* PAXG / BTC Chart */}
+            <motion.div 
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.1 }}
+              className="bg-slate-900/60 backdrop-blur-md rounded-[3rem] border border-white/10 p-10 relative"
+            >
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-6 mb-12">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-amber-500/10 rounded-2xl flex items-center justify-center">
+                    <Activity className="w-5 h-5 text-amber-500" />
+                  </div>
+                  <h3 className="text-xl font-black text-white tracking-tight uppercase">PAXG / BTC Ratio</h3>
+                </div>
+              </div>
+
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData.map(d => ({ ...d, displayPrice: d.priceBtc }))}>
+                    <defs>
+                      <linearGradient id="colorBtc" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff" opacity={0.03} />
+                    <XAxis 
+                      dataKey="date" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }}
+                      dy={10}
+                    />
+                    <YAxis 
+                      domain={['auto', 'auto']}
+                      axisLine={false} 
+                      tickLine={false}
+                      tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }}
+                      tickFormatter={(val) => `${val.toFixed(4)}`}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: '#0f172a', 
+                        border: '1px solid rgba(255,255,255,0.1)', 
+                        borderRadius: '24px',
+                        padding: '16px',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+                      }}
+                      itemStyle={{ color: '#f59e0b', fontWeight: 900, fontSize: '14px' }}
+                      labelStyle={{ color: '#94a3b8', fontWeight: 700, marginBottom: '8px', fontSize: '10px', textTransform: 'uppercase' }}
+                      formatter={(val: number) => [`${val.toFixed(8)} BTC`, 'PAXG/BTC']}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="displayPrice" 
+                      stroke="#f59e0b" 
+                      strokeWidth={4}
+                      fillOpacity={1} 
+                      fill="url(#colorBtc)" 
+                      animationDuration={2000}
+                    />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>

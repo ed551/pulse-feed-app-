@@ -45,7 +45,7 @@ const translations: Record<string, Record<string, string>> = {
     toggle_frame: 'Toggle Frame',
     ads: 'Ads',
     gold_data: 'PAXG Data',
-    gold_graph: 'Gold graph page',
+    gold_graph: 'Gold Graph',
     tomorrow: 'Tomorrow',
     watch_ads: 'Watch Ads',
     complete_task: 'Complete Task',
@@ -314,7 +314,7 @@ const translations: Record<string, Record<string, string>> = {
     toggle_frame: 'Badilisha Fremu',
     ads: 'Matangazo',
     gold_data: 'Data ya Dhahabu',
-    gold_graph: 'Gold graph page',
+    gold_graph: 'Gold Graph',
     market_data: 'Data ya Soko',
     market_insights: 'Maelezo ya Soko',
     price_chart: 'Chati ya Bei',
@@ -411,7 +411,7 @@ const translations: Record<string, Record<string, string>> = {
     toggle_frame: '切换框架',
     ads: '广告',
     gold_data: '黄金数据',
-    gold_graph: 'Gold graph page',
+    gold_graph: 'Gold Graph',
     market_data: '市场数据',
     market_insights: '市场洞察',
     price_chart: '收益趋势图',
@@ -684,7 +684,7 @@ const translations: Record<string, Record<string, string>> = {
     toggle_frame: 'تبديل الإطار',
     ads: 'الإعلانات',
     gold_data: 'بيانات الذهب',
-    gold_graph: 'Gold graph page',
+    gold_graph: 'Gold Graph',
     market_data: 'بيانات السوق'
   }
 };
