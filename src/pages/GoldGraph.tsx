@@ -173,15 +173,31 @@ export default function GoldGraph() {
 
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [predictions, setPredictions] = useState<{
-    p1d: { direction: 'UP' | 'DOWN' | 'SIDEWAYS'; confidence: number; target: number; reasoning: string };
-    p7d: { direction: 'UP' | 'DOWN' | 'SIDEWAYS'; confidence: number; target: number; reasoning: string };
-    p15d: { direction: 'UP' | 'DOWN' | 'SIDEWAYS'; confidence: number; target: number; reasoning: string };
-    p30d: { direction: 'UP' | 'DOWN' | 'SIDEWAYS'; confidence: number; target: number; reasoning: string };
+    usdt: {
+      p1d: { direction: 'UP' | 'DOWN' | 'SIDEWAYS'; confidence: number; target: number; reasoning: string };
+      p7d: { direction: 'UP' | 'DOWN' | 'SIDEWAYS'; confidence: number; target: number; reasoning: string };
+      p15d: { direction: 'UP' | 'DOWN' | 'SIDEWAYS'; confidence: number; target: number; reasoning: string };
+      p30d: { direction: 'UP' | 'DOWN' | 'SIDEWAYS'; confidence: number; target: number; reasoning: string };
+    },
+    btc: {
+      p1d: { direction: 'UP' | 'DOWN' | 'SIDEWAYS'; confidence: number; target: number; reasoning: string };
+      p7d: { direction: 'UP' | 'DOWN' | 'SIDEWAYS'; confidence: number; target: number; reasoning: string };
+      p15d: { direction: 'UP' | 'DOWN' | 'SIDEWAYS'; confidence: number; target: number; reasoning: string };
+      p30d: { direction: 'UP' | 'DOWN' | 'SIDEWAYS'; confidence: number; target: number; reasoning: string };
+    }
   }>({
-    p1d: { direction: 'UP', confidence: 88, target: 4485.50, reasoning: 'Strong momentum crossover vs BTC liquidity.' },
-    p7d: { direction: 'UP', confidence: 82, target: 4540.20, reasoning: 'Predictive neural trend indicates major breakout.' },
-    p15d: { direction: 'UP', confidence: 75, target: 4610.80, reasoning: 'Consolidation complete; entering high-profit phase.' },
-    p30d: { direction: 'UP', confidence: 78, target: 4850.00, reasoning: 'Long-term macro accumulation signals strong alpha.' }
+    usdt: {
+      p1d: { direction: 'UP', confidence: 88, target: 4485.50, reasoning: 'Strong momentum crossover vs BTC liquidity.' },
+      p7d: { direction: 'UP', confidence: 82, target: 4540.20, reasoning: 'Predictive neural trend indicates major breakout.' },
+      p15d: { direction: 'UP', confidence: 75, target: 4610.80, reasoning: 'Consolidation complete; entering high-profit phase.' },
+      p30d: { direction: 'UP', confidence: 78, target: 4850.00, reasoning: 'Long-term macro accumulation signals strong alpha.' }
+    },
+    btc: {
+      p1d: { direction: 'UP', confidence: 85, target: 0.070500, reasoning: 'BTC relative strength favoring gold backup.' },
+      p7d: { direction: 'UP', confidence: 80, target: 0.071200, reasoning: 'Macro rotation into safe-haven assets.' },
+      p15d: { direction: 'UP', confidence: 72, target: 0.072500, reasoning: 'Institutional hedging pattern detected.' },
+      p30d: { direction: 'UP', confidence: 75, target: 0.075000, reasoning: 'Long-term yield curve inversion support.' }
+    }
   });
   const [prediction, setPrediction] = useState<{
     direction: 'UP' | 'DOWN' | 'SIDEWAYS';
@@ -202,14 +218,15 @@ export default function GoldGraph() {
     const subset = data.slice(-count);
     return subset.map(d => ({
       ...d,
-      displayPrice: viewMode === 'BTC' ? d.priceBtc : d.price
+      displayPrice: viewMode === 'BTC' ? d.priceBtc : d.price,
+      changeUsdt: subset.length > 0 ? ((d.price - subset[0].price) / subset[0].price) * 100 : 0,
+      changeBtc: subset.length > 0 ? ((d.priceBtc - subset[0].priceBtc) / subset[0].priceBtc) * 100 : 0
     }));
   }, [data, timeframe, viewMode]);
 
-  const currentPrice = timeframeData.length > 0 ? timeframeData[timeframeData.length - 1].displayPrice : 0;
-  const startPrice = timeframeData.length > 0 ? timeframeData[0].displayPrice : 0;
-  const priceChange = currentPrice - (startPrice || currentPrice);
-  const percentChange = startPrice !== 0 ? (priceChange / startPrice) * 100 : 0;
+  const latestData = timeframeData.length > 0 ? timeframeData[timeframeData.length - 1] : null;
+  const usdtChangePerc = latestData?.changeUsdt || 0;
+  const btcChangePerc = latestData?.changeBtc || 0;
 
   // Forecast data for the chart projection
   const chartData = useMemo(() => {
@@ -243,15 +260,18 @@ export default function GoldGraph() {
       const mockResult = {
         direction: 'SIDEWAYS' as const,
         confidence: 45,
-        target: currentPrice * 1.002,
+        target: (realPrice || 2430) * 1.002,
         reasoning: "Baseline technical analysis active while AI engine is offline."
       };
       setPrediction(mockResult);
       setPredictions({
-        p1d: mockResult,
-        p7d: mockResult,
-        p15d: mockResult,
-        p30d: mockResult
+        usdt: { p1d: mockResult, p7d: mockResult, p15d: mockResult, p30d: mockResult },
+        btc: { 
+          p1d: { ...mockResult, target: ((realPrice || 2430) / (btcPrice || 67000)) }, 
+          p7d: { ...mockResult, target: ((realPrice || 2430) / (btcPrice || 67000)) }, 
+          p15d: { ...mockResult, target: ((realPrice || 2430) / (btcPrice || 67000)) }, 
+          p30d: { ...mockResult, target: ((realPrice || 2430) / (btcPrice || 67000)) } 
+        }
       });
       return;
     }
@@ -260,17 +280,24 @@ export default function GoldGraph() {
     try {
       const prompt = `
         Analyze the PAXG Market for Pulse Feeds Reward Ecosystem.
-        Current PAXG Price: ${currentPrice} USDT.
+        Current PAXG Price: ${realPrice} USDT.
         Current BTC Price: ${btcPrice ? btcPrice : '--'} USDT.
         PAXG/BTC Ratio: ${realPrice && btcPrice ? (realPrice / btcPrice).toFixed(6) : '--'}.
-        30-Day Trend: ${percentChange.toFixed(2)}%.
         
-        Provide smart technical predictions for 1 day, 7 days, 15 days, and 30 days in STRICT JSON format:
+        Provide high-fidelity technical predictions for BOTH PAXG/USDT (in USDT terms) and PAXG/BTC (the ratio e.g. 0.07) for 1 day, 7 days, 15 days, and 30 days in STRICT JSON format:
         {
-          "p1d": { "direction": "UP", "confidence": 85, "target": 2405.50, "reasoning": "..." },
-          "p7d": { "direction": "UP", "confidence": 75, "target": 2420.20, "reasoning": "..." },
-          "p15d": { "direction": "DOWN", "confidence": 60, "target": 2380.80, "reasoning": "..." },
-          "p30d": { "direction": "UP", "confidence": 70, "target": 2450.50, "reasoning": "..." }
+          "usdt": {
+            "p1d": { "direction": "UP", "confidence": 85, "target": 2405.50, "reasoning": "..." },
+            "p7d": { "direction": "UP", "confidence": 75, "target": 2420.20, "reasoning": "..." },
+            "p15d": { "direction": "DOWN", "confidence": 60, "target": 2380.80, "reasoning": "..." },
+            "p30d": { "direction": "UP", "confidence": 70, "target": 2450.50, "reasoning": "..." }
+          },
+          "btc": {
+            "p1d": { "direction": "UP", "confidence": 82, "target": 0.0365, "reasoning": "..." },
+            "p7d": { "direction": "UP", "confidence": 70, "target": 0.0380, "reasoning": "..." },
+            "p15d": { "direction": "SIDEWAYS", "confidence": 55, "target": 0.0360, "reasoning": "..." },
+            "p30d": { "direction": "UP", "confidence": 65, "target": 0.0400, "reasoning": "..." }
+          }
         }
       `;
       
@@ -287,8 +314,8 @@ export default function GoldGraph() {
         const result = JSON.parse(responseText);
         setPredictions(result);
         
-        // Use 7-day as the primary one for the chart
-        const primary = result.p7d;
+        // Use 7-day USDT as the primary one for the metadata/chart fallback
+        const primary = result.usdt.p7d;
         setPrediction(primary);
         setAiAnalysis(primary.reasoning);
         
@@ -341,6 +368,12 @@ export default function GoldGraph() {
                 <span className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
                   {formatCurrency(realPrice)}
                 </span>
+                <span className={cn(
+                  "flex items-center text-[10px] font-black px-2 py-0.5 rounded-lg border ml-2",
+                  usdtChangePerc >= 0 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                )}>
+                  {usdtChangePerc >= 0 ? "+" : ""}{usdtChangePerc.toFixed(2)}%
+                </span>
               </div>
             </div>
             <div className="text-right">
@@ -351,9 +384,9 @@ export default function GoldGraph() {
                 </span>
                 <span className={cn(
                   "flex items-center text-[10px] font-black px-2 py-0.5 rounded-lg border ml-2",
-                  priceChange >= 0 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                  btcChangePerc >= 0 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border-rose-500/20"
                 )}>
-                  {Math.abs(percentChange).toFixed(2)}%
+                  {btcChangePerc >= 0 ? "+" : ""}{btcChangePerc.toFixed(2)}%
                 </span>
               </div>
             </div>
@@ -379,19 +412,29 @@ export default function GoldGraph() {
                   <h3 className="text-xl font-black text-white tracking-tight uppercase">PAXG / USDT Momentum</h3>
                 </div>
                 
-                <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/5">
-                  {['7D', '30D', 'ALL'].map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setTimeframe(t as any)}
-                      className={cn(
-                        "px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
-                        timeframe === t ? "bg-white text-black shadow-lg" : "text-slate-500 hover:text-white"
-                      )}
-                    >
-                      {t}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "flex items-center text-xs font-black px-3 py-1 rounded-xl border backdrop-blur-md",
+                    usdtChangePerc >= 0 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                  )}>
+                    {usdtChangePerc >= 0 ? <TrendingUp className="w-3 h-3 mr-2" /> : <TrendingDown className="w-3 h-3 mr-2" />}
+                    {Math.abs(usdtChangePerc).toFixed(2)}%
+                  </div>
+
+                  <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/5">
+                    {['7D', '30D', 'ALL'].map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setTimeframe(t as any)}
+                        className={cn(
+                          "px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                          timeframe === t ? "bg-white text-black shadow-lg" : "text-slate-500 hover:text-white"
+                        )}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -458,6 +501,14 @@ export default function GoldGraph() {
                     <Activity className="w-5 h-5 text-amber-500" />
                   </div>
                   <h3 className="text-xl font-black text-white tracking-tight uppercase">PAXG / BTC Ratio</h3>
+                </div>
+
+                <div className={cn(
+                  "flex items-center text-xs font-black px-3 py-1 rounded-xl border backdrop-blur-md",
+                  btcChangePerc >= 0 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                )}>
+                  {btcChangePerc >= 0 ? <TrendingUp className="w-3 h-3 mr-2" /> : <TrendingDown className="w-3 h-3 mr-2" />}
+                  {Math.abs(btcChangePerc).toFixed(2)}%
                 </div>
               </div>
 
@@ -527,44 +578,93 @@ export default function GoldGraph() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                {[
-                  { label: 'Next 24h', key: 'p1d' },
-                  { label: 'Next 7 Days', key: 'p7d' },
-                  { label: 'Next 15 Days', key: 'p15d' },
-                  { label: 'Next 30 Days', key: 'p30d' },
-                ].map((pItem) => {
-                  const p = predictions[pItem.key as keyof typeof predictions];
-                  // Calculate local percentage based on current price if target exists
-                  const targetChange = p?.target ? ((p.target - (realPrice || 2430)) / (realPrice || 2430)) * 100 : 0;
-                  
-                  return (
-                    <div key={pItem.key} className="bg-black/40 rounded-3xl p-8 border border-white/5 flex flex-col items-center justify-center text-center">
-                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">{pItem.label}</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                {/* USDT Predictions */}
+                <div className="space-y-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-2 h-2 rounded-full bg-yellow-500" />
+                    <span className="text-xs font-black text-white uppercase tracking-widest">PAXG / USDT Projections</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    {[
+                      { label: 'Next 24h', key: 'p1d' },
+                      { label: 'Next 7 Days', key: 'p7d' },
+                      { label: 'Next 15 Days', key: 'p15d' },
+                      { label: 'Next 30 Days', key: 'p30d' },
+                    ].map((pItem) => {
+                      const p = predictions.usdt[pItem.key as keyof typeof predictions.usdt];
+                      const targetChange = p?.target ? ((p.target - (realPrice || 2430)) / (realPrice || 2430)) * 100 : 0;
+                      const isPositive = targetChange >= 0;
                       
-                      {targetChange >= 0 ? (
-                        <div className="flex items-center text-emerald-400 font-black text-4xl mb-2">
-                          <TrendingUp className="w-6 h-6 mr-2" />
-                          +{targetChange.toFixed(2)}%
+                      return (
+                        <div key={pItem.key} className={cn(
+                          "bg-black/40 rounded-3xl p-6 border transition-all hover:bg-black/60",
+                          isPositive ? "border-emerald-500/10" : "border-rose-500/10"
+                        )}>
+                          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">{pItem.label}</p>
+                          <div className={cn(
+                            "flex items-center font-black text-2xl",
+                            isPositive ? "text-emerald-400" : "text-rose-400"
+                          )}>
+                            {isPositive ? <ArrowUpRight className="w-5 h-5 mr-1" /> : <ArrowDownRight className="w-5 h-5 mr-1" />}
+                            {isPositive ? "+" : ""}{targetChange.toFixed(2)}%
+                          </div>
+                          <div className={cn(
+                            "inline-flex items-center gap-1.5 text-[8px] font-black px-2.5 py-1 rounded-full uppercase border mt-4",
+                            isPositive ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                          )}>
+                            <div className={cn("w-1.5 h-1.5 rounded-full", isPositive ? "bg-emerald-400 animate-pulse" : "bg-rose-400")} />
+                            {p.direction} TRADE
+                          </div>
                         </div>
-                      ) : (
-                        <div className="flex items-center text-rose-400 font-black text-4xl mb-2">
-                          <TrendingDown className="w-6 h-6 mr-2" />
-                          {targetChange.toFixed(2)}%
-                        </div>
-                      )}
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* BTC Predictions */}
+                <div className="space-y-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-2 h-2 rounded-full bg-amber-500" />
+                    <span className="text-xs font-black text-white uppercase tracking-widest">PAXG / BTC Projections</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    {[
+                      { label: 'Next 24h', key: 'p1d' },
+                      { label: 'Next 7 Days', key: 'p7d' },
+                      { label: 'Next 15 Days', key: 'p15d' },
+                      { label: 'Next 30 Days', key: 'p30d' },
+                    ].map((pItem) => {
+                      const p = predictions.btc[pItem.key as keyof typeof predictions.btc];
+                      const currentRatio = (realPrice / btcPrice);
+                      const targetChange = p?.target ? ((p.target - currentRatio) / currentRatio) * 100 : 0;
+                      const isPositive = targetChange >= 0;
                       
-                      <div className={cn(
-                        "text-[9px] font-black px-3 py-1 rounded-full uppercase border mt-4",
-                        targetChange >= 1 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
-                        targetChange <= -1 ? "bg-rose-500/10 text-rose-400 border-rose-500/20" :
-                        "bg-slate-500/10 text-slate-400 border-slate-500/20"
-                      )}>
-                        {targetChange > 2 ? 'Strong Growth' : targetChange > 0.5 ? 'Mild Uptrend' : Math.abs(targetChange) < 0.5 ? 'Consolidation' : 'Correction Risk'}
-                      </div>
-                    </div>
-                  );
-                })}
+                      return (
+                        <div key={pItem.key} className={cn(
+                          "bg-black/40 rounded-3xl p-6 border transition-all hover:bg-black/60",
+                          isPositive ? "border-emerald-500/10" : "border-rose-500/10"
+                        )}>
+                          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">{pItem.label}</p>
+                          <div className={cn(
+                            "flex items-center font-black text-2xl",
+                            isPositive ? "text-emerald-400" : "text-rose-400"
+                          )}>
+                            {isPositive ? <ArrowUpRight className="w-5 h-5 mr-1" /> : <ArrowDownRight className="w-5 h-5 mr-1" />}
+                            {isPositive ? "+" : ""}{targetChange.toFixed(2)}%
+                          </div>
+                          <div className={cn(
+                            "inline-flex items-center gap-1.5 text-[8px] font-black px-2.5 py-1 rounded-full uppercase border mt-4",
+                            isPositive ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                          )}>
+                            <div className={cn("w-1.5 h-1.5 rounded-full", isPositive ? "bg-emerald-400 animate-pulse" : "bg-rose-400")} />
+                            {p.direction} TRADE
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </motion.div>
           </div>

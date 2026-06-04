@@ -1203,16 +1203,14 @@ async function startServer() {
   initSystemUsers().catch(() => {});
   
   setInterval(monitorIP, 1000 * 60 * 5); // Check every 5 minutes in production
-  setInterval(reconcilePendingTransactions, 1000 * 60 * 2); // Poll status every 2 minutes
   setInterval(processPayoutQueue, 5000); // Process payout queue every 5 seconds
   setInterval(performRobustEducationSync, 1000 * 60 * 60 * 12); // Check for fresh content twice a day (every 12 hours)
-  
+
   // Initial background tasks
   performRobustEducationSync().catch(() => {}); // Initial population or refresh if stale with retries
   console.log("NODE_ENV:", process.env.NODE_ENV);
   console.log("Monitor Interval: 5m (Production-Ready)");
-  console.log("Reconciliation Interval: 2m (Bank Status Polling Active)");
-  
+
   const app = express();
   app.set('trust proxy', 1);
 
@@ -1804,88 +1802,10 @@ async function startServer() {
     });
   });
 
-  // Co-op Bank Balance Route (Developer Only)
-  app.get("/api/coop/balance", async (req, res) => {
-    try {
-      const balanceData = await getCoopAccountBalance();
-      if (!balanceData) {
-        return res.status(500).json({ 
-          success: false, 
-          error: "Failed to fetch real balance",
-          message: "Could not retrieve balance from Co-op Bank. Connectivity test failed."
-        });
-      }
-      res.json({ success: true, ...balanceData });
-    } catch (error: any) {
-      res.status(500).json({ success: false, error: error.message, message: isNetworkBlock(error) ? "Bank connection restricted (403). Simulation is frozen." : "API Error" });
-    }
-  });
-
   // M-Pesa API Routes
   app.post("/api/mpesa/stkpush", async (req, res) => {
     const { phoneNumber, amount } = req.body;
     
-    // Check if Co-op is primary
-    if (COOP_CONFIG.clientId) {
-      console.log(`Initiating Co-op Bank STK Push for ${phoneNumber} with amount ${amount}`);
-      try {
-        const accessToken = await getCoopBankAccessToken();
-        const reference = "STK-" + Date.now();
-
-        if (accessToken.startsWith('BRIDGE_CERTIFIED')) {
-          console.warn(`[Coop Bridge] Resilient STK Push Active for ${phoneNumber}`);
-          return res.json({ 
-            success: true, 
-            transactionId: "BRIDGE-" + reference, 
-            message: "STK Push initiated successfully via Resilient Bridge (Network Bypass Active)", 
-            isBridge: true 
-          });
-        }
-
-        const response = await axios.post(
-          `${COOP_CONFIG.baseUrl}/FT/stk/1.0.0`,
-          {
-            MessageReference: reference,
-            CallBackUrl: process.env.COOP_BANK_STK_CALLBACK_URL || `${process.env.APP_URL}/api/mpesa/callback`,
-            OperatorCode: "EDWIN",
-            TransactionCurrency: "KES",
-            MobileNumber: phoneNumber.replace(/^0/, "254").replace(/^\+/, ""),
-            Narration: "EDWIN MUOHA WATITU",
-            Amount: amount,
-            MessageDateTime: new Date().toISOString(),
-            OtherDetails: [
-              {
-                Name: "COOP",
-                Value: "PulseFeeds"
-              }
-            ]
-          },
-          {
-            headers: { 
-              Authorization: `Bearer ${accessToken}`, 
-              "Content-Type": "application/json",
-              "User-Agent": STANDARD_USER_AGENT,
-              "Accept": "application/json"
-            },
-          }
-        );
-        return res.json({ success: true, transactionId: reference, message: "STK Push initiated via Co-op Bank", details: response.data });
-      } catch (error: any) {
-        const errorData = error.response?.data;
-        console.error("Co-op STK Push Error:", errorData || error.message);
-        if (isNetworkBlock(error) || error.response?.status === 403 || (typeof errorData === 'string' && errorData.includes('<HTML>'))) {
-          console.warn("Co-op STK Push blocked by firewall. Activating Resilient Bridge.");
-          return res.json({ 
-            success: true, 
-            transactionId: "BRIDGE-STK-" + Date.now(), 
-            message: "STK Push initiated successfully via Resilient Bridge (Network Bypass Enabled)",
-            isBridge: true
-          });
-        }
-        return res.status(500).json({ success: false, error: "Co-op STK Push failed", details: error.response?.data || error.message });
-      }
-    }
-
     console.log(`Initiating M-Pesa Sandbox STK Push for ${phoneNumber} with amount ${amount}`);
     try {
       // If credentials are not set, return error (Simulation Locked)
@@ -2071,96 +1991,7 @@ async function startServer() {
     });
   });
 
-  app.get("/api/bank/coop/balance", async (req, res) => {
-    try {
-      const accessToken = await getCoopBankAccessToken();
-      const response = await axios.post(
-        `${COOP_CONFIG.baseUrl}/Enquiry/AccountBalance_v2/2.0.0/`,
-        {
-          MessageReference: "BAL-" + Date.now(),
-          AccountNumber: COOP_CONFIG.sourceAccount,
-          UserID: COOP_CONFIG.userId
-        },
-        {
-          headers: { 
-            Authorization: `Bearer ${accessToken}`, 
-            "Content-Type": "application/json",
-            "User-Agent": STANDARD_USER_AGENT
-          }
-        }
-      );
-      res.json(response.data);
-    } catch (error: any) {
-      res.status(500).json({ success: false, error: error.response?.data || error.message });
-    }
-  });
-
-  app.post("/api/bank/coop/validate", async (req, res) => {
-    const { accountNumber, bankCode } = req.body;
-    try {
-      const accessToken = await getCoopBankAccessToken();
-      const response = await axios.post(
-        `${COOP_CONFIG.baseUrl}/Enquiry/Validation/IPSL/1.0.0/`,
-        {
-          MessageReference: "VAL-" + Date.now(),
-          AccountNumber: accountNumber,
-          RecipientBankIdentifier: bankCode || "0011",
-          UserID: COOP_CONFIG.userId
-        },
-        {
-          headers: { 
-            Authorization: `Bearer ${accessToken}`, 
-            "Content-Type": "application/json",
-            "User-Agent": STANDARD_USER_AGENT
-          }
-        }
-      );
-      res.json(response.data);
-    } catch (error: any) {
-      res.status(500).json({ success: false, error: error.response?.data || error.message });
-    }
-  });
-
-  app.post("/api/bank/coop/status", async (req, res) => {
-    const { reference, type } = req.body;
-    try {
-      const accessToken = await getCoopBankAccessToken();
-      const endpoint = type === 'stk' 
-        ? `${COOP_CONFIG.baseUrl}/Enquiry/STK/1.0.0/`
-        : `${COOP_CONFIG.baseUrl}/Enquiry/TransactionStatus_V3/3.0.0/`;
-      
-      const payload: any = {
-        MessageReference: "STAT-" + Date.now(),
-        UserID: COOP_CONFIG.userId
-      };
-
-      if (type === 'stk') {
-        payload.MessageReference = reference; // In JSON, STK status uses the original reference as MessageReference or UserID?
-        // JSON shows: "MessageReference": "we222", "UserID": "w214e4" (where UserID is likely the message ref of original request)
-        payload.UserID = reference; 
-      } else {
-        // General status uses MessageReference: random, UserID: EDWINMUOHA? 
-        // No, JSON shows General status: "MessageReference": "f6cd2f44062a", "UserID": "EDWINMUOHA"
-        // Wait, "f6cd2f44062a" might be the reference to check?
-        // Actually, most banks use the original reference.
-        payload.MessageReference = reference;
-        payload.UserID = COOP_CONFIG.userId;
-      }
-
-      const response = await axios.post(endpoint, payload, {
-        headers: { 
-          Authorization: `Bearer ${accessToken}`, 
-          "Content-Type": "application/json",
-          "User-Agent": STANDARD_USER_AGENT
-        }
-      });
-      res.json(response.data);
-    } catch (error: any) {
-      res.status(500).json({ success: false, error: error.response?.data || error.message });
-    }
-  });
-
-  app.post("/api/payout/bank", async (req, res) => {
+  app.post("/api/payout/paybill", async (req, res) => {
     const clientIp = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
     const { bankDetails, amount, userId, scaToken, reference: providedReference, totpCode } = req.body;
     
@@ -2220,28 +2051,6 @@ async function startServer() {
 
     await markIdempotency(reference, 'pending', { userId, amount, accountNumber: bankDetails.accountNumber });
 
-    if (COOP_CONFIG.clientId) {
-      console.log(`[Queue] Adding Co-op Bank transfer for ${bankDetails.accountNumber} to queue.`);
-      const payoutData = {
-        type: bankDetails.type || 'bank',
-        bankDetails,
-        amount,
-        userId,
-        reference,
-        clientIp,
-        source: 'user_bank_withdrawal',
-        isUserWithdrawal: true
-      };
-      
-      await pushToPayoutQueue(payoutData);
-      return res.json({ 
-        success: true, 
-        transactionId: reference, 
-        message: "Bank transfer request queued. This prevents velocity limit violations by spacing out transaction processing.",
-        isQueued: true
-      });
-    }
-
     const equityKey = process.env.EQUITY_CONSUMER_KEY;
 
     if (equityKey) {
@@ -2298,35 +2107,6 @@ async function startServer() {
       success: false,
       error: "Service Locked",
       message: "Bank payout simulation is permanently disabled. Valid credentials and Whitelisted IP (35.214.40.75) required."
-    });
-  });
-
-  app.post("/api/bank/coop/disbursement", async (req, res) => {
-    const { type, accountNumber, amount, reference, userId } = req.body;
-    console.log(`[Bank Portal] Received disbursement request (Queuing): ${type} for ${accountNumber}`);
-    
-    const payoutData = {
-      type: type || 'ift',
-      bankDetails: {
-        accountNumber,
-        bankCode: '11',
-        bankName: 'Co-operative Bank'
-      },
-      amount,
-      userId: userId || 'portal-admin',
-      reference: reference || "PORTAL-" + Date.now(),
-      clientIp: '127.0.0.1',
-      source: 'portal_disbursement',
-      isUserWithdrawal: false
-    };
-
-    await pushToPayoutQueue(payoutData);
-    
-    return res.json({ 
-      success: true, 
-      transactionId: payoutData.reference,
-      message: `Disbursement added to batch queue. It will be processed shortly to ensure velocity limit compliance.`,
-      isQueued: true
     });
   });
 
@@ -2433,71 +2213,10 @@ async function startServer() {
     res.json({ status: "SUCCESS" });
   });
 
-  // --- Co-op Bank Transaction Status Reconciliation ---
-  async function syncCoopTransactionStatus(reference: string) {
-    try {
-      const accessToken = await getCoopBankAccessToken();
-      if (accessToken.startsWith('BRIDGE_CERTIFIED')) {
-        console.warn(`[Recon] Skipping ${reference} - Service currently bridged.`);
-        return;
-      }
-
-      console.log(`[Recon] Querying status for ${reference}...`);
-      const response = await axios.post(
-        `${COOP_CONFIG.baseUrl}/Enquiry/TransactionStatus_V3/3.0.0/`,
-        {
-          MessageReference: reference,
-          UserID: COOP_CONFIG.userId || "EDWINMUOHA"
-        },
-        { 
-          headers: { 
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-            "User-Agent": STANDARD_USER_AGENT
-          },
-          timeout: 10000
-        }
-      );
-
-      const data = response.data;
-      console.log(`[Recon] Bank Response for ${reference}:`, JSON.stringify(data));
-
-      const { TransactionStatus, TransactionStatusDescription } = data;
-      
-      if (TransactionStatus !== undefined) {
-        const payoutRef = resilientDb.collection("payouts").doc(reference);
-        const isSuccess = TransactionStatus === "00" || TransactionStatus === "0";
-        // Final states: 00 (Success), 09 (Failed/Rejected), 11 (Invalid). 01 is often Pending.
-        const isTerminal = TransactionStatus !== "01" && TransactionStatus !== "pending";
-
-        if (isTerminal) {
-          await payoutRef.update({
-            status: isSuccess ? "completed" : "failed",
-            bankResponse: data,
-            updatedAt: FieldValue.serverTimestamp(),
-            reconciledAt: FieldValue.serverTimestamp()
-          });
-
-          // Also update idempotency to reflect final state
-          await resilientDb.collection("idempotency_keys").doc(reference).update({
-            status: isSuccess ? "success" : "failed",
-            reconciledAt: FieldValue.serverTimestamp()
-          }).catch(() => {});
-
-          console.log(`[Recon] ${reference} marked as ${isSuccess ? 'SUCCESS' : 'FAILED'}: ${TransactionStatusDescription}`);
-        } else {
-          console.log(`[Recon] ${reference} is still PENDING at bank side.`);
-        }
-      }
-    } catch (error: any) {
-      console.error(`[Recon] Status check for ${reference} failed:`, error.response?.data || error.message);
-    }
-  }
-
-/**
- * Automated Education Hub Sync
- * Researches trending online courses quarterly (every 3 months)
- */
+  // --- Automated Education Hub Sync ---
+  /**
+   * Researches trending online courses quarterly (every 3 months)
+   */
 async function syncEducationCourses() {
   if (isAIBreakerTripped) {
     console.log("[EducationHub] Circuit breaker active. Skipping automated curation to prevent resource exhaustion.");
@@ -2645,31 +2364,6 @@ async function performRobustEducationSync() {
     }
   }
 }
-
-  async function reconcilePendingTransactions() {
-    try {
-      console.log("[Maintenance] Running Co-op Bank Transaction Reconciliation...");
-      // Query for pending payouts initiated via Co-op Bank
-      const pendingSnap = await resilientDb.collection("payouts")
-        .where("status", "==", "pending")
-        .get();
-
-      if (pendingSnap.docs.length === 0) {
-        console.log("[Maintenance] No pending transactions found for reconciliation.");
-        return;
-      }
-
-      console.log(`[Maintenance] Found ${pendingSnap.docs.length} pending transactions to reconcile.`);
-      
-      for (const doc of pendingSnap.docs) {
-        await syncCoopTransactionStatus(doc.id);
-        // Small delay between bank queries to avoid rate limits
-        await new Promise(r => setTimeout(r, 1000));
-      }
-    } catch (error: any) {
-      console.error("[Maintenance] Reconciliation sweep failed:", error.message);
-    }
-  }
 
   // --- End of Recon Helpers ---
 
@@ -3280,17 +2974,6 @@ async function performRobustEducationSync() {
         console.error(`[Webhook] [${callbackId}] PROCESSING ERROR:`, processingError.message);
       }
     })();
-  });
-
-  app.post("/api/admin/bank-recon", async (req, res) => {
-    const { reference } = req.body;
-    if (reference) {
-      await syncCoopTransactionStatus(reference);
-      return res.json({ success: true, message: `Sync initiated for ${reference}` });
-    } else {
-      reconcilePendingTransactions(); // Run background sweep
-      return res.json({ success: true, message: "Global reconciliation sweep initiated." });
-    }
   });
 
   app.post("/api/admin/security/update-pin", async (req, res) => {
