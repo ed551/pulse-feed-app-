@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { generateContentWithRetry, getAIBreakerStatus } from "../lib/ai";
 import { cn } from "../lib/utils";
+import { apiFetch } from "../lib/api";
 import { saveInsight } from "../lib/insights";
 import { 
   pulse_feeds_auto_sync, daily_twin_sync, midnight_settlement_engine, 
@@ -290,7 +291,7 @@ export default function Layout() {
     setIsShortening(true);
     try {
       const currentUrl = window.location.origin;
-      const response = await fetch(`${window.location.origin}/api/shorten?url=${encodeURIComponent(currentUrl)}`);
+      const response = await apiFetch(`/api/shorten?url=${encodeURIComponent(currentUrl)}`);
       let shareUrl = currentUrl;
       if (response.ok) {
         const data = await response.json();
@@ -874,7 +875,7 @@ export default function Layout() {
     if (!citySearchQuery) return;
     setWeatherStatus('detecting');
     try {
-      const response = await fetch(`/api/search-city?q=${encodeURIComponent(citySearchQuery)}`);
+      const response = await apiFetch(`/api/search-city?q=${encodeURIComponent(citySearchQuery)}`);
       if (!response.ok) throw new Error(`Search API responded with status: ${response.status}`);
       const data = await response.json();
       if (data && data.length > 0) {

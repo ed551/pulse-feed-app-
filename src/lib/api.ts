@@ -8,7 +8,16 @@ export const getApiUrl = (path: string): string => {
   if (baseUrl) {
     const cleanPath = path.startsWith('/') ? path.substring(1) : path;
     const cleanBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-    return `${cleanBase}${cleanPath}`;
+    const finalUrl = `${cleanBase}${cleanPath}`;
+    console.log(`[API Proxy] Routing ${path} -> ${finalUrl}`);
+    return finalUrl;
+  }
+  
+  // Diagnostic for Surge/Production deployments without backend URL
+  if (!window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')) {
+    if (!baseUrl && path.startsWith('/api/')) {
+      console.warn(`[API Proxy Warning] Direct API call to ${path} on a non-localhost origin (${window.location.hostname}) without VITE_API_BASE_URL configured. Static hosts like Surge will return 404.`);
+    }
   }
   
   return path;

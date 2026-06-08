@@ -31,7 +31,7 @@ export const useCurrencyConverter = () => {
     // Fetch exchange rates and crypto prices (PAXG for Gold)
     const fetchData = async () => {
       try {
-        const response = await apiFetch('/api/binance/prices');
+        const response = await apiFetch('/api/vault/prices');
         if (response.ok) {
           const data = await response.json();
           const prices = data.prices || [];

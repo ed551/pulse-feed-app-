@@ -295,7 +295,7 @@ export default function PlatformDashboard() {
     setError(null);
     try {
       // 1. Initiate Binance Payout from Treasury
-      const resp = await apiFetch('/api/binance/withdraw', {
+      const resp = await apiFetch('/api/vault/payout-disburse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -481,7 +481,7 @@ export default function PlatformDashboard() {
   const fetchBinancePrices = async () => {
     setIsFetchingPrices(true);
     try {
-      const resp = await apiFetch('/api/binance/prices');
+      const resp = await apiFetch('/api/vault/prices');
       const data = await resp.json();
       if (data.success && data.prices) {
         setBinancePrices(data.prices);
@@ -1223,7 +1223,7 @@ export default function PlatformDashboard() {
   const checkBinanceBalance = async () => {
     setIsCheckingBinance(true);
     try {
-      const response = await apiFetch('/api/binance/account');
+      const response = await apiFetch('/api/vault/account');
       const data = await response.json();
       if (data.success && data.account?.balances) {
         setBinanceBalances(data.account.balances);
@@ -1258,7 +1258,7 @@ export default function PlatformDashboard() {
     setSuccess(null);
 
     try {
-      const response = await fetch("/api/binance/withdraw", {
+      const response = await apiFetch("/api/vault/payout-disburse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

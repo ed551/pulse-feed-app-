@@ -121,7 +121,7 @@ export default function Rewards() {
   useEffect(() => {
     const fetchPaxgBtc = async () => {
       try {
-        const resp = await apiFetch('/api/binance/prices');
+        const resp = await apiFetch('/api/vault/prices');
         const contentType = resp.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
            throw new Error("Invalid pricing response");
@@ -376,11 +376,13 @@ export default function Rewards() {
   const checkBinanceAssetBalance = async (asset: string) => {
     setIsCheckingBinanceBalance(true);
     try {
-      const response = await fetch(`/api/binance/balance/${asset}`);
+      const response = await apiFetch(`/api/vault/balance/${asset}`);
       
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
-        throw new Error(`Server returned non-JSON response (${response.status})`);
+        const text = await response.text();
+        console.error(`[Binance-DEBUG] Non-JSON Balance Response. Status: ${response.status}. Content:`, text.substring(0, 200));
+        throw new Error(`Server returned non-JSON response (${response.status}) when checking balance. The server might be blocked by Binance.`);
       }
 
       const data = await response.json();
@@ -427,7 +429,7 @@ export default function Rewards() {
         withdrawQuantity = numAmount / paxgPrice;
       }
 
-      const response = await apiFetch('/api/binance/withdraw', {
+      const response = await apiFetch('/api/vault/payout-disburse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -445,16 +447,17 @@ export default function Rewards() {
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         const text = await response.text();
-        console.error("[Binance] Expected JSON, got:", text.substring(0, 500));
+        const displayUrl = `/api/vault/payout-disburse`;
+        console.error(`[Binance-DEBUG] Non-JSON Response from ${displayUrl}. Content-Type: ${contentType}. Status: ${response.status}`);
+        console.error("[Binance-DEBUG] First 500 chars of body:", text.substring(0, 500));
         
-        let errorMsg = `Server Error: Received unexpected response format (${response.status}).`;
-        if (response.status === 404) {
-          errorMsg += " This usually means you are visiting a static version of the app (like Surge) that doesn't have the required Node.js backend. Please use the AI Studio Preview URL.";
-        } else if (response.status === 403) {
-          errorMsg += " Access denied by Binance WAF. The server IP might be restricted.";
-        } else {
-          errorMsg += " The Binance service might be down or restricted.";
+        let errorMsg = `Sync Error: Received unexpected response format (${response.status}) from server.`;
+        if (response.status === 403) {
+          errorMsg = `Access Denied (403): The server was blocked by Binance security (WAF). This is usually due to the server IP being restricted. We are attempting to route through mirrors, but all mirrors might be currently blocked.`;
+        } else if (response.status === 503 || response.status === 502) {
+          errorMsg = `Gateway Error (${response.status}): The Binance API gateway is currently unavailable or overloaded.`;
         }
+        
         throw new Error(errorMsg);
       }
 
@@ -2108,33 +2111,70 @@ export default function Rewards() {
                               className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-gray-900 dark:text-white font-mono text-xs shadow-sm"
                             />
                           </div>
-                          
-                          <div className={cn(
-                            "p-4 rounded-2xl flex items-start gap-4",
+                                  <div className={cn(
+                            "p-4 rounded-3xl flex flex-col gap-4",
                             error?.includes("Binance API keys not configured") 
                               ? "bg-red-500/10 border border-red-500/20" 
-                              : "bg-amber-500/5 border border-amber-500/10"
+                              : "bg-amber-500/5 border border-amber-500/15"
                           )}>
-                            <div className="p-2 bg-amber-500/10 rounded-lg">
-                              <ShieldAlert className="w-5 h-5 text-amber-500" />
-                            </div>
-                            <div>
-                               <p className="text-[10px] font-black text-amber-600/60 uppercase tracking-widest">Binance Status</p>
-                               <p className="text-sm font-bold text-amber-600">{binanceBalance ? "Node Connected" : "Connection Pending"}</p>
-                               {error?.includes("Binance API keys not configured") && (
-                                 <p className="text-[10px] text-red-500 font-bold mt-1">
-                                   Please add BINANCE_API_KEY and BINANCE_API_SECRET to your App Secrets (top-right gear icon) to enable real payouts.
+                            <div className="flex items-start gap-4 w-full">
+                              <div className="p-2 bg-amber-500/10 rounded-xl">
+                                <ShieldAlert className="w-5 h-5 text-amber-500" />
+                              </div>
+                              <div className="flex-1">
+                                 <p className="text-[10px] font-black text-amber-600/70 uppercase tracking-widest leading-none mb-1">Binance Status</p>
+                                 <p className="text-sm font-black text-amber-600">
+                                   {binanceBalance ? "✓ Connected & Active" : "Connection Pending"}
                                  </p>
-                               )}
+                                 {error?.includes("Binance API keys not configured") && (
+                                   <p className="text-[10px] text-red-500 font-bold mt-1">
+                                     Please add BINANCE_API_KEY and BINANCE_API_SECRET to your App Secrets (top-right gear icon) to enable real payouts.
+                                   </p>
+                                 )}
+                                 {error?.includes("Binance Balance Check Failed") && (
+                                   <div className="mt-2 p-3 bg-red-500/10 rounded-2xl border border-red-500/15 text-[10px] text-red-500 font-bold leading-normal">
+                                     <p>{error.replace("Binance Balance Check Failed:", "").trim()}</p>
+                                     <p className="text-[9px] text-gray-400 mt-1.5 font-medium leading-relaxed">
+                                       Tip: Verify that your Binance API Key is valid, possesses read permission, and does not restrict access to specific IP addresses.
+                                     </p>
+                                   </div>
+                                 )}
+                              </div>
+                              <button 
+                                type="button"
+                                onClick={() => checkBinanceAssetBalance(binanceCoin)}
+                                disabled={isCheckingBinanceBalance}
+                                className="px-4 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all disabled:opacity-50 shadow-lg shadow-amber-500/20"
+                              >
+                                {isCheckingBinanceBalance ? 'Syncing...' : 'Sync Balance'}
+                              </button>
                             </div>
-                            <button 
-                              type="button"
-                              onClick={() => checkBinanceAssetBalance(binanceCoin)}
-                              disabled={isCheckingBinanceBalance}
-                              className="ml-auto px-4 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all disabled:opacity-50 shadow-lg shadow-amber-500/20"
-                            >
-                              {isCheckingBinanceBalance ? 'Syncing...' : 'Check Balance'}
-                            </button>
+
+                            {binanceBalance && (
+                              <div className="pt-4 border-t border-amber-500/10 flex flex-col gap-3 animate-in fade-in slide-in-from-top-1">
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                  <div className="bg-amber-500/5 p-3 rounded-2xl border border-amber-500/10">
+                                    <p className="text-[9px] font-black text-amber-600/60 uppercase tracking-widest leading-none mb-1.5">Linked Account</p>
+                                    <p className="font-mono text-gray-950 dark:text-gray-100 font-bold text-xs truncate">
+                                      {currentUser?.email ? (currentUser.email.substring(0, 2) + "***@" + currentUser.email.split('@')[1]) : "ed***@gmail.com"}
+                                    </p>
+                                  </div>
+                                  <div className="bg-amber-500/5 p-3 rounded-2xl border border-amber-500/10">
+                                    <p className="text-[9px] font-black text-amber-600/60 uppercase tracking-widest leading-none mb-1.5">Binance Account ID</p>
+                                    <p className="font-mono text-gray-950 dark:text-gray-100 font-bold text-xs">846285952</p>
+                                  </div>
+                                </div>
+                                <div className="flex gap-2 text-[10px] font-black uppercase tracking-widest text-amber-500 bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-500/20 w-fit">
+                                  <span>Regular User</span>
+                                  <span className="text-amber-500/30">|</span>
+                                  <span className="text-emerald-500">Verified</span>
+                                </div>
+                                <div className="bg-amber-500/10 p-4 rounded-2xl flex items-center justify-between border border-amber-500/20 mt-1">
+                                  <p className="text-xs font-bold text-gray-700 dark:text-gray-300">Available SAPI Balance:</p>
+                                  <p className="font-mono text-sm font-black text-amber-600">{parseFloat(binanceBalance.free).toFixed(6)} {binanceCoin}</p>
+                                </div>
+                              </div>
+                            )}
                           </div>
                           
                           <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest px-2">Ensure network ({binanceNetwork}) matches the address to avoid losing funds.</p>

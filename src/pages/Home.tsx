@@ -61,7 +61,7 @@ export default function Home() {
   useEffect(() => {
     const fetchPrices = async () => {
       try {
-        const resp = await apiFetch('/api/binance/prices');
+        const resp = await apiFetch('/api/vault/prices');
         const contentType = resp.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
            throw new Error("Invalid pricing response");

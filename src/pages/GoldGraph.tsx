@@ -84,7 +84,7 @@ export default function GoldGraph() {
     const fetchRealData = async () => {
       setDataLoading(true);
       try {
-        const response = await apiFetch('/api/binance/prices').catch(() => {
+        const response = await apiFetch('/api/vault/prices').catch(() => {
           throw new Error("Network latency detected");
         });
         
