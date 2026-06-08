@@ -21,6 +21,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 import { cn } from '../lib/utils';
+import { apiFetch } from '../lib/api';
 
 interface BinancePrice {
   symbol: string;
@@ -40,7 +41,7 @@ export default function BinanceHub() {
 
   const fetchPing = async () => {
     try {
-      const resp = await fetch('/api/binance/ping');
+      const resp = await apiFetch('/api/binance/ping');
       const data = await resp.json();
       setPingData(data);
     } catch (e) {
@@ -54,7 +55,7 @@ export default function BinanceHub() {
     fetchPing();
     try {
       // Fetch Prices
-      const priceResp = await fetch('/api/binance/prices');
+      const priceResp = await apiFetch('/api/binance/prices');
       const contentType = priceResp.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         const text = await priceResp.text();
@@ -69,7 +70,7 @@ export default function BinanceHub() {
       // Fetch Account if Admin (since we store keys in .env for now)
       const isAdmin = currentUser?.email === 'edwinmuoha@gmail.com' || userData?.role === 'admin';
       if (isAdmin) {
-        const accResp = await fetch('/api/binance/account');
+        const accResp = await apiFetch('/api/binance/account');
         const accType = accResp.headers.get("content-type");
         if (accType && accType.includes("application/json")) {
           const accResult = await accResp.json();

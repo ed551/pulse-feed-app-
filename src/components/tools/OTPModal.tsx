@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Mail, Smartphone, ShieldCheck, RefreshCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
+import { apiFetch } from '../../lib/api';
 
 interface OTPModalProps {
   userId: string;
@@ -46,7 +47,7 @@ export default function OTPModal({ userId, email, phoneNumber, method, onClose, 
     setIsResending(true);
     setError(null);
     try {
-      const res = await fetch('/api/otp/send', {
+      const res = await apiFetch('/api/otp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, email, phoneNumber, method })
@@ -104,7 +105,7 @@ export default function OTPModal({ userId, email, phoneNumber, method, onClose, 
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/otp/verify', {
+      const res = await apiFetch('/api/otp/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, otp: code, email })

@@ -39,6 +39,7 @@ import { useCurrencyConverter } from "../hooks/useCurrencyConverter";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";
 import { isIframe, getPasskeyErrorLinkMessage, checkPasskeyCapability } from "../lib/iframeUtils";
+import { apiFetch } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
 import { useRevenue } from "../contexts/RevenueContext";
 import { db, handleFirestoreError, OperationType } from "../lib/firebase";
@@ -120,7 +121,7 @@ export default function Rewards() {
   useEffect(() => {
     const fetchPaxgBtc = async () => {
       try {
-        const resp = await fetch('/api/binance/prices');
+        const resp = await apiFetch('/api/binance/prices');
         const contentType = resp.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
            throw new Error("Invalid pricing response");
@@ -426,7 +427,7 @@ export default function Rewards() {
         withdrawQuantity = numAmount / paxgPrice;
       }
 
-      const response = await fetch('/api/binance/withdraw', {
+      const response = await apiFetch('/api/binance/withdraw', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -445,7 +446,16 @@ export default function Rewards() {
       if (!contentType || !contentType.includes("application/json")) {
         const text = await response.text();
         console.error("[Binance] Expected JSON, got:", text.substring(0, 500));
-        throw new Error(`Server Error: Received unexpected response format (${response.status}). The Binance service might be down or restricted.`);
+        
+        let errorMsg = `Server Error: Received unexpected response format (${response.status}).`;
+        if (response.status === 404) {
+          errorMsg += " This usually means you are visiting a static version of the app (like Surge) that doesn't have the required Node.js backend. Please use the AI Studio Preview URL.";
+        } else if (response.status === 403) {
+          errorMsg += " Access denied by Binance WAF. The server IP might be restricted.";
+        } else {
+          errorMsg += " The Binance service might be down or restricted.";
+        }
+        throw new Error(errorMsg);
       }
 
       const result = await response.json();
@@ -565,7 +575,7 @@ export default function Rewards() {
           totpCode: totp
         };
 
-        const response = await fetch('/api/payout/international', {
+        const response = await apiFetch('/api/payout/international', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
@@ -658,7 +668,7 @@ export default function Rewards() {
   const checkTreasuryBalance = async () => {
     setIsCheckingBalance(true);
     try {
-      const response = await fetch('/api/coop/balance');
+      const response = await apiFetch('/api/coop/balance');
       const data = await response.json();
       if (data.success) {
         setBankBalance(data);
@@ -1053,7 +1063,7 @@ export default function Rewards() {
                               }
                               setIsSendingSms(true);
                               try {
-                                const resp = await fetch('/api/otp/send', {
+                                const resp = await apiFetch('/api/otp/send', {
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json' },
                                   body: JSON.stringify({ 
@@ -1086,7 +1096,7 @@ export default function Rewards() {
                                if (smsCode.length !== 6) return;
                                setIsPasskeyAuthenticating(true);
                                try {
-                                 const resp = await fetch('/api/otp/verify', {
+                                 const resp = await apiFetch('/api/otp/verify', {
                                    method: 'POST',
                                    headers: { 'Content-Type': 'application/json' },
                                    body: JSON.stringify({ 
@@ -1138,7 +1148,7 @@ export default function Rewards() {
                                if (!passwordInput) return;
                                setIsPasskeyAuthenticating(true);
                                try {
-                                 const resp = await fetch('/api/auth/verify-password', {
+                                 const resp = await apiFetch('/api/auth/verify-password', {
                                    method: 'POST',
                                    headers: { 'Content-Type': 'application/json' },
                                    body: JSON.stringify({ 
@@ -1185,7 +1195,7 @@ export default function Rewards() {
                                    if (isIframe() && !window.PublicKeyCredential) {
                                      throw new Error(getPasskeyErrorLinkMessage());
                                    }
-                                   const resp = await fetch('/api/auth/passkey/generate-authentication-options', {
+                                   const resp = await apiFetch('/api/auth/passkey/generate-authentication-options', {
                                      method: 'POST',
                                      headers: { 'Content-Type': 'application/json' },
                                      body: JSON.stringify({ userId: currentUser.uid }),
@@ -1195,7 +1205,7 @@ export default function Rewards() {
                                    
                                    const authResp = await (window as any).SimpleWebAuthnBrowser.startAuthentication(options);
                                    
-                                   const verifyResp = await fetch('/api/auth/passkey/verify-authentication', {
+                                   const verifyResp = await apiFetch('/api/auth/passkey/verify-authentication', {
                                      method: 'POST',
                                      headers: { 'Content-Type': 'application/json' },
                                      body: JSON.stringify({ userId: currentUser.uid, response: authResp }),

@@ -48,6 +48,7 @@ import { revenue_distribution_engine } from '../lib/engines';
 import { doc, updateDoc, increment, arrayUnion } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getAIBreakerStatus } from '../lib/ai';
+import { apiFetch } from '../lib/api';
 
 const categoryIcons: Record<string, React.ReactNode> = {
   'Technology': <BrainCircuit className="w-6 h-6 text-purple-500" />,
@@ -196,7 +197,7 @@ export default function EducationHub() {
 
     while (retries < MAX_RETRIES) {
       try {
-        const response = await fetch('/api/education/research-lesson', {
+        const response = await apiFetch('/api/education/research-lesson', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',

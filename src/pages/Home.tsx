@@ -18,6 +18,7 @@ import { useNavigate, useOutletContext } from "react-router-dom";
 import { usePosts } from "../hooks/usePosts";
 import { useAuth } from "../contexts/AuthContext";
 import { useCurrencyConverter } from "../hooks/useCurrencyConverter";
+import { apiFetch } from "../lib/api";
 import SponsoredPost from "../components/SponsoredPost";
 import { db } from "../lib/firebase";
 import { getDocFromServer, doc, setDoc, serverTimestamp, arrayUnion } from "firebase/firestore";
@@ -60,7 +61,7 @@ export default function Home() {
   useEffect(() => {
     const fetchPrices = async () => {
       try {
-        const resp = await fetch('/api/binance/prices');
+        const resp = await apiFetch('/api/binance/prices');
         const contentType = resp.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) {
            throw new Error("Invalid pricing response");

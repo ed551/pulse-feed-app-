@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { apiFetch } from '../lib/api';
 
 export interface ExchangeRates {
   [currencyCode: string]: number;
@@ -30,7 +31,7 @@ export const useCurrencyConverter = () => {
     // Fetch exchange rates and crypto prices (PAXG for Gold)
     const fetchData = async () => {
       try {
-        const response = await fetch('/api/binance/prices');
+        const response = await apiFetch('/api/binance/prices');
         if (response.ok) {
           const data = await response.json();
           const prices = data.prices || [];

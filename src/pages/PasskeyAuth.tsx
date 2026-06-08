@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
+import { apiFetch } from '../lib/api';
 import { Loader2, ShieldCheck, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function PasskeyAuth() {
@@ -23,7 +24,7 @@ export default function PasskeyAuth() {
     try {
       if (type === 'reg') {
         // Registration Flow
-        const resp = await fetch('/api/auth/passkey/generate-registration-options', {
+        const resp = await apiFetch('/api/auth/passkey/generate-registration-options', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId }),
@@ -37,7 +38,7 @@ export default function PasskeyAuth() {
           ...options,
         });
 
-        const verifyResp = await fetch('/api/auth/passkey/verify-registration', {
+        const verifyResp = await apiFetch('/api/auth/passkey/verify-registration', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId, response: regResp }),
@@ -52,7 +53,7 @@ export default function PasskeyAuth() {
         }
       } else {
         // Authentication Flow
-        const resp = await fetch('/api/auth/passkey/generate-authentication-options', {
+        const resp = await apiFetch('/api/auth/passkey/generate-authentication-options', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId }),
@@ -66,7 +67,7 @@ export default function PasskeyAuth() {
           ...options,
         });
 
-        const verifyResp = await fetch('/api/auth/passkey/verify-authentication', {
+        const verifyResp = await apiFetch('/api/auth/passkey/verify-authentication', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId, response: authResp }),

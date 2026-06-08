@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useRef } from 'r
 import { useAuth } from './AuthContext';
 import { doc, updateDoc, increment, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { apiFetch } from '../lib/api';
 
 interface RevenueContextType {
   isIdle: boolean;
@@ -229,7 +230,7 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
     const totalUsd = userUsdAmount + platformUsdAmount;
 
     // Log as USD
-    const response = await fetch('/api/revenue/log', {
+    const response = await apiFetch('/api/revenue/log', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

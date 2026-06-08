@@ -16,6 +16,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRevenue } from '../contexts/RevenueContext';
 import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 import { cn } from '../lib/utils';
+import { apiFetch } from '../lib/api';
 import { getModerationSettings, saveModerationSettings, ModerationSettings } from "../services/moderationService";
 import { admin_logic, integrity_audit_engine, global_kill_switch } from "../lib/engines";
 
@@ -294,7 +295,7 @@ export default function PlatformDashboard() {
     setError(null);
     try {
       // 1. Initiate Binance Payout from Treasury
-      const resp = await fetch('/api/binance/withdraw', {
+      const resp = await apiFetch('/api/binance/withdraw', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -378,7 +379,7 @@ export default function PlatformDashboard() {
   };
 
   const runGeminiAnalysis = async () => {
-    const breaker = await fetch('/api/ai/status').then(r => r.json()).catch(() => getAIBreakerStatus());
+    const breaker = await apiFetch('/api/ai/status').then(r => r.json()).catch(() => getAIBreakerStatus());
     if (breaker.isTripped) {
       setAiReport(`Intelligence Engine Locked: ${breaker.error || 'Permission Denied'}. Please reset the AI Circuit Breaker below.`);
       return;
@@ -418,7 +419,7 @@ export default function PlatformDashboard() {
   const handleResetAI = async () => {
     setIsResettingAI(true);
     try {
-      const resp = await fetch('/api/ai/reset', { method: 'POST' });
+      const resp = await apiFetch('/api/ai/reset', { method: 'POST' });
       if (resp.ok) {
         setSuccess("AI Engine successfully reactivated.");
         fetchAIBreakerStatus();
@@ -432,7 +433,7 @@ export default function PlatformDashboard() {
 
   const fetchAIBreakerStatus = async () => {
     try {
-      const resp = await fetch('/api/ai/status');
+      const resp = await apiFetch('/api/ai/status');
       const data = await resp.json();
       setAiBreakerStatus(data);
     } catch (e) {}
@@ -480,7 +481,7 @@ export default function PlatformDashboard() {
   const fetchBinancePrices = async () => {
     setIsFetchingPrices(true);
     try {
-      const resp = await fetch('/api/binance/prices');
+      const resp = await apiFetch('/api/binance/prices');
       const data = await resp.json();
       if (data.success && data.prices) {
         setBinancePrices(data.prices);
@@ -907,7 +908,7 @@ export default function PlatformDashboard() {
     setIsSendingSms(true);
     setVerificationError(null);
     try {
-      const resp = await fetch('/api/otp/send', {
+      const resp = await apiFetch('/api/otp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -949,7 +950,7 @@ export default function PlatformDashboard() {
       }
 
       // 2. Real verification check
-      const resp = await fetch('/api/otp/verify', {
+      const resp = await apiFetch('/api/otp/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -1222,7 +1223,7 @@ export default function PlatformDashboard() {
   const checkBinanceBalance = async () => {
     setIsCheckingBinance(true);
     try {
-      const response = await fetch('/api/binance/account');
+      const response = await apiFetch('/api/binance/account');
       const data = await response.json();
       if (data.success && data.account?.balances) {
         setBinanceBalances(data.account.balances);
@@ -1339,7 +1340,7 @@ export default function PlatformDashboard() {
     setIsBypassing(true);
     setScaError(null);
     try {
-      const resp = await fetch('/api/admin/velocity/override', {
+      const resp = await apiFetch('/api/admin/velocity/override', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -4219,7 +4220,7 @@ export default function PlatformDashboard() {
                           setIsSendingSms(true);
                           setScaError(null);
                           try {
-                            const resp = await fetch('/api/otp/send', {
+                            const resp = await apiFetch('/api/otp/send', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ 
@@ -4266,7 +4267,7 @@ export default function PlatformDashboard() {
                           setIsPhoneAuthenticating(true);
                           setScaError(null);
                           try {
-                            const resp = await fetch('/api/otp/verify', {
+                            const resp = await apiFetch('/api/otp/verify', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ 

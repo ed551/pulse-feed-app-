@@ -47,6 +47,7 @@ import FingerprintModal from "../components/tools/FingerprintModal";
 import OTPModal from "../components/tools/OTPModal";
 import PasskeyModal from "../components/tools/PasskeyModal";
 import { cn } from "../lib/utils";
+import { apiFetch } from "../lib/api";
 
 export default function Settings() {
   const { currentUser, userData, logout } = useAuth();
@@ -257,7 +258,7 @@ export default function Settings() {
     }
     try {
       // 1. Get options from server
-      const resp = await fetch('/api/auth/passkey/generate-registration-options', {
+      const resp = await apiFetch('/api/auth/passkey/generate-registration-options', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -274,7 +275,7 @@ export default function Settings() {
       const regResp = await startRegistration(options);
 
       // 3. Verify with server
-      const verifyResp = await fetch('/api/auth/passkey/verify-registration', {
+      const verifyResp = await apiFetch('/api/auth/passkey/verify-registration', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -796,7 +797,7 @@ export default function Settings() {
                                 setIsPasskeyAuthenticating(true);
                                 try {
                                   // 1. Get options from server
-                                  const resp = await fetch('/api/auth/passkey/generate-authentication-options', {
+                                  const resp = await apiFetch('/api/auth/passkey/generate-authentication-options', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ userId: currentUser.uid }),
@@ -808,7 +809,7 @@ export default function Settings() {
                                   const authResp = await startAuthentication(options);
 
                                   // 3. Verify
-                                  const verifyResp = await fetch('/api/auth/passkey/verify-authentication', {
+                                  const verifyResp = await apiFetch('/api/auth/passkey/verify-authentication', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ userId: currentUser.uid, response: authResp }),

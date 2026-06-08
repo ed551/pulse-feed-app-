@@ -3,6 +3,7 @@ import { Key, ShieldCheck, Loader2, AlertCircle } from 'lucide-react';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
+import { apiFetch } from '../../lib/api';
 
 interface PasskeyModalProps {
   userId: string;
@@ -52,7 +53,7 @@ export default function PasskeyModal({ userId, onClose, onSuccess }: PasskeyModa
     setError(null);
     try {
       // 1. Get options from server
-      const resp = await fetch('/api/auth/passkey/generate-authentication-options', {
+      const resp = await apiFetch('/api/auth/passkey/generate-authentication-options', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId }),
@@ -65,7 +66,7 @@ export default function PasskeyModal({ userId, onClose, onSuccess }: PasskeyModa
       const authResp = await startAuthentication(options);
 
       // 3. Verify with server
-      const verifyResp = await fetch('/api/auth/passkey/verify-authentication', {
+      const verifyResp = await apiFetch('/api/auth/passkey/verify-authentication', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

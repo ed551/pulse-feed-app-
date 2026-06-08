@@ -19,6 +19,7 @@ import {
   ChevronRight,
   ShieldCheck
 } from 'lucide-react';
+import { apiFetch } from '../lib/api';
 import { 
   LineChart as ReLineChart, 
   Line, 
@@ -83,7 +84,7 @@ export default function GoldGraph() {
     const fetchRealData = async () => {
       setDataLoading(true);
       try {
-        const response = await fetch('/api/binance/prices').catch(() => {
+        const response = await apiFetch('/api/binance/prices').catch(() => {
           throw new Error("Network latency detected");
         });
         

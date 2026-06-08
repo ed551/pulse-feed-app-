@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { isBiometricsSupported, authenticateBiometric } from '../lib/biometrics';
 import { isIframe, getPasskeyErrorLinkMessage, checkPasskeyCapability } from '../lib/iframeUtils';
+import { apiFetch } from '../lib/api';
 
 export default function Login() {
   const { loginWithGoogle, loginWithEmail, signupWithEmail, logout, isFacebookApp, currentUser, userData, isMfaVerified, setIsMfaVerified, sessionError, setSessionError, sendVerificationEmail } = useAuth();
@@ -109,7 +110,7 @@ export default function Login() {
       setError('');
       
       // 1. Get options from server
-      const resp = await fetch('/api/auth/passkey/generate-authentication-options', {
+      const resp = await apiFetch('/api/auth/passkey/generate-authentication-options', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUser.uid }),
@@ -122,7 +123,7 @@ export default function Login() {
       const authResp = await startAuthentication(options);
 
       // 3. Verify with server
-      const verifyResp = await fetch('/api/auth/passkey/verify-authentication', {
+      const verifyResp = await apiFetch('/api/auth/passkey/verify-authentication', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -171,7 +172,7 @@ export default function Login() {
     try {
       setIsSendingOtp(true);
       setError('');
-      const response = await fetch('/api/otp/send', {
+      const response = await apiFetch('/api/otp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -202,7 +203,7 @@ export default function Login() {
       setLoading(true);
       setError('');
       const cleanOtp = otp.replace(/\s+/g, '').replace(/\D/g, '');
-      const response = await fetch('/api/otp/verify', {
+      const response = await apiFetch('/api/otp/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

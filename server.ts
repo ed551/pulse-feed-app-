@@ -1,6 +1,7 @@
 // Build Version: 1.0.8 - Port 3000 Enforcement & Startup Resiliency
 import express from "express";
 import crypto from "crypto";
+import cors from "cors";
 // Build Version: 1.0.7 - Deployment Retry After 503
 import { createServer as createViteServer } from "vite";
 import path from "path";
@@ -1435,6 +1436,7 @@ async function startServer() {
 
   const app = express();
   app.set('trust proxy', 1);
+  app.use(cors());
 
   // Debug middleware for AI requests
   app.use('/api/gemini', (req, res, next) => {
@@ -1827,6 +1829,7 @@ async function startServer() {
       const logTag = isDeveloperPayout ? '[Binance Developer Payout]' : '[Binance User Withdrawal]';
       
       console.log(`${logTag} Executing SAPI POST to withdraw ${amount} ${asset} to ${address}`);
+      console.log(`${logTag} Full Query String: ${params.toString()}`);
 
       const resp = await axios({
         method: 'POST',
@@ -1840,12 +1843,13 @@ async function startServer() {
           "Cache-Control": "no-cache"
         },
         timeout: 30000,
-        validateStatus: (status) => status < 500 // Catch 4xx as data, not as exception if possible, or just handle in catch
+        validateStatus: (status) => status < 500
       });
 
+      console.log(`${logTag} Binance API Response Code: ${resp.status}`);
       if (resp.status >= 400) {
         const errorMsg = resp.data?.msg || `Binance Error Status: ${resp.status}`;
-        console.error(`${logTag} Failed with status ${resp.status}:`, errorMsg);
+        console.error(`${logTag} Failed with status ${resp.status}:`, errorMsg, resp.data);
         return res.status(resp.status).json({ success: false, error: errorMsg, status: resp.status });
       }
 
