@@ -36,13 +36,31 @@ export default function BinanceHub() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pingData, setPingData] = useState<any>(null);
+
+  const fetchPing = async () => {
+    try {
+      const resp = await fetch('/api/binance/ping');
+      const data = await resp.json();
+      setPingData(data);
+    } catch (e) {
+      console.warn("Ping failed", e);
+    }
+  };
 
   const fetchData = async () => {
     setRefreshing(true);
     setError(null);
+    fetchPing();
     try {
       // Fetch Prices
       const priceResp = await fetch('/api/binance/prices');
+      const contentType = priceResp.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await priceResp.text();
+        console.warn("[Binance Hub] Prices fetch received non-JSON response:", text.substring(0, 200));
+        throw new Error(`Price feed unavailable (Status: ${priceResp.status}). The Binance service might be restricted or undergoing maintenance.`);
+      }
       const priceResult = await priceResp.json();
       if (priceResult.success) {
         setPrices(priceResult.prices);
@@ -52,11 +70,16 @@ export default function BinanceHub() {
       const isAdmin = currentUser?.email === 'edwinmuoha@gmail.com' || userData?.role === 'admin';
       if (isAdmin) {
         const accResp = await fetch('/api/binance/account');
-        const accResult = await accResp.json();
-        if (accResult.success) {
-          setAccount(accResult.account);
+        const accType = accResp.headers.get("content-type");
+        if (accType && accType.includes("application/json")) {
+          const accResult = await accResp.json();
+          if (accResult.success) {
+            setAccount(accResult.account);
+          } else {
+            console.warn("Binance Account check failed:", accResult.error);
+          }
         } else {
-          console.warn("Binance Account check failed:", accResult.error);
+          console.warn(`Binance Account fetch returned non-JSON (Status: ${accResp.status})`);
         }
       }
     } catch (err: any) {
@@ -119,7 +142,14 @@ export default function BinanceHub() {
             </div>
             <div>
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Network Base</p>
-              <p className="text-lg font-black text-gray-900 dark:text-white">Binance Mainnet</p>
+              <div className="flex items-center gap-2">
+                <p className="text-lg font-black text-gray-900 dark:text-white">
+                  {pingData?.network || 'Binance Mainnet'}
+                </p>
+                {pingData?.isUsingFallbackKeys && (
+                  <span className="text-[8px] bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-1.5 py-0.5 rounded font-black uppercase">Fallback</span>
+                )}
+              </div>
             </div>
           </motion.div>
 
@@ -132,9 +162,24 @@ export default function BinanceHub() {
             <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/20 rounded-2xl flex items-center justify-center">
               <Cpu className="w-6 h-6 text-purple-600 dark:text-purple-400" />
             </div>
-            <div>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Price Feeds</p>
-              <p className="text-lg font-black text-gray-900 dark:text-white">WebSocket Ready</p>
+            <div className="flex-1">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Latency (API)</p>
+              <div className="flex items-center justify-between">
+                <p className="text-lg font-black text-gray-900 dark:text-white">
+                  {pingData?.latency ? `${pingData.latency}ms` : '---'}
+                </p>
+                <div className="flex gap-0.5">
+                  {[...Array(5)].map((_, i) => (
+                    <div 
+                      key={i} 
+                      className={cn(
+                        "w-1 h-3 rounded-full",
+                        pingData?.latency && pingData.latency < (i + 1) * 100 ? "bg-emerald-500" : "bg-gray-200 dark:bg-slate-800"
+                      )} 
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           </motion.div>
 

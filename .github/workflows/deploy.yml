@@ -1,33 +1,52 @@
-name: Pulse Feeds Frontend CI/CD
+name: Deploy to GitHub Pages
 
-# This tells the robot to wake up whenever new code is pushed to 'main'
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-
     steps:
-      # 1. The robot downloads your latest code
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      # 2. The robot sets up its own internal Node.js environment
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
-      # 3. The robot installs the Vite/React tools (just like you did in Termux)
       - name: Install Dependencies
-        run: npm install
+          # Using --force to handle potential dependency conflicts in this environment
+        run: npm install --force
 
-      # 4. The robot compiles your raw code into the browser-ready 'dist' folder
-      - name: Build the Production App
+      - name: Build
         run: npm run build
 
-      # 5. The robot securely logs into Surge and blasts the site live!
-      - name: Deploy to Surge
-        run: npx surge ./dist pulse-feeds.surge.sh --token ${{ secrets.SURGE_TOKEN }}
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

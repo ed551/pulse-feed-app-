@@ -40,7 +40,7 @@ import TranslateModal from "./tools/TranslateModal";
 import ClockModal from "./tools/ClockModal";
 import OTPModal from "./tools/OTPModal";
 import { ConnectivityBanner } from "./ConnectivityBanner";
-import { db } from "../lib/firebase";
+import { db, getConnectionStatus } from "../lib/firebase";
 import { setDoc, doc, arrayUnion, serverTimestamp, getDocFromServer, updateDoc } from "firebase/firestore";
 
 export default function Layout() {
@@ -121,10 +121,12 @@ export default function Layout() {
   }, [currentUser?.email]);
 
   const [circuitBreaker, setCircuitBreaker] = useState(getAIBreakerStatus());
+  const [dbStatus, setDbStatus] = useState(getConnectionStatus());
 
   useEffect(() => {
     const checkBreaker = setInterval(() => {
       setCircuitBreaker(getAIBreakerStatus());
+      setDbStatus(getConnectionStatus());
     }, 5000);
     return () => clearInterval(checkBreaker);
   }, []);
@@ -151,6 +153,13 @@ export default function Layout() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
+
+  const isRestricted = circuitBreaker.isTripped || dbStatus === 'error';
+  const restrictionMessage = dbStatus === 'error' && circuitBreaker.isTripped
+    ? "Critical Platform Restriction: Billing Restoration Required via Google Cloud Dashboard"
+    : circuitBreaker.isTripped
+    ? "AI Service Restricted: Billing Restoration Required via AI Studio / GCP Console"
+    : "Database Access Restricted: System Synchronizing in Offline Mode";
 
   // Header navigation items - Simplified
   const headerNavItems = [
@@ -974,15 +983,16 @@ export default function Layout() {
       )}>
         {/* AI Lockout Warning */}
         <AnimatePresence>
-          {circuitBreaker.isTripped && (
+          {isRestricted && (
             <motion.div 
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="bg-rose-600 text-white py-1.5 px-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 overflow-hidden whitespace-nowrap border-b border-white/10"
+              className="bg-rose-600 text-white py-1.5 px-4 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 overflow-hidden whitespace-nowrap border-b border-white/10 z-50 cursor-pointer"
+              onClick={() => window.open('https://console.cloud.google.com/billing', '_blank')}
             >
               <AlertTriangle className="w-3 h-3 flex-shrink-0 animate-pulse text-amber-300" />
-              <span>AI Service Restricted: Billing Restoration Required via Google Cloud Dashboard</span>
+              <span>{restrictionMessage}</span>
               <AlertTriangle className="w-3 h-3 flex-shrink-0 animate-pulse text-amber-300" />
             </motion.div>
           )}
@@ -1076,19 +1086,19 @@ export default function Layout() {
                   </span>
                 </div>
 
+                <div 
+                  onClick={() => navigate('/binance')}
+                  className="hidden lg:flex items-center px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-amber-50 dark:bg-amber-900/30 border border-amber-100 dark:border-amber-800 rounded-full shadow-sm group cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-all"
+                >
+                  <Database className="w-2.5 h-2.5 sm:w-3 h-3 text-amber-600 mr-1 group-hover:rotate-12 transition-transform" />
+                  <span className="text-[7px] sm:text-[9px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">Binance Sync</span>
+                </div>
+
                 {/* Points Balance Display */}
                 <div className="flex items-center px-2 sm:px-3 py-1 bg-yellow-50 dark:bg-yellow-900/30 rounded-full border border-yellow-100 dark:border-yellow-800 shadow-sm group">
                   <Layers className="w-3.5 h-3.5 sm:w-4 h-4 text-yellow-600 mr-1 sm:mr-1.5 group-hover:scale-110 transition-transform" />
                   <span className="text-[10px] sm:text-xs font-black text-yellow-800 dark:text-yellow-300 flex items-center gap-1">
                     {formatReward(userData?.points || 0)}
-                  </span>
-                </div>
-
-                {/* PAXG Wallet Balance */}
-                <div className="hidden sm:flex items-center px-2 sm:px-3 py-1 bg-amber-50 dark:bg-amber-900/30 rounded-full border border-amber-100 dark:border-amber-800 shadow-sm group">
-                  <Gem className="w-3.5 h-3.5 sm:w-4 h-4 text-amber-600 mr-1 sm:mr-1.5 group-hover:scale-110 transition-transform" />
-                  <span className="text-[10px] sm:text-xs font-black text-amber-800 dark:text-amber-300">
-                    {formatCurrency(userData?.balance || 0)}
                   </span>
                 </div>
 
@@ -1129,6 +1139,25 @@ export default function Layout() {
                     <TrendingUp className="w-3.5 h-3.5 text-gray-500" />
                   </button>
                 </div>
+
+                <button 
+                  id="top-bar-add-post-fab"
+                  onClick={() => setActiveModal('create-post-text')}
+                  className="p-2 sm:px-3 sm:py-1.5 bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 dark:from-indigo-600 dark:via-indigo-700 dark:to-purple-700 text-white rounded-full hover:scale-105 active:scale-95 transition-all shadow-[0_4px_12px_rgba(79,70,229,0.3)] hover:shadow-[0_4px_16px_rgba(79,70,229,0.5)] flex items-center justify-center gap-1 shrink-0 group"
+                  title="Create Content Post"
+                >
+                  <Plus className="w-4 h-4 text-white sm:mr-0.5 group-hover:rotate-90 transition-transform duration-300" />
+                  <span className="hidden sm:inline text-[9px] font-black uppercase tracking-widest text-indigo-50 drop-shadow-sm pr-1">Post</span>
+                </button>
+
+                <button 
+                  id="top-bar-notepad-btn"
+                  onClick={() => setActiveModal('notepad')}
+                  className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
+                  title="Note Pad"
+                >
+                  <Edit3 className="w-5 h-5" />
+                </button>
 
                 <Link to="/messages" className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all">
                   <MessageCircle className="w-5 h-5" />

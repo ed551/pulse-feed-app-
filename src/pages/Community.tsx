@@ -127,6 +127,7 @@ export default function Community() {
   const GOOGLE_MAPS_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID;
   const [useFallbackMarkers, setUseFallbackMarkers] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapLoadError, setMapLoadError] = useState<'NONE' | 'LOAD_FAILED' | 'PLATFORM_RESTRICTED'>('NONE');
   const [searchValue, setSearchValue] = useState("");
   const [isSearching, setIsSearching] = useState(false);
 
@@ -723,13 +724,19 @@ export default function Community() {
               <Navigation className="w-6 h-6 fill-blue-600/10 group-hover/locate:scale-110 transition-transform" />
             </button>
 
-            {hasMapsApiKey ? (
+            {hasMapsApiKey && mapLoadError === 'NONE' ? (
               <APIProvider 
                 apiKey={GOOGLE_MAPS_API_KEY || ''} 
                 onLoad={() => setMapLoaded(true)}
                 onError={(err) => {
                   console.error("Google Maps Load Error:", err);
                   setMapLoaded(false);
+                  // If it's a load error and the breaker is tripped, it's almost certainly billing
+                  if (getAIBreakerStatus().isTripped) {
+                    setMapLoadError("PLATFORM_RESTRICTED");
+                  } else {
+                    setMapLoadError("LOAD_FAILED");
+                  }
                 }}
               >
                 <Map
@@ -870,31 +877,50 @@ export default function Community() {
                 <div className="w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center shadow-lg shadow-red-200/50">
                   <AlertCircle className="w-8 h-8 text-red-500" />
                 </div>
-                <div className="max-w-xs">
-                  <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest">Maps Integration Required</h3>
-                  <p className="text-[10px] text-gray-500 mt-2 leading-relaxed">
-                    The Pulse Map requires a valid <b>Google Maps API Key</b> to function in production.
+                <div className="max-w-xs space-y-3">
+                  <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-widest leading-tight">
+                    {mapLoadError === 'PLATFORM_RESTRICTED' ? 'Service Restricted' : 
+                     mapLoadError === 'LOAD_FAILED' ? 'Maps Load Failure' : 'Maps Integration Required'}
+                  </h3>
+                  <p className="text-[10px] text-gray-500 leading-relaxed">
+                    {mapLoadError === 'PLATFORM_RESTRICTED' 
+                      ? 'The Pulse Map is currently restricted due to project-wide billing constraints. Please resolve this in the Google Cloud Console.'
+                      : mapLoadError === 'LOAD_FAILED'
+                      ? 'Failed to load Google Maps resources. This may be due to an invalid API key, domain restrictions, or billing issues.'
+                      : 'The Pulse Map requires a valid Google Maps API Key to function in production.'}
                   </p>
-                  <p className="mt-4 text-[9px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 p-2 rounded-lg border border-indigo-100 dark:border-indigo-800">
-                    If you are seeing this on your deployed site, ensure <b>VITE_GOOGLE_MAPS_API_KEY</b> is added to your Cloud Run or GitHub environment variables.
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => window.location.reload()}
-                    className="mt-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-gray-50 transition-all flex items-center gap-2"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    Force Reload
-                  </button>
-                  <a 
-                    href="https://console.cloud.google.com/google/maps-apis/credentials" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200/50"
-                  >
-                    Get API Key
-                  </a>
+                  
+                  {mapLoadError === 'PLATFORM_RESTRICTED' ? (
+                    <button 
+                      onClick={() => window.open('https://console.cloud.google.com/billing', '_blank')}
+                      className="w-full py-3 bg-rose-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-rose-200/50 hover:bg-rose-700 transition-all active:scale-95"
+                    >
+                      Restore Billing
+                    </button>
+                  ) : (
+                    <div className="space-y-4 pt-2">
+                       <p className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 p-3 rounded-xl border border-indigo-100 dark:border-indigo-800">
+                         Ensure <b>VITE_GOOGLE_MAPS_API_KEY</b> is correctly configured in your environment secrets.
+                       </p>
+                       <div className="flex gap-2 justify-center">
+                        <button 
+                          onClick={() => window.location.reload()}
+                          className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-gray-50 transition-all flex items-center gap-2"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          Retry Load
+                        </button>
+                        <a 
+                          href="https://console.cloud.google.com/google/maps-apis/credentials" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-700 transition-all flex items-center gap-2"
+                        >
+                          Check Console
+                        </a>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

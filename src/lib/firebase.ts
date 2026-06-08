@@ -33,7 +33,7 @@ const getDb = () => {
     // Attempt standard initialization first, fall back to long polling if it fails or is forced
     // In restricted container environments, sometimes standard (gRPC) works better than simulated long polling over HTTP
     return initializeFirestore(app, {
-      experimentalAutoDetectLongPolling: true,
+      experimentalForceLongPolling: true,
     }, dbId);
   } catch (e: any) {
     if (e.message.includes('already exists')) {
@@ -206,6 +206,13 @@ async function testConnection(retries = 5) {
     if (errorCode === 'permission-denied') {
       console.log("Firebase connection confirmed (received permission denial from server).");
       setConnectionStatus('connected');
+      return;
+    }
+
+    // Billing detection: 'unavailable' or 'permission-denied' during connection test often indicates project suspension
+    if (errorMessage.toLowerCase().includes('billing') || errorMessage.toLowerCase().includes('restricted') || errorMessage.toLowerCase().includes('dunning')) {
+      console.error("[Firebase] Billing restriction detected on Cloud project.");
+      setConnectionStatus('error');
       return;
     }
 
