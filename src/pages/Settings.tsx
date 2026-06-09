@@ -856,7 +856,7 @@ export default function Settings() {
                         if(next.length < 4 || next.length > 8) return alert("Validation Error: PIN must be 4-8 digits.");
                         
                         try {
-                          const res = await fetch("/api/user/security/update-pin", {
+                          const res = await apiFetch("/api/user/security/update-pin", {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ 
@@ -891,7 +891,7 @@ export default function Settings() {
                         if (!confirm("Reset PIN via Email? Instructions will be sent to your registered address.")) return;
                         
                         try {
-                          const res = await fetch("/api/user/security/reset-pin", {
+                          const res = await apiFetch("/api/user/security/reset-pin", {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ email: currentUser.email })
@@ -1100,7 +1100,7 @@ export default function Settings() {
                     if(!cur || !next) return alert("Validation Failed: Both PINs are required.");
                     
                     try {
-                      const res = await fetch("/api/admin/security/update-pin", {
+                      const res = await apiFetch("/api/admin/security/update-pin", {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ currentPin: cur, newPin: next })

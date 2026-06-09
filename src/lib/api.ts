@@ -14,10 +14,13 @@ export const getApiUrl = (path: string): string => {
   }
   
   // Diagnostic for Surge/Production deployments without backend URL
+  // We automatically route to the Render backend when deployed to Surge or a static environment to prevent 404s.
   if (!window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')) {
-    if (!baseUrl && path.startsWith('/api/')) {
-      console.warn(`[API Proxy Warning] Direct API call to ${path} on a non-localhost origin (${window.location.hostname}) without VITE_API_BASE_URL configured. Static hosts like Surge will return 404.`);
-    }
+    const fallbackBaseUrl = 'https://pulse-feeds-server.onrender.com';
+    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+    const finalUrl = `${fallbackBaseUrl}/${cleanPath}`;
+    console.log(`[API Proxy Fallback] Routing ${path} -> ${finalUrl}`);
+    return finalUrl;
   }
   
   return path;

@@ -1115,7 +1115,7 @@ export default function PlatformDashboard() {
       const platformUserId = "EDWINMUOHA";
       const platformAccountName = "EDWIN MUOHA WATITU";
       
-      const response = await fetch("/api/payout/platform", {
+      const response = await apiFetch("/api/payout/platform", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -291,7 +291,7 @@ export default function Rewards() {
           body.paybillDetails = paybillDetails;
         }
 
-        const response = await fetch(endpoint, {
+        const response = await apiFetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
@@ -372,6 +372,45 @@ export default function Rewards() {
 
   const [binanceBalance, setBinanceBalance] = useState<{ free: string, locked: string } | null>(null);
   const [isCheckingBinanceBalance, setIsCheckingBinanceBalance] = useState(false);
+  
+  const [diagnostics, setDiagnostics] = useState<{
+    keyFound: boolean;
+    keyName: string;
+    keyLength: number;
+    isMockKey: boolean;
+    hasBackslashKey: boolean;
+    secretFound: boolean;
+    secretName: string;
+    secretLength: number;
+    isMockSecret: boolean;
+    hasBackslashSecret: boolean;
+    proxyFound?: boolean;
+    proxyName?: string;
+    proxyLength?: number;
+    proxyValue?: string;
+  } | null>(null);
+  const [isCheckingDiagnostics, setIsCheckingDiagnostics] = useState(false);
+  const [showDiagPanel, setShowDiagPanel] = useState(false);
+
+  const runKeyDiagnostics = async () => {
+    setIsCheckingDiagnostics(true);
+    setDiagnostics(null);
+    try {
+      const response = await apiFetch(`/api/vault/diagnose`);
+      const data = await response.json();
+      if (data.success && data.diagnostics) {
+        setDiagnostics(data.diagnostics);
+        setShowDiagPanel(true);
+      } else {
+        throw new Error(data.error || "Failed to fetch credentials configuration");
+      }
+    } catch (err: any) {
+      console.error("Credentials setup diagnose failed:", err.message);
+      setError(`Credentials Diagnostic Failed: ${err.message}`);
+    } finally {
+      setIsCheckingDiagnostics(false);
+    }
+  };
 
   const checkBinanceAssetBalance = async (asset: string) => {
     setIsCheckingBinanceBalance(true);
@@ -2139,6 +2178,14 @@ export default function Rewards() {
                                      </p>
                                    </div>
                                  )}
+                                 <button
+                                   type="button"
+                                   onClick={runKeyDiagnostics}
+                                   disabled={isCheckingDiagnostics}
+                                   className="mt-2 text-[10px] font-extrabold text-amber-500 hover:text-amber-600 underline uppercase tracking-wider text-left transition-all disabled:opacity-50 flex items-center gap-1.5"
+                                 >
+                                   {isCheckingDiagnostics ? "Checking Configuration..." : "🔍 Diagnostics Check"}
+                                 </button>
                               </div>
                               <button 
                                 type="button"
@@ -2149,6 +2196,130 @@ export default function Rewards() {
                                 {isCheckingBinanceBalance ? 'Syncing...' : 'Sync Balance'}
                               </button>
                             </div>
+
+                            {showDiagPanel && diagnostics && (
+                              <div className="mt-1 p-4 bg-gray-100/50 dark:bg-black/30 border border-gray-200/15 dark:border-white/5 rounded-2xl text-[11px] space-y-3 font-medium leading-relaxed text-gray-700 dark:text-gray-300 animate-in fade-in slide-in-from-top-2">
+                                <div className="flex items-center justify-between border-b border-gray-200/10 pb-1.5">
+                                  <span className="font-extrabold uppercase tracking-widest text-[9px] text-amber-500">Credentials Diagnostics</span>
+                                  <button type="button" onClick={() => setShowDiagPanel(false)} className="text-gray-400 hover:text-gray-200 text-xs font-black">✕</button>
+                                </div>
+                                
+                                {/* API Key Status */}
+                                <div className="space-y-1">
+                                  <p className="flex items-center justify-between">
+                                    <span className="font-bold text-gray-500">API Key Configured:</span>
+                                    <span className={diagnostics.keyFound ? "text-emerald-500 font-extrabold" : "text-red-500 font-extrabold"}>
+                                      {diagnostics.keyFound ? `YES (${diagnostics.keyName})` : "NO"}
+                                    </span>
+                                  </p>
+                                  {diagnostics.keyFound && (
+                                    <>
+                                      <p className="flex items-center justify-between">
+                                        <span className="font-bold text-gray-500">API Key Detected Length:</span>
+                                        <span className="font-mono text-gray-900 dark:text-white font-bold">{diagnostics.keyLength} chars</span>
+                                      </p>
+                                      {diagnostics.isMockKey && (
+                                        <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] p-2.5 rounded-xl font-bold leading-normal mt-1">
+                                          ⚠️ <strong>Mock Key Detected!</strong> You configured the simulated fallback key value in Secrets. You must replace it with your real Binance API Key from your Binance account under "API Management".
+                                        </div>
+                                      )}
+                                      {diagnostics.hasBackslashKey && (
+                                        <div className="bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[10px] p-2.5 rounded-xl font-bold leading-normal mt-1">
+                                          ⚠️ <strong>Backslash in Key Name!</strong> Your secret name contains a backslash (<code>\</code>). Please re-create the secret and name it exactly <code>BINANCE_API_KEY</code> without any leading or trailing symbols.
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+
+                                {/* API Secret Status */}
+                                <div className="space-y-1 border-t border-gray-200/10 pt-2">
+                                  <p className="flex items-center justify-between">
+                                    <span className="font-bold text-gray-500">API Secret Configured:</span>
+                                    <span className={diagnostics.secretFound ? "text-emerald-500 font-extrabold" : "text-red-500 font-extrabold"}>
+                                      {diagnostics.secretFound ? `YES (${diagnostics.secretName})` : "NO"}
+                                    </span>
+                                  </p>
+                                  {diagnostics.secretFound && (
+                                    <>
+                                      <p className="flex items-center justify-between">
+                                        <span className="font-bold text-gray-500">API Secret Detected Length:</span>
+                                        <span className="font-mono text-gray-900 dark:text-white font-bold">{diagnostics.secretLength} chars</span>
+                                      </p>
+                                      {diagnostics.isMockSecret && (
+                                        <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] p-2.5 rounded-xl font-bold leading-normal mt-1">
+                                          ⚠️ <strong>Mock Secret Detected!</strong> You configured the simulated fallback secret in Secrets. You must replace it with your real Binance API Secret key.
+                                        </div>
+                                      )}
+                                      {diagnostics.hasBackslashSecret && (
+                                        <div className="bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[10px] p-2.5 rounded-xl font-bold leading-normal mt-1">
+                                          ⚠️ <strong>Backslash in Secret Name!</strong> Your secret name contains a backslash. Please re-create the secret and name it exactly <code>BINANCE_API_SECRET</code>.
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+
+                                {/* Proxy Support Status */}
+                                <div className="space-y-1 border-t border-gray-200/10 pt-2">
+                                  <p className="flex items-center justify-between">
+                                    <span className="font-bold text-gray-500">Static Proxy Routing:</span>
+                                    <span className={diagnostics.proxyFound ? "text-amber-500 font-extrabold" : "text-gray-400 font-bold"}>
+                                      {diagnostics.proxyFound ? `ACTIVE (${diagnostics.proxyName})` : "INACTIVE"}
+                                    </span>
+                                  </p>
+                                  {diagnostics.proxyFound && (
+                                    <>
+                                      <p className="flex items-center justify-between font-mono">
+                                        <span className="font-bold text-gray-500">Configured Node:</span>
+                                        <span className="text-gray-900 dark:text-white font-bold">{diagnostics.proxyValue}</span>
+                                      </p>
+                                      
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          try {
+                                            const res = await apiFetch("/api/vault/ip");
+                                            const data = await res.json();
+                                            alert(`Current Outbound IP: ${data.ip}`);
+                                          } catch (e: any) {
+                                            alert(`Failed to check IP: ${e.message}`);
+                                          }
+                                        }}
+                                        className="mt-2 w-full text-[10px] font-extrabold text-amber-500 hover:text-amber-600 underline uppercase tracking-wider text-center transition-all flex items-center justify-center gap-1.5"
+                                      >
+                                        Check Actual Outbound IP
+                                      </button>
+                                      
+                                      <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] p-2.5 rounded-xl font-bold leading-normal mt-1 animate-in fade-in slide-in-from-top-1">
+                                        🚀 <strong>Proxy Agent Active!</strong> Requests to Binance are successfully being routed through your static proxy. This ensures your Binance API access is routed through a single static IP address (such as <code>35.214.40.75</code>), allowing you to restrict API access safely in Binance API Settings.
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+
+                                {/* Checklist */}
+                                <div className="text-[10px] text-gray-400 leading-normal border-t border-gray-200/10 pt-2 font-medium space-y-2">
+                                  <div>
+                                    <p className="font-extrabold uppercase text-amber-500 text-[9px] tracking-wider mb-1">Standard Binance API Setup:</p>
+                                    <ol className="list-decimal pl-4 space-y-1">
+                                      <li>Create API keys under <b>API Management</b> on Binance</li>
+                                      <li>Enable <b>Enable Reading</b> (required for balance checks)</li>
+                                      <li>In AI Studio Secrets, add: <code>BINANCE_API_KEY</code> and <code>BINANCE_API_SECRET</code></li>
+                                    </ol>
+                                  </div>
+                                  
+                                  <div>
+                                    <p className="font-extrabold uppercase text-amber-500 text-[9px] tracking-wider mb-1 mt-1">Setup Secure Routing via Proxy (using your Static IP):</p>
+                                    <ol className="list-decimal pl-4 space-y-1">
+                                      <li>Run an HTTP or SOCKS5 proxy server (e.g. <b>Squid</b> or <b>tinyproxy</b>) on your static IP VPS at <code>35.214.40.75</code></li>
+                                      <li>In AI Studio Secrets, add a secret named <code>BINANCE_PROXY</code> with value: <code>http://35.214.40.75:PORT</code> (using your configured port)</li>
+                                      <li>On Binance, check <b>Restrict access to trusted IPs only (Recommended)</b> and whitelist <code>35.214.40.75</code></li>
+                                    </ol>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
 
                             {binanceBalance && (
                               <div className="pt-4 border-t border-amber-500/10 flex flex-col gap-3 animate-in fade-in slide-in-from-top-1">

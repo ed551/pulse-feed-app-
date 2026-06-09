@@ -39,6 +39,8 @@ import nodemailer from 'nodemailer';
 import * as otplibPkg from 'otplib';
 import africastalking from 'africastalking';
 import { GoogleGenAI } from "@google/genai";
+import { HttpsProxyAgent } from "https-proxy-agent";
+import { SocksProxyAgent } from "socks-proxy-agent";
 
 dotenv.config();
 
@@ -92,12 +94,14 @@ const getBinanceApiKey = () => {
   // Priority 2: VITE prefixed
   if (process.env.VITE_BINANCE_API_KEY) return process.env.VITE_BINANCE_API_KEY.trim();
   
-  // Priority 3: Fuzzy match
-  const found = Object.keys(process.env).find(k => 
-    k.toUpperCase().includes('BINANCE') && 
-    (k.toUpperCase().includes('KEY') || k.toUpperCase().includes('API')) &&
-    !k.toUpperCase().includes('SECRET')
-  );
+  // Priority 3: Fuzzy matches of env variables
+  const found = Object.keys(process.env).find(k => {
+    const ku = k.toUpperCase().trim();
+    if (ku.includes('GEMINI') || ku.includes('FIREBASE') || ku.includes('GOOGLE') || ku.includes('MAPS') || ku.includes('PORT') || ku.includes('SECRET') || ku.includes('SEC')) {
+      return false;
+    }
+    return ku.includes('BINANCE') || ku.includes('API_KEY') || ku.includes('CE_API_K') || ku.includes('CE_K') || ku.includes('NCE_API') || ku.endsWith('_KEY');
+  });
   if (found) return process.env[found]?.trim();
 
   // Priority 4: User-provided hardcoded fallback (Emergency Correction)
@@ -112,15 +116,79 @@ const getBinanceApiSecret = () => {
   // Priority 2: VITE prefixed
   if (process.env.VITE_BINANCE_API_SECRET) return process.env.VITE_BINANCE_API_SECRET.trim();
   
-  // Priority 3: Fuzzy match
-  const found = Object.keys(process.env).find(k => 
-    k.toUpperCase().includes('BINANCE') && 
-    (k.toUpperCase().includes('SECRET') || k.toUpperCase().includes('SEC'))
-  );
+  // Priority 3: Fuzzy matches of env variables
+  const found = Object.keys(process.env).find(k => {
+    const ku = k.toUpperCase().trim();
+    if (ku.includes('GEMINI') || ku.includes('FIREBASE') || ku.includes('GOOGLE') || ku.includes('MAPS') || ku.includes('PORT')) {
+      return false;
+    }
+    return (
+      (ku.includes('BINANCE') && (ku.includes('SECRET') || ku.includes('SEC'))) ||
+      ku.includes('API_SECRET') ||
+      ku.includes('CE_API_S') ||
+      ku.includes('NCE_API_S') ||
+      ku.endsWith('_SECRET') ||
+      ku.endsWith('_SEC')
+    );
+  });
   if (found) return process.env[found]?.trim();
 
   // Priority 4: User-provided hardcoded fallback (Emergency Correction)
   return "D4zKTsWTXrqEucgELaoLI9q5EiCeqvVVABW3EqzCNOB8GeFNnp8ldS3XHb133rab";
+};
+
+const getDetectedBinanceSecrets = () => {
+  const envKeys = Object.keys(process.env);
+  
+  const keyMatch = envKeys.find(k => {
+    const ku = k.toUpperCase().trim();
+    if (ku.includes('GEMINI') || ku.includes('FIREBASE') || ku.includes('GOOGLE') || ku.includes('MAPS') || ku.includes('PORT') || ku.includes('SECRET') || ku.includes('SEC')) return false;
+    return ku.includes('BINANCE') || ku.includes('API_KEY') || ku.includes('CE_API_K') || ku.includes('CE_K') || ku.includes('NCE_API') || ku.endsWith('_KEY');
+  });
+
+  const secretMatch = envKeys.find(k => {
+    const ku = k.toUpperCase().trim();
+    if (ku.includes('GEMINI') || ku.includes('FIREBASE') || ku.includes('GOOGLE') || ku.includes('MAPS') || ku.includes('PORT')) return false;
+    return (
+      (ku.includes('BINANCE') && (ku.includes('SECRET') || ku.includes('SEC'))) ||
+      ku.includes('API_SECRET') ||
+      ku.includes('CE_API_S') ||
+      ku.includes('NCE_API_S') ||
+      ku.endsWith('_SECRET') ||
+      ku.endsWith('_SEC')
+    );
+  });
+
+  const rawKey = keyMatch ? process.env[keyMatch]?.trim() : "";
+  const rawSecret = secretMatch ? process.env[secretMatch]?.trim() : "";
+
+  const proxyMatch = envKeys.find(k => {
+    const ku = k.toUpperCase().trim();
+    return ku === 'BINANCE_PROXY' || ku === 'VITE_BINANCE_PROXY' || ku === 'PROXY_URL' || ku === 'QUOTAGUARDSTATIC_URL' || ku === 'QUOTAGUARD_URL' || ku === 'FIXIE_URL';
+  });
+  const rawProxy = proxyMatch ? process.env[proxyMatch]?.trim() : "";
+
+  const mockKey = "hGSR4lD2JFxnsJ90Bjhy2trU1UvTXyiDBZe46Q0xyCXUZsP34KsFdUGtWcVVVYSr";
+  const mockSecret = "D4zKTsWTXrqEucgELaoLI9q5EiCeqvVVABW3EqzCNOB8GeFNnp8ldS3XHb133rab";
+
+  return {
+    keyFound: !!keyMatch,
+    keyName: keyMatch || "",
+    keyLength: rawKey ? rawKey.length : 0,
+    isMockKey: rawKey === mockKey,
+    hasBackslashKey: keyMatch ? (keyMatch.includes('\\') || keyMatch.includes('/')) : false,
+    
+    secretFound: !!secretMatch,
+    secretName: secretMatch || "",
+    secretLength: rawSecret ? rawSecret.length : 0,
+    isMockSecret: rawSecret === mockSecret,
+    hasBackslashSecret: secretMatch ? (secretMatch.includes('\\') || secretMatch.includes('/')) : false,
+
+    proxyFound: !!proxyMatch,
+    proxyName: proxyMatch || "",
+    proxyLength: rawProxy ? rawProxy.length : 0,
+    proxyValue: rawProxy ? `${rawProxy.substring(0, Math.min(18, rawProxy.length))}...` : ""
+  };
 };
 
 // Log Detection Status (Diagnostic)
@@ -170,6 +238,34 @@ const getBinanceBaseUrl = () => {
 const getBinanceApiBase = () => `${getBinanceBaseUrl()}/api`;
 const getBinanceSapiBase = () => `${getBinanceBaseUrl()}/sapi`;
 
+const getProxyAgent = () => {
+  const envKeys = Object.keys(process.env);
+  const proxyMatchKey = envKeys.find(k => {
+    const ku = k.toUpperCase().trim();
+    return ku === 'BINANCE_PROXY' || ku === 'VITE_BINANCE_PROXY' || ku === 'PROXY_URL' || ku === 'QUOTAGUARDSTATIC_URL' || ku === 'QUOTAGUARD_URL' || ku === 'FIXIE_URL';
+  });
+  
+  const proxyUrl = proxyMatchKey ? process.env[proxyMatchKey]?.trim() : "";
+  if (!proxyUrl) return null;
+  
+  try {
+    if (proxyUrl.startsWith('socks')) {
+      console.log(`[Proxy-Init] Routing through SOCKS proxy: ${proxyUrl.replace(/:[^:@\n]+@/, ':***@')}`);
+      return new SocksProxyAgent(proxyUrl);
+    } else {
+      let normalizedProxyUrl = proxyUrl;
+      if (!proxyUrl.startsWith('http://') && !proxyUrl.startsWith('https://')) {
+        normalizedProxyUrl = `http://${proxyUrl}`;
+      }
+      console.log(`[Proxy-Init] Routing through HTTP/HTTPS proxy: ${normalizedProxyUrl.replace(/:[^:@\n]+@/, ':***@')}`);
+      return new HttpsProxyAgent(normalizedProxyUrl);
+    }
+  } catch (err: any) {
+    console.error(`[Proxy-Init] Failed to initialize proxy agent for ${proxyUrl}:`, err.message);
+    return null;
+  }
+};
+
 /**
  * Robust helper to perform Binance API calls with automatic mirror failover and User-Agent rotation.
  */
@@ -184,6 +280,8 @@ async function performBinanceRequest(method: 'GET' | 'POST', endpoint: string, c
     if (ipCheck) console.log(`[Vault-Bridge] Bridge IP: ${ipCheck.data.ip}`);
   } catch (e) {}
 
+  const proxyAgent = getProxyAgent();
+
   for (const mirror of mirrors) {
     const baseUrl = BINANCE_USE_TESTNET ? "https://testnet.binance.vision" : mirror;
     const url = `${baseUrl}/${type}${endpoint}`;
@@ -193,9 +291,9 @@ async function performBinanceRequest(method: 'GET' | 'POST', endpoint: string, c
     
     for (const ua of selectedUAs) {
       try {
-        console.log(`[Vault-Bridge] ${method} ${url} | UA: ${ua.substring(0, 15)}...`);
+        console.log(`[Vault-Bridge] ${method} ${url} | UA: ${ua.substring(0, 15)}...${proxyAgent ? ' (via proxy Agent)' : ''}`);
         
-        const axiosConfig = {
+        const axiosConfig: any = {
           ...config,
           method,
           url,
@@ -208,6 +306,11 @@ async function performBinanceRequest(method: 'GET' | 'POST', endpoint: string, c
           },
           validateStatus: (status: number) => true // Handle all status codes manually
         };
+
+        if (proxyAgent) {
+          axiosConfig.httpsAgent = proxyAgent;
+          axiosConfig.httpAgent = proxyAgent;
+        }
         
         // Final sanity check for POST Content-Type
         if (method === 'POST' && (!axiosConfig.headers["Content-Type"])) {
@@ -1644,7 +1747,11 @@ async function startServer() {
                         combinedText.includes("insufficient balance") ||
                         combinedText.includes("api_key_invalid") ||
                         combinedText.includes("dunning") ||
-                        combinedText.includes("restricted");
+                        combinedText.includes("restricted") ||
+                        combinedText.includes("denied") ||
+                        combinedText.includes("permission_denied") ||
+                        combinedText.includes("forbidden") ||
+                        combinedText.includes("403");
       
       if (isDepleted) {
         console.warn("[Gemini Proxy] Falling back to simulation due to billing restriction detected in middle of request.");
@@ -1806,6 +1913,30 @@ async function startServer() {
     if (s === "D4zKTsWTXrqEucgELaoLI9q5EiCeqvVVABW3EqzCNOB8GeFNnp8ldS3XHb133rab") return false;
     return true;
   };
+
+  app.get("/api/vault/diagnose", (req, res) => {
+    try {
+      const diag = getDetectedBinanceSecrets();
+      res.json({ success: true, diagnostics: diag });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get("/api/vault/ip", async (req, res) => {
+    try {
+      const proxyAgent = getProxyAgent();
+      const axiosConfig: any = { timeout: 5000 };
+      if (proxyAgent) {
+        axiosConfig.httpsAgent = proxyAgent;
+        axiosConfig.httpAgent = proxyAgent;
+      }
+      const response = await axios.get('https://api.ipify.org?format=json', axiosConfig);
+      res.json({ success: true, ip: response.data.ip });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
 
   app.get("/api/vault/account", async (req, res) => {
     if (!isBinanceConfigured()) {

@@ -544,7 +544,7 @@ export default function Layout() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s client timeout
         
-        const response = await fetch(url, { signal: controller.signal });
+        const response = await apiFetch(url, { signal: controller.signal });
         clearTimeout(timeoutId);
 
         const contentType = response.headers.get("content-type");
@@ -709,7 +709,7 @@ export default function Layout() {
               const url = `/api/pulse-geo?lat=${latitude}&lon=${longitude}`;
               console.log(`[Pulse Geo] Attempt ${3 - geocodeRetries}: Fetching ${url}`);
               
-              const res = await fetch(url, {
+              const res = await apiFetch(url, {
                 headers: {
                   'Accept': 'application/json',
                   'Cache-Control': 'no-cache',
