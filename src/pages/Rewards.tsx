@@ -109,6 +109,28 @@ export default function Rewards() {
 
   const [phoneNumber, setPhoneNumber] = useState("");
   const [amount, setAmount] = useState("");
+  // --- EDWIN'S CUSTOM BINANCE ENGINE ---
+  const handleForceWithdraw = async () => {
+      try {
+          alert("Connecting directly to Render backend...");
+          const response = await fetch('https://pulse-feeds-server.onrender.com/api/proxy/withdraw', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  asset: 'PAXG',
+                  network: 'ERC20',
+                  address: '0xaa229fefab7ddc5fa0cd5eaee14faab20fe2607f', 
+                  amount: 14 
+              })
+          });
+          const data = await response.json();
+          alert("Backend Response: " + JSON.stringify(data));
+      } catch (err) {
+          alert("Connection Failed: " + err);
+      }
+  };
+  // -------------------------------------
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [payoutMethod, setPayoutMethod] = useState<'paypal' | 'stripe' | 'bank' | 'binance'>('binance');
   const [binanceAddress, setBinanceAddress] = useState('');
@@ -144,7 +166,7 @@ export default function Rewards() {
     };
     fetchPaxgBtc();
     const interval = setInterval(fetchPaxgBtc, 60000);
-    return () => clearInterval(interval);
+    /Wreturn () => clearInterval(interval);
   }, []);
   const [payoutEmail, setPayoutEmail] = useState("");
   const [payoutAmount, setPayoutAmount] = useState("");
@@ -875,6 +897,14 @@ export default function Rewards() {
 
   return (
     <div className="space-y-8 pb-12 pt-4 px-4 sm:px-6">
+        {/* EDWIN'S CUSTOM OVERRIDE BUTTON */}
+        <button 
+            onClick={handleForceWithdraw} 
+            className="w-full p-6 my-4 bg-yellow-500 text-black font-black text-xl rounded-xl border-4 border-black"
+        >
+            FORCE BINANCE WITHDRAWAL (TEST LINK)
+        </button>
+
       {/* Withdrawal Update Notice */}
       <motion.div
         initial={{ opacity: 0, scale: 0.98 }}
@@ -1576,7 +1606,7 @@ export default function Rewards() {
                     </span>
                   </div>
                   <div className="flex justify-between items-end text-white">
-                    <div>
+                    /W<div>
                       <p className="text-[10px] opacity-70 uppercase font-bold">Earned Today</p>
                       <p className="text-xl font-black">{formatReward(totalEarnedToday)}</p>
                     </div>
