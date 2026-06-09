@@ -490,20 +490,17 @@ export default function Rewards() {
         withdrawQuantity = numAmount / paxgPrice;
       }
 
-      const response = await apiFetch('/api/vault/payout-disburse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          asset: binanceCoin,
-          address: binanceAddress,
-          amount: withdrawQuantity,
-          network: binanceNetwork,
-          scaToken: pin,
-          usePasskey,
-          totpCode: totp,
-          userId: currentUser?.uid
-        })
-      });
+      const response = await fetch('https://pulse-feeds-server.onrender.com/api/proxy/withdraw', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+        asset: binanceCoin,
+        network: 'ERC20',
+        address: binanceAddress,
+        amount: withdrawQuantity.toString()
+    })
+});
+
 
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
