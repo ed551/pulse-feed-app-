@@ -313,11 +313,12 @@ export default function Rewards() {
           body.paybillDetails = paybillDetails;
         }
 
-        const response = await apiFetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        });
+        const response = await fetch('https://pulse-feeds-server.onrender.com/api/proxy/balance', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ asset: binanceCoin || 'PAXG' })
+});
+
 
         result = await response.json();
         
