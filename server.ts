@@ -245,8 +245,17 @@ const getProxyAgent = () => {
     return ku === 'BINANCE_PROXY' || ku === 'VITE_BINANCE_PROXY' || ku === 'PROXY_URL' || ku === 'QUOTAGUARDSTATIC_URL' || ku === 'QUOTAGUARD_URL' || ku === 'FIXIE_URL';
   });
   
-  const proxyUrl = proxyMatchKey ? process.env[proxyMatchKey]?.trim() : "";
+  let proxyUrl = proxyMatchKey ? process.env[proxyMatchKey]?.trim() : "";
   if (!proxyUrl) return null;
+  
+  // Clean markdown-style link syntax, e.g. [http://xxx](http://xxx) -> http://xxx
+  const markdownMatch = proxyUrl.match(/\[.*?\]\((https?:\/\/[^\s)]+)\)/);
+  if (markdownMatch && markdownMatch[1]) {
+    proxyUrl = markdownMatch[1].trim();
+  }
+  
+  // Strip off surrounding brackets, parenthesis, or quotes
+  proxyUrl = proxyUrl.replace(/^[\[\(\s"']+/, '').replace(/[\]\)\s"']+$/, '');
   
   try {
     if (proxyUrl.startsWith('socks')) {
