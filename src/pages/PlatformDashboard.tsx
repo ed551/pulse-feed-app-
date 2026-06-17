@@ -169,7 +169,7 @@ export default function PlatformDashboard() {
       // 2. Create Withdrawal Record
       await addDoc(collection(db, 'withdrawals'), {
         amount,
-        amountPoints: amount / (rates.goldKes || 310000), // Convert KES withdrawal to USDT
+        amountPoints: amount / (rates.KES || 130), // Convert KES withdrawal to USDT points
         amountKes: amount,
         category: 'developer_expense',
         reference: refCode,
@@ -197,8 +197,8 @@ export default function PlatformDashboard() {
       // Inject record
       await addDoc(collection(db, 'withdrawals'), {
         amount,
-        amountPoints: amount / (rates.goldUSD || 2600), // Convert USD withdrawal to USDT
-        amountKes: amount * 150, // Approx KES
+        amountPoints: amount, // Convert USD withdrawal to USDT points
+        amountKes: amount * (rates.KES || 130), // Approx KES
         category: 'operational',
         reference: refCode,
         status: 'success',
@@ -301,8 +301,8 @@ export default function PlatformDashboard() {
         body: JSON.stringify({
           asset: withdrawReq.currency || 'USDT',
           address: withdrawReq.address,
-          amount: withdrawReq.unit === 'GOLD' ? (withdrawReq.amount / (withdrawReq.currency === 'USDT' ? 31.1035 : 1)) : withdrawReq.amount,
-          network: withdrawReq.network || 'ETH',
+          amount: withdrawReq.amount,
+          network: withdrawReq.network || 'TRX',
           userId: 'platform-admin',
           scaToken: token,
           usePhone: up,
@@ -500,7 +500,7 @@ export default function PlatformDashboard() {
   }, []);
 
   const goldPriceValue = useMemo(() => {
-    const p = binancePrices.find(p => p.symbol === 'USDTUSDT')?.price;
+    const p = binancePrices.find(p => p.symbol === 'PAXGUSDT')?.price;
     return p ? parseFloat(p) : 2650.45; // Fallback
   }, [binancePrices]);
 
@@ -605,14 +605,14 @@ export default function PlatformDashboard() {
       // IF unit is missing:
       // - Platform Revenue is ALMOST ALWAYS KES or USD (large amounts).
       // - Standard revenue/payouts < 100 are likely Gold g.
-      const isPoints = tx.unit === 'POINTS' || tx.unit === 'G' || tx.unit === 'USDT' || tx.unit === 'Gold g' || tx.unit === 'Gold/BTC' || tx.unit === 'USDT / BTC' || (!tx.unit && Math.abs(platformAmtRaw) < 100 && tx.type !== 'platform_revenue' && tx.type !== 'expense');
+      const isPoints = tx.unit === 'POINTS' || tx.unit === 'G' || tx.unit === 'PAXG' || tx.unit === 'Gold g' || tx.unit === 'Gold/BTC' || tx.unit === 'PAXG / BTC' || (!tx.unit && Math.abs(platformAmtRaw) < 100 && tx.type !== 'platform_revenue' && tx.type !== 'expense');
       const isKes = tx.unit === 'KES' || tx.currency === 'KES';
       
       let platformAmt = platformAmtRaw;
       let grossAmt = grossAmtRaw;
 
       if (isPoints) {
-        // USDT value calculation logic
+        // PAXG value calculation logic
         platformAmt = platformAmtRaw / 1.3;
         grossAmt = grossAmtRaw / 1.3;
       } else if (isKes) {
@@ -999,7 +999,7 @@ export default function PlatformDashboard() {
         userAmount: 0,
         platformAmount: amountUsd,
         totalAmount: amountUsd,
-        reason: `Manual Return of Funds to Treasury (${useKesForReturn ? 'KES' : 'USDT'})`,
+        reason: `Manual Return of Funds to Treasury (${useKesForReturn ? 'KES' : 'PAXG'})`,
         userId: currentUser?.uid || 'system',
         timestamp: serverTimestamp(),
         serverSecret: "pulse-feeds-server-secret-2026"
@@ -1121,7 +1121,7 @@ export default function PlatformDashboard() {
         body: JSON.stringify({
           method: "binance",
           amount: amountToWithdraw,
-          asset: "USDT",
+          asset: "PAXG",
           address: "0x992B9Fd95e4e64F374A92070e17627409fE27694", // Main Binance Hot Wallet
           recipient: "Binance Treasury",
           userId: "platform-admin",
@@ -1214,7 +1214,7 @@ export default function PlatformDashboard() {
   const [binanceBalances, setBinanceBalances] = useState<any[]>([]);
   const [isCheckingBinance, setIsCheckingBinance] = useState(false);
   const [binanceWithdrawalForm, setBinanceWithdrawalForm] = useState({
-    asset: 'USDT',
+    asset: 'PAXG',
     address: '',
     amount: '',
     network: 'ETH'
@@ -1283,9 +1283,9 @@ export default function PlatformDashboard() {
       if (db) {
         const statsRef = doc(db, "platform", "stats");
         
-        // BUG FIX: If withdrawing USDT, we must deduct the USD value from platformShare
+        // BUG FIX: If withdrawing PAXG, we must deduct the USD value from platformShare
         let usdDeduction = parseFloat(amount);
-        if (asset === 'USDT' && goldPriceValue) {
+        if (asset === 'PAXG' && goldPriceValue) {
           usdDeduction = parseFloat(amount) * goldPriceValue;
         } else if (asset === 'BTC' && btcPriceValue) {
           usdDeduction = parseFloat(amount) * btcPriceValue;
@@ -2075,7 +2075,7 @@ export default function PlatformDashboard() {
                             <td className="px-6 py-4 text-right font-black font-mono">
                               <span className={cn((tx.type === 'revenue' || tx.type === 'platform_revenue' || (tx.platformAmount || 0) > 0) ? "text-green-600" : "text-red-600")}>
                                 {(tx.type === 'revenue' || tx.type === 'platform_revenue' || (tx.platformAmount || 0) > 0) ? '+' : '-'}{
-                                  tx.unit === 'GOLD' || tx.unit === 'Points' || tx.unit === 'Gold g' || tx.unit === 'Gold/BTC' || tx.unit === 'USDT' || tx.unit === 'USDT / BTC'
+                                  tx.unit === 'GOLD' || tx.unit === 'Points' || tx.unit === 'Gold g' || tx.unit === 'Gold/BTC' || tx.unit === 'PAXG' || tx.unit === 'PAXG / BTC'
                                     ? formatReward(Math.abs(tx.platformAmount || tx.totalAmount || 0))
                                     : formatCurrency(Math.abs(tx.platformAmount || tx.totalAmount || 0))
                                 }
@@ -2669,7 +2669,7 @@ export default function PlatformDashboard() {
                     </div>
                     <div>
                       <h3 className="text-xl font-black text-white uppercase tracking-tight">Rewards Matrix</h3>
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">USDT / Market Convergence</label>
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">PAXG / Market Convergence</label>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -2680,7 +2680,7 @@ export default function PlatformDashboard() {
                 <div className="space-y-4">
                   <div className="p-4 bg-black/40 rounded-2xl border border-white/5">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">USDT Market Ratio</p>
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">PAXG Market Ratio</p>
                       <span className="text-[10px] font-bold text-amber-500">+{((goldBtcRatio / 0.05) * 100 - 100).toFixed(2)}% Performance</span>
                     </div>
                     <p className="text-3xl font-black text-white tracking-tighter">{goldBtcRatio.toFixed(5)}</p>
@@ -2788,7 +2788,7 @@ export default function PlatformDashboard() {
                     onChange={(e) => setBinanceWithdrawalForm({...binanceWithdrawalForm, asset: e.target.value})}
                     className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none"
                   >
-                    <option value="USDT">USDT</option>
+                    <option value="PAXG">PAXG</option>
                     <option value="BTC">BTC</option>
                   </select>
                   <button 
@@ -3584,7 +3584,7 @@ export default function PlatformDashboard() {
                       useKesForReturn ? "bg-blue-600 text-white border-blue-600" : "bg-amber-500 text-white border-amber-500"
                     )}
                   >
-                    {useKesForReturn ? "Mode: KES" : "Mode: USDT"}
+                    {useKesForReturn ? "Mode: KES" : "Mode: PAXG"}
                   </button>
                 </div>
                 <div className="relative">
@@ -3683,7 +3683,7 @@ export default function PlatformDashboard() {
                       useKesForRevenue ? "bg-green-600 text-white border-green-600" : "bg-amber-500 text-white border-amber-500"
                     )}
                   >
-                    {useKesForRevenue ? "Mode: KES" : "Mode: USDT"}
+                    {useKesForRevenue ? "Mode: KES" : "Mode: PAXG"}
                   </button>
               </div>
               <div className="relative">
@@ -3742,7 +3742,7 @@ export default function PlatformDashboard() {
 
           <form onSubmit={handleLogPlatformExpense} className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">Amount (USDT)</label>
+              <label className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">Amount (PAXG)</label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">G</span>
                 <input

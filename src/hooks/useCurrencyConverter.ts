@@ -9,11 +9,12 @@ export const useCurrencyConverter = () => {
   // Default rates (Base: 1 USD)
   const [rates, setRates] = useState<ExchangeRates>({ 
     USD: 1,
+    USDT: 1,
     KES: 130, // authoritative local rate
     GOLD: 31.1035 / 2375.40, // ~0.01309 g per USD
     BTC: 1 / 67000
   });
-  const [currency, setCurrency] = useState<string>('GOLD');
+  const [currency, setCurrency] = useState<string>('USDT');
   const [loading, setLoading] = useState(true);
   const [goldPriceUSD, setGoldPriceUSD] = useState<number>(2375.40); 
   const [btcPriceUSD, setBtcPriceUSD] = useState<number>(67000);
@@ -25,10 +26,10 @@ export const useCurrencyConverter = () => {
       setCurrency(savedCurrency);
     } else {
       // Default to USDT for this app
-      setCurrency('GOLD');
+      setCurrency('USDT');
     }
     
-    // Fetch exchange rates and crypto prices (USDT for Gold)
+    // Fetch exchange rates and crypto prices (PAXG for Gold)
     const fetchData = async () => {
       try {
         const response = await apiFetch('/api/vault/prices');
@@ -36,11 +37,11 @@ export const useCurrencyConverter = () => {
           const data = await response.json();
           const prices = data.prices || [];
           
-          const usdtTicker = prices.find((p: any) => p.symbol === 'USDTUSDT');
+          const paxgTicker = prices.find((p: any) => p.symbol === 'PAXGUSDT');
           const btcTicker = prices.find((p: any) => p.symbol === 'BTCUSDT');
           
-          if (usdtTicker && usdtTicker.price) {
-            const price = parseFloat(usdtTicker.price);
+          if (paxgTicker && paxgTicker.price) {
+            const price = parseFloat(paxgTicker.price);
             if (!isNaN(price) && price > 0) {
               setGoldPriceUSD(price);
               const gPerUSD = 31.1035 / price;
@@ -84,11 +85,15 @@ export const useCurrencyConverter = () => {
     const rateFrom = rates[fromCurrency] || 1;
     const amountInUSD = fromCurrency === 'USD' ? amount : amount / rateFrom;
 
+    if (currency === 'USDT') {
+      return `${amountInUSD.toFixed(2)} USDT`;
+    }
+
     if (currency === 'GOLD' || currency === 'BTC_GOLD') {
       const gRate = rates['GOLD'] || (31.1035 / 2375.40);
       const grams = amountInUSD * gRate;
-      const usdt = grams / 31.1035;
-      return `${usdt.toFixed(6)} USDT`;
+      const paxg = grams / 31.1035;
+      return `${paxg.toFixed(6)} PAXG`;
     }
 
     if (currency === 'BTC') {
@@ -112,10 +117,8 @@ export const useCurrencyConverter = () => {
   };
 
   const formatReward = (points: number): string => {
-    // 1 point = 1 gram of Gold internally
-    // 1 USDT = 1 Troy Ounce = 31.1035 grams
-    const usdt = points / 31.1035;
-    return `${usdt.toFixed(6)} USDT`;
+    // 1 point = 1 USDT internally key
+    return `${points.toFixed(2)} USDT`;
   };
 
   const formatCurrency = (amountInUSD: number): string => {

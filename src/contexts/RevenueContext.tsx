@@ -71,7 +71,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const IDLE_THRESHOLD = idleThreshold;
   const EARNING_INTERVAL = 30000; // Check every 30s locally
   const SYNC_INTERVAL = 300000; // Sync to DB every 5 mins
-  const ACTIVE_POINTS_PER_INTERVAL = 0.016; // 0.016 USDT per 30s
+  const ACTIVE_POINTS_PER_INTERVAL = 0.016; // 0.016 PAXG per 30s
   
   const monitorBehaviorWithAI = async () => {
     if (!currentUser || isAnalyzingBehavior || Date.now() - lastBehaviorCheckRef.current < 60000) return;
@@ -125,7 +125,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   useEffect(() => {
     if (currentUser && db && userData && !pointsLocked) {
-      const expectedPoints = (userData.balance || 0) * 1.3;
+      const expectedPoints = userData.balance || 0;
       const currentPoints = userData.points || 0;
       const diff = Math.abs(expectedPoints - currentPoints);
       
@@ -260,8 +260,8 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
     const userRef = doc(db, 'users', currentUser.uid);
     const statsRef = doc(db, 'platform', 'stats');
 
-    // USDT economy logic (0.01 USDT = 1 KES context fallback)
-    const pointsToAdd = userUsdAmount > 0 ? Math.max(0.001, userUsdAmount * 1.3) : 0;
+    // USDT economy logic (1 USDT = 1 USD)
+    const pointsToAdd = userUsdAmount > 0 ? userUsdAmount : 0;
     
     // Update User Data with specific revenue source tracking
     const updateData: any = {
@@ -417,8 +417,8 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
       if ((userData?.balance || 0) < usdAmount) return false;
 
       const userRef = doc(db, 'users', currentUser.uid);
-      // 1300 Points per $1.00
-      const pointsToDeduct = usdAmount * 1.3;
+      // 1 USDT per $1.00 USD
+      const pointsToDeduct = usdAmount;
 
       await updateDoc(userRef, {
         balance: increment(-usdAmount),
@@ -473,8 +473,8 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
         
         // Accumulate locally: 0.016 USDT per interval
         const userPts = ACTIVE_POINTS_PER_INTERVAL;
-        const userUsd = userPts / 1.3; // USDT Economy 
-        const platUsd = (0.5 * ACTIVE_POINTS_PER_INTERVAL) / 1.3; // Platform takes 50% extra from air
+        const userUsd = userPts; // USDT Economy (1:1 with USD)
+        const platUsd = 0.5 * ACTIVE_POINTS_PER_INTERVAL; // Platform takes 50% extra from air
 
         pendingUserPointsRef.current += userPts;
         pendingUserValueRef.current += userUsd;

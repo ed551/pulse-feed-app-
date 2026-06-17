@@ -45,7 +45,7 @@ const translations: Record<string, Record<string, string>> = {
     toggle_frame: 'Toggle Frame',
     ads: 'Ads',
     gold_data: 'USDT Data',
-    gold_graph: 'Gold Graph',
+    gold_graph: 'USDT Trend',
     tomorrow: 'Tomorrow',
     watch_ads: 'Watch Ads',
     complete_task: 'Complete Task',

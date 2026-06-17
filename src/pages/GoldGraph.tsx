@@ -37,8 +37,8 @@ import { cn } from '../lib/utils';
 import { marketBrain } from '../lib/marketEngine';
 import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 
-// Mock data generator for 30 days of USDT price movement
-const generateUSDTData = () => {
+// Mock data generator for 30 days of PAXG price movement
+const generatePAXGData = () => {
   const data = [];
   let currentPrice = 2450.45;
   const now = new Date();
@@ -92,11 +92,11 @@ export default function GoldGraph() {
         
         const result = await response.json();
         if (result.success) {
-          const usdt = result.prices.find((p: any) => p.symbol === 'USDTUSDT');
+          const paxg = result.prices.find((p: any) => p.symbol === 'PAXGUSDT');
           const btc = result.prices.find((p: any) => p.symbol === 'BTCUSDT');
           
-          if (usdt && usdt.price && btc && btc.price) {
-            const priceOz = parseFloat(usdt.price);
+          if (paxg && paxg.price && btc && btc.price) {
+            const priceOz = parseFloat(paxg.price);
             const btcVal = parseFloat(btc.price);
             
             setRealPrice(priceOz);
@@ -139,7 +139,7 @@ export default function GoldGraph() {
         }
       } catch (err) {
         console.warn("Market fetch fallback active:", err);
-        // Robust Fallback (USDT ~$2652, BTC ~$67.10k)
+        // Robust Fallback (PAXG ~$2652, BTC ~$67.10k)
         const basePrice = 2652.34; 
         const fallbackBtc = 67100;
         setRealPrice(basePrice);
@@ -280,12 +280,12 @@ export default function GoldGraph() {
     setIsAnalyzing(true);
     try {
       const prompt = `
-        Analyze the USDT Market for Pulse Feeds Reward Ecosystem.
-        Current USDT Price: ${realPrice} USDT.
+        Analyze the PAXG Market for Pulse Feeds Reward Ecosystem.
+        Current PAXG Price: ${realPrice} USDT.
         Current BTC Price: ${btcPrice ? btcPrice : '--'} USDT.
-        USDT/BTC Ratio: ${realPrice && btcPrice ? (realPrice / btcPrice).toFixed(6) : '--'}.
+        PAXG/BTC Ratio: ${realPrice && btcPrice ? (realPrice / btcPrice).toFixed(6) : '--'}.
         
-        Provide high-fidelity technical predictions for BOTH USDT/USDT (in USDT terms) and USDT/BTC (the ratio e.g. 0.07) for 1 day, 7 days, 15 days, and 30 days in STRICT JSON format:
+        Provide high-fidelity technical predictions for BOTH PAXG/USDT (in USDT terms) and PAXG/BTC (the ratio e.g. 0.07) for 1 day, 7 days, 15 days, and 30 days in STRICT JSON format:
         {
           "usdt": {
             "p1d": { "direction": "UP", "confidence": 85, "target": 2405.50, "reasoning": "..." },
@@ -353,10 +353,10 @@ export default function GoldGraph() {
                 <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full uppercase tracking-[0.2em] font-black border border-emerald-500/30">Neural Active</span>
               </h1>
               <div className="flex items-center gap-3 mt-2">
-                <p className="text-slate-400 text-sm font-bold uppercase tracking-widest opacity-60">High-Fidelity USDT Core</p>
+                <p className="text-slate-400 text-sm font-bold uppercase tracking-widest opacity-60">High-Fidelity PAXG Core</p>
                 <div className="w-1 h-1 bg-slate-700 rounded-full" />
                 <div className="px-3 py-1 bg-amber-500/10 rounded-lg text-[10px] font-black text-amber-500 uppercase tracking-widest border border-amber-500/20">
-                  USDT/USDT & USDT/BTC
+                  PAXG/USDT & PAXG/BTC
                 </div>
               </div>
             </div>
@@ -364,7 +364,7 @@ export default function GoldGraph() {
 
           <div className="flex flex-wrap items-center gap-12">
             <div className="text-right">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-1">Spot Index (USDT / USDT)</p>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-1">Spot Index (USDT / PAXG)</p>
               <div className="flex items-baseline gap-3">
                 <span className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
                   {formatCurrency(realPrice)}
@@ -378,7 +378,7 @@ export default function GoldGraph() {
               </div>
             </div>
             <div className="text-right">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-1">Spot Index (BTC / USDT)</p>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-1">Spot Index (BTC / PAXG)</p>
               <div className="flex items-baseline gap-3">
                 <span className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-600">
                   {(realPrice && btcPrice ? (realPrice / btcPrice).toFixed(6) : "0.0352")}
@@ -399,7 +399,7 @@ export default function GoldGraph() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Visual Terminal */}
           <div className="lg:col-span-2 space-y-8">
-            {/* USDT / USDT Chart */}
+            {/* PAXG / USDT Chart */}
             <motion.div 
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -410,7 +410,7 @@ export default function GoldGraph() {
                   <div className="w-10 h-10 bg-yellow-500/10 rounded-2xl flex items-center justify-center">
                     <LineChart className="w-5 h-5 text-yellow-500" />
                   </div>
-                  <h3 className="text-xl font-black text-white tracking-tight uppercase">USDT / USDT Momentum</h3>
+                  <h3 className="text-xl font-black text-white tracking-tight uppercase">PAXG / USDT Momentum</h3>
                 </div>
                 
                 <div className="flex items-center gap-3">
@@ -473,7 +473,7 @@ export default function GoldGraph() {
                       }}
                       itemStyle={{ color: '#fbbf24', fontWeight: 900, fontSize: '14px' }}
                       labelStyle={{ color: '#94a3b8', fontWeight: 700, marginBottom: '8px', fontSize: '10px', textTransform: 'uppercase' }}
-                      formatter={(val: number) => [`$${val.toFixed(2)}`, 'USDT/USDT']}
+                      formatter={(val: number) => [`$${val.toFixed(2)}`, 'PAXG/USDT']}
                     />
                     <Area 
                       type="monotone" 
@@ -489,7 +489,7 @@ export default function GoldGraph() {
               </div>
             </motion.div>
 
-            {/* USDT / BTC Chart */}
+            {/* PAXG / BTC Chart */}
             <motion.div 
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -501,7 +501,7 @@ export default function GoldGraph() {
                   <div className="w-10 h-10 bg-amber-500/10 rounded-2xl flex items-center justify-center">
                     <Activity className="w-5 h-5 text-amber-500" />
                   </div>
-                  <h3 className="text-xl font-black text-white tracking-tight uppercase">USDT / BTC Ratio</h3>
+                  <h3 className="text-xl font-black text-white tracking-tight uppercase">PAXG / BTC Ratio</h3>
                 </div>
 
                 <div className={cn(
@@ -547,7 +547,7 @@ export default function GoldGraph() {
                       }}
                       itemStyle={{ color: '#f59e0b', fontWeight: 900, fontSize: '14px' }}
                       labelStyle={{ color: '#94a3b8', fontWeight: 700, marginBottom: '8px', fontSize: '10px', textTransform: 'uppercase' }}
-                      formatter={(val: number) => [`${val.toFixed(8)} BTC`, 'USDT/BTC']}
+                      formatter={(val: number) => [`${val.toFixed(8)} BTC`, 'PAXG/BTC']}
                     />
                     <Area 
                       type="monotone" 
@@ -584,7 +584,7 @@ export default function GoldGraph() {
                 <div className="space-y-6">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-2 h-2 rounded-full bg-yellow-500" />
-                    <span className="text-xs font-black text-white uppercase tracking-widest">USDT / USDT Projections</span>
+                    <span className="text-xs font-black text-white uppercase tracking-widest">PAXG / USDT Projections</span>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     {[
@@ -627,7 +627,7 @@ export default function GoldGraph() {
                 <div className="space-y-6">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-2 h-2 rounded-full bg-amber-500" />
-                    <span className="text-xs font-black text-white uppercase tracking-widest">USDT / BTC Projections</span>
+                    <span className="text-xs font-black text-white uppercase tracking-widest">PAXG / BTC Projections</span>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     {[
