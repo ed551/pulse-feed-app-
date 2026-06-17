@@ -310,6 +310,7 @@ async function performBinanceRequest(method: 'GET' | 'POST', endpoint: string, c
         if (proxyAgent) {
           axiosConfig.httpsAgent = proxyAgent;
           axiosConfig.httpAgent = proxyAgent;
+          axiosConfig.proxy = false;
         }
         
         // Final sanity check for POST Content-Type

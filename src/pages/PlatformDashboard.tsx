@@ -487,7 +487,7 @@ export default function PlatformDashboard() {
         setBinancePrices(data.prices);
       }
     } catch (e) {
-      console.error("Failed to fetch Binance prices:", e);
+      console.warn("Failed to fetch Binance prices:", e);
     } finally {
       setIsFetchingPrices(false);
     }
