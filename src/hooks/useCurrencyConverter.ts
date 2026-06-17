@@ -24,11 +24,11 @@ export const useCurrencyConverter = () => {
     if (savedCurrency) {
       setCurrency(savedCurrency);
     } else {
-      // Default to PAXG for this app
+      // Default to USDT for this app
       setCurrency('GOLD');
     }
     
-    // Fetch exchange rates and crypto prices (PAXG for Gold)
+    // Fetch exchange rates and crypto prices (USDT for Gold)
     const fetchData = async () => {
       try {
         const response = await apiFetch('/api/vault/prices');
@@ -36,11 +36,11 @@ export const useCurrencyConverter = () => {
           const data = await response.json();
           const prices = data.prices || [];
           
-          const paxgTicker = prices.find((p: any) => p.symbol === 'PAXGUSDT');
+          const usdtTicker = prices.find((p: any) => p.symbol === 'USDTUSDT');
           const btcTicker = prices.find((p: any) => p.symbol === 'BTCUSDT');
           
-          if (paxgTicker && paxgTicker.price) {
-            const price = parseFloat(paxgTicker.price);
+          if (usdtTicker && usdtTicker.price) {
+            const price = parseFloat(usdtTicker.price);
             if (!isNaN(price) && price > 0) {
               setGoldPriceUSD(price);
               const gPerUSD = 31.1035 / price;
@@ -78,7 +78,7 @@ export const useCurrencyConverter = () => {
   };
 
   const convert = (amount: number, fromCurrency: string = 'USD'): string => {
-    if (isNaN(amount)) return '0.00 PAXG';
+    if (isNaN(amount)) return '0.00 USDT';
 
     // Convert input to USD base first
     const rateFrom = rates[fromCurrency] || 1;
@@ -87,8 +87,8 @@ export const useCurrencyConverter = () => {
     if (currency === 'GOLD' || currency === 'BTC_GOLD') {
       const gRate = rates['GOLD'] || (31.1035 / 2375.40);
       const grams = amountInUSD * gRate;
-      const paxg = grams / 31.1035;
-      return `${paxg.toFixed(6)} PAXG`;
+      const usdt = grams / 31.1035;
+      return `${usdt.toFixed(6)} USDT`;
     }
 
     if (currency === 'BTC') {
@@ -113,9 +113,9 @@ export const useCurrencyConverter = () => {
 
   const formatReward = (points: number): string => {
     // 1 point = 1 gram of Gold internally
-    // 1 PAXG = 1 Troy Ounce = 31.1035 grams
-    const paxg = points / 31.1035;
-    return `${paxg.toFixed(6)} PAXG`;
+    // 1 USDT = 1 Troy Ounce = 31.1035 grams
+    const usdt = points / 31.1035;
+    return `${usdt.toFixed(6)} USDT`;
   };
 
   const formatCurrency = (amountInUSD: number): string => {

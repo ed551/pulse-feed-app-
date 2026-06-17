@@ -1,35 +1,35 @@
-/**
- * API utility to handle base URLs for different deployment environments.
- * When running on Surge (static only), VITE_API_BASE_URL should point to the Render backend.
- */
-export const getApiUrl = (path: string): string => {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-  
-  if (baseUrl) {
-    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
-    const cleanBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-    const finalUrl = `${cleanBase}${cleanPath}`;
-    console.log(`[API Proxy] Routing ${path} -> ${finalUrl}`);
-    return finalUrl;
+// Production API configuration for Pulse Feeds
+const BASE_URL = 'https://pulse-feeds-server.onrender.com';
+
+export const api = {
+  // Check user balance
+  async getBalance() {
+    try {
+      const response = await fetch(`${BASE_URL}/api/proxy/balance`);
+      if (!response.ok) throw new Error('Network response was not ok');
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching balance:', error);
+      throw error;
+    }
+  },
+
+  // Process tokenized gold reward withdrawal
+  async withdraw(data: any) {
+    try {
+      const response = await fetch(`${BASE_URL}/api/proxy/withdraw`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error('Withdrawal request failed');
+      return await response.json();
+    } catch (error) {
+      console.error('Error processing withdrawal:', error);
+      throw error;
+    }
   }
-  
-  // Diagnostic for Surge/Production deployments without backend URL
-  // We automatically route to the Render backend when deployed to Surge or a static environment to prevent 404s.
-  if (!window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')) {
-    const fallbackBaseUrl = 'https://pulse-feeds-server.onrender.com';
-    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
-    const finalUrl = `${fallbackBaseUrl}/${cleanPath}`;
-    console.log(`[API Proxy Fallback] Routing ${path} -> ${finalUrl}`);
-    return finalUrl;
-  }
-  
-  return path;
 };
 
-/**
- * Universal fetch wrapper that automatically applies the API base URL.
- */
-export const apiFetch = async (path: string, options?: RequestInit): Promise<Response> => {
-  const url = getApiUrl(path);
-  return fetch(url, options);
-};

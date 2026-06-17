@@ -99,7 +99,7 @@ export default function BinanceHub() {
 
   const btcPrice = prices.find(p => p.symbol === 'BTCUSDT')?.price;
   const ethPrice = prices.find(p => p.symbol === 'ETHUSDT')?.price;
-  const paxgPrice = prices.find(p => p.symbol === 'PAXGUSDT')?.price;
+  const usdtPrice = prices.find(p => p.symbol === 'USDTUSDT')?.price;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 pb-24">
@@ -246,13 +246,13 @@ export default function BinanceHub() {
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center text-amber-500 font-black">G</div>
                   <div>
-                    <p className="font-black text-sm text-gray-900 dark:text-white">PAXG</p>
+                    <p className="font-black text-sm text-gray-900 dark:text-white">USDT</p>
                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Binance Ticker</p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="font-black text-amber-600 dark:text-amber-400">
-                    {paxgPrice && btcPrice ? (parseFloat(paxgPrice) / parseFloat(btcPrice)).toFixed(8) : "0.00000000"}
+                    {usdtPrice && btcPrice ? (parseFloat(usdtPrice) / parseFloat(btcPrice)).toFixed(8) : "0.00000000"}
                   </p>
                   <div className="flex flex-col items-end">
                     <p className="text-[10px] text-gray-400 font-medium italic opacity-60">
@@ -293,7 +293,7 @@ export default function BinanceHub() {
                         {calculateTotalBalance(account.balances, prices, formatCurrency)}
                       </span>
                     </div>
-                    <p className="text-[10px] font-bold text-slate-500">Locked Assets: 0.00 PAXG</p>
+                    <p className="text-[10px] font-bold text-slate-500">Locked Assets: 0.00 USDT</p>
                   </div>
 
                   <div className="space-y-3">
@@ -302,7 +302,7 @@ export default function BinanceHub() {
                       {account.balances
                         .filter((b: any) => parseFloat(b.free) > 0 || parseFloat(b.locked) > 0)
                         .map((b: any) => {
-                          const isPAXG = b.asset === 'PAXG';
+                          const isUSDT = b.asset === 'USDT';
                           const amount = parseFloat(b.free) + parseFloat(b.locked);
   const grams = amount * 31.1035;
   const points = Math.floor(grams * 1000); // g to mg
@@ -310,10 +310,10 @@ export default function BinanceHub() {
   return (
     <div key={b.asset} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-transparent hover:border-gray-200 dark:hover:border-slate-700 transition-colors">
       <div className="flex items-center gap-2">
-        <span className={cn("font-black text-xs", isPAXG ? "text-yellow-600 dark:text-yellow-400" : "text-gray-900 dark:text-white")}>
+        <span className={cn("font-black text-xs", isUSDT ? "text-yellow-600 dark:text-yellow-400" : "text-gray-900 dark:text-white")}>
           {b.asset}
         </span>
-        {isPAXG && (
+        {isUSDT && (
           <span className="text-[8px] bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 px-1.5 py-0.5 rounded-full font-black">PHYSICAL</span>
         )}
       </div>
@@ -323,7 +323,7 @@ export default function BinanceHub() {
           <span className="ml-1 text-[9px] opacity-60 font-medium">{b.asset}</span>
         </p>
         <p className="text-[10px] font-black text-emerald-600">
-           {isPAXG ? `${amount.toFixed(6)} PAXG` : formatCurrency(amount)}
+           {isUSDT ? `${amount.toFixed(6)} USDT` : formatCurrency(amount)}
         </p>
       </div>
     </div>
@@ -350,7 +350,7 @@ export default function BinanceHub() {
           </motion.div>
         </div>
 
-        {/* PAXG Reserve Coverage Analysis */}
+        {/* USDT Reserve Coverage Analysis */}
         {account && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -361,16 +361,16 @@ export default function BinanceHub() {
               <div className="flex-1 space-y-4">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-5 h-5 text-emerald-600" />
-                  <h2 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tighter">PAXG Reserve Coverage</h2>
+                  <h2 className="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tighter">USDT Reserve Coverage</h2>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 font-medium leading-relaxed">
-                  The platform uses PAX Gold (PAXG) to back all community rewards. 1 PAXG is verifiable 1:1 with a LBMA-approved gold bar in London vaults.
+                  The platform uses PAX Gold (USDT) to back all community rewards. 1 USDT is verifiable 1:1 with a LBMA-approved gold bar in London vaults.
                 </p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 bg-white/50 dark:bg-slate-900/50 rounded-2xl border border-white dark:border-slate-800">
-                    <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Total PAXG Held</p>
+                    <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Total USDT Held</p>
                     <p className="text-2xl font-black text-gray-900 dark:text-white">
-                      {(parseFloat(account.balances.find((b: any) => b.asset === 'PAXG')?.free || '0')).toFixed(6)} PAXG
+                      {(parseFloat(account.balances.find((b: any) => b.asset === 'USDT')?.free || '0')).toFixed(6)} USDT
                     </p>
                   </div>
                   <div className="p-4 bg-white/50 dark:bg-slate-900/50 rounded-2xl border border-white dark:border-slate-800">
@@ -382,10 +382,10 @@ export default function BinanceHub() {
               
               <div className="w-full md:w-auto flex flex-col items-center justify-center p-8 bg-white dark:bg-slate-900 rounded-[2rem] border border-emerald-100 dark:border-slate-800 shadow-inner">
                 <div className="text-center mb-4">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Current PAXG Value</p>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Current USDT Value</p>
                   <p className="text-4xl font-black text-gray-900 dark:text-whitetracking-tighter">
-                    {formatCurrency(parseFloat(paxgPrice || '0'))}
-                    <span className="text-sm font-bold text-gray-400 ml-1">/PAXG</span>
+                    {formatCurrency(parseFloat(usdtPrice || '0'))}
+                    <span className="text-sm font-bold text-gray-400 ml-1">/USDT</span>
                   </p>
                 </div>
                 <div className="h-2 w-48 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden mb-4">
@@ -454,7 +454,7 @@ function calculateTotalBalance(balances: any[], tickers: BinancePrice[], formatC
     // Fallbacks for common assets if ticker missing or pair is different
     if (b.asset === 'BTC') return sum + (val * 65000);
     if (b.asset === 'ETH') return sum + (val * 3500);
-    if (b.asset === 'PAXG') return sum + (val * 2400); // 1 PAXG = 1 Troy Ounce Gold
+    if (b.asset === 'USDT') return sum + (val * 2400); // 1 USDT = 1 Troy Ounce Gold
     
     return sum;
   }, 0);

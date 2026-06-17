@@ -140,7 +140,7 @@ export default function EducationHub() {
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // 80/20 Revenue Split for Course Enrollment & AI Training
-      // Total Enrollment Fee/Value: 0.001 PAXG (~2.6 USD)
+      // Total Enrollment Fee/Value: 0.001 USDT (~2.6 USD)
       const totalEnrollmentValue = 0.001;
       const userShare = totalEnrollmentValue * 0.2; // 20% to user
       const developerShare = totalEnrollmentValue * 0.8; // 80% to developer (as Platform Revenue)
@@ -152,7 +152,7 @@ export default function EducationHub() {
         experience: increment(250)
       });
 
-      // Log Developer/Platform Share (Convert PAXG to local currency estimation)
+      // Log Developer/Platform Share (Convert USDT to local currency estimation)
       await addPlatformRevenue(developerShare * 2600, `Course Enrollment Fee: ${course.title} (Developer 80% Share)`);
 
       showNotification("Education Milestone", { 
@@ -262,7 +262,7 @@ export default function EducationHub() {
       }
 
       // Distribute rewards for learning
-      const rewardPoints = 0.00001; // ~0.026 USD in PAXG
+      const rewardPoints = 0.00001; // ~0.026 USD in USDT
       const { userShare } = revenue_distribution_engine(rewardPoints, 'education');
 
       await updateDoc(doc(db, 'users', currentUser.uid), {

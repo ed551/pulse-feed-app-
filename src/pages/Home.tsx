@@ -56,7 +56,7 @@ export default function Home() {
   const [activeMenuPostId, setActiveMenuPostId] = useState<string | null>(null);
   const [activeReactionPostId, setActiveReactionPostId] = useState<string | null>(null);
   const reactionTimeoutRef = useRef<any>(null);
-  const [paxgBtcRate, setPaxgBtcRate] = useState<number | null>(null);
+  const [usdtBtcRate, setUsdtBtcRate] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchPrices = async () => {
@@ -68,9 +68,9 @@ export default function Home() {
         }
         const data = await resp.json();
         if (data.success) {
-          const p = data.prices.find((p: any) => p.symbol === 'PAXGUSDT')?.price;
+          const p = data.prices.find((p: any) => p.symbol === 'USDTUSDT')?.price;
           const b = data.prices.find((p: any) => p.symbol === 'BTCUSDT')?.price;
-          if (p && b) setPaxgBtcRate(parseFloat(p) / parseFloat(b));
+          if (p && b) setUsdtBtcRate(parseFloat(p) / parseFloat(b));
         }
       } catch (e) {}
     };
@@ -142,7 +142,7 @@ export default function Home() {
       type: 'sponsored',
       company: 'CloudScale',
       title: 'Scale your business with ease',
-      description: 'Enterprise-grade cloud infrastructure for startups. Get 0.0625 PAXG in credits when you sign up today.',
+      description: 'Enterprise-grade cloud infrastructure for startups. Get 0.0625 USDT in credits when you sign up today.',
       imageUrl: 'https://picsum.photos/seed/cloud/800/400',
       cta: 'Get Credits',
       link: 'https://google.com'
@@ -152,7 +152,7 @@ export default function Home() {
       type: 'sponsored',
       company: 'Pulse Rewards',
       title: 'Earn more with Pulse Feeds',
-      description: 'Did you know you can earn up to 0.000625 PAXG/month by just engaging with the community? Check your rewards dashboard.',
+      description: 'Did you know you can earn up to 0.000625 USDT/month by just engaging with the community? Check your rewards dashboard.',
       imageUrl: 'https://picsum.photos/seed/rewards/800/400',
       cta: 'Check Rewards',
       link: '/rewards'
@@ -469,7 +469,7 @@ export default function Home() {
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-4 animate-in fade-in slide-in-from-left duration-500">
                <div className="flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-widest text-indigo-100 border border-white/5">
                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400"></span>
-                 PAXG/BTC: {paxgBtcRate ? paxgBtcRate.toFixed(6) : '0.0384'}
+                 USDT/BTC: {usdtBtcRate ? usdtBtcRate.toFixed(6) : '0.0384'}
                </div>
                <div className="flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-widest text-indigo-100 border border-white/5">
                  <span className="w-1.5 h-1.5 rounded-full bg-orange-400"></span>

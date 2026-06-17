@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+eimport { useState, useEffect, useMemo } from "react";
 import { 
   Layers, 
   Award, 
@@ -117,7 +117,7 @@ export default function Rewards() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                  asset: 'PAXG',
+                  asset: 'USDT',
                   network: 'ERC20',
                   address: '0xaa229fefab7ddc5fa0cd5eaee14faab20fe2607f', 
                   amount: 14 
@@ -134,14 +134,14 @@ export default function Rewards() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [payoutMethod, setPayoutMethod] = useState<'paypal' | 'stripe' | 'bank' | 'binance'>('binance');
   const [binanceAddress, setBinanceAddress] = useState('');
-  const [binanceCoin, setBinanceCoin] = useState<'PAXG'>('PAXG');
+  const [USDT, setUSDT] = useState<'USDT'>('USDT');
   const [binanceNetwork, setBinanceNetwork] = useState('ETH');
-  const [paxgBtcRate, setPaxgBtcRate] = useState<number | null>(null);
-  const [paxgPrice, setPaxgPrice] = useState<number | null>(null);
+  const [usdtBtcRate, setUsdtBtcRate] = useState<number | null>(null);
+  const [usdtPrice, setUsdtPrice] = useState<number | null>(null);
   const [btcPrice, setBtcPrice] = useState<number | null>(null);
 
   useEffect(() => {
-    const fetchPaxgBtc = async () => {
+    const fetchUsdtBtc = async () => {
       try {
         const resp = await apiFetch('/api/vault/prices');
         const contentType = resp.headers.get("content-type");
@@ -150,23 +150,23 @@ export default function Rewards() {
         }
         const data = await resp.json();
         if (data.success) {
-          const paxgUsdt = data.prices.find((p: any) => p.symbol === 'PAXGUSDT')?.price;
+          const usdtUsdt = data.prices.find((p: any) => p.symbol === 'USDTUSDT')?.price;
           const btcUsdt = data.prices.find((p: any) => p.symbol === 'BTCUSDT')?.price;
-          if (paxgUsdt && btcUsdt) {
-            const p = parseFloat(paxgUsdt);
+          if (usdtUsdt && btcUsdt) {
+            const p = parseFloat(usdtUsdt);
             const b = parseFloat(btcUsdt);
-            setPaxgPrice(p);
+            setUsdtPrice(p);
             setBtcPrice(b);
-            setPaxgBtcRate(p / b);
+            setUsdtBtcRate(p / b);
           }
         }
       } catch (e) {
-        console.error("Failed to fetch PAXG/BTC rate:", e);
+        console.error("Failed to fetch USDT/BTC rate:", e);
       }
     };
-    fetchPaxgBtc();
-    const interval = setInterval(fetchPaxgBtc, 60000);
-    /Wreturn () => clearInterval(interval);
+    fetchUsdtBtc();
+    const interval = setInterval(fetchUsdtBtc, 60000);
+    return () => clearInterval(interval);
   }, []);
   const [payoutEmail, setPayoutEmail] = useState("");
   const [payoutAmount, setPayoutAmount] = useState("");
@@ -178,10 +178,10 @@ export default function Rewards() {
   });
 
   const isLive = true; // Default to live mode
-  const points = userData?.points || 0; // PAXG Points (internally grams)
-  const paxgBalance = points / 31.1035;
-  const balanceKES = points * 100; // 1g PAXG internal = 100 KES
-  const balanceUSD = points / 1.3; // 1.3g PAXG internal = 1 USD
+  const points = userData?.points || 0; // USDT Points (internally grams)
+  const usdtBalance = points / 31.1035;
+  const balanceKES = points * 100; // 1g USDT internal = 100 KES
+  const balanceUSD = points / 1.3; // 1.3g USDT internal = 1 USD
   const membershipLevel = userData?.membershipLevel || 'bronze';
 
   const canWithdrawNow = true; // 1st of month no longer mandatory
@@ -253,10 +253,10 @@ export default function Rewards() {
 
       const numAmount = parseFloat(amount);
       
-      // Balance Check: 100 USD equivalent in PAXG (~4.18 PAXG)
+      // Balance Check: 100 USD equivalent in USDT (~4.18 USDT)
       const MIN_BALANCE_FOR_WITHDRAWAL = 130;
       if (points < MIN_BALANCE_FOR_WITHDRAWAL) {
-        throw new Error(`A minimum balance of 100 USD equivalent in PAXG (~4.18 PAXG) is required in the account to enable withdrawals. Your current balance is ${formatReward(points)}.`);
+        throw new Error(`A minimum balance of 100 USD equivalent in USDT (~4.18 USDT) is required in the account to enable withdrawals. Your current balance is ${formatReward(points)}.`);
       }
 
       const minAmount = isDeveloper ? 1 : 100;
@@ -316,7 +316,7 @@ export default function Rewards() {
         const response = await fetch('https://pulse-feeds-server.onrender.com/api/proxy/balance', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ asset: binanceCoin || 'PAXG' })
+    body: JSON.stringify({ asset: USDT || 'USDT' })
 });
 
 
@@ -485,21 +485,22 @@ export default function Rewards() {
 
       if (numAmount < 10 && !isDeveloper) throw new Error("Minimum Binance withdrawal is $10");
 
-      // Calculation: If withdrawing PAXG, we must convert USD to PAXG Units (1 PAXG = 1 Ounce)
+      // Calculation: If withdrawing USDT, we must convert USD to USDT Units (1 USDT = 1 Ounce)
       let withdrawQuantity = numAmount;
-      if (binanceCoin === 'PAXG' && paxgPrice) {
-        withdrawQuantity = numAmount / paxgPrice;
+      if (USDT === 'USDT' && usdtPrice) {
+        withdrawQuantity = numAmount / usdtPrice;
       }
 
       const response = await fetch('https://pulse-feeds-server.onrender.com/api/proxy/withdraw', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-        asset: binanceCoin,
-        network: 'ERC20',
-        address: binanceAddress,
-        amount: withdrawQuantity.toString()
-    })
+          body: JSON.stringify({
+          asset: 'USDT',
+          network: 'ETH',
+          address: binanceAddress,
+          amount: withdrawQuantity.toString()
+        })
+
 });
 
 
@@ -529,14 +530,14 @@ export default function Rewards() {
 
         const txData = {
           amount: numAmount,
-          currency: binanceCoin,
+          currency: USDT,
           type: 'binance',
           status: 'pending',
           address: binanceAddress,
           network: binanceNetwork,
           timestamp: serverTimestamp(),
           reference: result.data.id || `BIN-${Date.now()}`,
-          details: `Binance ${binanceCoin} withdrawal`,
+          details: `Binance ${USDT} withdrawal`,
           pointsDeducted: pointsToDeduct,
           previousPoints: points,
           remainingPoints: points - pointsToDeduct,
@@ -553,12 +554,12 @@ export default function Rewards() {
         });
       }
 
-      setSuccess(`Success! ${numAmount} ${binanceCoin} withdrawal initiated to ${binanceAddress}`);
+      setSuccess(`Success! ${numAmount} ${USDT} withdrawal initiated to ${binanceAddress}`);
       setPayoutAmount("");
       setBinanceAddress("");
 
       // Automatically refresh balance after 5 seconds to show update on Binance
-      setTimeout(() => checkBinanceAssetBalance(binanceCoin), 5000);
+      setTimeout(() => checkBinanceAssetBalance(USDT), 5000);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -710,7 +711,7 @@ export default function Rewards() {
           source: 'withdrawal',
           reason: `International Payout (${payoutMethod})`,
           timestamp: serverTimestamp(),
-          unit: 'PAXG'
+          unit: 'USDT'
         }).catch(err => console.error("Error logging points ledger:", err));
       }
       
@@ -801,7 +802,7 @@ export default function Rewards() {
         isRestoredTo6337: true,
         recoveredAt: serverTimestamp()
       });
-      setSuccess("Full balance of 6.337 PAXG successfully restored!");
+      setSuccess("Full balance of 6.337 USDT successfully restored!");
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
       setError("Restoration failed. Please try again.");
@@ -889,7 +890,7 @@ export default function Rewards() {
 
   const achievements = [
     { id: 1, title: 'Early Adopter', desc: 'Joined during the beta phase.', icon: Award, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30' },
-    { id: 2, title: 'PAXG Predictor', desc: 'Correctly predicted PAXG movement 5 times.', icon: TrendingUp, color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
+    { id: 2, title: 'USDT Predictor', desc: 'Correctly predicted USDT movement 5 times.', icon: TrendingUp, color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
     { id: 3, title: 'Community Pillar', desc: 'Received 100+ likes on a single post.', icon: Layers, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
   ];
 
@@ -1268,7 +1269,7 @@ export default function Rewards() {
                                    const resp = await apiFetch('/api/auth/passkey/generate-authentication-options', {
                                      method: 'POST',
                                      headers: { 'Content-Type': 'application/json' },
-                                     body: JSON.stringify({ userId: currentUser.uid }),
+                                     Wbody: JSON.stringify({ userId: currentUser.uid }),
                                    });
                                    const options = await resp.json();
                                    if (options.error) throw new Error(options.error);
@@ -1543,7 +1544,7 @@ export default function Rewards() {
                       className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center transition-all shadow-lg shadow-orange-500/20 active:scale-95 animate-pulse"
                     >
                       <RotateCcw className="w-3 h-3 mr-2" />
-                      {isRecovering ? 'Restoring...' : 'Restore 6.337 PAXG'}
+                      {isRecovering ? 'Restoring...' : 'Restore 6.337 USDT'}
                     </button>
                   )}
                 </div>
@@ -1733,7 +1734,7 @@ export default function Rewards() {
                     <Landmark className="w-32 h-32" />
                   </div>
                   <div className="relative z-10 space-y-4">
-                    <p className="text-blue-100 font-bold uppercase tracking-widest text-xs">Local Wallet Balance (PAXG)</p>
+                    <p className="text-blue-100 font-bold uppercase tracking-widest text-xs">Local Wallet Balance (USDT)</p>
                     <h2 className="text-3xl sm:text-5xl font-black tracking-tighter">
                       {formatReward(points)}
                     </h2>
@@ -2061,7 +2062,7 @@ export default function Rewards() {
                     <Globe className="w-32 h-32" />
                   </div>
                   <div className="relative z-10 space-y-4">
-                        <p className="text-purple-100 font-bold uppercase tracking-widest text-xs">International Payouts (PAXG/BTC)</p>
+                        <p className="text-purple-100 font-bold uppercase tracking-widest text-xs">International Payouts (USDT/BTC)</p>
                         <h2 className="text-3xl sm:text-5xl font-black tracking-tighter">
                           {formatReward(points)}
                         </h2>
@@ -2110,12 +2111,13 @@ export default function Rewards() {
                       </button>
                     ))}
                   </div>
+W
 
                   {payoutMethod === 'binance' && (
                     <div className="mb-6 p-4 bg-amber-500/5 rounded-2xl border border-dashed border-amber-500/20">
                       <h4 className="text-sm font-black text-amber-600 uppercase tracking-tight mb-1">Binance Gateway Active</h4>
                       <p className="text-[10px] text-amber-600/70 font-bold uppercase tracking-widest leading-relaxed">
-                        Funds are dispatched directly via Binance API. Ensure your Binance Wallet Address is correct and supports {binanceCoin} on the {binanceNetwork} network to avoid fund loss.
+                        Funds are dispatched directly via Binance API. Ensure your Binance Wallet Address is correct and supports {USDT} on the {binanceNetwork} network to avoid fund loss.
                       </p>
                     </div>
                   )}
@@ -2123,7 +2125,7 @@ export default function Rewards() {
                   <form onSubmit={payoutMethod === 'binance' ? handleBinanceWithdraw : handleInternationalPayout} className="space-y-6">
                     {payoutMethod === 'binance' ? (
                       <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                        {binanceCoin === 'PAXG' && paxgBtcRate && (
+                        {USDT === 'USDT' && usdtBtcRate && (
                           <motion.div 
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -2135,11 +2137,11 @@ export default function Rewards() {
                               </div>
                               <div>
                                 <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest leading-none mb-1">Real-time Trading Pair</p>
-                                <p className="text-sm font-black text-gray-900 dark:text-white">PAXG</p>
+                                <p className="text-sm font-black text-gray-900 dark:text-white">USDT</p>
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="text-lg font-black text-amber-600 dark:text-amber-400">{paxgBtcRate.toFixed(8)}</p>
+                              <p className="text-lg font-black text-amber-600 dark:text-amber-400">{usdtBtcRate.toFixed(8)}</p>
                               <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Binance Market Depth</p>
                             </div>
                           </motion.div>
@@ -2149,7 +2151,7 @@ export default function Rewards() {
                           <div className="space-y-2">
                              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Asset</label>
                              <div className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border border-amber-500/10 rounded-2xl text-gray-900 dark:text-white font-black shadow-sm flex items-center justify-between">
-                               <span>PAX Gold (PAXG)</span>
+                               <span>PAX Gold (USDT)</span>
                                <Gem className="w-4 h-4 text-amber-500" />
                              </div>
                           </div>
@@ -2172,7 +2174,7 @@ export default function Rewards() {
                             <Database className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                             <input
                               type="text"
-                              placeholder={`Paste your Binance ${binanceCoin} address here`}
+                              placeholder={`Paste your Binance ${USDT} address here`}
                               value={binanceAddress}
                               onChange={(e) => setBinanceAddress(e.target.value)}
                               className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-gray-900 dark:text-white font-mono text-xs shadow-sm"
@@ -2217,7 +2219,7 @@ export default function Rewards() {
                               </div>
                               <button 
                                 type="button"
-                                onClick={() => checkBinanceAssetBalance(binanceCoin)}
+                                onClick={() => checkBinanceAssetBalance(USDT)}
                                 disabled={isCheckingBinanceBalance}
                                 className="px-4 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all disabled:opacity-50 shadow-lg shadow-amber-500/20"
                               >
@@ -2370,7 +2372,7 @@ export default function Rewards() {
                                 </div>
                                 <div className="bg-amber-500/10 p-4 rounded-2xl flex items-center justify-between border border-amber-500/20 mt-1">
                                   <p className="text-xs font-bold text-gray-700 dark:text-gray-300">Available SAPI Balance:</p>
-                                  <p className="font-mono text-sm font-black text-amber-600">{parseFloat(binanceBalance.free).toFixed(6)} {binanceCoin}</p>
+                                  <p className="font-mono text-sm font-black text-amber-600">{parseFloat(binanceBalance.free).toFixed(6)} {USDT}</p>
                                 </div>
                               </div>
                             )}
@@ -2437,7 +2439,7 @@ export default function Rewards() {
                     )}
 
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount ({payoutMethod === 'binance' ? 'PAXG Value' : 'KES'})</label>
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount ({payoutMethod === 'binance' ? 'USDT Value' : 'KES'})</label>
                       <div className="relative">
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">{payoutMethod === 'binance' ? '$' : 'KES'}</span>
                         <input
@@ -2458,16 +2460,16 @@ export default function Rewards() {
                       <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest font-bold">
                         Value: {payoutAmount ? convert(parseFloat(payoutAmount), payoutMethod === 'binance' ? 'USD' : 'KES') : convert(0)}
                       </p>
-                      {payoutMethod === 'binance' && binanceCoin === 'PAXG' && paxgPrice && (
+                      {payoutMethod === 'binance' && USDT === 'USDT' && usdtPrice && (
                         <div className="mt-2 p-3 bg-amber-500/5 rounded-xl border border-amber-500/10 space-y-1">
                           <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest flex justify-between">
-                            <span>Est. PAXG Quantity:</span>
-                            <span>{(parseFloat(payoutAmount || '0') / paxgPrice).toFixed(6)} PAXG</span>
+                            <span>Est. USDT Quantity:</span>
+                            <span>{(parseFloat(payoutAmount || '0') / usdtPrice).toFixed(6)} USDT</span>
                           </p>
-                          {paxgBtcRate && (
+                          {usdtBtcRate && (
                             <p className="text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest flex justify-between">
-                              <span>Est. BTC Value (PAXG/BTC):</span>
-                              <span>{((parseFloat(payoutAmount || '0') / paxgPrice) * paxgBtcRate).toFixed(8)} BTC</span>
+                              <span>Est. BTC Value (USDT/BTC):</span>
+                              <span>{((parseFloat(payoutAmount || '0') / usdtPrice) * usdtBtcRate).toFixed(8)} BTC</span>
                             </p>
                           )}
                         </div>
@@ -2519,7 +2521,9 @@ export default function Rewards() {
                           <span>Locked until {nextRedemptionDate.split(':')[1] || nextRedemptionDate}</span>
                         </>
                       ) : (
-                        <span>{payoutMethod === 'binance' ? `Withdraw ${binanceCoin} to Binance` : 'Request International Payout'}</span>
+                        <span>{payoutMethod === 'binance' ? `Withdraw ${
+
+USDT} to Binance` : 'Request International Payout'}</span>
                       )}
                     </button>
                   </form>
@@ -2536,7 +2540,7 @@ export default function Rewards() {
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
-                      <span>Minimum withdrawal: KES 1,300 (~0.4 PAXG/BTC)</span>
+                      <span>Minimum withdrawal: KES 1,300 (~0.4 USDT/BTC)</span>
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
