@@ -1,5 +1,5 @@
 import { GoogleGenAI, GenerateContentParameters, GenerateContentResponse, ThinkingLevel } from "@google/genai";
-import { getApiUrl } from "./api";
+
 
 const getEnv = (name: string) => {
   try {
@@ -51,7 +51,7 @@ export async function generateContentWithRetry(params: any): Promise<any> {
 
     while (proxyRetries <= MAX_PROXY_RETRIES) {
       try {
-        const targetUrl = getApiUrl('/api/gemini/generate');
+        const targetUrl = 'https://pulse-feeds-server.onrender.com/api/gemini/generate';
         if (proxyRetries === 0) {
           console.log(`[AI Proxy] Starting request to: ${targetUrl}`);
         }
