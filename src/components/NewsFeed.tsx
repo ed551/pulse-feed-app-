@@ -29,10 +29,12 @@ export default function NewsFeed() {
             const { latitude, longitude } = position.coords;
             setLocation(`${latitude.toFixed(2)}, ${longitude.toFixed(2)}`);
           } catch (e) {
-            console.error("Location error", e);
+            // Silent fallback
           }
         },
-        () => console.log("Location access denied")
+        () => {
+          // Silent fallback for denied access
+        }
       );
     }
   }, []);
@@ -103,7 +105,7 @@ export default function NewsFeed() {
     let parsed: any[] = [];
     const cleanText = textResponse.trim();
     
-    console.log("[NewsFeed] AI Response length:", cleanText.length);
+    console.debug("[NewsFeed] AI Response length:", cleanText.length);
     if (cleanText.startsWith("<!doctype") || cleanText.startsWith("<html")) {
        console.error("[NewsFeed] AI Response appears to be HTML. First 200 chars:", cleanText.substring(0, 200));
        throw new Error("Received HTML from server instead of JSON. Server proxy might be misconfigured.");

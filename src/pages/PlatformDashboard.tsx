@@ -119,6 +119,58 @@ export default function PlatformDashboard() {
   const [aiBreakerStatus, setAiBreakerStatus] = useState<{ isTripped: boolean, error?: string, cooldownRemaining?: number } | null>(null);
   const [isResettingAI, setIsResettingAI] = useState(false);
   
+  // Infrastructure Diagnostics (Oracle Cloud Status)
+  const [diagnostics, setDiagnostics] = useState<{
+    keyFound: boolean;
+    keyName: string;
+    keyLength: number;
+    isMockKey: boolean;
+    hasBackslashKey: boolean;
+    secretFound: boolean;
+    secretName: string;
+    secretLength: number;
+    isMockSecret: boolean;
+    hasBackslashSecret: boolean;
+    proxyFound?: boolean;
+    proxyName?: string;
+    proxyLength?: number;
+    proxyValue?: string;
+    proxyExhaustedDetected?: boolean;
+    proxyErrorReason?: string;
+    isRestrictedIp?: boolean;
+    isNativeOracleCloud?: boolean;
+    restrictionDetails?: string;
+    serverInfo?: {
+      uptime: number;
+      deployedAt: string;
+      platform: string;
+      memory: { free: number; total: number };
+      nodeVersion: string;
+    };
+  } | null>(null);
+  const [isCheckingDiagnostics, setIsCheckingDiagnostics] = useState(false);
+
+  const runKeyDiagnostics = async () => {
+    setIsCheckingDiagnostics(true);
+    try {
+      const response = await apiFetch(`/api/vault/diagnose`);
+      const data = await response.json();
+      if (data.success && data.diagnostics) {
+        setDiagnostics(data.diagnostics);
+      }
+    } catch (err: any) {
+      console.error("Infrastructure Diagnostics Failed:", err);
+    } finally {
+      setIsCheckingDiagnostics(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'infrastructure' && !isCheckingDiagnostics) {
+      runKeyDiagnostics();
+    }
+  }, [activeTab]);
+  
   // Automated Operational Growth Engine
   useEffect(() => {
     if (activeTab === 'withdrawals' && currentUser?.email === 'edwinmuoha@gmail.com') {
@@ -3229,6 +3281,104 @@ export default function PlatformDashboard() {
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* Oracle Cloud Status Section */}
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-[3rem] shadow-xl border border-gray-100 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-3">
+                <Cpu className="w-8 h-8 text-indigo-600" />
+                Oracle Cloud Engine Status
+              </h3>
+              <button 
+                onClick={runKeyDiagnostics}
+                className="p-3 bg-gray-50 dark:bg-gray-900 rounded-2xl hover:bg-gray-100 transition-all text-gray-500"
+                title="Refresh hardware diagnostics"
+              >
+                <RefreshCw className={cn("w-5 h-5", isCheckingDiagnostics && "animate-spin")} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-3xl border border-gray-100 dark:border-gray-800">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Server Platform</p>
+                <p className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
+                  {diagnostics?.serverInfo?.platform || "Detecting..."}
+                  {diagnostics?.serverInfo?.platform === 'linux' && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full uppercase">Oracle Cloud</span>}
+                </p>
+              </div>
+              <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-3xl border border-gray-100 dark:border-gray-800">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total System Uptime</p>
+                <p className="text-xl font-black text-gray-900 dark:text-white">
+                  {diagnostics?.serverInfo ? `${(diagnostics.serverInfo.uptime / 3600).toFixed(1)} hrs` : "..."}
+                </p>
+              </div>
+              <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-3xl border border-gray-100 dark:border-gray-800">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Runtime Memory</p>
+                <p className="text-xl font-black text-gray-900 dark:text-white">
+                  {diagnostics?.serverInfo ? `${(diagnostics.serverInfo.memory.free / 1024 / 1024).toFixed(0)} / ${(diagnostics.serverInfo.memory.total / 1024 / 1024).toFixed(0)} MB` : "..."}
+                </p>
+                <div className="w-full bg-gray-200 dark:bg-gray-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                   <div 
+                     className="bg-indigo-600 h-full rounded-full transition-all duration-1000" 
+                     style={{ width: diagnostics?.serverInfo ? `${((diagnostics.serverInfo.memory.total - diagnostics.serverInfo.memory.free) / diagnostics.serverInfo.memory.total * 100)}%` : '0%' }}
+                   />
+                </div>
+              </div>
+              <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-3xl border border-gray-100 dark:border-gray-800">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Environment Secret</p>
+                <p className={cn(
+                  "text-xl font-black",
+                  diagnostics?.secretFound ? "text-emerald-600" : "text-amber-600"
+                )}>
+                  {diagnostics?.secretFound ? "ESTABLISHED" : "MISSING"}
+                </p>
+                <p className="text-[10px] text-gray-500 mt-1">Binance Vault Protocol</p>
+              </div>
+            </div>
+            
+            {diagnostics?.isNativeOracleCloud && !diagnostics?.isRestrictedIp && (
+              <div className="mt-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-3xl flex items-center gap-4">
+                <div className="p-3 bg-emerald-100 dark:bg-emerald-900/40 rounded-2xl">
+                  <Zap className="w-6 h-6 text-emerald-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-tight">Direct Native Connectivity</p>
+                  <p className="text-xs text-emerald-600 dark:text-emerald-500/80 leading-relaxed font-medium">
+                    Latency optimized: Routing via native Frankfurt (DE) infrastructure. 
+                    No proxy overhead detected.
+                  </p>
+                </div>
+                <div className="text-[10px] font-black bg-emerald-200 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 px-3 py-1.5 rounded-xl uppercase tracking-widest">Optimized</div>
+              </div>
+            )}
+
+            {diagnostics?.isRestrictedIp && (
+              <div className="mt-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-3xl flex items-center gap-4 animate-pulse">
+                <div className="p-3 bg-red-100 dark:bg-red-900/40 rounded-2xl">
+                  <AlertTriangle className="w-6 h-6 text-red-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-black text-red-700 dark:text-red-400 uppercase tracking-tight">Restricted Location Detected</p>
+                  <p className="text-xs text-red-600 dark:text-red-500/80 leading-relaxed font-medium">
+                    Binance has restricted access from your current outbound IP range. 
+                    {diagnostics.isNativeOracleCloud ? ' Oracle Cloud (DE) data-centers are sometimes restricted for SAPI operations.' : ' Germany is supported, but data-centers are restricted for SAPI operations.'}
+                  </p>
+                </div>
+                <div className="text-[10px] font-black bg-red-200 dark:bg-red-900/60 text-red-800 dark:text-red-300 px-3 py-1.5 rounded-xl uppercase">Action Required</div>
+              </div>
+            )}
+
+            {diagnostics?.proxyValue && (
+              <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl flex items-center gap-3">
+                <Radio className="w-5 h-5 text-amber-600 animate-pulse" />
+                <div className="flex-1">
+                  <p className="text-xs font-black text-amber-700 uppercase tracking-tight">Active Proxy Relay</p>
+                  <p className="text-[10px] text-amber-600 leading-relaxed font-mono truncate">{diagnostics.proxyValue}</p>
+                </div>
+                <div className="text-[10px] font-black bg-amber-200 text-amber-800 px-2 py-1 rounded uppercase">External Backend</div>
+              </div>
+            )}
           </div>
 
           <div className="bg-slate-900 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden">

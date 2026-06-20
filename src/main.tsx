@@ -7,14 +7,14 @@ import './index.css';
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then(registration => {
-      console.log('SW registered: ', registration);
+      console.debug('SW registered: ', registration);
     }).catch(registrationError => {
-      console.log('SW registration failed: ', registrationError);
+      console.debug('SW registration failed: ', registrationError);
     });
   });
 }
 
-console.log('Pulse Feeds: App initializing...');
+console.debug('Pulse Feeds: App initializing...');
 
 // Remove boot loader once React kicks in
 const hideBootLoader = () => {
@@ -32,4 +32,4 @@ createRoot(document.getElementById('root')!).render(
 );
 
 hideBootLoader();
-console.log('Pulse Feeds: Render initiated.');
+console.debug('Pulse Feeds: Render initiated.');

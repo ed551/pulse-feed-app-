@@ -31,4 +31,3 @@ jobs:
 
       - name: Deploy to Surge
         run: npx surge ./dist pulse-feeds.surge.sh --token ${{ secrets.SURGE_TOKEN }}
-        

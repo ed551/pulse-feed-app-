@@ -16,7 +16,7 @@ export default function SelfHealing() {
       
       // Register diagnostic task at low frequency (every 2 mins)
       engine.current.register('health_check', () => {
-        console.log("[Self-Healing] Routine health check performed.");
+        console.debug("[Self-Healing] Routine health check performed.");
       }, 120000);
 
       ai_auto_diagnostics();

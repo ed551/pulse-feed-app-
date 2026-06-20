@@ -40,8 +40,9 @@ else
 fi
 
 echo -e "${YELLOW}👑 Pulling latest updates from original branch (Rebase with Autostash)...${NC}"
+# --autostash dynamically stashes modifications, pulls changes, rebases, and automatically restores them
 if git pull origin main --rebase --autostash; then
-  echo -e "${GREEN}✓ Successfully synchronized from GitHub!${NC}"
+  echo -e "${GREEN}✓ successfully synchronized from GitHub!${NC}"
 else
   echo -e "${RED}✗ Sync failure: Merge conflicts or pull block detected. Please review logs or merge manually.${NC}"
   exit 1

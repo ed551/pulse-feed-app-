@@ -39,7 +39,7 @@ import { useCurrencyConverter } from "../hooks/useCurrencyConverter";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";
 import { isIframe, getPasskeyErrorLinkMessage, checkPasskeyCapability } from "../lib/iframeUtils";
-import { apiFetch } from "../lib/api";
+import { apiFetch, getApiUrl } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
 import { useRevenue } from "../contexts/RevenueContext";
 import { db, handleFirestoreError, OperationType } from "../lib/firebase";
@@ -400,6 +400,18 @@ export default function Rewards() {
     proxyName?: string;
     proxyLength?: number;
     proxyValue?: string;
+    proxyExhaustedDetected?: boolean;
+    proxyErrorReason?: string;
+    isRestrictedIp?: boolean;
+    isNativeOracleCloud?: boolean;
+    restrictionDetails?: string;
+    serverInfo?: {
+      uptime: number;
+      deployedAt: string;
+      platform: string;
+      memory: { free: number; total: number };
+      nodeVersion: string;
+    };
   } | null>(null);
   const [isCheckingDiagnostics, setIsCheckingDiagnostics] = useState(false);
   const [showDiagPanel, setShowDiagPanel] = useState(false);
@@ -409,6 +421,14 @@ export default function Rewards() {
     setDiagnostics(null);
     try {
       const response = await apiFetch(`/api/vault/diagnose`);
+      
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("[Diagnostics] Non-JSON response:", text.substring(0, 500));
+        throw new Error(`Endpoint /api/vault/diagnose returned status ${response.status} with non-JSON content. This suggests your VPS (at 89.168.120.135) is returning an error page or a WAF block. Check if the Node.js server is running.`);
+      }
+
       const data = await response.json();
       if (data.success && data.diagnostics) {
         setDiagnostics(data.diagnostics);
@@ -417,8 +437,7 @@ export default function Rewards() {
         throw new Error(data.error || "Failed to fetch credentials configuration");
       }
     } catch (err: any) {
-      console.error("Credentials setup diagnose failed:", err.message);
-      setError(`Credentials Diagnostic Failed: ${err.message}`);
+      setError(`Credentials Diagnostic Failed. Ensure your Custom Backend URL is set correctly in settings and your server is live: ${err.message}`);
     } finally {
       setIsCheckingDiagnostics(false);
     }
@@ -426,14 +445,16 @@ export default function Rewards() {
 
   const checkBinanceAssetBalance = async (asset: string) => {
     setIsCheckingBinanceBalance(true);
+    setError(null);
     try {
       const response = await apiFetch(`/api/vault/balance/${asset}`);
       
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         const text = await response.text();
-        console.error(`[Binance-DEBUG] Non-JSON Balance Response. Status: ${response.status}. Content:`, text.substring(0, 200));
-        throw new Error(`Server returned non-JSON response (${response.status}) when checking balance. The server might be blocked by Binance.`);
+        console.error("[Binance] Non-JSON response received:", text.substring(0, 500));
+        const isHtml = text.includes('<html>') || text.includes('<!DOCTYPE html>');
+        throw new Error(`Endpoint /api/vault/balance/${asset} returned status ${response.status} with non-JSON content. ${isHtml ? "This usually indicates a Binance WAF block or your VPS setup (Nginx) is returning an error page. Check the whitelisted IP 89.168.120.135 translates correctly to your outbound proxy IP." : "Check your server configuration."}`);
       }
 
       const data = await response.json();
@@ -443,7 +464,9 @@ export default function Rewards() {
         throw new Error(data.error || "Failed to fetch balance");
       }
     } catch (err: any) {
-      setError(`Binance Balance Check Failed: ${err.message}`);
+      setBinanceBalance(null);
+      const isFetchError = err.message === "Failed to fetch" || err.name === "AbortError";
+      setError(`Binance Balance Check Failed: ${err.message}${isFetchError ? " (Network Timeout/CORS). Please click Diagnostics Check below to verify server connectivity." : ""}`);
     } finally {
       setIsCheckingBinanceBalance(false);
     }
@@ -477,6 +500,7 @@ export default function Rewards() {
       // Calculation: If withdrawing USDT, we withdraw the USDT amount directly
       let withdrawQuantity = numAmount;
 
+      let result;
       const response = await apiFetch('/api/vault/payout-disburse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -497,19 +521,20 @@ export default function Rewards() {
         const text = await response.text();
         const displayUrl = `/api/vault/payout-disburse`;
         console.error(`[Binance-DEBUG] Non-JSON Response from ${displayUrl}. Content-Type: ${contentType}. Status: ${response.status}`);
-        console.error("[Binance-DEBUG] First 500 chars of body:", text.substring(0, 500));
         
         let errorMsg = `Sync Error: Received unexpected response format (${response.status}) from server.`;
         if (response.status === 403) {
-          errorMsg = `Access Denied (403): The server was blocked by Binance security (WAF). This is usually due to the server IP being restricted. We are attempting to route through mirrors, but all mirrors might be currently blocked.`;
+          errorMsg = `Access Denied (403): The server was blocked by Binance security (WAF). This is usually due to the server IP being restricted. Please check your API key restrictions and IP access rules in Binance.`;
         } else if (response.status === 503 || response.status === 502) {
           errorMsg = `Gateway Error (${response.status}): The Binance API gateway is currently unavailable or overloaded.`;
+        } else if (response.status === 404) {
+          errorMsg = `API Endpoint Not Found (404). Please ensure your backend is deployed, running, and matches your custom API base URL configuration.`;
         }
-        
         throw new Error(errorMsg);
+      } else {
+        result = await response.json();
       }
 
-      const result = await response.json();
       if (!result.success) throw new Error(result.error || "Binance withdrawal failed");
 
       if (currentUser && db) {
@@ -2209,8 +2234,13 @@ export default function Rewards() {
                                         <span className="font-mono text-gray-900 dark:text-white font-bold">{diagnostics.keyLength} chars</span>
                                       </p>
                                       {diagnostics.isMockKey && (
-                                        <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] p-2.5 rounded-xl font-bold leading-normal mt-1">
-                                          ⚠️ <strong>Mock Key Detected!</strong> You configured the simulated fallback key value in Secrets. You must replace it with your real Binance API Key from your Binance account under "API Management".
+                                        <div className="bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] p-3 rounded-xl mt-2 font-bold ring-2 ring-amber-500/10 mb-2">
+                                          <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-lg">⚠️</span>
+                                            <span className="text-xs uppercase">Action Required: Real API Key Needed</span>
+                                          </div>
+                                          <p className="mt-1 leading-tight">You are currently using the <strong>Simulated Mock Key</strong>. This key is for UI diagnostics only and will NOT fetch your real balances from Binance.</p>
+                                          <p className="mt-2 text-[9px] font-medium opacity-80 italic">Replace <code>BINANCE_API_KEY</code> and <code>BINANCE_API_SECRET</code> in Secrets with your real credentials from <code>Binance.com &gt; API Management</code>.</p>
                                         </div>
                                       )}
                                       {diagnostics.hasBackslashKey && (
@@ -2254,10 +2284,242 @@ export default function Rewards() {
                                 <div className="space-y-1 border-t border-gray-200/10 pt-2">
                                   <p className="flex items-center justify-between">
                                     <span className="font-bold text-gray-500">Static Proxy Routing:</span>
-                                    <span className={diagnostics.proxyFound ? "text-amber-500 font-extrabold" : "text-gray-400 font-bold"}>
-                                      {diagnostics.proxyFound ? `ACTIVE (${diagnostics.proxyName})` : "INACTIVE"}
+                                    <span className={diagnostics.proxyFound ? "text-emerald-500 font-extrabold" : "text-amber-500 font-extrabold"}>
+                                      {diagnostics.proxyFound ? `ACTIVE (${diagnostics.proxyName})` : "MISSING (Using Default Route)"}
                                     </span>
                                   </p>
+                                  {!diagnostics.proxyFound && (
+                                    <div className="bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-[8px] p-1.5 rounded-lg mt-1 font-bold leading-tight">
+                                      ⚠️ Proxy not detected in server environment. If you just added it to Secrets, please wait a minute or request an agent rebuild to sync environment variables.
+                                    </div>
+                                  )}
+                                  {/* Real-time Connectivity Alert */}
+                                  <p className="flex items-center justify-between">
+                                    <span className="font-bold text-gray-500">Binance Connectivity:</span>
+                                    <span className={(diagnostics as any).lastPingStatus === "OK" ? "text-emerald-500 font-extrabold" : "text-red-500 font-extrabold"}>
+                                      {(diagnostics as any).lastPingStatus || "PENDING"}
+                                      {(diagnostics as any).lastPingLatency ? ` (${(diagnostics as any).lastPingLatency}ms)` : ""}
+                                    </span>
+                                  </p>
+
+                                  <p className="flex items-center justify-between text-[10px] mt-1 pt-1 border-t border-gray-100 dark:border-white/5">
+                                    <span className="font-bold text-gray-400">Detected Outbound IP:</span>
+                                    <span className="font-mono font-bold text-blue-500">
+                                      {(diagnostics as any).outboundIp || "Pending"}
+                                      {diagnostics.proxyExhaustedDetected && " (FALLBACK)"}
+                                    </span>
+                                  </p>
+                                  <p className="flex items-center justify-between text-[10px] pb-1 border-b border-gray-100 dark:border-white/5">
+                                    <span className="font-bold text-emerald-500">Bridge Target (Oracle):</span>
+                                    <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">89.168.120.135 (DE)</span>
+                                  </p>
+                                  <p className="flex items-center justify-between text-[10px] pb-1 border-b border-gray-100 dark:border-white/5">
+                                    <span className="font-bold text-indigo-500">Domain Linked (Surge):</span>
+                                    <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">pulse-feeds.surge.sh</span>
+                                  </p>
+                                  {(diagnostics as any).outboundIp && ((diagnostics as any).outboundIp.includes("ETIMEDOUT") || (diagnostics as any).outboundIp.includes("EHOSTUNREACH") || (diagnostics as any).outboundIp.includes("ECONNREFUSED") || ((diagnostics as any).outboundIp !== '89.168.120.135' && !(diagnostics as any).outboundIp.includes("Check Failed"))) && (
+                                    <div className="bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-[10px] p-3 rounded-xl mt-2 font-bold ring-2 ring-red-500/10 mb-2">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-lg">{(diagnostics as any).outboundIp === '74.220.48.202' ? '🛡️' : '⌛'}</span>
+                                        <span className="text-xs uppercase">{(diagnostics as any).outboundIp === '74.220.48.202' ? 'IP Mismatch / Proxy Inactive' : 'Bridge Tunnel Blocked'}</span>
+                                      </div>
+                                      
+                                      {(diagnostics as any).outboundIp === '74.220.48.202' ? (
+                                        <div className="space-y-2">
+                                          <p className="mt-1 leading-tight">Your request is leaking through the <strong>Cloud Run Direct Route (74.220.48.202)</strong> instead of your Oracle Proxy.</p>
+                                          <div className="bg-amber-500/20 p-2 rounded border border-amber-500/30 text-amber-700 dark:text-amber-300">
+                                            <strong>Fix:</strong> Ensure <code>VITE_API_BASE_URL</code> (or <code>BINANCE_PROXY</code>) is set correctly in Secrets. If you just added it, <strong>re-start</strong> the application to sync environment variables.
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <p className="mt-1 leading-tight mb-2 text-[9px]">
+                                          AI Studio cannot reach your Oracle Gateway. 
+                                          {(diagnostics as any).proxyConnectivityMessage && (
+                                            <span className="block mt-1 text-amber-500 font-bold animate-pulse">{(diagnostics as any).proxyConnectivityMessage}</span>
+                                          )}
+                                        </p>
+                                      )}
+                                      
+                                      <div className="space-y-1.5 pt-2 border-t border-red-500/10 mt-2">
+                                        <p className="text-[9px] uppercase tracking-wider text-red-400/80">Termux Fix Checklist (Server-Side):</p>
+                                        <ol className="list-decimal pl-4 text-[9px] space-y-1.5">
+                                          <li>
+                                            <strong>Connect to Server:</strong>
+                                            <div className="bg-black/20 p-2 rounded-lg font-mono text-gray-300 select-all cursor-pointer hover:bg-black/30 transition-colors mt-1">
+                                              ssh ubuntu@89.168.120.135
+                                            </div>
+                                          </li>
+                                          <li>
+                                            <strong>Open Firewall (Inner):</strong>
+                                            <div className="bg-black/20 p-2 rounded-lg font-mono text-gray-300 select-all cursor-pointer hover:bg-black/30 transition-colors mt-1">
+                                              sudo iptables -I INPUT 6 -p tcp --dport 3000 -j ACCEPT
+                                            </div>
+                                          </li>
+                                          <li>
+                                            <strong>Open Outer Wall (Oracle Console):</strong>
+                                            <p className="mt-1 opacity-80">Go to <code>Networking &gt; VCNs &gt; your-vcn &gt; Security Lists &gt; Default Security List</code>. Add an <strong>Ingress Rule</strong>: Source <code>0.0.0.0/0</code>, Protocol <code>TCP</code>, Port Range <code>3000</code>.</p>
+                                          </li>
+                                          <li>
+                                            <strong>Verify Proxy Listening:</strong>
+                                            <div className="bg-black/20 p-2 rounded-lg font-mono text-gray-300 select-all cursor-pointer hover:bg-black/30 transition-colors mt-1">
+                                              sudo netstat -tulpn | grep 3000
+                                            </div>
+                                            <p className="mt-1 opacity-70 text-[8px] leading-tight">If empty, your proxy isn't running on port 3000. Ensure your service provider or custom script is active.</p>
+                                          </li>
+                                          <li>
+                                            <strong>CORS Support:</strong>
+                                            <p className="mt-1 opacity-70 text-[8px] leading-tight">Ensure your backend allows requests from Surge. Since you are using native mobile setup, verify the <strong>CORS Middleware</strong> is active in your server code to prevent 'Failed to Fetch' errors.</p>
+                                          </li>
+                                          <li className="text-amber-500 font-bold">
+                                            <strong>Binance Whitelisting (CRITICAL for Payouts):</strong>
+                                            <p className="mt-1 leading-tight text-[9px]">Go to your Binance API Management. Enable <strong>"Restrict access to trusted IPs only"</strong> and add <code>89.168.120.135</code> to the trusted list. Without this, Binance WAF will return 403 Forbidden for all withdrawal requests.</p>
+                                          </li>
+                                        </ol>
+                                        <p className="text-[8px] font-medium opacity-70 italic mt-2">* Run <code>sudo netfilter-persistent save</code> after iptables to persist changes.</p>
+                                      </div>
+                                    </div>
+                                  )}
+                                  {(diagnostics as any).outboundIp && 
+                                   (diagnostics as any).outboundIp !== "89.168.120.135" && 
+                                   (diagnostics as any).outboundIp !== "Pending" && 
+                                   !(diagnostics as any).outboundIp.includes("Check Failed") &&
+                                   !(diagnostics as any).outboundIp.includes("ETIMEDOUT") && (
+                                    <div className="bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-[10px] p-3 rounded-xl mt-2 font-bold ring-2 ring-red-500/10 mb-2">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-lg">❌</span>
+                                        <span className="text-xs uppercase">IP Mismatch / Proxy Failure</span>
+                                      </div>
+                                      <p>Binance sees: <code className="bg-red-500/20 px-1 rounded">{(diagnostics as any).outboundIp}</code></p>
+                                      <p>Expected IP: <code className="bg-emerald-500/20 px-1 rounded text-emerald-600 dark:text-emerald-400">89.168.120.135</code></p>
+                                      <p className="mt-2 text-[9px] font-medium leading-tight border-t border-red-500/10 pt-2">
+                                        Since these don't match, Binance will block your requests (Status 451). 
+                                        Verify your <code>BINANCE_PROXY</code> setting in Secrets.
+                                      </p>
+                                    </div>
+                                  )}
+                                  {diagnostics.isRestrictedIp && (
+                                    <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] p-2.5 rounded-xl font-bold leading-normal mt-2">
+                                      🚨 <strong>Blocked Range Detected!</strong> 
+                                      <p className="mt-1 font-medium">{diagnostics.restrictionDetails}</p>
+                                      <p className="mt-1 text-[9px] opacity-80 italic">Note: Residential IPs in Germany are OK, but Cloud/Hosting IPs (like Oracle/Google) are restricted for SAPI.</p>
+                                      <p className="mt-1.5 border-t border-red-500/10 pt-1.5"><strong>Official Fix:</strong> In Binance API settings, select 'Restrict access to trusted IPs only' and whitelist <code>89.168.120.135</code>.</p>
+                                      <p className="mt-1 text-[9px] font-bold text-amber-500">Warning: If your 'Detected IP' is NOT 89.168.120.135, you MUST use a <code>BINANCE_PROXY</code> that provides that IP.</p>
+                                    </div>
+                                  )}
+
+                                  <div className="mt-2 pt-2 border-t border-emerald-500/10 space-y-2">
+                                    <p className="font-extrabold uppercase text-emerald-500 text-[10px] tracking-wider flex items-center gap-1.5">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                      Deployment Connectivity Check
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div className={cn(
+                                        "p-2 rounded-lg border",
+                                        (diagnostics as any).backendBaseUrl ? "bg-emerald-500/5 border-emerald-500/10" : "bg-red-500/5 border-red-500/10"
+                                      )}>
+                                        <p className={cn(
+                                          "text-[8px] font-bold uppercase mb-0.5",
+                                          diagnostics.proxyFound ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+                                        )}>Cloud Run Backend</p>
+                                  <p className="text-[10px] font-mono font-bold truncate">{(diagnostics as any).backendBaseUrl || 'pulse-feeds.surge.sh'}</p>
+                                        <div className="flex items-center gap-1 mt-1">
+                                          <div className={cn("w-1.5 h-1.5 rounded-full", diagnostics.proxyFound ? "bg-emerald-500" : "bg-amber-500")} />
+                                          <span className="text-[8px] font-bold text-gray-500 uppercase">{(diagnostics as any).backendBaseUrl ? "Reachable" : "Blocked"}</span>
+                                        </div>
+                                      </div>
+                                      <div className="bg-indigo-500/5 p-2 rounded-lg border border-indigo-500/10">
+                                        <p className="text-[8px] text-indigo-600 dark:text-indigo-400 font-bold uppercase mb-0.5">Oracle Cloud IP</p>
+                                        <p className="text-[10px] font-mono font-bold truncate">89.168.120.135</p>
+                                        <div className="flex items-center gap-1 mt-1">
+                                          <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                                          <span className="text-[8px] font-bold text-gray-500 uppercase">Gateway Active</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <p className="text-[9px] text-gray-500 italic leading-tight">
+                                      * Ensure <code>VITE_API_BASE_URL</code> matches the Oracle Gateway precisely to maintain connectivity between Surge and your whitelisted IP.
+                                    </p>
+                                  </div>
+
+                                  {diagnostics.serverInfo && (
+                                    <div className="mt-2 pt-2 border-t border-gray-100 dark:border-white/5 space-y-1">
+                                      <p className="font-extrabold uppercase text-indigo-500 text-[9px] tracking-wider mb-1">
+                                        SYSTEM STATUS ({diagnostics.isNativeOracleCloud ? 'ORACLE CLOUD VPS' : 'CLOUD CONTAINER'}):
+                                      </p>
+                                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+                                        <div className="flex justify-between">
+                                          <span className="text-gray-400">Health:</span>
+                                          <span className="text-emerald-500 font-bold italic">LIVE</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-gray-400">Uptime:</span>
+                                          <span className="text-gray-700 dark:text-gray-300 font-bold">{Math.floor(diagnostics.serverInfo.uptime / 60)}m {diagnostics.serverInfo.uptime % 60}s</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-gray-400">RAM:</span>
+                                          <span className="text-gray-700 dark:text-gray-300 font-bold">{diagnostics.serverInfo.memory.total - diagnostics.serverInfo.memory.free}MB / {diagnostics.serverInfo.memory.total}MB</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-gray-400">Arch:</span>
+                                          <span className="text-gray-700 dark:text-gray-300 font-bold uppercase">{diagnostics.serverInfo.platform}</span>
+                                        </div>
+                                      </div>
+                                      <div className="flex justify-between text-[10px] items-center">
+                                        <span className="text-gray-400 font-bold">Last Oracle Deploy:</span>
+                                        <span className="bg-indigo-500/10 text-indigo-500 px-1.5 py-0.5 rounded font-mono font-extrabold text-[9px]">
+                                          {new Date(diagnostics.serverInfo.deployedAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Mixed Content / CORS Alert & Safety Logic */}
+                                  {diagnostics && (() => {
+                                      const bridgeInfo = (diagnostics as any).bridgeRelay;
+                                      const rawBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
+                                      const currentApiBase = getApiUrl('/');
+                                      const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+                                      const isBaseHttp = rawBaseUrl.startsWith('http://');
+                                      const isSurge = typeof window !== 'undefined' && window.location.hostname.includes('surge.sh');
+                                      
+                                      // Logic for relaying matches getApiUrl.ts
+                                      const isRelaying = isHttps && isBaseHttp;
+                                      const isRemoteRelay = isSurge && isRelaying;
+
+                                      if (isRelaying || bridgeInfo?.active) {
+                                        return (
+                                          <div className="mb-3 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl space-y-2">
+                                            <p className="text-[10px] font-bold text-emerald-500 uppercase flex items-center gap-1.5 leading-none">
+                                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                              Bridge Relay Status: {isRemoteRelay ? 'REMOTE SECURE' : 'LOCAL SECURE'}
+                                            </p>
+                                            <p className="text-[9px] text-gray-700 dark:text-gray-300 leading-tight">
+                                              {isRemoteRelay 
+                                                ? `SECURE TUNNEL: Relaying Surge Traffic through Cloud Run to bypass Browser Mixed Content blocks.`
+                                                : `INTERNAL BRIDGE: Relaying HTTPS frontend traffic to HTTP Oracle VPS securely.`}
+                                            </p>
+                                            <div className="p-2 bg-indigo-500/5 rounded-lg border border-indigo-500/10">
+                                              <p className="text-[8px] font-bold text-gray-400 uppercase mb-1">Tunnel Path</p>
+                                              <p className="text-[9px] font-mono truncate">
+                                                {window.location.host} {'->'} {isRemoteRelay ? 'Cloud Run Relay' : 'Local Relay'} {'->'} {rawBaseUrl.replace('http://', '')}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        );
+                                      }
+                                      return (
+                                        <div className="mb-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-1">
+                                           <p className="text-[10px] font-bold text-amber-600 uppercase flex items-center gap-1.5">
+                                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                              Direct Connection Mode
+                                           </p>
+                                           <p className="text-[9px] text-gray-600 dark:text-gray-400">
+                                              {rawBaseUrl ? `Connecting directly to ${rawBaseUrl}. Ensure HTTPS/SSL is active on the target if using Surge.` : 'No external Oracle Bridge detected. Using default whitelisted IP.'}
+                                           </p>
+                                        </div>
+                                      );
+                                  })()}
+
                                   {diagnostics.proxyFound && (
                                     <>
                                       <p className="flex items-center justify-between font-mono">
@@ -2281,9 +2543,19 @@ export default function Rewards() {
                                         Check Actual Outbound IP
                                       </button>
                                       
-                                      <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] p-2.5 rounded-xl font-bold leading-normal mt-1 animate-in fade-in slide-in-from-top-1">
-                                        🚀 <strong>Proxy Agent Active!</strong> Requests to Binance are successfully being routed through your static proxy. This ensures your Binance API access is routed through a single static IP address (such as <code>35.214.40.75</code>), allowing you to restrict API access safely in Binance API Settings.
-                                      </div>
+                                      {diagnostics.proxyExhaustedDetected ? (
+                                        <div className="bg-red-500/10 border border-red-500/15 text-red-500 text-[10px] p-2.5 rounded-xl font-bold leading-normal mt-1.5 animate-in fade-in slide-in-from-top-1 space-y-1">
+                                          <p>🚨 <strong>Fixie Proxy Quota Exhausted (Error 407/402)!</strong></p>
+                                          <p>Your Fixie account has reached its limits of 500 requests/month (or authentication credentials are invalid). The server has enabled <strong>Direct Fallback Routing</strong> to prevent network request hang ups, but please upgrade your plan or check your stats at <code>app.usefixie.com</code>.</p>
+                                          {diagnostics.proxyErrorReason && (
+                                            <p className="font-mono text-[9px] text-red-400">Status details: {diagnostics.proxyErrorReason}</p>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] p-2.5 rounded-xl font-bold leading-normal mt-1 animate-in fade-in slide-in-from-top-1">
+                                          🚀 <strong>Proxy Agent Active!</strong> Requests to Binance are successfully being routed through your static proxy. This ensures your Binance API access is routed through a single static IP address (such as <code>89.168.120.135</code>), allowing you to restrict API access safely in Binance API Settings.
+                                        </div>
+                                      )}
                                     </>
                                   )}
                                 </div>
@@ -2300,11 +2572,12 @@ export default function Rewards() {
                                   </div>
                                   
                                   <div>
-                                    <p className="font-extrabold uppercase text-amber-500 text-[9px] tracking-wider mb-1 mt-1">Setup Secure Routing via Proxy (using your Static IP):</p>
+                                    <p className="font-extrabold uppercase text-amber-500 text-[9px] tracking-wider mb-1 mt-1">Setup Secure Routing:</p>
                                     <ol className="list-decimal pl-4 space-y-1">
-                                      <li>Run an HTTP or SOCKS5 proxy server (e.g. <b>Squid</b> or <b>tinyproxy</b>) on your static IP VPS at <code>35.214.40.75</code></li>
-                                      <li>In AI Studio Secrets, add a secret named <code>BINANCE_PROXY</code> with value: <code>http://35.214.40.75:PORT</code> (using your configured port)</li>
-                                      <li>On Binance, check <b>Restrict access to trusted IPs only (Recommended)</b> and whitelist <code>35.214.40.75</code></li>
+                                      <li><b>Matched Oracle Config:</b> Static OUTBOUND IP is <code>89.168.120.135</code></li>
+                                      <li><b>Matched Surge Config:</b> Domain <code>pulse-feeds.surge.sh</code> is linked</li>
+                                      <li><b>Binance Matching:</b> Whitelist <code>89.168.120.135</code> in API Settings</li>
+                                      <li><b>AI Studio Matching:</b> Ensure <code>VITE_API_BASE_URL</code> (or <code>BINANCE_PROXY</code>) matches precisely</li>
                                     </ol>
                                   </div>
                                 </div>

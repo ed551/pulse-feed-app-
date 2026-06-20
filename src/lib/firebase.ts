@@ -13,10 +13,10 @@ export const auth = getAuth(app);
 // Initializing Firestore with optional database ID
 const firestoreDatabaseId = firebaseConfig.firestoreDatabaseId;
 
-console.log('Initializing Firestore with database ID:', firestoreDatabaseId || '(default)');
+console.debug('Initializing Firestore with database ID:', firestoreDatabaseId || '(default)');
 
 // Silence noisy non-fatal Firestore warnings (like idle stream timeouts) in the browser
-setLogLevel('debug'); // Increased for diagnostic purposes
+setLogLevel('error');
 
 // Use a factory-like initialization to prevent multiple initialization errors
 const getDb = () => {
@@ -24,16 +24,18 @@ const getDb = () => {
   const dbId = (firestoreDatabaseId && firestoreDatabaseId !== '(default)' && !forceDefault) ? firestoreDatabaseId : undefined;
   
   if (forceDefault) {
-     console.log('[Firebase] Resilience mode active: Forcing (default) database.');
+     console.debug('[Firebase] Resilience mode active: Forcing (default) database.');
   }
   
-  console.log(`[Firebase] Initializing Firestore with Database ID: ${dbId || '(default)'} in Project: ${firebaseConfig.projectId}`);
+  console.debug(`[Firebase] Initializing Firestore with Database ID: ${dbId || '(default)'} in Project: ${firebaseConfig.projectId}`);
   
   try {
-    // Attempt standard initialization first, fall back to long polling if it fails or is forced
-    // In restricted container environments, sometimes standard (gRPC) works better than simulated long polling over HTTP
+    // Use experimentalAutoDetectLongPolling: true instead of forcing long polling.
+    // This allows the SDK to establish a high-performance standard WebChannel/gRPC connection first,
+    // and seamlessly fall back to long polling only if WebSocket or direct connections are blocked by firewalls or proxies.
+    // This dramatically resolves connection timeouts and "code=unavailable" errors in restricted browser environments.
     return initializeFirestore(app, {
-      experimentalForceLongPolling: true,
+      experimentalAutoDetectLongPolling: true,
     }, dbId);
   } catch (e: any) {
     if (e.message.includes('already exists')) {
@@ -42,10 +44,13 @@ const getDb = () => {
     }
     console.error('[Firebase] Error during initializeFirestore:', e);
     
-    // Desperate fallback with force long polling
-    return initializeFirestore(app, {
-      experimentalForceLongPolling: true,
-    }, dbId);
+    // Desperate fallback: try standard getFirestore which has its own native fallback flow
+    try {
+      return getFirestore(app, dbId);
+    } catch (fallbackErr) {
+      console.error('[Firebase] Crucial fallback failed:', fallbackErr);
+      return getFirestore(app);
+    }
   }
 };
 
@@ -172,7 +177,7 @@ async function testConnection(retries = 5) {
   const attempt = 6 - retries;
   try {
     setConnectionStatus('testing');
-    console.log(`Testing Firebase connection (Attempt ${attempt}/5) on DB: ${firestoreDatabaseId || '(default)'}...`);
+    console.debug(`Testing Firebase connection (Attempt ${attempt}/5) on DB: ${firestoreDatabaseId || '(default)'}...`);
     
     // Using a more robust test: fetch a document that definitely exists and has public read
     // or just fetch any path to trigger a network roundtrip. 
@@ -194,7 +199,7 @@ async function testConnection(retries = 5) {
       timeoutPromise
     ]);
     
-    console.log("Firebase connection confirmed (reached server).");
+    console.debug("Firebase connection confirmed (reached server).");
     setConnectionStatus('connected');
   } catch (error: any) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -204,7 +209,7 @@ async function testConnection(retries = 5) {
     
     // If it's permission-denied, it means WE ARE CONNECTED (otherwise we'd get unavailable)
     if (errorCode === 'permission-denied') {
-      console.log("Firebase connection confirmed (received permission denial from server).");
+      console.debug("Firebase connection confirmed (received permission denial from server).");
       setConnectionStatus('connected');
       return;
     }
@@ -266,7 +271,7 @@ async function testConnection(retries = 5) {
 // Run connection test with a delay to ensure network is initialized
 setTimeout(() => {
   window.addEventListener('online', () => {
-    console.log("[Network] Browser reports ONLINE");
+    console.debug("[Network] Browser reports ONLINE");
     testConnection();
   });
   window.addEventListener('offline', () => {

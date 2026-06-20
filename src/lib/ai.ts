@@ -53,7 +53,7 @@ export async function generateContentWithRetry(params: any): Promise<any> {
       try {
         const targetUrl = getApiUrl('/api/gemini/generate');
         if (proxyRetries === 0) {
-          console.log(`[AI Proxy] Starting request to: ${targetUrl}`);
+          console.debug(`[AI Proxy] Starting request to: ${targetUrl}`);
         }
         
         const response = await fetch(targetUrl, {
@@ -72,7 +72,7 @@ export async function generateContentWithRetry(params: any): Promise<any> {
            if (proxyRetries < MAX_PROXY_RETRIES) {
               proxyRetries++;
               const backoff = 5000 * proxyRetries;
-              console.warn(`[AI Proxy] Infrastructure warmup (${response.status}). Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
+              console.debug(`[AI Proxy] Infrastructure warmup (${response.status}). Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
               await delay(backoff);
               continue;
            }
@@ -85,7 +85,7 @@ export async function generateContentWithRetry(params: any): Promise<any> {
           if (proxyRetries < MAX_PROXY_RETRIES) {
             proxyRetries++;
             const backoff = 5000 * proxyRetries; 
-            console.warn(`[AI Proxy] Infrastructure block (Node warmup). Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
+            console.debug(`[AI Proxy] Infrastructure block (Node warmup). Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
             await delay(backoff);
             continue;
           }
@@ -99,7 +99,7 @@ export async function generateContentWithRetry(params: any): Promise<any> {
           if (proxyRetries < MAX_PROXY_RETRIES) {
             proxyRetries++;
             const backoff = 2000 * proxyRetries;
-            console.warn(`[AI Proxy] Invalid JSON response. Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
+            console.debug(`[AI Proxy] Invalid JSON response. Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
             await delay(backoff);
             continue;
           }
@@ -131,7 +131,7 @@ export async function generateContentWithRetry(params: any): Promise<any> {
           if (isRetryable && proxyRetries < MAX_PROXY_RETRIES) {
             proxyRetries++;
             const backoff = (isBilling ? 6000 : 3000) * proxyRetries;
-            console.warn(`[AI Proxy] Service under load (${response.status}). Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
+            console.debug(`[AI Proxy] Service under load (${response.status}). Retrying in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
             await delay(backoff);
             continue;
           }
@@ -153,7 +153,7 @@ export async function generateContentWithRetry(params: any): Promise<any> {
         if (proxyRetries < MAX_PROXY_RETRIES) {
            proxyRetries++;
            const backoff = 5000 * proxyRetries;
-           console.warn(`[AI Proxy] Network connection failed. Retrying with adaptive backoff in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
+           console.debug(`[AI Proxy] Network connection failed. Retrying with adaptive backoff in ${backoff}ms... (${proxyRetries}/${MAX_PROXY_RETRIES})`);
            await delay(backoff);
            continue;
         }
@@ -253,7 +253,7 @@ export async function generateContentWithRetry(params: any): Promise<any> {
             
             if (isQuotaExceeded || isDepleted) {
               const waitTime = isDepleted ? 60000 : 30000; // 60s for billing fallback, 30s for quota
-              console.warn(`[Client AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Mandatory recovery delay of ${waitTime/1000}s. (Attempt ${retries}/${MAX_RETRIES})`);
+              console.debug(`[Client AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Mandatory recovery delay of ${waitTime/1000}s. (Attempt ${retries}/${MAX_RETRIES})`);
               
               if (isDepleted && retries >= 1) {
                 console.error("[Client AI] Billing/Quota issues detected. Please check your AI Studio credits.");
@@ -288,7 +288,7 @@ export async function generateContentWithRetry(params: any): Promise<any> {
               throw error;
             }
             
-            console.warn(`[Client AI] Falling back from ${oldModel} to ${params.model} (Attempt ${retries}/${MAX_RETRIES})`);
+            console.debug(`[Client AI] Falling back from ${oldModel} to ${params.model} (Attempt ${retries}/${MAX_RETRIES})`);
             continue;
           }
 

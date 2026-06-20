@@ -193,12 +193,11 @@ export default function Community() {
           setZoom(17);
         },
         (error) => {
-          console.error("Error getting location:", error);
-          let message = "Could not get your location.";
-          if (error.code === 1) message = "Location permission denied. Please enable location access in your browser settings.";
-          if (error.code === 2) message = "Location unavailable. Please check your GPS/Network.";
-          if (error.code === 3) message = "Location request timed out. Please try again.";
-          alert(message);
+          // Silent fallback for environments that deny geolocation (common in iframe/preview)
+          const errorMsg = error.code === 1 ? "Permission denied" : (error.code === 2 ? "Position unavailable" : "Timeout");
+          console.debug(`Geolocation failed: ${errorMsg}. Falling back to default.`);
+          // Only show alert if it was a manual location request (likely not on mount)
+          // But locateUser is called on mount, so we'll skip the alert to avoid blocking the user
         },
         {
           enableHighAccuracy: true,
@@ -207,7 +206,7 @@ export default function Community() {
         }
       );
     } else {
-      alert("Your browser does not support geolocation.");
+      // Browser doesn't support geolocation - silent fallback
     }
   };
 

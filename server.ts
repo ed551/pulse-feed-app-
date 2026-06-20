@@ -34,7 +34,8 @@ import {
 } from "firebase/firestore";
 import { applicationDefault } from 'firebase-admin/app';
 
-import fs from "fs";
+import fs from "node:fs";
+import os from "node:os";
 import nodemailer from 'nodemailer';
 import * as otplibPkg from 'otplib';
 import africastalking from 'africastalking';
@@ -104,8 +105,8 @@ const getBinanceApiKey = () => {
   });
   if (found) return process.env[found]?.trim();
 
-  // Priority 4: User-provided hardcoded fallback (Emergency Correction)
-  return "hGSR4lD2JFxnsJ90Bjhy2trU1UvTXyiDBZe46Q0xyCXUZsP34KsFdUGtWcVVVYSr"; 
+  // Priority 4: No hardcoded fallback
+  return ""; 
 };
 
 const getBinanceApiSecret = () => {
@@ -133,8 +134,38 @@ const getBinanceApiSecret = () => {
   });
   if (found) return process.env[found]?.trim();
 
-  // Priority 4: User-provided hardcoded fallback (Emergency Correction)
-  return "D4zKTsWTXrqEucgELaoLI9q5EiCeqvVVABW3EqzCNOB8GeFNnp8ldS3XHb133rab";
+  // Priority 4: No hardcoded fallback
+  return "";
+};
+
+const getProxyMatchKey = () => {
+  const envKeys = Object.keys(process.env);
+  
+  // Custom User Proxies (High Priority)
+  // We exclude VITE_API_BASE_URL from proxy agents, as it is used for API Relay/Bridge logic.
+  const userProxy = envKeys.find(k => {
+    const ku = k.toUpperCase().trim();
+    return ku === 'BINANCE_PROXY' || ku === 'VITE_BINANCE_PROXY';
+  });
+  if (userProxy) return userProxy;
+
+  // Third-party standard proxies (Fallback)
+  const systemProxy = envKeys.find(k => {
+    const ku = k.toUpperCase().trim();
+    return ku === 'PROXY_URL' || ku === 'QUOTAGUARDSTATIC_URL' || ku === 'QUOTAGUARD_URL' || ku === 'FIXIE_URL';
+  });
+  if (systemProxy) return systemProxy;
+
+  // Fuzzy matches next (e.g. BINANCE PROXY, BINANCE_PROXY_URL, MY_PROXY)
+  return envKeys.find(k => {
+    const ku = k.toUpperCase().trim().replace(/[\s-]/g, '_');
+    return (
+      ku.includes('BINANCE_PROXY') || 
+      (ku.includes('PROXY') && (ku.includes('URL') || ku.includes('HOST'))) ||
+      ku === 'ORACLE_PROXY' ||
+      ku === 'BRIDGE_PROXY'
+    );
+  });
 };
 
 const getDetectedBinanceSecrets = () => {
@@ -162,11 +193,13 @@ const getDetectedBinanceSecrets = () => {
   const rawKey = keyMatch ? process.env[keyMatch]?.trim() : "";
   const rawSecret = secretMatch ? process.env[secretMatch]?.trim() : "";
 
-  const proxyMatch = envKeys.find(k => {
-    const ku = k.toUpperCase().trim();
-    return ku === 'BINANCE_PROXY' || ku === 'VITE_BINANCE_PROXY' || ku === 'PROXY_URL' || ku === 'QUOTAGUARDSTATIC_URL' || ku === 'QUOTAGUARD_URL' || ku === 'FIXIE_URL';
-  });
+  // Oracle Cloud Direct Connectivity remains the priority, BINANCE_PROXY is optional fallback only
+  const proxyMatch = getProxyMatchKey();
   const rawProxy = proxyMatch ? process.env[proxyMatch]?.trim() : "";
+
+  if (rawProxy) {
+    console.log(`[Binance-Secrets] Found proxy key ${proxyMatch} with length ${rawProxy.length}`);
+  }
 
   const mockKey = "hGSR4lD2JFxnsJ90Bjhy2trU1UvTXyiDBZe46Q0xyCXUZsP34KsFdUGtWcVVVYSr";
   const mockSecret = "D4zKTsWTXrqEucgELaoLI9q5EiCeqvVVABW3EqzCNOB8GeFNnp8ldS3XHb133rab";
@@ -187,7 +220,8 @@ const getDetectedBinanceSecrets = () => {
     proxyFound: !!proxyMatch,
     proxyName: proxyMatch || "",
     proxyLength: rawProxy ? rawProxy.length : 0,
-    proxyValue: rawProxy ? `${rawProxy.substring(0, Math.min(18, rawProxy.length))}...` : ""
+    proxyValue: rawProxy ? `${rawProxy.substring(0, Math.min(18, rawProxy.length))}...` : "",
+    isNativeOracleCloud: os.platform() === 'linux' && fs.existsSync('/etc/os-release') && fs.readFileSync('/etc/os-release', 'utf8').toLowerCase().includes('oracle')
   };
 };
 
@@ -214,13 +248,15 @@ const BINANCE_MIRRORS = [
 ];
 
 const ALTERNATE_USER_AGENTS = [
-  "Binance/3.0.0 (API Connector)",
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+  "Binance/3.0.0 (API Connector)",
   "PostmanRuntime/7.36.1",
   "axios/1.6.7"
 ];
+
+  // (getProxyMatchKey moved up for consistency)
 
 const getBinanceMirror = () => {
   const custom = process.env.BINANCE_API_URL;
@@ -238,15 +274,51 @@ const getBinanceBaseUrl = () => {
 const getBinanceApiBase = () => `${getBinanceBaseUrl()}/api`;
 const getBinanceSapiBase = () => `${getBinanceBaseUrl()}/sapi`;
 
+// Tracking for proxy exhaustion/errors (such as 407 Proxy Authentication Required or 402 Payment Required)
+let proxyExhaustedDetected = false;
+let lastProxyErrorTime = 0;
+const PROXY_RETRY_DELAY = 300000; // 5 minutes cool-down before retrying proxy after exhaustion
+
+const checkProxyStatus = () => {
+  if (proxyExhaustedDetected && Date.now() - lastProxyErrorTime > PROXY_RETRY_DELAY) {
+    console.log("[Vault-Bridge] Proxy cool-down expired. Attempting to re-enable proxy routing.");
+    proxyExhaustedDetected = false;
+    proxyErrorReason = "";
+  }
+  return proxyExhaustedDetected;
+};
+let proxyErrorReason = "";
+
+// System Telemetry & Build Info
+const START_TIME = Date.now();
+const getBuildInfo = () => {
+  try {
+    // In production, esbuild-bundled server runs from dist/server.cjs
+    // So process.cwd() is project root, dist/build-info.json should work
+    const buildInfoPath = path.join(process.cwd(), 'dist', 'build-info.json');
+    if (fs.existsSync(buildInfoPath)) {
+      return JSON.parse(fs.readFileSync(buildInfoPath, 'utf8'));
+    }
+  } catch (e) {
+    // Fallback silently during dev
+  }
+  return { timestamp: new Date().toISOString(), env: "development" };
+};
+const BUILD_INFO = getBuildInfo();
+
 const getProxyAgent = () => {
-  const envKeys = Object.keys(process.env);
-  const proxyMatchKey = envKeys.find(k => {
-    const ku = k.toUpperCase().trim();
-    return ku === 'BINANCE_PROXY' || ku === 'VITE_BINANCE_PROXY' || ku === 'PROXY_URL' || ku === 'QUOTAGUARDSTATIC_URL' || ku === 'QUOTAGUARD_URL' || ku === 'FIXIE_URL';
-  });
+  const proxyMatchKey = getProxyMatchKey();
   
   let proxyUrl = proxyMatchKey ? process.env[proxyMatchKey]?.trim() : "";
-  if (!proxyUrl) return null;
+  if (!proxyUrl) {
+    console.log("[Proxy-Init] No BINANCE_PROXY found in environment.");
+    return null;
+  }
+
+  console.log(`[Proxy-Init] Attempting to initialize proxy from key: ${proxyMatchKey}`);
+
+  // Always use proxy if configured, do not bypass based on platform detection
+  // (Removing Oracle Cloud bypass as requested to allow explicit proxy usage)
   
   // Clean markdown-style link syntax, e.g. [http://xxx](http://xxx) -> http://xxx
   const markdownMatch = proxyUrl.match(/\[.*?\]\((https?:\/\/[^\s)]+)\)/);
@@ -255,7 +327,18 @@ const getProxyAgent = () => {
   }
   
   // Strip off surrounding brackets, parenthesis, or quotes
-  proxyUrl = proxyUrl.replace(/^[\[\(\s"']+/, '').replace(/[\]\)\s"']+$/, '');
+  proxyUrl = proxyUrl.replace(/^[\[\(\s"']+/, '').replace(/[\]\)\s"']+$/, '').trim();
+  
+  // Special handling for Oracle Cloud IPs that might be missing protocol or port defaults
+  if (!proxyUrl.includes('://')) {
+    if (proxyUrl.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+      // It's just an IP, default to http://IP:3000 for Oracle Bridge (Matching user's recent update)
+      console.log(`[Proxy-Init] IP-only detected (${proxyUrl}), defaulting to http://${proxyUrl}:3000`);
+      proxyUrl = `http://${proxyUrl}:3000`;
+    } else if (proxyUrl.includes(':')) {
+       proxyUrl = `http://${proxyUrl}`;
+    }
+  }
   
   try {
     if (proxyUrl.startsWith('socks')) {
@@ -285,41 +368,53 @@ async function performBinanceRequest(method: 'GET' | 'POST', endpoint: string, c
 
   // Attempt to log public IP if possible
   try {
-    const ipCheck = await axios.get('https://api.ipify.org?format=json', { timeout: 2000 }).catch(() => null);
-    if (ipCheck) console.log(`[Vault-Bridge] Bridge IP: ${ipCheck.data.ip}`);
+    const ipCheck = await axios.get('https://api.ipify.org?format=json', { timeout: 3000 }).catch(() => null);
+    if (ipCheck) console.debug(`[Vault-Bridge] Bridge IP: ${ipCheck.data.ip}`);
   } catch (e) {}
 
+  const proxyMatchKey = getProxyMatchKey();
   const proxyAgent = getProxyAgent();
 
   for (const mirror of mirrors) {
     const baseUrl = BINANCE_USE_TESTNET ? "https://testnet.binance.vision" : mirror;
     const url = `${baseUrl}/${type}${endpoint}`;
     
-    // Pick 2 random UAs to try per mirror
-    const selectedUAs = [...ALTERNATE_USER_AGENTS].sort(() => Math.random() - 0.5).slice(0, 2);
+    // Pick 1 random UA to try per mirror to save time
+    const ua = ALTERNATE_USER_AGENTS[Math.floor(Math.random() * ALTERNATE_USER_AGENTS.length)];
     
-    for (const ua of selectedUAs) {
-      try {
-        console.log(`[Vault-Bridge] ${method} ${url} | UA: ${ua.substring(0, 15)}...${proxyAgent ? ' (via proxy Agent)' : ''}`);
-        
-        const axiosConfig: any = {
-          ...config,
-          method,
-          url,
-          timeout: type === 'sapi' ? 45000 : 15000,
-          headers: {
-            ...config.headers,
-            "User-Agent": ua,
-            "Accept": "application/json, text/plain, */*",
-            "X-Vault-Origin": "Bridge-v5"
-          },
-          validateStatus: (status: number) => true // Handle all status codes manually
-        };
+    // If we've detected proxy issues, fall back to direct routing
+    const activeProxyAgent = checkProxyStatus() ? null : proxyAgent;
+    
+    try {
+      console.debug(`[Vault-Bridge] ${method} ${url} | UA: ${ua.substring(0, 15)}...${activeProxyAgent ? ' (via proxy Agent)' : ' (directFallback)'}`);
+      
+      const axiosConfig: any = {
+        ...config,
+        method,
+        url,
+        timeout: type === 'sapi' ? 30000 : 15000, // Even more generous timeouts for proxy stability
+        headers: {
+          ...config.headers,
+          "User-Agent": ua,
+          "Accept": "application/json, text/plain, */*",
+          "X-Vault-Origin": "Bridge-v5"
+        },
+        validateStatus: (status: number) => true
+      };
 
-        if (proxyAgent) {
-          axiosConfig.httpsAgent = proxyAgent;
-          axiosConfig.httpAgent = proxyAgent;
+        if (activeProxyAgent) {
+          axiosConfig.httpsAgent = activeProxyAgent;
+          axiosConfig.httpAgent = activeProxyAgent;
           axiosConfig.proxy = false;
+          if (mirror === mirrors[0]) {
+            console.log(`[Vault-Bridge] Routing through proxy gateway: ${proxyMatchKey}`);
+          }
+        } else {
+          // Explicitly disable axios default proxy detection when in direct mode
+          axiosConfig.proxy = false;
+          if (proxyMatchKey && !proxyExhaustedDetected) {
+            console.warn(`[Vault-Bridge] Proxy intended but not used (Initialization failed or missing value)`);
+          }
         }
         
         // Final sanity check for POST Content-Type
@@ -329,16 +424,40 @@ async function performBinanceRequest(method: 'GET' | 'POST', endpoint: string, c
 
         const response = await axios(axiosConfig);
         
-        // Success
+        // Success (Extra check for 200 OK HTML blocks/challenges)
         if (response.status === 200) {
+          const respData = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+          if (respData.includes('<html>') || respData.includes('<!DOCTYPE html>')) {
+             console.warn(`[Vault-Bridge] Mirror ${mirror} returned 200 but it is HTML (Possible WAF Challenge/Block). Trying next mirror...`);
+             lastError = new Error(`Mirror ${mirror} returned 200 HTML content instead of API JSON`);
+             continue;
+          }
+          if (type === 'sapi' && method === 'POST') console.log(`[Vault-Bridge] SAPI Success on ${mirror}`);
           return response;
         }
 
+        console.warn(`[Vault-Bridge] Mirror ${mirror} returned status ${response.status}. Data preview: ${typeof response.data === 'string' ? response.data.substring(0, 100) : JSON.stringify(response.data).substring(0, 100)}`);
+
+        // Handle proxy authentication/exhaustion failures
+        if (response.status === 407 || response.status === 402) {
+          console.error(`[Vault-Bridge] Proxy Authentication/Quota issues status ${response.status} from mirror ${mirror}. Switching to direct fallback.`);
+          proxyExhaustedDetected = true;
+          lastProxyErrorTime = Date.now();
+          proxyErrorReason = `Proxy returned HTTP status ${response.status} (Authentication Required or Quota Limit Exceeded). Please upgrade or verify your Fixie proxy.`;
+          continue; // Retrying next mirror directly in the fallback mode
+        }
+
         // Handle mirror blocks (403 HTML)
-        if (response.status === 403 && typeof response.data === 'string' && response.data.includes('<html>')) {
-          console.warn(`[Vault-Bridge] Mirror Blocked (403 HTML) on ${mirror}. Trying next...`);
-          lastError = new Error(`Mirror ${mirror} returned 403 HTML (WAF)`);
-          continue; 
+        if (response.status === 403) {
+          const respData = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+          const isWafBlock = respData.includes('<html>') || respData.includes('WAF');
+          const isApiBlock = respData.includes('Restricted') || respData.includes('whitelist') || respData.includes('IP');
+          
+          if (isWafBlock || isApiBlock) {
+             console.warn(`[Vault-Bridge] Mirror Restricted/Blocked (403) on ${mirror}. Reason: ${isWafBlock ? 'WAF/HTML' : 'API_BLOCK'}. Trying next...`);
+             lastError = new Error(`Mirror ${mirror} returned 403 (${isWafBlock ? 'WAF' : 'IP_RESTRICTED'})`);
+             continue; 
+          }
         }
 
         // Handle real API errors (JSON)
@@ -349,15 +468,25 @@ async function performBinanceRequest(method: 'GET' | 'POST', endpoint: string, c
         lastError = new Error(`Unexpected Status ${response.status} from ${mirror}`);
       } catch (err: any) {
         console.error(`[Vault-Bridge] Connection error on ${mirror}:`, err.message);
+        
+        // Look for proxy issues in thrown exception
+        const errMsg = (err.message || "").toLowerCase();
+        const errStatus = err.response?.status;
+        if (errStatus === 407 || errMsg.includes("407") || errStatus === 402 || errMsg.includes("402") || errMsg.includes("proxy authentication")) {
+          console.error(`[Vault-Bridge] Proxy Auth/Billing error thrown: ${err.message}. Enabling direct routing fallback.`);
+          proxyExhaustedDetected = true;
+          lastProxyErrorTime = Date.now();
+          proxyErrorReason = `Proxy error thrown: ${err.message} (${errStatus || '407'}). Your Fixie quota is likely exceeded.`;
+        }
+        
         lastError = err;
       }
       
       await new Promise(resolve => setTimeout(resolve, 200));
+      if (BINANCE_USE_TESTNET) break;
     }
-    if (BINANCE_USE_TESTNET) break;
-  }
 
-  throw lastError || new Error("All Vault mirrors exhausted or blocked by WAF.");
+    throw lastError || new Error("All Vault mirrors exhausted or blocked by WAF.");
 }
 
 const BREAKER_COOLDOWN = 1800000; // 30 minutes automatic retry
@@ -691,8 +820,11 @@ async function generateContentWithRetry(params: any): Promise<any> {
             const oldModel = params.model;
             
             if (isQuotaExceeded || isUnavailable || isDepleted) {
-              const waitTime = isDepleted ? 60000 : 30000; 
-              console.warn(`[Server AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Mandatory recovery delay of ${waitTime/1000}s. (Attempt ${retries}/${MAX_RETRIES})`);
+              // 429 (Quota) and 402 (Billing) need substantial wait times.
+              // 503 (Service Unavailable) usually just means one specific model is overloaded, 
+              // so we reduce the wait time to 2s to allow faster switching to fallback models.
+              const waitTime = isDepleted ? 60000 : (isUnavailable ? 2000 : 30000); 
+              console.debug(`[Server AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. recovery delay of ${waitTime/1000}s. (Attempt ${retries}/${MAX_RETRIES})`);
               
               // If we are hitting billing errors and we've already tried several times, fail fast
               if (isDepleted && retries > 3) {
@@ -734,7 +866,7 @@ async function generateContentWithRetry(params: any): Promise<any> {
               throw error;
             }
             
-            console.warn(`[Server AI] Retrying with model fallback: ${params.model} (Attempt ${retries}/${MAX_RETRIES})`);
+            console.debug(`[Server AI] Retrying with model fallback: ${params.model} (Attempt ${retries}/${MAX_RETRIES})`);
             continue;
         }
 
@@ -783,12 +915,12 @@ try {
     
   if (fs.existsSync(configPath)) {
     firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    console.log("Firebase Config: Loaded from JSON file.");
+    console.debug("Firebase Config: Loaded from JSON file.");
   } else {
     throw new Error("JSON config file not found");
   }
 } catch (configError) {
-  console.log("Firebase Config: JSON config missing or invalid. Falling back to Environment Variables.");
+  console.debug("Firebase Config: JSON config missing or invalid. Falling back to Environment Variables.");
   firebaseConfig = {
     projectId: process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || "pulse-feeds-473225905822",
     apiKey: process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY,
@@ -1165,7 +1297,7 @@ async function testFirestoreConnection() {
   }
 }
 // IP Stability Monitor
-let TARGET_STATIC_IP = "35.214.40.75"; // Whitelisted Static IP confirmed by Bank
+let TARGET_STATIC_IP = "89.168.120.135"; // Whitelisted Static IP (Oracle Cloud Proxy)
 let currentOutboundIp = TARGET_STATIC_IP; 
 let isIpCertified = false;
 
@@ -1656,13 +1788,110 @@ async function startServer() {
   console.log("Monitor Interval: 5m (Production-Ready)");
 
   const app = express();
+  
+  // High-priority CORS configuration for cross-origin frontend (Surge) and mobile deployments
+  // We use the 'cors' package but ensure it's configured to be as permissive as possible while remaining compatible with credentials if needed.
+  // Note: res.header("Access-Control-Allow-Origin", "*") conflicts with credentials: true.
+  // So we use origin: true to dynamically allow the requesting origin (Surge) while maintaining cookie/header support.
   app.set('trust proxy', 1);
-  app.use(cors());
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  app.use(cors({
+    origin: (origin, callback) => {
+      // Allow all origins (development, Surge, staging, etc.)
+      callback(null, true);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Origin', 'Cache-Control', 'x-bridge-relay', 'x-api-key', 'x-api-secret'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    maxAge: 86400 // 24 hours preflight cache
+  }));
+
+  // Handle preflight OPTIONS requests explicitly (Safety net)
+  app.options('*', (req, res) => {
+    res.sendStatus(200);
+  });
 
   // Debug middleware for all Vault (Binance) API requests
   app.use('/api/vault', (req, res, next) => {
     console.log(`[Vault-DEBUG] ${req.method} ${req.path} - Headers: ${JSON.stringify(req.headers['content-type'])}`);
     next();
+  });
+
+  // Mixed Content Safety Bridge: Relays requests to the Oracle VPS if VITE_API_BASE_URL is set.
+  // This allows the HTTPS frontend (Surge/AI Studio) to talk to an HTTP backend via this secure relay.
+  app.use('/api/vault', async (req, res, next) => {
+    // Priority 1: VITE_API_BASE_URL secret
+    // Priority 2: BINANCE_PROXY environment
+    // Priority 3: Hardcoded Oracle VPS fallback to ensure stability
+    const bridgeUrl = (process.env.VITE_API_BASE_URL || process.env.BINANCE_PROXY || 'http://89.168.120.135:3000').trim();
+    
+    if (bridgeUrl && bridgeUrl.startsWith('http')) {
+      // Prevent infinite loop if bridgeUrl accidentally points to ourselves
+      const host = req.get('host') || '';
+      if (bridgeUrl.includes(host) && host !== '') {
+        return next();
+      }
+
+      console.log(`[Bridge-Relay] Forwarding ${req.method} /api/vault${req.path} to ${bridgeUrl}`);
+      try {
+        const cleanBase = bridgeUrl.endsWith('/') ? bridgeUrl.slice(0, -1) : bridgeUrl;
+        const targetUrl = `${cleanBase}/api/vault${req.path}`;
+        
+        // Pass through query params
+        const queryParams = new URL(targetUrl, bridgeUrl).searchParams;
+        Object.entries(req.query).forEach(([k, v]) => queryParams.set(k, String(v)));
+        const finalUrl = `${targetUrl.split('?')[0]}?${queryParams.toString()}`;
+
+        // Clean headers for relay to prevent protocol/host conflicts
+        const relayHeaders: any = {
+           "x-bridge-relay": "true",
+           "user-agent": req.headers["user-agent"] || STANDARD_USER_AGENT,
+           "accept": req.headers["accept"] || "application/json",
+           "content-type": req.headers["content-type"] || "application/json",
+           "host": new URL(bridgeUrl).host
+        };
+
+        // Pass through credentials if present
+        if (req.headers["x-api-key"]) relayHeaders["x-api-key"] = req.headers["x-api-key"];
+        if (req.headers["x-api-secret"]) relayHeaders["x-api-secret"] = req.headers["x-api-secret"];
+        if (req.headers["authorization"]) relayHeaders["authorization"] = req.headers["authorization"];
+
+        const relayResponse = await axios({
+          method: req.method as any,
+          url: finalUrl,
+          data: req.method !== 'GET' ? req.body : undefined,
+          headers: relayHeaders,
+          timeout: 20000, 
+          validateStatus: () => true
+        });
+
+        // Optimization: Standardize response to avoid issues with specialized headers
+        res.status(relayResponse.status);
+        if (relayResponse.headers['content-type']) {
+          res.setHeader('Content-Type', relayResponse.headers['content-type']);
+        }
+        res.send(relayResponse.data);
+        return;
+      } catch (err: any) {
+        console.error(`[Bridge-Relay] Relay failed: ${err.message}. Backend falling back to local processing.`);
+        next();
+      }
+    } else {
+      next();
+    }
+  });
+
+  // Dedicated health check endpoint (does not block root /)
+  app.get("/api/health-check", (req, res) => {
+    res.json({
+      status: "online",
+      name: "Pulse-Feeds API Server",
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      version: "1.2.2"
+    });
   });
 
   // Debug middleware for AI requests
@@ -1689,8 +1918,6 @@ async function startServer() {
   // Security Enforcement: AI Studio/Cloud Run requires port 3000 for local proxy
   const PORT = 3000;
   const HOST = "0.0.0.0";
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   // AI System Management
   app.get("/api/ai/status", (req, res) => {
@@ -1918,15 +2145,129 @@ async function startServer() {
   const isBinanceConfigured = () => {
     const k = getBinanceApiKey();
     const s = getBinanceApiSecret();
-    if (!k || !s) return false;
-    if (k === "hGSR4lD2JFxnsJ90Bjhy2trU1UvTXyiDBZe46Q0xyCXUZsP34KsFdUGtWcVVVYSr") return false;
-    if (s === "D4zKTsWTXrqEucgELaoLI9q5EiCeqvVVABW3EqzCNOB8GeFNnp8ldS3XHb133rab") return false;
-    return true;
+    return !!(k && s);
   };
 
-  app.get("/api/vault/diagnose", (req, res) => {
+  app.get("/api/vault/diagnose", async (req, res) => {
     try {
-      const diag = getDetectedBinanceSecrets();
+      const diag = getDetectedBinanceSecrets() as any;
+      
+      // Detected IP (Crucial for WAF troubleshooting)
+      try {
+        const ipResp = await axios.get('https://api.ipify.org?format=json', { timeout: 3000 }).catch(() => null);
+        if (ipResp) diag.outboundIp = ipResp.data.ip;
+      } catch (e) {}
+
+      // Real-time connectivity test
+      try {
+        const proxyMatchKey = getProxyMatchKey();
+        const proxyAgent = checkProxyStatus() ? null : getProxyAgent();
+        diag.proxyObjVisible = !!proxyAgent;
+        const testMirror = BINANCE_MIRRORS[Math.floor(Math.random() * BINANCE_MIRRORS.length)];
+        const axiosConfig: any = { 
+          timeout: 15000, 
+          validateStatus: () => true,
+          headers: { 'Cache-Control': 'no-cache' }
+        };
+        if (proxyAgent) {
+          axiosConfig.httpsAgent = proxyAgent;
+          axiosConfig.httpAgent = proxyAgent;
+          axiosConfig.proxy = false;
+          console.log(`[Vault-Diagnose] Testing connectivity via proxy (${proxyMatchKey})...`);
+        }
+        
+        const pingStart = Date.now();
+        const pingResp = await axios.get(`${testMirror}/api/v3/ping`, axiosConfig);
+        diag.lastPingLatency = Date.now() - pingStart;
+        diag.lastPingStatus = pingResp.status === 200 ? "OK" : `STATUS_${pingResp.status}`;
+        diag.lastPingMirror = testMirror;
+
+        if (pingResp.status !== 200) {
+          const respData = typeof pingResp.data === 'string' ? pingResp.data : JSON.stringify(pingResp.data);
+          if (respData.toLowerCase().includes('restricted location') || respData.toLowerCase().includes('eligible') || pingResp.status === 451) {
+            diag.isRestrictedIp = true;
+            diag.restrictionDetails = `Binance Regional Restriction (${pingResp.status}): This IP range is flagged by Binance WAF. Action: Enable 'IP Access Restriction' on Binance and whitelist ${diag.outboundIp || 'your server IP'}, or use a Residential Proxy.`;
+          }
+        }
+      } catch (e: any) {
+        diag.lastPingStatus = `FAILED: ${e.message}`;
+        
+        // Handle proxy 407/402 authentication and quota limits in diagnostics test
+        const errMsg = (e.message || "").toLowerCase();
+        const errStatus = e.response?.status;
+        const errData = JSON.stringify(e.response?.data || "").toLowerCase();
+
+        if (errStatus === 451 || errStatus === 403 || errMsg.includes("451") || errData.includes("restricted location") || errData.includes("eligible")) {
+          diag.isRestrictedIp = true;
+          diag.restrictionDetails = `Binance Access Blocked (${errStatus || '451'}). German (DE) Oracle servers are supported, but SAPI requires manual whitelisting of ${diag.outboundIp || 'the server IP'} in your Binance API settings to bypass data-center filters.`;
+        }
+
+        if (errMsg.includes("etimedout") || errMsg.includes("ehostunreach") || errMsg.includes("econnrefused")) {
+          // Do not mark as exhausted for simple timeouts or host unreachable, 
+          // as these are likely configuration or transient bridge issues on the user/network side.
+          console.log(`[Proxy-Diag] Connectivity issue detected (${errMsg}). Not disabling proxy.`);
+          diag.proxyConnectivityError = true;
+          
+          const proxyUrl = getProxyAgent() ? "Oracle Server" : "Proxy";
+          const portMatch = errMsg.match(/:(\d+)/) || ["", "3000"];
+          const port = portMatch[1];
+          
+          diag.proxyConnectivityMessage = errMsg.includes("ehostunreach") 
+            ? `Network Unreachable: The ${proxyUrl} IP is not responding on port ${port}. Check your ISP or Oracle Cloud Ingress rules.`
+            : errMsg.includes("econnrefused")
+            ? `Connection Refused: The ${proxyUrl} rejected connection on port ${port}. Is your proxy software (Squid/Tinyproxy) running and listening on 0.0.0.0?`
+            : `Connection Timeout: The proxy server is too slow or the port ${port} is closed.`;
+        } else if (errStatus === 407 || errMsg.includes("407") || errStatus === 402 || errMsg.includes("402") || errMsg.includes("proxy authentication")) {
+          proxyExhaustedDetected = true;
+          lastProxyErrorTime = Date.now();
+          proxyErrorReason = `Proxy returned ${errStatus || '407'} / ${e.message}. Your Fixie plan limit has likely been exceeded (500 free requests per month).`;
+        }
+      }
+
+      diag.proxyExhaustedDetected = proxyExhaustedDetected;
+      diag.proxyErrorReason = proxyErrorReason;
+      diag.backendBaseUrl = `${req.protocol}://${req.get('host')}`;
+      
+      // Bridge Relay Status
+      diag.bridgeRelay = {
+        active: !!(process.env.VITE_API_BASE_URL && process.env.VITE_API_BASE_URL.startsWith('http')),
+        target: process.env.VITE_API_BASE_URL || null,
+        safetyMode: req.protocol === 'https' && (process.env.VITE_API_BASE_URL || '').startsWith('http://')
+      };
+      
+      // System Status (Analogous to GitHub Actions/Render Events)
+      diag.serverInfo = {
+        uptime: Math.floor((Date.now() - START_TIME) / 1000),
+        deployedAt: BUILD_INFO.timestamp,
+        platform: os.platform(),
+        memory: {
+          free: Math.round(os.freemem() / 1024 / 1024),
+          total: Math.round(os.totalmem() / 1024 / 1024)
+        },
+        nodeVersion: process.version
+      };
+
+      // Get the actual IP Binance would see
+      try {
+        const proxyMatchKey = getProxyMatchKey();
+        const proxyAgent = checkProxyStatus() ? null : getProxyAgent();
+        const axiosConfig: any = { timeout: 12000, headers: { 'Cache-Control': 'no-cache' } };
+        if (proxyAgent) {
+          axiosConfig.httpsAgent = proxyAgent;
+          axiosConfig.httpAgent = proxyAgent;
+          axiosConfig.proxy = false;
+          console.log(`[Vault-Diagnose] Testing outbound IP via Proxy (${proxyMatchKey})...`);
+        } else {
+          console.log("[Vault-Diagnose] Testing outbound IP via Native Route...");
+        }
+        const ipResp = await axios.get('https://api.ipify.org?format=json', axiosConfig);
+        diag.outboundIp = ipResp.data.ip;
+        console.log(`[Vault-Diagnose] IP detected: ${diag.outboundIp}`);
+      } catch (e: any) {
+        diag.outboundIp = `Check Failed: ${e.message}`;
+        console.error(`[Vault-Diagnose] IP Check Error: ${e.message}`);
+      }
+
       res.json({ success: true, diagnostics: diag });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
@@ -1935,11 +2276,12 @@ async function startServer() {
 
   app.get("/api/vault/ip", async (req, res) => {
     try {
-      const proxyAgent = getProxyAgent();
+      const proxyAgent = proxyExhaustedDetected ? null : getProxyAgent();
       const axiosConfig: any = { timeout: 5000 };
       if (proxyAgent) {
         axiosConfig.httpsAgent = proxyAgent;
         axiosConfig.httpAgent = proxyAgent;
+        axiosConfig.proxy = false;
       }
       const response = await axios.get('https://api.ipify.org?format=json', axiosConfig);
       res.json({ success: true, ip: response.data.ip });
@@ -1950,9 +2292,9 @@ async function startServer() {
 
   app.get("/api/vault/account", async (req, res) => {
     if (!isBinanceConfigured()) {
-      return res.status(401).json({ 
-        success: false, 
-        error: "Binance API keys not configured. To establish a real connection, please enter your BINANCE_API_KEY and BINANCE_API_SECRET in the settings gear icon (top right)." 
+      return res.status(400).json({
+        success: false,
+        error: "Binance API keys are not configured. Please add BINANCE_API_KEY and BINANCE_API_SECRET in the settings to access live production data."
       });
     }
 
@@ -1989,12 +2331,16 @@ async function startServer() {
       let status = 500;
       if (err.response) {
         status = err.response.status;
-        if (typeof err.response.data === 'string' && err.response.data.includes('<html>')) {
+        const errDataStr = typeof err.response.data === 'string' ? err.response.data : JSON.stringify(err.response.data || "");
+        
+        if (errDataStr.toLowerCase().includes('restricted location') || errDataStr.toLowerCase().includes('eligible')) {
+          errorMsg = `Binance Restricted Location (451): Your server IP range is restricted from SAPI. Fix: Enable 'IP Access Restriction' and whitelist 89.168.120.135 in your Binance API settings, or deploy via a Residential Proxy.`;
+        } else if (errDataStr.includes('<html>')) {
           errorMsg = `Binance WAF Block (403 Forbidden). All mirrors were blocked for your request. Please check your API key restrictions and IP access rules in Binance.`;
         } else if (err.response.data?.msg) {
           errorMsg = err.response.data.msg;
         } else if (err.response.data) {
-          errorMsg = typeof err.response.data === 'string' ? err.response.data : JSON.stringify(err.response.data);
+          errorMsg = JSON.stringify(err.response.data);
         }
       }
       res.status(status).json({ success: false, error: errorMsg });
@@ -2004,9 +2350,9 @@ async function startServer() {
   app.get("/api/vault/balance/:asset", async (req, res) => {
     const { asset } = req.params;
     if (!isBinanceConfigured()) {
-      return res.status(401).json({ 
-        success: false, 
-        error: "Binance API keys not configured. Please supply BINANCE_API_KEY and BINANCE_API_SECRET in the settings gear icon (top right)." 
+      return res.status(400).json({
+        success: false,
+        error: "Binance API keys are not configured. Please add BINANCE_API_KEY and BINANCE_API_SECRET to enable live production balance checks."
       });
     }
 
@@ -2045,8 +2391,12 @@ async function startServer() {
       let status = 500;
       if (err.response) {
         status = err.response.status;
+        const errDataStr = typeof err.response.data === 'string' ? err.response.data : JSON.stringify(err.response.data || "");
+        
         if (typeof err.response.data === 'string' && err.response.data.includes('<html>')) {
-          errorMsg = `Binance Restricted Access (403 Forbidden). All mirrors are currently blocked. Please make sure your API key does not restrict IP access or that your API key exists.`;
+          errorMsg = `Binance Access Restricted (403/451). Your server range is flagged or location-blocked. Action: Whitelist your server IP in Binance API settings.`;
+        } else if (errDataStr.toLowerCase().includes('restricted location') || errDataStr.toLowerCase().includes('eligible') || status === 451) {
+          errorMsg = `Binance Restricted Location (451): This server IP is restricted from SAPI. Fix: Enable 'IP Access Restriction' and add your server IP to the whitelist in Binance.`;
         } else if (err.response.data?.msg) {
           errorMsg = err.response.data.msg;
         } else if (err.response.data) {
@@ -2060,16 +2410,6 @@ async function startServer() {
   app.post("/api/vault/payout-disburse", async (req, res) => {
     const { asset, address, amount, network, userId, scaToken, totpCode } = req.body;
     
-    if (!isBinanceConfigured()) {
-      return res.status(401).json({ 
-        success: false, 
-        error: "Binance API keys not configured. To establish a real connection, please enter your BINANCE_API_KEY and BINANCE_API_SECRET in the settings." 
-      });
-    }
-
-    const apiKey = getBinanceApiKey();
-    const apiSecret = getBinanceApiSecret();
-
     if (!asset || !address || !amount) {
       return res.status(400).json({ success: false, error: "Missing required withdrawal parameters (asset, address, amount)." });
     }
@@ -2085,7 +2425,17 @@ async function startServer() {
       return res.status(403).json({ success: false, error: "Security validation (PIN, Biometrics, or TOTP) is required for Binance withdrawals." });
     }
 
-    console.log(`[Binance Withdraw Request] Initiated by user ${userId} for ${amount} ${asset} to ${address}`);
+    if (!isBinanceConfigured()) {
+      return res.status(400).json({
+        success: false,
+        error: "Binance API keys are not configured. Cannot perform production payout-disburse. Please add your credentials in the settings."
+      });
+    }
+
+    const apiKey = getBinanceApiKey();
+    const apiSecret = getBinanceApiSecret();
+
+    console.debug(`[Binance Withdraw Request] Initiated by user ${userId} for ${amount} ${asset} to ${address}`);
     try {
       // Binance SAPI for withdrawals (Spot API)
       if (process.env.BINANCE_USE_TESTNET === "true") {
@@ -2107,8 +2457,8 @@ async function startServer() {
       const isDeveloperPayout = userId === 'platform-admin' || userId === 'system' || address === '0x992B9Fd95e4e64F374A92070e17627409fE27694'; 
       const logTag = isDeveloperPayout ? '[Binance Developer Payout]' : '[Binance User Withdrawal]';
 
-      console.log(`${logTag} Executing SAPI POST to withdraw ${amount} ${asset} to ${address}`);
-      console.log(`${logTag} Full Query String: ${params.toString()}`);
+      console.debug(`${logTag} Executing SAPI POST to withdraw ${amount} ${asset} to ${address}`);
+      console.debug(`${logTag} Full Query String: ${params.toString()}`);
 
       const resp = await performBinanceRequest('POST', `/v1/capital/withdraw/apply`, {
         data: params.toString(),
@@ -2120,7 +2470,7 @@ async function startServer() {
         }
       }, 'sapi');
 
-      console.log(`${logTag} Binance API Response Code: ${resp.status}`);
+      console.debug(`${logTag} Binance API Response Code: ${resp.status}`);
       if (resp.status === 200 && resp.data) {
         res.json({ success: true, data: resp.data, isDeveloper: isDeveloperPayout });
       } else {
@@ -2389,7 +2739,7 @@ async function startServer() {
         return res.status(500).json({
           success: false,
           error: "Service Locked",
-          message: "M-Pesa simulation is permanently disabled. Valid credentials and Whitelisted IP (35.214.40.75) required."
+          message: `M-Pesa simulation is permanently disabled. Valid credentials and Whitelisted IP (${TARGET_STATIC_IP}) required.`
         });
       }
 
@@ -2430,7 +2780,7 @@ async function startServer() {
         console.error("M-Pesa STK Push blocked. Simulation is PERMANENTLY FROZEN.");
         return res.status(500).json({ 
           error: "Failed to initiate STK Push", 
-          message: "Network block detected (403/WAF). Simulation is frozen. Ensure IP 35.214.40.75 is whitelisted.",
+          message: `Network block detected (403/WAF). Simulation is frozen. Ensure IP ${TARGET_STATIC_IP} is whitelisted.`,
           details: error.message 
         });
       }
@@ -2549,7 +2899,7 @@ async function startServer() {
           return res.status(500).json({ 
             success: false, 
             error: "Equity Bank payout failed", 
-            message: "Network block detected (403/WAF). Simulation is frozen. Ensure IP 35.214.40.75 is whitelisted.",
+            message: `Network block detected (403/WAF). Simulation is frozen. Ensure IP ${TARGET_STATIC_IP} is whitelisted.`,
             details: error.message 
           });
         }
@@ -2562,7 +2912,7 @@ async function startServer() {
     res.status(500).json({
       success: false,
       error: "Service Locked",
-      message: "Payout simulation is permanently disabled. Valid credentials and Whitelisted IP (35.214.40.75) required."
+      message: `Payout simulation is permanently disabled. Valid credentials and Whitelisted IP (${TARGET_STATIC_IP}) required.`
     });
   });
 
@@ -2668,7 +3018,7 @@ async function startServer() {
           return res.status(500).json({ 
             success: false, 
             error: "Equity Bank bank payout failed", 
-            message: "Network block detected (403/WAF). Simulation is frozen. Ensure IP 35.214.40.75 is whitelisted.",
+            message: `Network block detected (403/WAF). Simulation is frozen. Ensure IP ${TARGET_STATIC_IP} is whitelisted.`,
             details: error.message 
           });
         }
@@ -2681,7 +3031,7 @@ async function startServer() {
     res.status(500).json({
       success: false,
       error: "Service Locked",
-      message: "Bank payout simulation is permanently disabled. Valid credentials and Whitelisted IP (35.214.40.75) required."
+      message: `Bank payout simulation is permanently disabled. Valid credentials and Whitelisted IP (${TARGET_STATIC_IP}) required.`
     });
   });
 
@@ -2721,7 +3071,7 @@ async function startServer() {
         return res.status(500).json({
           success: false,
           error: "Service Locked",
-          message: "Paybill payout simulation is permanently disabled. Valid credentials and Whitelisted IP (35.214.40.75) required."
+          message: `Paybill payout simulation is permanently disabled. Valid credentials and Whitelisted IP (${TARGET_STATIC_IP}) required.`
         });
       }
 
@@ -3470,7 +3820,14 @@ async function performRobustEducationSync() {
       });
     }
 
-    res.status(503).json({ error: "Weather service temporarily unavailable", details: lastError?.message });
+    console.warn(`[Weather] Returning ultimate simulated weather fallback for ${cacheKey} due to: ${lastError?.message || 'Unknown error'}`);
+    return res.json({
+      current_weather: { temperature: 22.0, weathercode: 3, time: new Date().toISOString() },
+      daily: { temperature_2m_max: [24.0, 25.0], weather_code: [3, 3] },
+      _source: 'simulation_ultimate_fallback',
+      _is_simulated: true,
+      _error_details: lastError?.message || "Service unavailable"
+    });
   });
 
   // Co-op Bank Callback Handler
@@ -4309,7 +4666,7 @@ async function performRobustEducationSync() {
     }
 
     const clientMessage = isForbidden 
-      ? "Bank/API connectivity restricted from this location. Please ensure static IP 35.214.40.75 is whitelisted."
+      ? `Bank/API connectivity restricted from this location. Please ensure static IP ${TARGET_STATIC_IP} is whitelisted.`
       : err.message || "A system error occurred. Our self-healing engine has been notified.";
 
     res.status(500).json({ 
