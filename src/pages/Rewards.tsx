@@ -47,6 +47,8 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, u
 
 import { useNavigate } from "react-router-dom";
 
+import OTPModal from "../components/tools/OTPModal";
+
 interface Transaction {
   id: string;
   amount: number;
@@ -73,15 +75,16 @@ export default function Rewards() {
   const { currency, availableCurrencies, changeCurrency, convert, formatReward, loading, rates } = useCurrencyConverter();
   const [activeTab, setActiveTab] = useState<'overview' | 'local' | 'international' | 'history'>('overview');
   const [showSCAModal, setShowSCAModal] = useState(false);
-  const [authMethod, setAuthMethod] = useState<'pin' | 'passkey' | 'totp' | 'sms' | 'password'>('pin');
+  const [authMethod, setAuthMethod] = useState<'pin' | 'passkey' | 'totp' | 'sms' | 'password' | 'email'>('pin');
   const [passwordInput, setPasswordInput] = useState("");
   const [smsCode, setSmsCode] = useState("");
   const [isSendingSms, setIsSendingSms] = useState(false);
   const [isPasskeyAuthenticating, setIsPasskeyAuthenticating] = useState(false);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [scaToken, setScaToken] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [scaError, setScaError] = useState<string | null>(null);
-  const [scaPendingAction, setScaPendingAction] = useState<((pin: string, usePasskey?: boolean, totp?: string) => void) | null>(null);
+  const [scaPendingAction, setScaPendingAction] = useState<((pin: string, usePasskey?: boolean, totp?: string, email?: string) => void) | null>(null);
   const [passkeyBlocked, setPasskeyBlocked] = useState(false);
 
   useEffect(() => {
@@ -219,13 +222,13 @@ export default function Rewards() {
     }
   }, [currentUser, payoutMethod, binanceCoin]);
 
-  const handlePayment = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean, totp?: string) => {
+  const handlePayment = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean, totp?: string, email?: string) => {
     if (e) e.preventDefault();
     if (!amount) return;
     
     // Trigger SCA if not provided
-    if (!pin && !usePasskey && !totp && !isDeveloper && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (p: string, up?: boolean, t?: string) => handlePayment(undefined, p, up, t));
+    if (!pin && !usePasskey && !totp && !email && !isDeveloper && !process.env.SKIP_SCA) {
+      setScaPendingAction(() => (p: string, up?: boolean, t?: string, em?: string) => handlePayment(undefined, p, up, t, em));
       setShowSCAModal(true);
       return;
     }
@@ -269,7 +272,7 @@ export default function Rewards() {
       if (isDeveloper) limitKES = 1300000; // Unrestricted for system fixes (Adjusted scaling)
       else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitKES = 65000; // ~500 USD
           
-      if (recentWithdrawalsKES + requestedKES > limitKES && !totp && !usePasskey) {
+      if (recentWithdrawalsKES + requestedKES > limitKES && !totp && !usePasskey && !email) {
         setScaError(`Daily velocity limit reach with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is KES 650,000.`);
       }
 
@@ -287,7 +290,8 @@ export default function Rewards() {
           userId: currentUser?.uid,
           scaToken: pin,
           usePasskey,
-          totpCode: totp
+          totpCode: totp,
+          email: email
         };
 
         if (localMethod === 'mpesa') {
@@ -472,12 +476,12 @@ export default function Rewards() {
     }
   };
 
-  const handleBinanceWithdraw = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean, totp?: string) => {
+  const handleBinanceWithdraw = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean, totp?: string, email?: string) => {
     if (e) e.preventDefault();
     if (!payoutAmount) return;
 
-    if (!pin && !usePasskey && !totp && !isDeveloper && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (p: string, up?: boolean, t?: string) => handleBinanceWithdraw(undefined, p, up, t));
+    if (!pin && !usePasskey && !totp && !email && !isDeveloper && !process.env.SKIP_SCA) {
+      setScaPendingAction(() => (p: string, up?: boolean, t?: string, em?: string) => handleBinanceWithdraw(undefined, p, up, t, em));
       setShowSCAModal(true);
       return;
     }
@@ -512,6 +516,7 @@ export default function Rewards() {
           scaToken: pin,
           usePasskey,
           totpCode: totp,
+          email: email,
           userId: currentUser?.uid
         })
       });
@@ -580,16 +585,16 @@ export default function Rewards() {
     }
   };
 
-  const handleInternationalPayout = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean, totp?: string) => {
+  const handleInternationalPayout = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean, totp?: string, email?: string) => {
     if (payoutMethod === 'binance') {
-      return handleBinanceWithdraw(e, pin, usePasskey, totp);
+      return handleBinanceWithdraw(e, pin, usePasskey, totp, email);
     }
     if (e) e.preventDefault();
     if (!payoutAmount) return;
 
     // Trigger SCA if not provided
-    if (!pin && !usePasskey && !totp && !isDeveloper && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (p: string, up?: boolean, t?: string) => handleInternationalPayout(undefined, p, up, t));
+    if (!pin && !usePasskey && !totp && !email && !isDeveloper && !process.env.SKIP_SCA) {
+      setScaPendingAction(() => (p: string, up?: boolean, t?: string, em?: string) => handleInternationalPayout(undefined, p, up, t, em));
       setShowSCAModal(true);
       return;
     }
@@ -629,7 +634,7 @@ export default function Rewards() {
       if (isDeveloper) limitKES = 1300000;
       else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitKES = 65000; 
           
-      if (recentWithdrawalsKES + numAmount > limitKES && !totp && !usePasskey) {
+      if (recentWithdrawalsKES + numAmount > limitKES && !totp && !usePasskey && !email) {
         setScaError(`Daily velocity limit of KES ${limitKES.toLocaleString()} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is KES 650,000.`);
       }
 
@@ -644,11 +649,13 @@ export default function Rewards() {
           method: payoutMethod,
           amount: numAmount,
           email: payoutEmail,
+          payoutEmail: email || payoutEmail, // Use verification email if provided
           bankDetails: payoutMethod === 'bank' ? bankDetails : null,
           userId: currentUser.uid,
           scaToken: pin,
           usePasskey,
-          totpCode: totp
+          totpCode: totp,
+          verificationEmail: email
         };
 
         const response = await apiFetch('/api/payout/international', {
@@ -1010,8 +1017,7 @@ export default function Rewards() {
                        authMethod === 'passkey' ? "bg-white dark:bg-gray-800 text-orange-600 shadow-sm" : "text-gray-400"
                      )}
                    >
-                     Key
-                   </button>
+                     Key</button><button onClick={() => { setAuthMethod('email'); setScaError(null); }} className={cn('flex-1 py-1.5 px-1 text-[7px] font-black uppercase tracking-widest rounded-lg transition-all', authMethod === 'email' ? 'bg-white dark:bg-gray-800 text-orange-600 shadow-sm' : 'text-gray-400')}>Mail</button>
                  </div>
 
                  {/* Error Display / Velocity Prompt */}
@@ -1202,6 +1208,26 @@ export default function Rewards() {
                           </button>
                         </div>
                      </>
+                   ) : authMethod === 'email' ? (
+                     <div className="space-y-4">
+                       <OTPModal 
+                         userId={currentUser?.uid || ''} 
+                         email={currentUser?.email || ''}
+                         method="email"
+                         onClose={() => {
+                           setShowSCAModal(false);
+                           setScaPendingAction(null);
+                         }}
+                         onSuccess={() => {
+                           if (scaPendingAction) {
+                             scaPendingAction("", false, "", currentUser?.email || '');
+                           }
+                           setShowSCAModal(false);
+                           setScaPendingAction(null);
+                           setScaError(null);
+                         }}
+                       />
+                     </div>
                    ) : authMethod === 'password' ? (
                      <>
                         <div className="space-y-4">
