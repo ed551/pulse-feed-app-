@@ -1,6 +1,8 @@
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
+import 'leaflet/dist/leaflet.css';
+import 'react-quill-new/dist/quill.snow.css';
 import './index.css';
 
 // Register service worker
