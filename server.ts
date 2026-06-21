@@ -4345,10 +4345,15 @@ async function performRobustEducationSync() {
     
     // Rate Limiting Check
     const userIdentifier = userId || email;
-    const isAdmin = userIdentifier === 'edwinmuoha@gmail.com' || email === 'edwinmuoha@gmail.com';
+    const adminEmail = process.env.ADMIN_EMAIL || 'edwinmuoha@gmail.com';
+    const isAdmin = userIdentifier === adminEmail || email === adminEmail || userId === adminEmail;
+    
+    // Disable rate limiting in simulation mode (no SMS API key)
+    const isSimulation = !process.env.SMS_API_KEY && !process.env.EMAIL_USER;
+    
     const attempts = failedScaAttempts.get(userIdentifier);
     
-    if (!isAdmin && attempts && attempts.lockoutUntil > Date.now()) {
+    if (!isAdmin && !isSimulation && attempts && attempts.lockoutUntil > Date.now()) {
       return res.status(429).json({ 
         success: false, 
         error: "RATE_LIMIT", 

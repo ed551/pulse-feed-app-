@@ -736,6 +736,79 @@ export default function Settings() {
       content: (
         <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
           <div className="space-y-3">
+          <div className="space-y-4">
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Identity & Trust</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center text-blue-600">
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Email Address</p>
+                    <p className="text-xs font-bold text-gray-900 dark:text-white truncate max-w-[120px]">{currentUser?.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {currentUser?.emailVerified || userData?.emailVerified ? (
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg">
+                      <ShieldCheck className="w-3 h-3" />
+                      <span className="text-[9px] font-black uppercase tracking-tighter">Verified</span>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={async () => {
+                        try {
+                          await sendVerificationEmail();
+                          alert("Verification link sent to your email!");
+                        } catch (err: any) {
+                          alert(`Error: ${err.message}`);
+                        }
+                      }}
+                      className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-[9px] font-black uppercase tracking-tighter"
+                    >
+                      Verify
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg flex items-center justify-center text-emerald-600">
+                    <Smartphone className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Phone Link</p>
+                    <p className="text-xs font-bold text-gray-900 dark:text-white">{userData?.phoneNumber || "Not Linked"}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {userData?.phoneNumberVerified ? (
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg">
+                      <ShieldCheck className="w-3 h-3" />
+                      <span className="text-[9px] font-black uppercase tracking-tighter">Verified</span>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => {
+                        const targetSection = document.getElementById('mfa-sms');
+                        if (targetSection) {
+                          targetSection.scrollIntoView({ behavior: 'smooth' });
+                          // Optionally highlight it
+                        } else {
+                          setActiveSection('security');
+                        }
+                      }}
+                      className="px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg text-[9px] font-black uppercase tracking-tighter animate-pulse"
+                    >
+                      Verify Now
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('two_factor_auth')}</h4>
             
             <div className="grid grid-cols-1 gap-2">
