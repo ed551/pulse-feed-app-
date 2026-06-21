@@ -3978,6 +3978,11 @@ async function performRobustEducationSync() {
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
 
+      // Add a flag to the main user document for quick client-side check
+      await resilientDb.collection('users').doc(userId).set({
+        hasSetPin: true
+      }, { merge: true });
+
       return res.json({ success: true, message: "Security PIN updated successfully." });
     } catch (e: any) {
       return res.status(500).json({ error: e.message });

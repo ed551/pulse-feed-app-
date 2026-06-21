@@ -746,7 +746,14 @@ export default function Settings() {
                       <KeyRound className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-tight">Security PIN (SCA)</h4>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-tight">Security PIN (SCA)</h4>
+                        {!userData?.hasSetPin && (
+                          <span className="px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 text-[8px] font-black text-red-600 dark:text-red-400 rounded-md uppercase tracking-widest animate-pulse">
+                            NOT SET
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[10px] text-gray-500">The 4-8 digit key required for all withdrawals.</p>
                     </div>
                   </div>

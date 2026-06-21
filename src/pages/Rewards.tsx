@@ -48,6 +48,7 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, u
 import { useNavigate } from "react-router-dom";
 
 import OTPModal from "../components/tools/OTPModal";
+import CreateWithdrawPinModal from "../components/CreateWithdrawPinModal";
 
 interface Transaction {
   id: string;
@@ -86,6 +87,7 @@ export default function Rewards() {
   const [scaError, setScaError] = useState<string | null>(null);
   const [scaPendingAction, setScaPendingAction] = useState<((pin: string, usePasskey?: boolean, totp?: string, email?: string) => void) | null>(null);
   const [passkeyBlocked, setPasskeyBlocked] = useState(false);
+  const [showCreatePinModal, setShowCreatePinModal] = useState(false);
 
   useEffect(() => {
     const checkCap = async () => {
@@ -225,6 +227,12 @@ export default function Rewards() {
   const handlePayment = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean, totp?: string, email?: string) => {
     if (e) e.preventDefault();
     if (!amount) return;
+
+    // Check if user has set a PIN
+    if (!userData?.hasSetPin && !isDeveloper && !process.env.SKIP_SCA) {
+      setShowCreatePinModal(true);
+      return;
+    }
     
     // Trigger SCA if not provided
     if (!pin && !usePasskey && !totp && !email && !isDeveloper && !process.env.SKIP_SCA) {
@@ -479,6 +487,12 @@ export default function Rewards() {
   const handleBinanceWithdraw = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean, totp?: string, email?: string) => {
     if (e) e.preventDefault();
     if (!payoutAmount) return;
+
+    // Check if user has set a PIN
+    if (!userData?.hasSetPin && !isDeveloper && !process.env.SKIP_SCA) {
+      setShowCreatePinModal(true);
+      return;
+    }
 
     if (!pin && !usePasskey && !totp && !email && !isDeveloper && !process.env.SKIP_SCA) {
       setScaPendingAction(() => (p: string, up?: boolean, t?: string, em?: string) => handleBinanceWithdraw(undefined, p, up, t, em));
@@ -2892,6 +2906,15 @@ export default function Rewards() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <CreateWithdrawPinModal
+        isOpen={showCreatePinModal}
+        onClose={() => setShowCreatePinModal(false)}
+        onSuccess={() => {
+          setShowCreatePinModal(false);
+          // The hasSetPin flag will be updated on the next userData sync
+        }}
+      />
     </div>
   );
 }

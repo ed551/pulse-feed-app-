@@ -40,13 +40,15 @@ import CallModal from "./tools/CallModal";
 import TranslateModal from "./tools/TranslateModal";
 import ClockModal from "./tools/ClockModal";
 import OTPModal from "./tools/OTPModal";
+import LoginModal from "./LoginModal";
 import { ConnectivityBanner } from "./ConnectivityBanner";
 import { db, getConnectionStatus } from "../lib/firebase";
 import { setDoc, doc, arrayUnion, serverTimestamp, getDocFromServer, updateDoc } from "firebase/firestore";
 
 export default function Layout() {
-  const { currentUser, userData, logout, isFacebookApp } = useAuth();
+  const { currentUser, userData, loading, logout, isFacebookApp } = useAuth();
   const { t } = useTranslation();
+  const location = useLocation();
   const { convert, formatReward, formatCurrency, rates } = useCurrencyConverter();
 
   const weatherTypes = [
@@ -151,6 +153,21 @@ export default function Layout() {
       setIsLocked(true);
     }
   }, [isIdle, userData?.twoFactorEnabled, currentUser]);
+
+  // Auto-login popup for guests
+  useEffect(() => {
+    if (!currentUser && !loading && location.pathname === '/') {
+      const hasShown = sessionStorage.getItem('login_modal_shown');
+      if (!hasShown) {
+        const timer = setTimeout(() => {
+          setActiveModal('login');
+          sessionStorage.setItem('login_modal_shown', 'true');
+        }, 5000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [currentUser, loading, location.pathname]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
@@ -366,8 +383,7 @@ export default function Layout() {
   }, []);
 
   // Removed Stopwatch and Timer logic as it's moved to ClockModal.tsx
-
-  const location = useLocation();
+  // Removed location as it's at the top of the component
 
   // Smart Market Prediction Logic (Brain Unit)
   const [marketData, setMarketData] = useState<MarketPrediction | null>(null);
@@ -1379,6 +1395,10 @@ export default function Layout() {
         </AnimatePresence>
 
         {/* AI Eye Modal */}
+        {activeModal === 'login' && (
+          <LoginModal onClose={() => setActiveModal(null)} />
+        )}
+
         {activeModal === 'aieye' && (
           <AIEyeModal onClose={() => setActiveModal(null)} />
         )}
