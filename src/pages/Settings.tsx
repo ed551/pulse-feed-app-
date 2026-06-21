@@ -50,7 +50,7 @@ import { cn } from "../lib/utils";
 import { apiFetch } from "../lib/api";
 
 export default function Settings() {
-  const { currentUser, userData, logout } = useAuth();
+  const { currentUser, userData, logout, sendVerificationEmail } = useAuth();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<string | null>(null);
@@ -1427,8 +1427,9 @@ export default function Settings() {
             </button>
           </div>
         </div>
-      )
-    },
+      </div>
+    )
+  },
     {
       id: 'notifications',
       title: t('notifications'),
