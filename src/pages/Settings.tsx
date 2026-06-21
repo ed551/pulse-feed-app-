@@ -1424,16 +1424,14 @@ export default function Settings() {
                 </div>
               </div>
               <ChevronRight className="w-4 h-4 text-gray-400" />
-                      </button>
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
-)
-},
-{
-  id: 'notifications',
-  
+    )
+  },
+    {
+      id: 'notifications',
       title: t('notifications'),
       description: t('notifications_desc'),
       icon: <Bell className="w-5 h-5 text-orange-500" />,
