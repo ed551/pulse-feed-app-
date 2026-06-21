@@ -79,6 +79,8 @@ interface UserData {
   activeSessions?: string[];
   passkeyRegistered?: boolean;
   hasSetPin?: boolean;
+  emailVerified?: boolean;
+  phoneNumberVerified?: boolean;
   contentFilters?: {
     sensitiveContent: boolean;
     spamFilter: boolean;
