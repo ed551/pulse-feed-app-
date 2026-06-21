@@ -3703,131 +3703,142 @@ async function performRobustEducationSync() {
   });
 
   app.get("/api/weather", async (req, res) => {
-    console.log(`[API] GET /api/weather - Query:`, req.query);
-    const { lat, lon } = req.query;
-    const latitude = parseFloat(lat as string);
-    const longitude = parseFloat(lon as string);
-
-    if (isNaN(latitude) || isNaN(longitude)) {
-      return res.status(400).json({ error: "Invalid coordinates" });
-    }
-
-    // Round to 1 decimal place for city-level caching
-    const cacheKey = `${latitude.toFixed(1)},${longitude.toFixed(1)}`;
-    const cached = weatherCache.get(cacheKey);
-    const now = Date.now();
-
-    // 1. If we have FRESH data, return it immediately
-    if (cached && (now - cached.timestamp < FRESH_DURATION)) {
-      console.log(`[Weather] Serving FRESH cache for ${cacheKey}`);
-      return res.json({ ...cached.data, _source: 'cache_fresh' });
-    }
-
-    // 2. If no fresh data, try to fetch from providers
-    let lastError: any = null;
     try {
-      console.log(`[Weather] Fetching for ${cacheKey}...`);
-      
-      // Define fetchers
-      const fetchOpenMeteo = async () => {
-        const res = await axios.get(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true&daily=temperature_2m_max,weather_code&timezone=auto`, {
-          timeout: 10000,
-          headers: { 'Accept': 'application/json', 'User-Agent': 'PulseFeedWeatherBot/4.2' }
-        });
-        if (!res.data?.current_weather) throw new Error("Invalid Open-Meteo response");
-        return { data: res.data, source: 'network_primary' };
-      };
+      console.log(`[API] GET /api/weather - Query:`, req.query);
+      const { lat, lon } = req.query;
+      const latitude = parseFloat(lat as string);
+      const longitude = parseFloat(lon as string);
 
-      const fetchMetNorway = async () => {
-        const res = await axios.get(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${latitude}&lon=${longitude}`, {
-          timeout: 10000,
-          headers: { 'User-Agent': 'PulseFeedWeatherBot/4.2 (contact: edwinmuoha@gmail.com)', 'Accept': 'application/json' }
-        });
-        const timeseries = res.data?.properties?.timeseries?.[0];
-        if (!timeseries) throw new Error("Invalid MET Norway response");
-        
-        const current = timeseries.data.instant.details;
-        const nextHour = timeseries.data.next_1_hours;
-        let weathercode = 3; // Default cloudy
-        
-        if (nextHour) {
-          const summary = nextHour.summary.symbol_code;
-          if (summary.includes('sun') || summary.includes('clear')) weathercode = 0;
-          else if (summary.includes('rain')) weathercode = 61;
-          else if (summary.includes('snow')) weathercode = 71;
-          else if (summary.includes('thunder')) weathercode = 95;
-        }
-
-        const mappedData = {
-          current_weather: { temperature: current.air_temperature, weathercode },
-          daily: { temperature_2m_max: [current.air_temperature + 2, current.air_temperature + 1], weather_code: [weathercode, weathercode] }
-        };
-        return { data: mappedData, source: 'network_fallback_met' };
-      };
-
-      // Try primary and secondary in parallel for speed and resilience
-      const result = await Promise.any([fetchOpenMeteo(), fetchMetNorway()]);
-      
-      console.log(`[Weather] Success via ${result.source}`);
-      weatherCache.set(cacheKey, { data: result.data, timestamp: now });
-      return res.json({ ...result.data, _source: result.source });
-
-    } catch (error: any) {
-      lastError = error;
-      console.warn(`[Weather] Primary providers failed (Open-Meteo/Met.no): ${error.message || 'Unknown error'}. Trying wttr.in fallback...`);
-      
-      if (isNetworkBlock(error)) {
-        console.warn("[Weather] Network block detected for weather providers.");
+      if (isNaN(latitude) || isNaN(longitude)) {
+        return res.status(400).json({ error: "Invalid coordinates" });
       }
-      
+
+      // Round to 1 decimal place for city-level caching
+      const cacheKey = `${latitude.toFixed(1)},${longitude.toFixed(1)}`;
+      const cached = weatherCache.get(cacheKey);
+      const now = Date.now();
+
+      // 1. If we have FRESH data, return it immediately
+      if (cached && (now - cached.timestamp < FRESH_DURATION)) {
+        console.log(`[Weather] Serving FRESH cache for ${cacheKey}`);
+        return res.json({ ...cached.data, _source: 'cache_fresh' });
+      }
+
+      // 2. If no fresh data, try to fetch from providers
+      let lastError: any = null;
       try {
-        const wttrRes = await axios.get(`https://wttr.in/${latitude},${longitude}?format=j1`, {
-          timeout: 8000,
-          headers: { 'Accept': 'application/json', 'User-Agent': 'curl/7.64.1' }
-        });
+        console.log(`[Weather] Fetching for ${cacheKey}...`);
+        
+        // Define fetchers
+        const fetchOpenMeteo = async () => {
+          const res = await axios.get(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true&daily=temperature_2m_max,weather_code&timezone=auto`, {
+            timeout: 10000,
+            headers: { 'Accept': 'application/json', 'User-Agent': 'PulseFeedWeatherBot/4.2' }
+          });
+          if (!res.data?.current_weather) throw new Error("Invalid Open-Meteo response");
+          return { data: res.data, source: 'network_primary' };
+        };
 
-        const contentType = wttrRes.headers['content-type'] || '';
-        if (contentType.includes('application/json') && wttrRes.data?.current_condition?.[0]) {
-          const cond = wttrRes.data.current_condition[0];
+        const fetchMetNorway = async () => {
+          const res = await axios.get(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${latitude}&lon=${longitude}`, {
+            timeout: 10000,
+            headers: { 'User-Agent': 'PulseFeedWeatherBot/4.2 (contact: edwinmuoha@gmail.com)', 'Accept': 'application/json' }
+          });
+          const timeseries = res.data?.properties?.timeseries?.[0];
+          if (!timeseries) throw new Error("Invalid MET Norway response");
+          
+          const current = timeseries.data.instant.details;
+          const nextHour = timeseries.data.next_1_hours;
+          let weathercode = 3; // Default cloudy
+          
+          if (nextHour) {
+            const summary = nextHour.summary.symbol_code;
+            if (summary.includes('sun') || summary.includes('clear')) weathercode = 0;
+            else if (summary.includes('rain')) weathercode = 61;
+            else if (summary.includes('snow')) weathercode = 71;
+            else if (summary.includes('thunder')) weathercode = 95;
+          }
+
           const mappedData = {
-            current_weather: { temperature: parseFloat(cond.temp_C), weathercode: 0 },
-            daily: { temperature_2m_max: [parseFloat(wttrRes.data.weather?.[0]?.maxtempC || cond.temp_C)], weather_code: [0] }
+            current_weather: { temperature: current.air_temperature, weathercode },
+            daily: { temperature_2m_max: [current.air_temperature + 2, current.air_temperature + 1], weather_code: [weathercode, weathercode] }
           };
-          console.log(`[Weather] wttr.in success for ${cacheKey}`);
-          weatherCache.set(cacheKey, { data: mappedData, timestamp: now });
-          return res.json({ ...mappedData, _source: 'network_fallback_wttr' });
-        } else {
-          console.warn("[Weather] wttr.in returned invalid data for", cacheKey, "ContentType:", contentType);
+          return { data: mappedData, source: 'network_fallback_met' };
+        };
+
+        // Try primary and secondary in parallel for speed and resilience
+        const result = await Promise.any([fetchOpenMeteo(), fetchMetNorway()]);
+        
+        console.log(`[Weather] Success via ${result.source}`);
+        weatherCache.set(cacheKey, { data: result.data, timestamp: now });
+        return res.json({ ...result.data, _source: result.source });
+
+      } catch (error: any) {
+        lastError = error;
+        console.warn(`[Weather] Primary providers failed (Open-Meteo/Met.no): ${error.message || 'Unknown error'}. Trying wttr.in fallback...`);
+        
+        if (isNetworkBlock(error)) {
+          console.warn("[Weather] Network block detected for weather providers.");
         }
-      } catch (wttrError: any) {
-        lastError = wttrError;
-        console.error(`[Weather] All providers failed for ${cacheKey}. Last error (wttr.in): ${wttrError.message}`);
+        
+        try {
+          const wttrRes = await axios.get(`https://wttr.in/${latitude},${longitude}?format=j1`, {
+            timeout: 8000,
+            headers: { 'Accept': 'application/json', 'User-Agent': 'curl/7.64.1' }
+          });
+
+          const contentType = wttrRes.headers['content-type'] || '';
+          if (contentType.includes('application/json') && wttrRes.data?.current_condition?.[0]) {
+            const cond = wttrRes.data.current_condition[0];
+            const mappedData = {
+              current_weather: { temperature: parseFloat(cond.temp_C), weathercode: 0 },
+              daily: { temperature_2m_max: [parseFloat(wttrRes.data.weather?.[0]?.maxtempC || cond.temp_C)], weather_code: [0] }
+            };
+            console.log(`[Weather] wttr.in success for ${cacheKey}`);
+            weatherCache.set(cacheKey, { data: mappedData, timestamp: now });
+            return res.json({ ...mappedData, _source: 'network_fallback_wttr' });
+          } else {
+            console.warn("[Weather] wttr.in returned invalid data for", cacheKey, "ContentType:", contentType);
+          }
+        } catch (wttrError: any) {
+          lastError = wttrError;
+          console.error(`[Weather] All providers failed for ${cacheKey}. Last error (wttr.in): ${wttrError.message}`);
+        }
       }
-    }
 
-    // 3. Final Fallback: If we have ANY cached data (even very stale), use it instead of returning 500
-    if (cached) {
-      console.warn(`[Weather] Returning STALE cache as last resort for ${cacheKey}`);
-      return res.json({ ...cached.data, _source: 'cache_emergency_fallback', _is_stale: true });
-    }
+      // 3. Final Fallback: If we have ANY cached data (even very stale), use it instead of returning 500
+      if (cached) {
+        console.warn(`[Weather] Returning STALE cache as last resort for ${cacheKey}`);
+        return res.json({ ...cached.data, _source: 'cache_emergency_fallback', _is_stale: true });
+      }
 
-    if (isNetworkBlock(lastError)) {
-      console.warn("[Weather] Network block detected. Returning default simulated weather.");
+      if (isNetworkBlock(lastError)) {
+        console.warn("[Weather] Network block detected. Returning default simulated weather.");
+        return res.json({
+          current_weather: { temperature: 24.5, weathercode: 0, time: new Date().toISOString() },
+          daily: { temperature_2m_max: [28.0], weather_code: [0] },
+          _source: 'simulation_network_block'
+        });
+      }
+
+      console.warn(`[Weather] Returning ultimate simulated weather fallback for ${cacheKey} due to: ${lastError?.message || 'Unknown error'}`);
       return res.json({
-        current_weather: { temperature: 24.5, weathercode: 0, time: new Date().toISOString() },
-        daily: { temperature_2m_max: [28.0], weather_code: [0] },
-        _source: 'simulation_network_block'
+        current_weather: { temperature: 22.0, weathercode: 3, time: new Date().toISOString() },
+        daily: { temperature_2m_max: [24.0, 25.0], weather_code: [3, 3] },
+        _source: 'simulation_ultimate_fallback',
+        _is_simulated: true,
+        _error_details: lastError?.message || "Service unavailable"
+      });
+    } catch (criticalErr: any) {
+      console.error("[Weather CRITICAL] Universal fallback triggered due to exception:", criticalErr.message);
+      return res.json({
+        current_weather: { temperature: 22.5, weathercode: 3, time: new Date().toISOString() },
+        daily: { temperature_2m_max: [24.0, 25.0], weather_code: [3, 3] },
+        _source: 'simulation_ultimate_critical_fallback',
+        _is_simulated: true,
+        _error_details: criticalErr.message || "Unknown routing exception"
       });
     }
-
-    console.warn(`[Weather] Returning ultimate simulated weather fallback for ${cacheKey} due to: ${lastError?.message || 'Unknown error'}`);
-    return res.json({
-      current_weather: { temperature: 22.0, weathercode: 3, time: new Date().toISOString() },
-      daily: { temperature_2m_max: [24.0, 25.0], weather_code: [3, 3] },
-      _source: 'simulation_ultimate_fallback',
-      _is_simulated: true,
-      _error_details: lastError?.message || "Service unavailable"
-    });
   });
 
   // Co-op Bank Callback Handler
