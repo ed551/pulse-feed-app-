@@ -1,6 +1,4 @@
 @import "tailwindcss";
-@import "react-quill-new/dist/quill.snow.css";
-@import url('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
 
 @layer base {
   html, body, #root {

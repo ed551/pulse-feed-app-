@@ -45,7 +45,7 @@ export default function BinanceHub() {
       const data = await resp.json();
       setPingData(data);
     } catch (e) {
-      console.warn("Ping failed", e);
+      console.debug("Ping failed", e);
     }
   };
 
@@ -59,8 +59,9 @@ export default function BinanceHub() {
       const contentType = priceResp.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         const text = await priceResp.text();
-        console.warn("[Binance Hub] Prices fetch received non-JSON response:", text.substring(0, 200));
-        throw new Error(`Price feed unavailable (Status: ${priceResp.status}). The Binance service might be restricted or undergoing maintenance.`);
+        console.warn("[Binance Hub] Prices fetch received non-JSON response:", text.substring(0, 500));
+        const isHtml = text.includes('<html>') || text.includes('<!DOCTYPE html>');
+        throw new Error(`Price feed unavailable (Status: ${priceResp.status}). ${isHtml ? "The bridge VPS (89.168.120.135) returned HTML instead of JSON. This suggests a Binance WAF challenge or an Nginx misconfiguration on the VPS." : "Check your server configuration."}`);
       }
       const priceResult = await priceResp.json();
       if (priceResult.success) {

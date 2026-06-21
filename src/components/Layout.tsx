@@ -515,7 +515,7 @@ export default function Layout() {
       try {
         const { data, timestamp } = JSON.parse(cachedData);
         if (data && data.current && data.forecast && Date.now() - timestamp < 30 * 60 * 1000) { // 30 mins
-          console.log("Weather: Using localStorage cache");
+          console.debug("Weather: Using localStorage cache");
           
           // Re-attach icons because functions (components) are lost in JSON.stringify
           const currentType = weatherTypes.find(t => t.type === data.current.type) || weatherTypes[3];
@@ -768,12 +768,12 @@ export default function Layout() {
           fetchWeather(latitude, longitude, city);
         },
         (error) => {
-          console.error("Geolocation Error:", error);
+          // Silent fallback for environments that deny geolocation (common in iframe/preview)
           const errorMsg = error.code === 1 ? "Permission denied" : (error.code === 2 ? "Position unavailable" : "Timeout");
-          console.warn(`Geolocation failed: ${errorMsg}. Falling back to default.`);
+          console.debug(`Geolocation failed: ${errorMsg}. Falling back to default.`);
           setLocationName('Pulse Global');
           fetchWeather(-1.286389, 36.817223, 'Pulse Global'); // Default to Nairobi
-          showNotification("Location Access", { body: "We couldn't detect your precise location. Using a default region." });
+          // Removed notification to avoid interrupting the user on every reload if they intentionally deny location
         }
       );
     } else {

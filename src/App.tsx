@@ -72,9 +72,8 @@ function WakeLockHandler() {
       if ('wakeLock' in navigator) {
         try {
           wakeLock = await (navigator as any).wakeLock.request('screen');
-          console.log("Master Wake Lock Active");
         } catch (err) {
-          console.log("Wake Lock request failed");
+          // Silent fallback for environments that don't support wake lock or deny permission
         }
       }
     };
