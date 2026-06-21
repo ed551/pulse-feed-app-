@@ -95,6 +95,9 @@ export default function Settings() {
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>((userData?.theme as 'light' | 'dark' | 'system') || "system");
   const [activeSessions, setActiveSessions] = useState<string[]>(userData?.activeSessions || []);
   const [passkeyBlocked, setPasskeyBlocked] = useState(false);
+  const [showPinOtp, setShowPinOtp] = useState(false);
+  const [pinEmailVerified, setPinEmailVerified] = useState(false);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
 
   useEffect(() => {
     const checkCap = async () => {
@@ -753,10 +756,10 @@ export default function Settings() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-gray-400 pl-1">Verification</label>
-                      {passkeyAuthorized ? (
+                      {passkeyAuthorized || pinEmailVerified ? (
                         <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-xl px-4 py-3 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
                           <ShieldCheck className="w-4 h-4" />
-                          Authenticated via Passkey
+                          {passkeyAuthorized ? "Authenticated via Passkey" : "Verified via Email"}
                         </div>
                       ) : (
                         <div className="flex flex-col gap-2">
@@ -766,72 +769,101 @@ export default function Settings() {
                             className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-xs font-mono focus:ring-2 focus:ring-purple-500 outline-none"
                             placeholder="Current PIN"
                           />
-                          {userData?.passkeyRegistered && (
+                          <div className="flex flex-col gap-1">
+                            {userData?.passkeyRegistered && (
+                              <button 
+                                onClick={async () => {
+                                  if (!currentUser) return;
+                                  
+                                  if (isIframe()) {
+                                    const width = 500;
+                                    const height = 600;
+                                    const left = window.screenX + (window.outerWidth - width) / 2;
+                                    const top = window.screenY + (window.outerHeight - height) / 2;
+                                    
+                                    const popup = window.open(
+                                      `#/passkey-auth?userId=${currentUser.uid}&type=auth`,
+                                      'Passkey Authentication',
+                                      `width=${width},height=${height},left=${left},top=${top},status=no,menubar=no,toolbar=no`
+                                    );
+
+                                    const handleMessage = (event: MessageEvent) => {
+                                      if (event.origin !== window.location.origin) return;
+                                      if (event.data?.type === 'passkey-success') {
+                                        setPasskeyAuthorized(true);
+                                        window.removeEventListener('message', handleMessage);
+                                      }
+                                    };
+                                    window.addEventListener('message', handleMessage);
+                                    return;
+                                  }
+
+                                  setIsPasskeyAuthenticating(true);
+                                  try {
+                                    // 1. Get options from server
+                                    const resp = await apiFetch('/api/auth/passkey/generate-authentication-options', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ userId: currentUser.uid }),
+                                    });
+                                    const options = await resp.json();
+                                    if (options.error) throw new Error(options.error);
+
+                                    // 2. Start authentication
+                                    const authResp = await startAuthentication(options);
+
+                                    // 3. Verify
+                                    const verifyResp = await apiFetch('/api/auth/passkey/verify-authentication', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ userId: currentUser.uid, response: authResp }),
+                                    });
+                                    const verification = await verifyResp.json();
+                                    if (verification.verified) {
+                                      setPasskeyAuthorized(true);
+                                    } else {
+                                      throw new Error(verification.error || "Verification failed");
+                                    }
+                                  } catch (e: any) {
+                                    alert(`Auth Error: ${e.message}`);
+                                  } finally {
+                                    setIsPasskeyAuthenticating(false);
+                                  }
+                                }}
+                                disabled={isPasskeyAuthenticating}
+                                className="text-[9px] font-black uppercase text-indigo-600 dark:text-indigo-400 text-center hover:underline"
+                              >
+                                {isPasskeyAuthenticating ? "Verifying..." : "Verify with Passkey"}
+                              </button>
+                            )}
                             <button 
                               onClick={async () => {
-                                if (!currentUser) return;
-                                
-                                if (isIframe()) {
-                                  const width = 500;
-                                  const height = 600;
-                                  const left = window.screenX + (window.outerWidth - width) / 2;
-                                  const top = window.screenY + (window.outerHeight - height) / 2;
-                                  
-                                  const popup = window.open(
-                                    `#/passkey-auth?userId=${currentUser.uid}&type=auth`,
-                                    'Passkey Authentication',
-                                    `width=${width},height=${height},left=${left},top=${top},status=no,menubar=no,toolbar=no`
-                                  );
-
-                                  const handleMessage = (event: MessageEvent) => {
-                                    if (event.origin !== window.location.origin) return;
-                                    if (event.data?.type === 'passkey-success') {
-                                      setPasskeyAuthorized(true);
-                                      window.removeEventListener('message', handleMessage);
-                                    }
-                                  };
-                                  window.addEventListener('message', handleMessage);
-                                  return;
-                                }
-
-                                setIsPasskeyAuthenticating(true);
+                                if (!currentUser?.email) return;
+                                setIsSendingOtp(true);
                                 try {
-                                  // 1. Get options from server
-                                  const resp = await apiFetch('/api/auth/passkey/generate-authentication-options', {
+                                  const res = await apiFetch("/api/otp/send", {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ userId: currentUser.uid }),
+                                    body: JSON.stringify({ userId: currentUser.uid, email: currentUser.email, method: 'email' })
                                   });
-                                  const options = await resp.json();
-                                  if (options.error) throw new Error(options.error);
-
-                                  // 2. Start authentication
-                                  const authResp = await startAuthentication(options);
-
-                                  // 3. Verify
-                                  const verifyResp = await apiFetch('/api/auth/passkey/verify-authentication', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ userId: currentUser.uid, response: authResp }),
-                                  });
-                                  const verification = await verifyResp.json();
-                                  if (verification.verified) {
-                                    setPasskeyAuthorized(true);
+                                  if (res.ok) {
+                                    setPendingAction('reset_pin_email');
+                                    setShowFingerprintModal(true);
                                   } else {
-                                    throw new Error(verification.error || "Verification failed");
+                                    alert("Failed to send OTP.");
                                   }
-                                } catch (e: any) {
-                                  alert(`Auth Error: ${e.message}`);
+                                } catch (err) {
+                                  alert("Error sending OTP.");
                                 } finally {
-                                  setIsPasskeyAuthenticating(false);
+                                  setIsSendingOtp(false);
                                 }
                               }}
-                              disabled={isPasskeyAuthenticating}
-                              className="text-[9px] font-black uppercase text-indigo-600 dark:text-indigo-400 text-center hover:underline"
+                              disabled={isSendingOtp}
+                              className="text-[9px] font-black uppercase text-purple-600 dark:text-purple-400 text-center hover:underline"
                             >
-                              {isPasskeyAuthenticating ? "Verifying..." : "Or Verify with Passkey"}
+                              {isSendingOtp ? "Sending..." : "Verify with Email"}
                             </button>
-                          )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -851,7 +883,7 @@ export default function Settings() {
                         const cur = (document.getElementById('userCurrentPin') as HTMLInputElement)?.value || "";
                         const next = (document.getElementById('userNewPin') as HTMLInputElement).value;
                         
-                        if(!passkeyAuthorized && !cur) return alert("Validation Error: Please provide your current PIN or verify with Passkey.");
+                        if(!passkeyAuthorized && !pinEmailVerified && !cur) return alert("Validation Error: Please provide your current PIN, verify via Email, or verify with Passkey.");
                         if(!next) return alert("Validation Error: Please provide a new PIN.");
                         if(next.length < 4 || next.length > 8) return alert("Validation Error: PIN must be 4-8 digits.");
                         
@@ -863,7 +895,8 @@ export default function Settings() {
                               userId: currentUser?.uid, 
                               currentPin: cur, 
                               newPin: next,
-                              usePasskey: passkeyAuthorized
+                              usePasskey: passkeyAuthorized,
+                              email: pinEmailVerified ? currentUser?.email : undefined
                             })
                           });
                           const data = await res.json();
@@ -874,6 +907,7 @@ export default function Settings() {
                             }
                             (document.getElementById('userNewPin') as HTMLInputElement).value = "";
                             setPasskeyAuthorized(false);
+                            setPinEmailVerified(false);
                           } else {
                             alert(`Security Error: ${data.message}`);
                           }
@@ -888,22 +922,23 @@ export default function Settings() {
                     <button 
                       onClick={async () => {
                         if (!currentUser?.email) return;
-                        if (!confirm("Reset PIN via Email? Instructions will be sent to your registered address.")) return;
-                        
+                        setIsSendingOtp(true);
                         try {
-                          const res = await apiFetch("/api/user/security/reset-pin", {
+                          const res = await apiFetch("/api/otp/send", {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ email: currentUser.email })
+                            body: JSON.stringify({ userId: currentUser.uid, email: currentUser.email, method: 'email' })
                           });
-                          const data = await res.json();
                           if (res.ok) {
-                            alert("Recovery Started: Please check your email for reset instructions.");
+                            setPendingAction('reset_pin_email');
+                            setShowFingerprintModal(true);
                           } else {
-                            alert(`Error: ${data.message}`);
+                            alert("Failed to send verification code.");
                           }
-                        } catch (e: any) {
-                          alert(`Connection Error: ${e.message}`);
+                        } catch (err) {
+                          alert("Error connecting to security service.");
+                        } finally {
+                          setIsSendingOtp(false);
                         }
                       }}
                       className="px-4 py-3 bg-white dark:bg-gray-700 text-purple-600 border border-purple-200 dark:border-purple-800 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
@@ -1469,8 +1504,27 @@ export default function Settings() {
                 userId={currentUser?.uid || ''} 
                 phoneNumber={phoneNumber}
                 method="sms"
-                onClose={() => setShowFingerprintModal(false)}
+                onClose={() => {
+                  setShowFingerprintModal(false);
+                  setPendingAction(null);
+                }}
                 onSuccess={handleFingerprintSuccess}
+              />
+            ) : pendingAction === 'reset_pin_email' ? (
+              <OTPModal 
+                userId={currentUser?.uid || ''} 
+                email={currentUser?.email || ''}
+                method="email"
+                onClose={() => {
+                  setShowFingerprintModal(false);
+                  setPendingAction(null);
+                }}
+                onSuccess={() => {
+                  setPinEmailVerified(true);
+                  setShowFingerprintModal(false);
+                  setPendingAction(null);
+                  alert("Identity verified via Email! You can now set a new Security PIN.");
+                }}
               />
             ) : userData?.twoFactorType === 'passkey' && userData?.twoFactorEnabled ? (
               <PasskeyModal 

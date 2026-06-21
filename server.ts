@@ -427,9 +427,10 @@ async function performBinanceRequest(method: 'GET' | 'POST', endpoint: string, c
         // Success (Extra check for 200 OK HTML blocks/challenges)
         if (response.status === 200) {
           const respData = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-          if (respData.includes('<html>') || respData.includes('<!DOCTYPE html>')) {
-             console.warn(`[Vault-Bridge] Mirror ${mirror} returned 200 but it is HTML (Possible WAF Challenge/Block). Trying next mirror...`);
-             lastError = new Error(`Mirror ${mirror} returned 200 HTML content instead of API JSON`);
+          const isHtml = respData.includes('<html>') || respData.includes('<!DOCTYPE html>') || respData.includes('<title>Cookie check</title>') || respData.includes('Checking your browser');
+          if (isHtml) {
+             console.warn(`[Vault-Bridge] Mirror ${mirror} returned 200 but it is HTML (Possible WAF Challenge/Block/Cookie Check). Trying next mirror...`);
+             lastError = new Error(`Mirror ${mirror} returned HTML content (Cloudflare/WAF Challenge) instead of API JSON`);
              continue;
           }
           if (type === 'sapi' && method === 'POST') console.log(`[Vault-Bridge] SAPI Success on ${mirror}`);
@@ -1519,8 +1520,8 @@ async function verifyUserAuthorizationLevel(userId: string, authData: { scaToken
     }
   }
 
-  // Level 2: TOTP/Phone/SMS Verification
-  if (!isSuccess && (authData.totpCode || authData.usePhone)) {
+  // Level 2: TOTP/Phone/SMS/Email Verification (Step-up)
+  if (!isSuccess && (authData.totpCode || authData.usePhone || authData.email)) {
     // Check for recent verified OTP in DB (Step-up)
     try {
       const userDoc = await resilientDb.collection('users').doc(userId).get();
@@ -3960,13 +3961,16 @@ async function performRobustEducationSync() {
   });
 
   app.post("/api/user/security/update-pin", async (req, res) => {
-    const { userId, currentPin, newPin } = req.body;
+    const { userId, currentPin, newPin, email } = req.body;
     if (!userId) return res.status(400).json({ error: "User ID required" });
 
     try {
-      const isAuthValid = await verifyUserAuthorization(userId, { scaToken: currentPin });
+      const isAuthValid = await verifyUserAuthorization(userId, { 
+        scaToken: currentPin,
+        email: email 
+      });
       if (!isAuthValid) {
-         return res.status(401).json({ success: false, error: "AUTH_DENIED", message: "Verification failed. Incorrect PIN or Passkey registration required." });
+         return res.status(401).json({ success: false, error: "AUTH_DENIED", message: "Verification failed. Incorrect PIN, Passkey required, or Email OTP block." });
       }
 
       await resilientDb.collection('users').doc(userId).collection('private').doc('security').set({
