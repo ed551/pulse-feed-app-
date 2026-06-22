@@ -34,6 +34,12 @@ Pulse Feeds is a multi-functional community platform designed for social interac
 ### 6. Community Events
 - **Engagement:** Keep the Events page populated with community-driven or system-generated events and dates.
 
+### 7. GitHub Automation & Self-Solving Drive
+- **Continuous Monitoring:** The agent takes ownership of the GitHub Action results. If a deployment fails (e.g., due to syntax errors like "Unterminated regular expression"), the agent must proactively fix the codebase.
+- **Verification Before Push:** Always run `npm run lint` and `npm run build` (via `compile_applet`) locally before finalizing changes to ensure the "fresh push" will succeed.
+- **Self-Healing Protocol:** If an action remains "unsolved," the agent should perform a deep check of related components (e.g., `Settings.tsx` JSX structure) to resolve underlying logical or syntax conflicts without user intervention.
+- **Automated Workflow:** The workflow is designed to be "self-driven," meaning it should initiate on every push and only require user attention if environmental secrets (like Surge tokens) are missing.
+
 ## Technical Constraints
 - **Framework:** React with Vite and Tailwind CSS.
 - **Backend:** Firebase (Firestore & Auth).
