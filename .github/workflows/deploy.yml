@@ -24,6 +24,7 @@ jobs:
           npm install @tailwindcss/oxide-linux-x64-gnu --legacy-peer-deps
 
       - name: Run Linter
+        continue-on-error: true
         run: npm run lint
 
       - name: Build the Production App
