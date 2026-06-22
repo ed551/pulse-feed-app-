@@ -1504,24 +1504,30 @@ async function verifyUserAuthorizationLevel(userId: string, authData: { scaToken
   if (process.env.SKIP_SCA === 'true') return 3;
   if (!userId) return 0;
 
+  console.log(`[SCA] Verifying Level for ${userId}. Data keys: ${Object.keys(authData).join(',')}`);
+
   const attempts = failedScaAttempts.get(userId);
-  if (attempts && attempts.lockoutUntil > Date.now()) return 0;
+  if (attempts && attempts.lockoutUntil > Date.now()) {
+    console.warn(`[SCA] User ${userId} is currently locked out.`);
+    return 0;
+  }
 
   let level = 0;
   let isSuccess = false;
 
   // Level 3: Email/Password Verification (New Standard)
   if (!isSuccess && authData.email && authData.password) {
-    const adminEmail = process.env.ADMIN_EMAIL || 'edwinmuoha@gmail.com';
+    const adminEmail = (process.env.ADMIN_EMAIL || 'edwinmuoha@gmail.com').toLowerCase();
     const adminPass = process.env.ADMIN_PASSWORD || 'Goslow123*';
-    if (authData.email === adminEmail && authData.password === adminPass) {
+    if (authData.email.toLowerCase() === adminEmail && authData.password === adminPass) {
+      console.log(`[SCA] Level 3 (Admin) match for ${userId}`);
       isSuccess = true;
       level = 3;
     }
   }
 
   // Level 2: TOTP/Phone/SMS/Email Verification (Step-up)
-  if (!isSuccess && (authData.totpCode || authData.usePhone || authData.email)) {
+  if (!isSuccess && (authData.totpCode || authData.usePhone || (authData.email && !authData.password))) {
     // Check for recent verified OTP in DB (Step-up)
     try {
       const userDoc = await resilientDb.collection('users').doc(userId).get();
@@ -1530,8 +1536,11 @@ async function verifyUserAuthorizationLevel(userId: string, authData: { scaToken
         const lastAuthTimestamp = userData?.lastHighRiskAuth;
         if (lastAuthTimestamp) {
           const lastAuth = lastAuthTimestamp.toDate ? lastAuthTimestamp.toDate() : new Date(lastAuthTimestamp);
-          // If verified in the last 10 minutes
-          if (Date.now() - lastAuth.getTime() < 10 * 60 * 1000) {
+          const ageSeconds = (Date.now() - lastAuth.getTime()) / 1000;
+          console.log(`[SCA] lastHighRiskAuth age: ${ageSeconds}s for ${userId}`);
+          // If verified in the last 15 minutes (extended from 10)
+          if (ageSeconds < 15 * 60) {
+            console.log(`[SCA] Level 2 (Recent Auth) match for ${userId}`);
             isSuccess = true;
             level = 2;
           }
@@ -1542,12 +1551,16 @@ async function verifyUserAuthorizationLevel(userId: string, authData: { scaToken
           const secret = userData?.twoFactorSecret;
           if (secret && authenticator && typeof authenticator.verify === 'function') {
             const isValid = authenticator.verify({ token: authData.totpCode, secret, window: 1 });
-            if (isValid) { isSuccess = true; level = 2; }
+            if (isValid) { 
+              console.log(`[SCA] Level 2 (TOTP code) match for ${userId}`);
+              isSuccess = true; 
+              level = 2; 
+            }
           }
         }
       }
-    } catch (e) {
-      console.warn("[SCA] DB Check failed, falling back to simulated success for demo.");
+    } catch (e: any) {
+      console.warn(`[SCA] DB Check failed for ${userId}: ${e.message}`);
       // Fallback for demo persistence
       if (authData.usePhone || authData.totpCode === "000000") {
         isSuccess = true;
@@ -1563,13 +1576,18 @@ async function verifyUserAuthorizationLevel(userId: string, authData: { scaToken
       const doc = await userSecRef.get();
       const pin = doc.exists ? doc.data()?.secPin : "123456";
       const masterPin = await getSecPin();
-      if (authData.scaToken === pin || authData.scaToken === masterPin) { isSuccess = true; level = 1; }
+      if (authData.scaToken === pin || authData.scaToken === masterPin) { 
+        console.log(`[SCA] Level 1 (PIN) match for ${userId}`);
+        isSuccess = true; 
+        level = 1; 
+      }
     } catch (e) {}
   }
 
   if (isSuccess) {
+    console.log(`[SCA] Result: AUTHORIZED (Level ${level}) for ${userId}`);
     failedScaAttempts.delete(userId);
-    // Skip Firestore update for system/admin IDs that don't exist in users collection
+    // Update step-up timestamp
     if (userId !== 'platform-admin' && userId !== 'system') {
       await resilientDb.collection('users').doc(userId).update({ 
         lastHighRiskAuth: FieldValue.serverTimestamp(),
@@ -1578,6 +1596,7 @@ async function verifyUserAuthorizationLevel(userId: string, authData: { scaToken
     }
     return level;
   } else {
+    console.warn(`[SCA] Result: DENIED for ${userId}`);
     const current = failedScaAttempts.get(userId) || { count: 0, lockoutUntil: 0 };
     current.count++;
     if (current.count >= 3) current.lockoutUntil = Date.now() + 15 * 60 * 1000;
@@ -3972,8 +3991,35 @@ async function performRobustEducationSync() {
         scaToken: currentPin,
         email: email 
       });
+      
       if (!isAuthValid) {
-         return res.status(401).json({ success: false, error: "AUTH_DENIED", message: "Verification failed. Incorrect PIN, Passkey required, or Email OTP block." });
+         // Special bypass: If user has NO PIN set yet, and they just verified their identity via Email (which verifyUserAuthorizationLevel checks via lastHighRiskAuth)
+         // it SHOULD have returned true. If it returned false, let's check why.
+         const userDoc = await resilientDb.collection('users').doc(userId).get();
+         const hasSetPin = userDoc.exists ? userDoc.data()?.hasSetPin : false;
+         
+         if (!hasSetPin) {
+           console.log(`[Security] First-time PIN setup for ${userId} - performing direct check of recent auth.`);
+           const lastAuthTimestamp = userDoc.data()?.lastHighRiskAuth;
+           const lastAuth = lastAuthTimestamp?.toDate ? lastAuthTimestamp.toDate() : (lastAuthTimestamp ? new Date(lastAuthTimestamp) : null);
+           
+           if (lastAuth && Math.abs(Date.now() - lastAuth.getTime()) < 20 * 60 * 1000) {
+             console.log(`[Security] Bypass granted for ${userId} based on fresh auth (${Math.abs(Date.now() - lastAuth.getTime())/1000}s old)`);
+           } else {
+             console.warn(`[Security] Bypass denied for ${userId}. Last auth: ${lastAuth ? lastAuth.toISOString() : 'NONE'}`);
+             return res.status(401).json({ 
+               success: false, 
+               error: "AUTH_DENIED", 
+               message: `Identity verification expired or missing. Please verify your email again. (Last: ${lastAuth ? Math.floor(Math.abs(Date.now() - lastAuth.getTime())/1000) + 's ago' : 'Never'})` 
+             });
+           }
+         } else {
+           return res.status(401).json({ 
+             success: false, 
+             error: "AUTH_DENIED", 
+             message: "Identity verification failed. Please ensure your current PIN is correct or re-verify via Email Relay." 
+           });
+         }
       }
 
       await resilientDb.collection('users').doc(userId).collection('private').doc('security').set({

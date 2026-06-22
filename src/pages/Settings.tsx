@@ -1003,14 +1003,32 @@ export default function Settings() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase text-gray-400 dark:text-gray-500 pl-1 tracking-widest">Authority Validation</label>
-                        {!userData?.hasSetPin ? (
-                          <div className="flex items-center gap-3 bg-amber-50/50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/30 rounded-2xl px-5 py-4 text-xs font-bold text-gray-900 dark:text-white shadow-inner">
-                            <div className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center text-white shrink-0 animate-pulse">
-                              <Lock className="w-3.5 h-3.5" />
+                        {!userData?.hasSetPin && !pinEmailVerified && !passkeyAuthorized ? (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-3 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-2xl px-5 py-4 text-xs font-bold text-gray-900 dark:text-white shadow-inner">
+                              <div className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center text-white shrink-0 animate-pulse">
+                                <Lock className="w-3.5 h-3.5" />
+                              </div>
+                              <div>
+                                  <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest leading-none">First-Time Setup</p>
+                                  <p className="text-[9px] text-gray-500 mt-1 leading-tight">No current PIN exists. Verify via **Email Relay** below to authorize your first security key.</p>
+                              </div>
                             </div>
-                            <div>
-                                <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest leading-none">First-Time Setup</p>
-                                <p className="text-[9px] text-gray-500 mt-1 leading-tight">No current PIN exists. Verify via **Email Relay** below to authorize your first security key.</p>
+                            <div className="flex gap-2">
+                               <button 
+                                onClick={async () => {
+                                  if (!currentUser?.email) return;
+                                  setIsSendingOtp(true);
+                                  try {
+                                    const res = await apiFetch("/api/otp/send", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: currentUser.uid, email: currentUser.email, method: 'email' }) });
+                                    if (res.ok) { setPendingAction('reset_pin_email'); setShowFingerprintModal(true); }
+                                  } catch (err) { alert("Email service unreachable."); } finally { setIsSendingOtp(false); }
+                                }}
+                                disabled={isSendingOtp}
+                                className="flex-1 py-3 bg-purple-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-purple-700 transition-all shadow-lg shadow-purple-600/20 active:scale-95"
+                              >
+                                {isSendingOtp ? "Relaying..." : "Authorize via Email"}
+                              </button>
                             </div>
                           </div>
                         ) : passkeyAuthorized || pinEmailVerified ? (
