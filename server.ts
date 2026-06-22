@@ -2422,8 +2422,11 @@ async function startServer() {
     }
 
     // Force SCA for any binance withdrawal due to high risk
-    if (!scaToken && !totpCode && authLevel < 1) {
-      return res.status(403).json({ success: false, error: "Security validation (PIN, Biometrics, or TOTP) is required for Binance withdrawals." });
+    if (authLevel < 1) {
+      const error = (scaToken || totpCode) 
+        ? "Security validation failed. Please check your PIN or TOTP code."
+        : "Security validation (PIN, Biometrics, or TOTP) is required for Binance withdrawals.";
+      return res.status(403).json({ success: false, error });
     }
 
     if (!isBinanceConfigured()) {

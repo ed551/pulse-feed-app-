@@ -229,13 +229,13 @@ export default function Rewards() {
     if (!amount) return;
 
     // Check if user has set a PIN
-    if (!userData?.hasSetPin && !isDeveloper && !process.env.SKIP_SCA) {
+    if (!userData?.hasSetPin && !process.env.SKIP_SCA) {
       setShowCreatePinModal(true);
       return;
     }
     
     // Trigger SCA if not provided
-    if (!pin && !usePasskey && !totp && !email && !isDeveloper && !process.env.SKIP_SCA) {
+    if (!pin && !usePasskey && !totp && !email && !process.env.SKIP_SCA) {
       setScaPendingAction(() => (p: string, up?: boolean, t?: string, em?: string) => handlePayment(undefined, p, up, t, em));
       setShowSCAModal(true);
       return;
@@ -489,12 +489,12 @@ export default function Rewards() {
     if (!payoutAmount) return;
 
     // Check if user has set a PIN
-    if (!userData?.hasSetPin && !isDeveloper && !process.env.SKIP_SCA) {
+    if (!userData?.hasSetPin && !process.env.SKIP_SCA) {
       setShowCreatePinModal(true);
       return;
     }
 
-    if (!pin && !usePasskey && !totp && !email && !isDeveloper && !process.env.SKIP_SCA) {
+    if (!pin && !usePasskey && !totp && !email && !process.env.SKIP_SCA) {
       setScaPendingAction(() => (p: string, up?: boolean, t?: string, em?: string) => handleBinanceWithdraw(undefined, p, up, t, em));
       setShowSCAModal(true);
       return;
@@ -607,7 +607,7 @@ export default function Rewards() {
     if (!payoutAmount) return;
 
     // Trigger SCA if not provided
-    if (!pin && !usePasskey && !totp && !email && !isDeveloper && !process.env.SKIP_SCA) {
+    if (!pin && !usePasskey && !totp && !email && !process.env.SKIP_SCA) {
       setScaPendingAction(() => (p: string, up?: boolean, t?: string, em?: string) => handleInternationalPayout(undefined, p, up, t, em));
       setShowSCAModal(true);
       return;
