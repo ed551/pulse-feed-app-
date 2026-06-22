@@ -1140,7 +1140,16 @@ export default function Settings() {
                           if(!next) return alert("Validation Error: Proposed PIN missing.");
                           try {
                             const res = await apiFetch("/api/user/security/update-pin", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: currentUser?.uid, currentPin: cur, newPin: next, usePasskey: passkeyAuthorized, email: pinEmailVerified ? currentUser?.email : undefined }) });
-                            if (res.ok) { alert("Protocol Success: PIN Rotated."); setPasskeyAuthorized(false); setPinEmailVerified(false); }
+                            if (res.ok) { 
+                            alert("Protocol Success: Withdrawal PIN Secured."); 
+                            setPasskeyAuthorized(false); 
+                            setPinEmailVerified(false);
+                            // If it was first time setup, we should probably redirect or update local state
+                            window.location.reload(); // Refresh to reflect hasSetPin change everywhere
+                          } else {
+                            const data = await res.json();
+                            alert(`Security Error: ${data.message || "Rotation failed."}`);
+                          }
                           } catch (e: any) { alert(`API Error: ${e.message}`); }
                         }}
                         className="flex-1 py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-[1.25rem] text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-purple-600/30 active:scale-95"

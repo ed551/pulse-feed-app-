@@ -1574,14 +1574,24 @@ async function verifyUserAuthorizationLevel(userId: string, authData: { scaToken
     try {
       const userSecRef = resilientDb.collection('users').doc(userId).collection('private').doc('security');
       const doc = await userSecRef.get();
-      const pin = doc.exists ? doc.data()?.secPin : "123456";
+      const pin = doc.exists ? doc.data()?.secPin : null;
       const masterPin = await getSecPin();
-      if (authData.scaToken === pin || authData.scaToken === masterPin) { 
+      
+      // Detailed comparison for debugging
+      const providedPin = String(authData.scaToken).trim();
+      const storedPin = pin ? String(pin).trim() : null;
+      const masterStr = masterPin ? String(masterPin).trim() : null;
+
+      if (providedPin === storedPin || (masterStr && providedPin === masterStr)) { 
         console.log(`[SCA] Level 1 (PIN) match for ${userId}`);
         isSuccess = true; 
         level = 1; 
+      } else {
+        console.warn(`[SCA] Level 1 mismatch for ${userId}. Provided: ${providedPin.substring(0,2)}..., Stored: ${storedPin ? storedPin.substring(0,2)+'...' : 'NONE'}`);
       }
-    } catch (e) {}
+    } catch (e: any) {
+      console.error(`[SCA] Level 1 check error for ${userId}:`, e.message);
+    }
   }
 
   if (isSuccess) {
@@ -3985,55 +3995,64 @@ async function performRobustEducationSync() {
   app.post("/api/user/security/update-pin", async (req, res) => {
     const { userId, currentPin, newPin, email } = req.body;
     if (!userId) return res.status(400).json({ error: "User ID required" });
+    if (!newPin || newPin.length < 4) return res.status(400).json({ error: "PIN must be 4-8 digits" });
 
     try {
-      const isAuthValid = await verifyUserAuthorization(userId, { 
+      let isAuthValid = await verifyUserAuthorization(userId, { 
         scaToken: currentPin,
         email: email 
       });
+
+      const userDoc = await resilientDb.collection('users').doc(userId).get();
+      const userData = userDoc.exists ? userDoc.data() : {};
+      const hasSetPin = userData?.hasSetPin || false;
+      
+      // Extended bypass for setting the PIN for the first time
+      if (!isAuthValid && !hasSetPin) {
+          console.log(`[Security] First-time PIN setup detected for ${userId}. Checking recent Email/Passkey auth...`);
+          const lastAuthTimestamp = userData?.lastHighRiskAuth;
+          if (lastAuthTimestamp) {
+            const lastAuth = lastAuthTimestamp.toDate ? lastAuthTimestamp.toDate() : new Date(lastAuthTimestamp);
+            const ageSeconds = (Date.now() - lastAuth.getTime()) / 1000;
+            if (ageSeconds < 30 * 60) { // 30 mins window for setup
+              console.log(`[Security] Setup bypass GRANTED for ${userId} (Auth age: ${Math.floor(ageSeconds)}s)`);
+              isAuthValid = true;
+            }
+          }
+      }
       
       if (!isAuthValid) {
-         // Special bypass: If user has NO PIN set yet, and they just verified their identity via Email (which verifyUserAuthorizationLevel checks via lastHighRiskAuth)
-         // it SHOULD have returned true. If it returned false, let's check why.
-         const userDoc = await resilientDb.collection('users').doc(userId).get();
-         const hasSetPin = userDoc.exists ? userDoc.data()?.hasSetPin : false;
-         
          if (!hasSetPin) {
-           console.log(`[Security] First-time PIN setup for ${userId} - performing direct check of recent auth.`);
-           const lastAuthTimestamp = userDoc.data()?.lastHighRiskAuth;
-           const lastAuth = lastAuthTimestamp?.toDate ? lastAuthTimestamp.toDate() : (lastAuthTimestamp ? new Date(lastAuthTimestamp) : null);
-           
-           if (lastAuth && Math.abs(Date.now() - lastAuth.getTime()) < 20 * 60 * 1000) {
-             console.log(`[Security] Bypass granted for ${userId} based on fresh auth (${Math.abs(Date.now() - lastAuth.getTime())/1000}s old)`);
-           } else {
-             console.warn(`[Security] Bypass denied for ${userId}. Last auth: ${lastAuth ? lastAuth.toISOString() : 'NONE'}`);
-             return res.status(401).json({ 
-               success: false, 
-               error: "AUTH_DENIED", 
-               message: `Identity verification expired or missing. Please verify your email again. (Last: ${lastAuth ? Math.floor(Math.abs(Date.now() - lastAuth.getTime())/1000) + 's ago' : 'Never'})` 
-             });
-           }
+           return res.status(401).json({ 
+             success: false, 
+             error: "AUTH_REQUIRED", 
+             message: "Identity verification failed. Please verify your email relay authority before setting your first security key." 
+           });
          } else {
            return res.status(401).json({ 
              success: false, 
              error: "AUTH_DENIED", 
-             message: "Identity verification failed. Please ensure your current PIN is correct or re-verify via Email Relay." 
+             message: "Verification failed. Incorrect current PIN or identity verification required." 
            });
          }
       }
 
+      // Authorization Successful - Update the PIN
+      console.log(`[Security] Updating PIN for ${userId}. New PIN Length: ${newPin.length}`);
+      
       await resilientDb.collection('users').doc(userId).collection('private').doc('security').set({
-        secPin: newPin,
+        secPin: String(newPin).trim(),
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
 
-      // Add a flag to the main user document for quick client-side check
       await resilientDb.collection('users').doc(userId).set({
-        hasSetPin: true
+        hasSetPin: true,
+        lastHighRiskAuth: FieldValue.serverTimestamp() // Renew auth for immediate withdrawals
       }, { merge: true });
 
-      return res.json({ success: true, message: "Security PIN updated successfully." });
+      return res.json({ success: true, message: "Security Architecture Locked. PIN updated successfully." });
     } catch (e: any) {
+      console.error("[Security] Update-pin error:", e.message);
       return res.status(500).json({ error: e.message });
     }
   });

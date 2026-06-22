@@ -91,7 +91,7 @@ export default function CreateWithdrawPinModal({ isOpen, onClose, onSuccess }: C
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           userId: currentUser?.uid, 
-          currentPin: "", // currentPin not required because we verified via email
+          currentPin: "", 
           newPin: newPin,
           email: currentUser?.email 
         })
@@ -104,7 +104,7 @@ export default function CreateWithdrawPinModal({ isOpen, onClose, onSuccess }: C
           onClose();
         }, 2000);
       } else {
-        setError(data.message || "Failed to create PIN.");
+        setError(data.message || "Identity verification mismatch. Please ensure your email relay authorization is active.");
       }
     } catch (err) {
       setError("Security service unavailable.");
