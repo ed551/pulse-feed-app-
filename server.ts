@@ -1533,8 +1533,11 @@ async function verifyUserAuthorizationLevel(userId: string, authData: { scaToken
       const userDoc = await resilientDb.collection('users').doc(userId).get();
       if (userDoc.exists) {
         const userData = userDoc.data();
+        console.log(`[SCA] Verifying Level 2 for ${userId}. userData keys: ${Object.keys(userData || {})}`);
         const lastAuthTimestamp = userData?.lastHighRiskAuth;
+        console.log(`[SCA] lastAuthTimestamp: ${lastAuthTimestamp}`);
         if (lastAuthTimestamp) {
+        
           const lastAuth = lastAuthTimestamp.toDate ? lastAuthTimestamp.toDate() : new Date(lastAuthTimestamp);
           const ageSeconds = (Date.now() - lastAuth.getTime()) / 1000;
           console.log(`[SCA] lastHighRiskAuth age: ${ageSeconds}s for ${userId}`);
@@ -1544,6 +1547,8 @@ async function verifyUserAuthorizationLevel(userId: string, authData: { scaToken
             isSuccess = true;
             level = 2;
           }
+        } else {
+          console.log(`[SCA] No lastAuthTimestamp found for ${userId}`);
         }
 
         // If not successful via timestamp, check TOTP secret directly if code provided
@@ -4263,6 +4268,39 @@ async function performRobustEducationSync() {
   const memoryOtpStore = new Map<string, { otp: string, expires: number }>();
 
   // OTP Security Routes
+  app.post("/api/user/security/reset-pin", async (req, res) => {
+    const { userId, email, newPin } = req.body;
+    if (!userId || !email) return res.status(400).json({ error: "Missing required fields" });
+    if (!newPin || newPin.length < 4) return res.status(400).json({ error: "PIN must be 4-8 digits" });
+
+    try {
+      // Must have verified email recently to reset PIN
+      const userRef = resilientDb.collection('users').doc(userId);
+      const userDoc = await userRef.get();
+      const userData = userDoc.data();
+      const lastAuthTimestamp = userData?.lastHighRiskAuth;
+      
+      const lastAuth = lastAuthTimestamp?.toDate ? lastAuthTimestamp.toDate() : (lastAuthTimestamp ? new Date(lastAuthTimestamp) : null);
+      const ageSeconds = lastAuth ? (Date.now() - lastAuth.getTime()) / 1000 : Infinity;
+
+      if (ageSeconds > 15 * 60) {
+        return res.status(401).json({ success: false, error: "AUTH_EXPIRED", message: "Verification session expired. Please reverify via email." });
+      }
+
+      await userRef.collection('private').doc('security').set({
+        secPin: String(newPin).trim(),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      await userRef.set({ hasSetPin: true }, { merge: true });
+
+      return res.json({ success: true, message: "PIN reset successfully." });
+    } catch (e: any) {
+      console.error("[Security] Reset-pin error:", e.message);
+      res.status(500).json({ error: "Failed to reset PIN" });
+    }
+  });
+
   app.post("/api/otp/send", async (req, res) => {
     const { userId, email, method } = req.body;
     const phoneNumber = req.body.phoneNumber || req.body.phone; // Resilient key check

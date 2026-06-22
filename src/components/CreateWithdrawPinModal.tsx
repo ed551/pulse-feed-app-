@@ -86,15 +86,14 @@ export default function CreateWithdrawPinModal({ isOpen, onClose, onSuccess }: C
     setIsLoading(true);
     setError(null);
     try {
-      const res = await apiFetch("/api/user/security/update-pin", {
+      const res = await apiFetch("/api/user/security/reset-pin", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           userId: currentUser?.uid, 
-          currentPin: "", 
           newPin: newPin,
-          email: currentUser?.email 
-        })
+          email: currentUser?.email
+        }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -104,10 +103,10 @@ export default function CreateWithdrawPinModal({ isOpen, onClose, onSuccess }: C
           onClose();
         }, 2000);
       } else {
-        setError(data.message || "Identity verification mismatch. Please ensure your email relay authorization is active.");
+        setError(data.message || "Failed to reset PIN. Please ensure your email is verified.");
       }
-    } catch (err) {
-      setError("Security service unavailable.");
+    } catch (e: any) {
+      setError("An error occurred.");
     } finally {
       setIsLoading(false);
     }
