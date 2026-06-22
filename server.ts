@@ -1871,7 +1871,7 @@ async function startServer() {
         // Optimization: Standardize response to avoid issues with specialized headers
         res.status(relayResponse.status);
         if (relayResponse.headers['content-type']) {
-          res.setHeader('Content-Type', relayResponse.headers['content-type']);
+          res.setHeader('Content-Type', String(relayResponse.headers['content-type']));
         }
         res.send(relayResponse.data);
         return;
@@ -3788,7 +3788,7 @@ async function performRobustEducationSync() {
             headers: { 'Accept': 'application/json', 'User-Agent': 'curl/7.64.1' }
           });
 
-          const contentType = wttrRes.headers['content-type'] || '';
+          const contentType = String(wttrRes.headers['content-type'] || '');
           if (contentType.includes('application/json') && wttrRes.data?.current_condition?.[0]) {
             const cond = wttrRes.data.current_condition[0];
             const mappedData = {
