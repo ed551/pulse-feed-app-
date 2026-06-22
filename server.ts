@@ -1537,11 +1537,32 @@ async function verifyUserAuthorizationLevel(userId: string, authData: { scaToken
         const lastAuthTimestamp = userData?.lastHighRiskAuth;
         console.log(`[SCA] lastAuthTimestamp: ${lastAuthTimestamp}`);
         if (lastAuthTimestamp) {
-        
-          const lastAuth = lastAuthTimestamp.toDate ? lastAuthTimestamp.toDate() : new Date(lastAuthTimestamp);
-          const ageSeconds = (Date.now() - lastAuth.getTime()) / 1000;
+          let lastAuth: Date | null = null;
+          if (lastAuthTimestamp instanceof Date) {
+            lastAuth = lastAuthTimestamp;
+          } else if (lastAuthTimestamp && typeof lastAuthTimestamp === 'object') {
+            if (typeof lastAuthTimestamp.toDate === 'function') {
+              try {
+                lastAuth = lastAuthTimestamp.toDate();
+              } catch (e) {}
+            } else if (lastAuthTimestamp._seconds !== undefined) {
+              lastAuth = new Date(lastAuthTimestamp._seconds * 1000);
+            } else if (lastAuthTimestamp.seconds !== undefined) {
+              lastAuth = new Date(lastAuthTimestamp.seconds * 1000);
+            } else if (lastAuthTimestamp.constructor && lastAuthTimestamp.constructor.name && lastAuthTimestamp.constructor.name.includes('FieldValue')) {
+              console.log(`[SCA] lastHighRiskAuth is FieldValue sentinel. Defaulting to now.`);
+              lastAuth = new Date();
+            }
+          }
+          if (!lastAuth && lastAuthTimestamp) {
+            const d = new Date(lastAuthTimestamp);
+            if (!isNaN(d.getTime())) {
+              lastAuth = d;
+            }
+          }
+          const ageSeconds = lastAuth ? (Date.now() - lastAuth.getTime()) / 1000 : Infinity;
           console.log(`[SCA] lastHighRiskAuth age: ${ageSeconds}s for ${userId}`);
-          // If verified in the last 15 minutes (extended from 10)
+          // If verified in the last 15 minutes
           if (ageSeconds < 15 * 60) {
             console.log(`[SCA] Level 2 (Recent Auth) match for ${userId}`);
             isSuccess = true;
@@ -4338,7 +4359,29 @@ async function performRobustEducationSync() {
       const userData = userDoc.data();
       const lastAuthTimestamp = userData?.lastHighRiskAuth;
       
-      const lastAuth = lastAuthTimestamp?.toDate ? lastAuthTimestamp.toDate() : (lastAuthTimestamp ? new Date(lastAuthTimestamp) : null);
+      let lastAuth: Date | null = null;
+      if (lastAuthTimestamp instanceof Date) {
+        lastAuth = lastAuthTimestamp;
+      } else if (lastAuthTimestamp && typeof lastAuthTimestamp === 'object') {
+        if (typeof lastAuthTimestamp.toDate === 'function') {
+          try {
+            lastAuth = lastAuthTimestamp.toDate();
+          } catch (e) {}
+        } else if (lastAuthTimestamp._seconds !== undefined) {
+          lastAuth = new Date(lastAuthTimestamp._seconds * 1000);
+        } else if (lastAuthTimestamp.seconds !== undefined) {
+          lastAuth = new Date(lastAuthTimestamp.seconds * 1000);
+        } else if (lastAuthTimestamp.constructor && lastAuthTimestamp.constructor.name && lastAuthTimestamp.constructor.name.includes('FieldValue')) {
+          console.log(`[SCA] lastHighRiskAuth is FieldValue sentinel in reset-pin. Defaulting to now.`);
+          lastAuth = new Date();
+        }
+      }
+      if (!lastAuth && lastAuthTimestamp) {
+        const d = new Date(lastAuthTimestamp);
+        if (!isNaN(d.getTime())) {
+          lastAuth = d;
+        }
+      }
       const ageSeconds = lastAuth ? (Date.now() - lastAuth.getTime()) / 1000 : Infinity;
 
       if (ageSeconds > 15 * 60) {
