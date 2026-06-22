@@ -19,6 +19,7 @@ import { cn } from '../lib/utils';
 import { apiFetch } from '../lib/api';
 import { getModerationSettings, saveModerationSettings, ModerationSettings } from "../services/moderationService";
 import { admin_logic, integrity_audit_engine, global_kill_switch } from "../lib/engines";
+import CreateWithdrawPinModal from "../components/CreateWithdrawPinModal";
 
 interface UserData {
   uid: string;
@@ -73,6 +74,7 @@ export default function PlatformDashboard() {
   const [networkAlerts, setNetworkAlerts] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showSystemAuditPopup, setShowSystemAuditPopup] = useState(false);
+  const [showCreatePinModal, setShowCreatePinModal] = useState(false);
   const [withdrawalFilter, setWithdrawalFilter] = useState<'all' | 'user' | 'operational' | 'pending' | 'success' | 'queued'>('operational');
   const [systemHealth, setSystemHealth] = useState({
     cpu: 18,
@@ -559,6 +561,11 @@ export default function PlatformDashboard() {
   const btcPriceValue = useMemo(() => {
     const p = binancePrices.find(p => p.symbol === 'BTCUSDT')?.price;
     return p ? parseFloat(p) : 66733.42; // Match screenshot fallback
+  }, [binancePrices]);
+
+  const bnbPriceValue = useMemo(() => {
+    const p = binancePrices.find(p => p.symbol === 'BNBUSDT')?.price;
+    return p ? parseFloat(p) : 605.12; // Fallback
   }, [binancePrices]);
 
   const goldBtcRatio = useMemo(() => {
@@ -1298,6 +1305,12 @@ export default function PlatformDashboard() {
       return;
     }
 
+    // Coordinate User Withdrawal PIN Check
+    if (!userData?.hasSetPin && !process.env.SKIP_SCA) {
+      setShowCreatePinModal(true);
+      return;
+    }
+
     // Trigger SCA if not authenticated
     if (!token && !usePhone && (!email || !password) && !process.env.SKIP_SCA) {
       setScaPendingAction(() => (t: string, up?: boolean, em?: string, pw?: string) => handleBinanceWithdrawal(undefined, t, up, em, pw));
@@ -1318,7 +1331,7 @@ export default function PlatformDashboard() {
           address,
           amount: parseFloat(amount),
           network,
-          userId: 'platform-admin',
+          userId: currentUser?.uid || 'platform-admin',
           scaToken: token,
           usePhone,
           email,
@@ -1335,12 +1348,14 @@ export default function PlatformDashboard() {
       if (db) {
         const statsRef = doc(db, "platform", "stats");
         
-        // BUG FIX: If withdrawing PAXG, we must deduct the USD value from platformShare
+        // Calculate USD value for accurate platform share deduction
         let usdDeduction = parseFloat(amount);
         if (asset === 'PAXG' && goldPriceValue) {
           usdDeduction = parseFloat(amount) * goldPriceValue;
         } else if (asset === 'BTC' && btcPriceValue) {
           usdDeduction = parseFloat(amount) * btcPriceValue;
+        } else if (asset === 'BNB' && bnbPriceValue) {
+          usdDeduction = parseFloat(amount) * bnbPriceValue;
         }
 
         await updateDoc(statsRef, {
@@ -2856,14 +2871,27 @@ export default function PlatformDashboard() {
                 </div>
                 
                 <div className="flex gap-4">
-                  <select 
-                    value={binanceWithdrawalForm.asset}
-                    onChange={(e) => setBinanceWithdrawalForm({...binanceWithdrawalForm, asset: e.target.value})}
-                    className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none"
-                  >
-                    <option value="PAXG">PAXG</option>
-                    <option value="BTC">BTC</option>
-                  </select>
+                    <select 
+                      value={binanceWithdrawalForm.asset}
+                      onChange={(e) => setBinanceWithdrawalForm({...binanceWithdrawalForm, asset: e.target.value})}
+                      className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-bold"
+                    >
+                      <option value="PAXG" className="bg-gray-900">PAXG</option>
+                      <option value="BTC" className="bg-gray-900">BTC</option>
+                      <option value="USDT" className="bg-gray-900">USDT</option>
+                      <option value="BNB" className="bg-gray-900">BNB</option>
+                    </select>
+
+                    <select 
+                      value={binanceWithdrawalForm.network}
+                      onChange={(e) => setBinanceWithdrawalForm({...binanceWithdrawalForm, network: e.target.value})}
+                      className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-bold"
+                    >
+                      <option value="ETH" className="bg-gray-900">ERC20 (ETH)</option>
+                      <option value="BSC" className="bg-gray-900">BEP20 (BSC)</option>
+                      <option value="BTC" className="bg-gray-900">BTC (Native)</option>
+                      <option value="TRX" className="bg-gray-900">TRC20 (TRON)</option>
+                    </select>
                   <button 
                     onClick={() => handleBinanceWithdrawal()}
                     disabled={isDevWithdrawing}
@@ -4492,6 +4520,14 @@ export default function PlatformDashboard() {
           </div>
         )}
       </AnimatePresence>
+      <CreateWithdrawPinModal 
+        isOpen={showCreatePinModal} 
+        onClose={() => setShowCreatePinModal(false)} 
+        onSuccess={() => {
+          setShowCreatePinModal(false);
+          handleBinanceWithdrawal();
+        }}
+      />
     </div>
   );
 }
