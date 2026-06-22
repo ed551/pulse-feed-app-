@@ -59,6 +59,8 @@ export default function AISecurityDashboard() {
   const [aiCurrentPin, setAiCurrentPin] = useState("");
   const [aiNewPin, setAiNewPin] = useState("");
   const [isUpdatingAiPin, setIsUpdatingAiPin] = useState(false);
+  const [phoneInput, setPhoneInput] = useState(userData?.phoneNumber || "");
+  const [isUpdatingPhone, setIsUpdatingPhone] = useState(false);
 
   // Verification modal states
   const [pendingAction, setPendingAction] = useState<string | null>(null);
@@ -403,31 +405,34 @@ Write in a highly professional, clinical, tech-forward tone. Respond with ONLY t
       {/* Phone Management */}
       <div className="p-6 bg-emerald-50/5 dark:bg-emerald-950/5 rounded-[2rem] border border-emerald-100 dark:border-emerald-900/30 mb-6">
         <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase mb-4">Mobile Authority Number</h4>
-        <input 
+         <input 
           type="text"
-          value={userData?.phoneNumber || ""}
-          onChange={(e) => {
-             // In a real implementation this would trigger an update or require verification
-          }}
+          value={phoneInput}
+          onChange={(e) => setPhoneInput(e.target.value)}
           className="w-full bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-3 text-sm"
           placeholder="+254..."
         />
         <button 
            onClick={async () => {
-             const phone = prompt("Enter new phone number:");
-             if (phone) {
+             setIsUpdatingPhone(true);
+             try {
                 const res = await apiFetch("/api/user/security/update-phone", { 
                     method: 'POST', 
                     headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify({ userId: currentUser?.uid, phoneNumber: phone }) 
+                    body: JSON.stringify({ userId: currentUser?.uid, phoneNumber: phoneInput }) 
                 });
-                if (res.ok) alert("Phone updated!");
-                else alert("Update failed.");
+                if (res.ok) alert("Phone number updated successfully.");
+                else alert("Failed to update phone number.");
+             } catch {
+                alert("Error updating phone.");
+             } finally {
+                setIsUpdatingPhone(false);
              }
            }}
+           disabled={isUpdatingPhone}
            className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold"
         >
-          Update Phone Number
+          {isUpdatingPhone ? "Updating..." : "Update Phone Number"}
         </button>
       </div>
 
