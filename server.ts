@@ -2509,8 +2509,15 @@ async function startServer() {
       }, 'sapi');
 
       console.debug(`${logTag} Binance API Response Code: ${resp.status}`);
+      console.debug(`${logTag} Binance API Response Data: ${JSON.stringify(resp.data)}`);
       if (resp.status === 200 && resp.data) {
-        res.json({ success: true, data: resp.data, isDeveloper: isDeveloperPayout });
+        // Technically Binance returns 200 even for some failed withdrawals, need to check if id exists
+        if (resp.data.id) {
+            res.json({ success: true, data: resp.data, isDeveloper: isDeveloperPayout });
+        } else {
+            console.error(`${logTag} Potential Failure: Status 200 but no withdrawal id. Data: `, JSON.stringify(resp.data));
+            res.status(500).json({ success: false, error: "Binance accepted request but returned no ID.", details: resp.data });
+        }
       } else {
         const errorMsg = resp.data?.msg || `Binance Error Status: ${resp.status}`;
         console.error(`${logTag} Failed with status ${resp.status}:`, errorMsg);
