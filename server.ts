@@ -4274,6 +4274,37 @@ async function performRobustEducationSync() {
   // In-memory OTP store for resilience when DB permissions are restricted
   const memoryOtpStore = new Map<string, { otp: string, expires: number }>();
 
+  // Security AI Advice Route
+  app.get("/api/ai/security-advice", async (req, res) => {
+    const userId = req.query.userId as string;
+    if (!userId) return res.status(400).json({ error: "Missing userId" });
+
+    try {
+      const userDoc = await resilientDb.collection('users').doc(userId).get();
+      if (!userDoc.exists) return res.status(404).json({ error: "User not found" });
+      
+      const userData = userDoc.data();
+      const insights = [];
+      
+      if (!userData?.hasSetPin) {
+        insights.push("Immediate Action: Set a Withdrawal PIN to secure your treasury outflows.");
+      }
+      
+      if (userData?.securityRating && userData.securityRating < 70) {
+        insights.push("Improve your security standing by linking a secondary authenticator.");
+      }
+      
+      if (!userData?.isPasskeyLinked) {
+        insights.push("Recommendation: Link a Passkey for faster, more secure access.");
+      }
+
+      res.json({ success: true, insights: insights.length > 0 ? insights : ["Your account security is optimal."] });
+    } catch (e: any) {
+      console.error("[Security] Advice-fetch error:", e.message);
+      res.status(500).json({ error: "Failed to fetch security insights" });
+    }
+  });
+
   // OTP Security Routes
   app.post("/api/user/security/reset-pin", async (req, res) => {
     const { userId, email, newPin } = req.body;

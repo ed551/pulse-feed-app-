@@ -202,12 +202,33 @@ Write in a highly professional, clinical, tech-forward tone. Respond with ONLY t
       </div>
 
       {/* AI Insights Board */}
-      <div className="p-6 bg-gray-50/50 dark:bg-gray-800/30 rounded-[2rem] border border-gray-100 dark:border-gray-800 text-left">
-        <h5 className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-4 flex items-center gap-2 pl-1">
-          <Sparkles className="w-3.5 h-3.5 text-purple-500 animate-pulse" />
-          AI Sentinel Insights Hub
-        </h5>
+      <div className="p-6 bg-gray-50/50 dark:bg-gray-800/30 rounded-[2rem] border border-gray-100 dark:border-gray-800 text-left mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h5 className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2 pl-1">
+            <Sparkles className="w-3.5 h-3.5 text-purple-500 animate-pulse" />
+            AI Sentinel Insights Hub
+          </h5>
+          <button onClick={() => { /* re-fetch logic */ }} className="text-gray-400 hover:text-white">
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        </div>
         
+        <div className="flex items-center gap-4 mb-4">
+          <div className="text-indigo-400">
+            <Brain className="w-8 h-8" />
+          </div>
+          <div>
+            <h5 className="text-xs font-bold text-white">AI Security Advisor</h5>
+            <p className="text-[10px] text-gray-400">Analysis: Your security posture is being reviewed.</p>
+          </div>
+        </div>
+        
+        {/* Real fetching logic would go here, updating state for insights */}
+        <p className="text-gray-400 text-xs">Based on your activity, ensure 2FA is active and your PIN meets complexity requirements.</p>
+      </div>
+
+      {/* Manual Neural Audit Board */}
+      <div className="p-6 bg-gray-50/50 dark:bg-gray-800/30 rounded-[2rem] border border-gray-100 dark:border-gray-800 text-left">
         {aiAuditResult ? (
           <div className="prose prose-sm dark:prose-invert max-w-none text-left text-xs bg-white dark:bg-gray-950 p-6 rounded-2xl border border-gray-100 dark:border-gray-900 shadow-inner leading-relaxed text-gray-600 dark:text-gray-300 animate-in fade-in duration-300">
             <Markdown>{aiAuditResult}</Markdown>
