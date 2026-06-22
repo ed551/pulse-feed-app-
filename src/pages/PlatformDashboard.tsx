@@ -20,6 +20,7 @@ import { apiFetch } from '../lib/api';
 import { getModerationSettings, saveModerationSettings, ModerationSettings } from "../services/moderationService";
 import { admin_logic, integrity_audit_engine, global_kill_switch } from "../lib/engines";
 import CreateWithdrawPinModal from "../components/CreateWithdrawPinModal";
+import OTPModal from "../components/tools/OTPModal";
 
 interface UserData {
   uid: string;
@@ -1466,7 +1467,7 @@ export default function PlatformDashboard() {
   }, [showSCAModal, currentUser?.email, userData?.email]);
 
   const verifySCA = (pin?: string, usePhone?: boolean, email?: string, pass?: string) => {
-    if (!pin && !usePhone && (!email || !pass)) return;
+    if (!pin && !usePhone && !email) return;
     
     setShowSCAModal(false);
     if (scaPendingAction) {
@@ -4320,44 +4321,23 @@ export default function PlatformDashboard() {
               <div className="space-y-4">
                 {authMethod === 'email' ? (
                   <div className="space-y-4">
-                    <div className="space-y-2 text-center mb-2">
-                       <div className="flex items-center justify-center gap-1 mb-2">
-                        <span className="text-blue-500 font-black text-xl">G</span>
-                        <span className="text-red-500 font-black text-xl">o</span>
-                        <span className="text-yellow-500 font-black text-xl">o</span>
-                        <span className="text-blue-500 font-black text-xl">g</span>
-                        <span className="text-green-500 font-black text-xl">l</span>
-                        <span className="text-red-500 font-black text-xl">e</span>
-                      </div>
-                      <p className="text-[10px] text-gray-400">Re-verify your Google credentials</p>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block pl-1">Gmail Account</label>
-                      <input 
-                        type="email"
-                        value={scaEmail}
-                        onChange={(e) => setScaEmail(e.target.value)}
-                        placeholder="admin@gmail.com"
-                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-medium text-white focus:border-blue-500 outline-none transition-all"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block pl-1">Password</label>
-                      <input 
-                        type="password"
-                        value={scaPassword}
-                        onChange={(e) => setScaPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-medium text-white focus:border-blue-500 outline-none transition-all"
-                      />
-                    </div>
-                    <button
-                      onClick={() => verifySCA("", false, scaEmail, scaPassword)}
-                      disabled={scaEmail.length < 5 || scaPassword.length < 4}
-                      className="w-full py-4 bg-indigo-600 text-white font-black rounded-xl uppercase text-xs shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all disabled:opacity-50"
-                    >
-                      Verify Credentials
-                    </button>
+                    <OTPModal 
+                      userId={currentUser?.uid || ''} 
+                      email={currentUser?.email || ''}
+                      method="email"
+                      onClose={() => {
+                        setShowSCAModal(false);
+                        setScaPendingAction(null);
+                      }}
+                      onSuccess={() => {
+                        if (scaPendingAction) {
+                          verifySCA("", false, currentUser?.email || "");
+                        }
+                        setShowSCAModal(false);
+                        setScaPendingAction(null);
+                        setScaError(null);
+                      }}
+                    />
                   </div>
                 ) : authMethod === 'pin' ? (
                   <>
