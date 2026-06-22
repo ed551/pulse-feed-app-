@@ -32,6 +32,7 @@ import {
   ShieldAlert, 
   Zap, 
   Gem,
+  ExternalLink,
   Database
 } from "lucide-react";
 import { mpesa_handler, unified_participant_payout, rewards_policy, equal_distribution_protocol, merchant_of_record_tax_remittance } from "../lib/engines";
@@ -1790,6 +1791,56 @@ export default function Rewards() {
                   </div>
                 </div>
 
+                {/* Security PIN Integration & Coordination (SCA Status) */}
+                <div className="bg-gray-50 dark:bg-gray-800/40 p-6 rounded-3xl border border-gray-100 dark:border-gray-700/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-10 h-10 rounded-xl flex items-center justify-center border",
+                      userData?.hasSetPin 
+                        ? "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/30"
+                        : "bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-800/30"
+                    )}>
+                      {userData?.hasSetPin ? <ShieldCheck className="w-5 h-5" /> : <Lock className="w-5 h-5 text-amber-500 animate-pulse" />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-tight">Withdrawal PIN Security</h4>
+                        {userData?.hasSetPin ? (
+                          <span className="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/40 text-[7px] font-black text-emerald-600 dark:text-emerald-400 rounded uppercase tracking-wider">
+                            Active
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 bg-red-100 dark:bg-red-900/40 text-[7px] font-black text-red-600 dark:text-red-400 rounded uppercase tracking-wider animate-pulse">
+                            Setup Required
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-500 font-medium">
+                        {userData?.hasSetPin 
+                          ? "Vault outflows are fully locked behind Strong Customer Authentication (SCA)." 
+                          : "Configure your secure Withdrawal PIN to enable funds transfer."}
+                      </p>
+                    </div>
+                  </div>
+                  {userData?.hasSetPin ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate("/settings", { state: { activeSection: 'security' } })}
+                      className="px-3.5 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl text-[9px] font-black uppercase tracking-wider border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm shrink-0"
+                    >
+                      Cycle / Rotate PIN
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowCreatePinModal(true)}
+                      className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/10 shrink-0"
+                    >
+                      Set Up PIN Now
+                    </button>
+                  )}
+                </div>
+
                 <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
                   <div className="flex items-center justify-between mb-6">
                     <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center space-x-2">
@@ -2116,6 +2167,56 @@ export default function Rewards() {
                           <span>≈ KES {balanceKES.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                   </div>
+                </div>
+
+                {/* Security PIN Integration & Coordination (SCA Status) */}
+                <div className="bg-gray-50 dark:bg-gray-800/40 p-6 rounded-3xl border border-gray-100 dark:border-gray-700/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-10 h-10 rounded-xl flex items-center justify-center border",
+                      userData?.hasSetPin 
+                        ? "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/30"
+                        : "bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-800/30"
+                    )}>
+                      {userData?.hasSetPin ? <ShieldCheck className="w-5 h-5" /> : <Lock className="w-5 h-5 text-amber-500 animate-pulse" />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-tight">Withdrawal PIN Security</h4>
+                        {userData?.hasSetPin ? (
+                          <span className="px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/40 text-[7px] font-black text-emerald-600 dark:text-emerald-400 rounded uppercase tracking-wider">
+                            Active
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 bg-red-100 dark:bg-red-900/40 text-[7px] font-black text-red-600 dark:text-red-400 rounded uppercase tracking-wider animate-pulse">
+                            Setup Required
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-500 font-medium">
+                        {userData?.hasSetPin 
+                          ? "Vault outflows are fully locked behind Strong Customer Authentication (SCA)." 
+                          : "Configure your secure Withdrawal PIN to enable funds transfer."}
+                      </p>
+                    </div>
+                  </div>
+                  {userData?.hasSetPin ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate("/settings", { state: { activeSection: 'security' } })}
+                      className="px-3.5 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl text-[9px] font-black uppercase tracking-wider border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all shadow-sm shrink-0"
+                    >
+                      Cycle / Rotate PIN
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowCreatePinModal(true)}
+                      className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/10 shrink-0"
+                    >
+                      Set Up PIN Now
+                    </button>
+                  )}
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
@@ -2882,6 +2983,21 @@ export default function Rewards() {
                       <p className="text-xs font-bold uppercase tracking-widest">Withdrawal Frequency</p>
                       <p className="text-sm font-medium">Limited to once per month</p>
                     </div>
+                  </div>
+
+                  <div 
+                    onClick={() => !userData?.hasSetPin && navigate('/settings', { state: { activeSection: 'security' } })}
+                    className={cn(
+                      "flex items-center p-4 rounded-2xl border transition-all cursor-pointer",
+                      !userData?.hasSetPin ? "bg-amber-50 border-amber-100 text-amber-700 animate-pulse" : "bg-gray-50 dark:bg-gray-900/50 border-gray-100 dark:border-gray-700"
+                    )}
+                  >
+                    <ShieldCheck className="w-5 h-5 mr-3 flex-shrink-0 text-emerald-500" />
+                    <div className="text-left flex-1">
+                      <p className="text-xs font-bold uppercase tracking-widest">Security PIN (SCA)</p>
+                      <p className="text-sm font-medium">{userData?.hasSetPin ? 'Coordinator Active' : 'Setup Required at Settings'}</p>
+                    </div>
+                    <ExternalLink className="w-4 h-4 opacity-30" />
                   </div>
                 </div>
 

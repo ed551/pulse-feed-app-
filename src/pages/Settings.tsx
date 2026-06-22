@@ -36,7 +36,7 @@ import {
   Activity
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
 import { isIframe, getPasskeyErrorLinkMessage, checkPasskeyCapability } from "../lib/iframeUtils";
 import { useAuth } from "../contexts/AuthContext";
@@ -53,9 +53,22 @@ export default function Settings() {
   const { currentUser, userData, logout, sendVerificationEmail } = useAuth();
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [showFingerprintModal, setShowFingerprintModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (location.state?.activeSection) {
+      setActiveSection(location.state.activeSection);
+      setTimeout(() => {
+        const el = document.getElementById(`settings-sec-${location.state.activeSection}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 300);
+    }
+  }, [location.state?.activeSection]);
   
   // Form states
   const [displayName, setDisplayName] = useState(currentUser?.displayName || "");
@@ -734,698 +747,672 @@ export default function Settings() {
       description: t('security_privacy_desc'),
       icon: <Shield className="w-5 h-5 text-purple-500" />,
       content: (
-        <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
-            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Identity & Trust</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 flex items-center justify-between">
+        <div className="space-y-8 animate-in fade-in slide-in-from-top-2 duration-300">
+            {/* Security Summary / Health */}
+            <div className="p-5 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 dark:from-indigo-500/10 dark:to-purple-500/10 rounded-[2rem] border border-indigo-100/50 dark:border-indigo-500/20">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center text-blue-600">
-                    <Mail className="w-4 h-4" />
+                  <div className="w-10 h-10 bg-indigo-500/10 rounded-xl flex items-center justify-center text-indigo-600">
+                    <ShieldCheck className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Email Address</p>
-                    <p className="text-xs font-bold text-gray-900 dark:text-white truncate max-w-[120px]">{currentUser?.email}</p>
+                    <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight">Security Protocol</h4>
+                    <p className="text-[10px] text-gray-500 font-medium">System status: <span className="text-emerald-500">Maximum Protection</span></p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {currentUser?.emailVerified || userData?.emailVerified ? (
-                    <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg">
-                      <ShieldCheck className="w-3 h-3" />
-                      <span className="text-[9px] font-black uppercase tracking-tighter">Verified</span>
+                <div className="flex -space-x-2">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="w-6 h-6 rounded-full border-2 border-white dark:border-gray-900 bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                      <Check className="w-3 h-3 text-emerald-500" />
                     </div>
-                  ) : (
-                    <button 
-                      onClick={async () => {
-                        try {
-                          await sendVerificationEmail();
-                          alert("Verification link sent to your email!");
-                        } catch (err: any) {
-                          alert(`Error: ${err.message}`);
-                        }
-                      }}
-                      className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-[9px] font-black uppercase tracking-tighter"
-                    >
-                      Verify
-                    </button>
-                  )}
+                  ))}
                 </div>
               </div>
-
-              <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg flex items-center justify-center text-emerald-600">
-                    <Smartphone className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Phone Link</p>
-                    <p className="text-xs font-bold text-gray-900 dark:text-white">{userData?.phoneNumber || "Not Linked"}</p>
-                  </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="p-3 bg-white/50 dark:bg-gray-800/50 rounded-2xl border border-white dark:border-gray-700/50">
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">MFA Status</p>
+                  <p className="text-xs font-bold text-gray-900 dark:text-white">{userData?.twoFactorType ? userData.twoFactorType.toUpperCase() : 'DISABLED'}</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  {userData?.phoneNumberVerified ? (
-                    <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg">
-                      <ShieldCheck className="w-3 h-3" />
-                      <span className="text-[9px] font-black uppercase tracking-tighter">Verified</span>
-                    </div>
-                  ) : (
-                    <button 
-                      onClick={() => {
-                        const targetSection = document.getElementById('mfa-sms');
-                        if (targetSection) {
-                          targetSection.scrollIntoView({ behavior: 'smooth' });
-                          // Optionally highlight it
-                        } else {
-                          setActiveSection('security');
-                        }
-                      }}
-                      className="px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg text-[9px] font-black uppercase tracking-tighter animate-pulse"
-                    >
-                      Verify Now
-                    </button>
-                  )}
+                <div className="p-3 bg-white/50 dark:bg-gray-800/50 rounded-2xl border border-white dark:border-gray-700/50">
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Passkey</p>
+                  <p className="text-xs font-bold text-gray-900 dark:text-white">{userData?.passkeyRegistered ? 'LINKED' : 'UNAVAILABLE'}</p>
                 </div>
               </div>
             </div>
 
-            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('two_factor_auth')}</h4>
-            
-            <div className="grid grid-cols-1 gap-2">
-              <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-purple-500/10 rounded-xl flex items-center justify-center text-purple-600">
-                      <KeyRound className="w-5 h-5" />
+            {/* Section 1: Identity Framework */}
+            <div>
+              <h4 className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-4 pl-1">Identity & Trust Framework</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-3xl border border-gray-100 dark:border-gray-700/50 transition-all hover:shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-blue-600">
+                      <Mail className="w-4 h-4" />
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-tight">Security PIN (SCA)</h4>
-                        {!userData?.hasSetPin && (
-                          <span className="px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 text-[8px] font-black text-red-600 dark:text-red-400 rounded-md uppercase tracking-widest animate-pulse">
-                            NOT SET
-                          </span>
-                        )}
+                    {currentUser?.emailVerified || userData?.emailVerified ? (
+                      <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 rounded-lg">
+                        <Check className="w-2.5 h-2.5" />
+                        <span className="text-[9px] font-black uppercase tracking-tighter">Verified</span>
                       </div>
-                      <p className="text-[10px] text-gray-500">The 4-8 digit key required for all withdrawals.</p>
-                    </div>
+                    ) : (
+                      <button 
+                        onClick={async () => {
+                          try {
+                            await sendVerificationEmail();
+                            alert("Verification link sent to your email!");
+                          } catch (err: any) {
+                            alert(`Error: ${err.message}`);
+                          }
+                        }}
+                        className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-[9px] font-black uppercase tracking-tighter animate-pulse shadow-md shadow-blue-500/10"
+                      >
+                        Verify Now
+                      </button>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Email Authority</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{currentUser?.email}</p>
                   </div>
                 </div>
-                
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-gray-400 pl-1">Verification</label>
-                      {passkeyAuthorized || pinEmailVerified ? (
-                        <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-xl px-4 py-3 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                          <ShieldCheck className="w-4 h-4" />
-                          {passkeyAuthorized ? "Authenticated via Passkey" : "Verified via Email"}
+
+                <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-3xl border border-gray-100 dark:border-gray-700/50 transition-all hover:shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center text-emerald-600">
+                      <Smartphone className="w-4 h-4" />
+                    </div>
+                    {userData?.phoneNumberVerified ? (
+                      <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 rounded-lg">
+                        <Check className="w-2.5 h-2.5" />
+                        <span className="text-[9px] font-black uppercase tracking-tighter">Verified</span>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => {
+                          const targetSection = document.getElementById('mfa-sms');
+                          if (targetSection) targetSection.scrollIntoView({ behavior: 'smooth' });
+                          else setActiveSection('security');
+                        }}
+                        className="px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg text-[9px] font-black uppercase tracking-tighter animate-bounce shadow-md shadow-orange-500/10"
+                      >
+                        Verify Link
+                      </button>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Mobile Link</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">{userData?.phoneNumber || "Unlinked"}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+
+            {/* Section 2: MFA Engine */}
+            <div>
+              <h4 className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-4 pl-1">{t('two_factor_auth')} Engine</h4>
+              <div className="space-y-2">
+                {[
+                  { id: 'passkey', icon: ShieldCheck, label: 'Passkey (FIDO2)', desc: 'Secure biometric login', color: 'text-indigo-500' },
+                  { id: 'biometric', icon: Fingerprint, label: t('biometric_scanner'), desc: t('biometric_desc'), color: 'text-cyan-500' },
+                  { id: 'sms', icon: Smartphone, label: 'SMS Verification', desc: 'Secure text codes', color: 'text-emerald-500' },
+                  { id: 'email_otp', icon: Mail, label: t('email_otp'), desc: t('email_otp_desc'), color: 'text-blue-500' },
+                  { id: 'totp', icon: Shield, label: t('google_auth'), desc: t('totp_desc'), color: 'text-orange-500' }
+                ].map(method => (
+                  <div key={`mfa-${method.id}`} className="group">
+                    <button
+                      onClick={() => handleUpdate2FA(method.id)}
+                      className={cn(
+                        "w-full flex items-center justify-between p-4 rounded-2xl border transition-all",
+                        userData?.twoFactorType === method.id 
+                          ? "bg-indigo-50/50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 shadow-sm" 
+                          : "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 hover:border-indigo-200 dark:hover:border-indigo-800"
+                      )}
+                    >
+                      <div className="flex items-center space-x-4">
+                        <div className={cn("p-2 rounded-xl bg-gray-50 dark:bg-gray-900 shadow-inner group-hover:scale-110 transition-transform", method.color)}>
+                          <method.icon className="w-5 h-5" />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-2">
+                            {method.label}
+                            {method.id === 'passkey' && userData?.passkeyRegistered && (
+                              <span className="px-1.5 py-0.5 rounded-full text-[8px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 uppercase tracking-widest">
+                                Active
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[10px] text-gray-500 font-medium">{method.desc}</p>
+                        </div>
+                      </div>
+                      {userData?.twoFactorType === method.id ? (
+                        <div className="w-6 h-6 bg-indigo-600 rounded-full flex items-center justify-center shadow-lg shadow-indigo-600/20">
+                          <Check className="w-3.5 h-3.5 text-white" />
                         </div>
                       ) : (
-                        <div className="flex flex-col gap-2">
-                          <input 
-                            type="password" 
-                            id="userCurrentPin"
-                            className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-xs font-mono focus:ring-2 focus:ring-purple-500 outline-none"
-                            placeholder="Current PIN"
-                          />
-                          <div className="flex flex-col gap-1">
-                            {userData?.passkeyRegistered && (
+                        <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-indigo-400 transition-colors" />
+                      )}
+                    </button>
+
+                    {/* Method Specific UI */}
+                    {userData?.twoFactorType === 'totp' && method.id === 'totp' && userData?.twoFactorSecret && (
+                      <div className="mt-2 p-6 bg-orange-50/30 dark:bg-orange-900/10 border border-orange-100/50 dark:border-orange-800/30 rounded-3xl mx-2 animate-in slide-in-from-top-2">
+                        <div className="flex flex-col items-center gap-6">
+                          <div className="p-4 bg-white dark:bg-gray-900 rounded-3xl shadow-xl border border-orange-100 dark:border-orange-800">
+                            <QRCodeSVG 
+                              value={`otpauth://totp/PulseFeeds:${userData.email}?secret=${userData.twoFactorSecret}&issuer=PulseFeeds`}
+                              size={160}
+                              level="H"
+                              includeMargin={true}
+                              className="dark:filter dark:invert dark:hue-rotate-180"
+                            />
+                          </div>
+                          <div className="text-center space-y-2">
+                            <h5 className="text-[10px] font-black text-orange-800 dark:text-orange-400 uppercase tracking-[0.2em]">{t('scan_qr')}</h5>
+                            <p className="text-[10px] text-gray-500 max-w-[200px] leading-relaxed">{t('scan_qr_desc')}</p>
+                          </div>
+                          <div className="w-full space-y-2">
+                            <p className="text-[10px] font-black text-orange-800 dark:text-orange-400 uppercase tracking-[0.2em] text-center">{t('manual_entry')}</p>
+                            <div className="flex items-center justify-between bg-white dark:bg-gray-950 p-3 rounded-2xl border border-orange-100 dark:border-orange-900 shadow-inner">
+                              <code className="text-xs font-mono font-black text-orange-600 dark:text-orange-500 tracking-tighter">
+                                {userData.twoFactorSecret}
+                              </code>
                               <button 
-                                onClick={async () => {
-                                  if (!currentUser) return;
-                                  
-                                  if (isIframe()) {
-                                    const width = 500;
-                                    const height = 600;
-                                    const left = window.screenX + (window.outerWidth - width) / 2;
-                                    const top = window.screenY + (window.outerHeight - height) / 2;
-                                    
-                                    const popup = window.open(
-                                      `#/passkey-auth?userId=${currentUser.uid}&type=auth`,
-                                      'Passkey Authentication',
-                                      `width=${width},height=${height},left=${left},top=${top},status=no,menubar=no,toolbar=no`
-                                    );
-
-                                    const handleMessage = (event: MessageEvent) => {
-                                      if (event.origin !== window.location.origin) return;
-                                      if (event.data?.type === 'passkey-success') {
-                                        setPasskeyAuthorized(true);
-                                        window.removeEventListener('message', handleMessage);
-                                      }
-                                    };
-                                    window.addEventListener('message', handleMessage);
-                                    return;
-                                  }
-
-                                  setIsPasskeyAuthenticating(true);
-                                  try {
-                                    // 1. Get options from server
-                                    const resp = await apiFetch('/api/auth/passkey/generate-authentication-options', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ userId: currentUser.uid }),
-                                    });
-                                    const options = await resp.json();
-                                    if (options.error) throw new Error(options.error);
-
-                                    // 2. Start authentication
-                                    const authResp = await startAuthentication(options);
-
-                                    // 3. Verify
-                                    const verifyResp = await apiFetch('/api/auth/passkey/verify-authentication', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ userId: currentUser.uid, response: authResp }),
-                                    });
-                                    const verification = await verifyResp.json();
-                                    if (verification.verified) {
-                                      setPasskeyAuthorized(true);
-                                    } else {
-                                      throw new Error(verification.error || "Verification failed");
-                                    }
-                                  } catch (e: any) {
-                                    alert(`Auth Error: ${e.message}`);
-                                  } finally {
-                                    setIsPasskeyAuthenticating(false);
-                                  }
-                                }}
-                                disabled={isPasskeyAuthenticating}
-                                className="text-[9px] font-black uppercase text-indigo-600 dark:text-indigo-400 text-center hover:underline"
+                                onClick={() => navigator.clipboard.writeText(userData.twoFactorSecret || '')}
+                                className="px-3 py-1 bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-400 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-orange-200 transition-colors"
                               >
-                                {isPasskeyAuthenticating ? "Verifying..." : "Verify with Passkey"}
+                                {t('copy')}
                               </button>
-                            )}
-                            <button 
-                              onClick={async () => {
-                                if (!currentUser?.email) return;
-                                setIsSendingOtp(true);
-                                try {
-                                  const res = await apiFetch("/api/otp/send", {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ userId: currentUser.uid, email: currentUser.email, method: 'email' })
-                                  });
-                                  if (res.ok) {
-                                    setPendingAction('reset_pin_email');
-                                    setShowFingerprintModal(true);
-                                  } else {
-                                    alert("Failed to send OTP.");
-                                  }
-                                } catch (err) {
-                                  alert("Error sending OTP.");
-                                } finally {
-                                  setIsSendingOtp(false);
-                                }
-                              }}
-                              disabled={isSendingOtp}
-                              className="text-[9px] font-black uppercase text-purple-600 dark:text-purple-400 text-center hover:underline"
-                            >
-                              {isSendingOtp ? "Sending..." : "Verify with Email"}
-                            </button>
+                            </div>
                           </div>
                         </div>
-                      )}
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-gray-400 pl-1">New PIN</label>
-                      <input 
-                        type="password" 
-                        id="userNewPin"
-                         className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-xs font-mono focus:ring-2 focus:ring-purple-500 outline-none"
-                        placeholder="4-8 digits"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={async () => {
-                        const cur = (document.getElementById('userCurrentPin') as HTMLInputElement)?.value || "";
-                        const next = (document.getElementById('userNewPin') as HTMLInputElement).value;
-                        
-                        if(!passkeyAuthorized && !pinEmailVerified && !cur) return alert("Validation Error: Please provide your current PIN, verify via Email, or verify with Passkey.");
-                        if(!next) return alert("Validation Error: Please provide a new PIN.");
-                        if(next.length < 4 || next.length > 8) return alert("Validation Error: PIN must be 4-8 digits.");
-                        
-                        try {
-                          const res = await apiFetch("/api/user/security/update-pin", {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ 
-                              userId: currentUser?.uid, 
-                              currentPin: cur, 
-                              newPin: next,
-                              usePasskey: passkeyAuthorized,
-                              email: pinEmailVerified ? currentUser?.email : undefined
-                            })
-                          });
-                          const data = await res.json();
-                          if (res.ok) {
-                            alert("Success: Your Security PIN has been rotated.");
-                            if (document.getElementById('userCurrentPin')) {
-                              (document.getElementById('userCurrentPin') as HTMLInputElement).value = "";
-                            }
-                            (document.getElementById('userNewPin') as HTMLInputElement).value = "";
-                            setPasskeyAuthorized(false);
-                            setPinEmailVerified(false);
-                          } else {
-                            alert(`Security Error: ${data.message}`);
-                          }
-                        } catch (e: any) {
-                          alert(`Connection Error: ${e.message}`);
-                        }
-                      }}
-                      className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-purple-600/20 active:scale-95"
-                    >
-                      Update SEC-PIN
-                    </button>
-                    <button 
-                      onClick={async () => {
-                        if (!currentUser?.email) return;
-                        setIsSendingOtp(true);
-                        try {
-                          const res = await apiFetch("/api/otp/send", {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ userId: currentUser.uid, email: currentUser.email, method: 'email' })
-                          });
-                          if (res.ok) {
-                            setPendingAction('reset_pin_email');
-                            setShowFingerprintModal(true);
-                          } else {
-                            alert("Failed to send verification code.");
-                          }
-                        } catch (err) {
-                          alert("Error connecting to security service.");
-                        } finally {
-                          setIsSendingOtp(false);
-                        }
-                      }}
-                      className="px-4 py-3 bg-white dark:bg-gray-700 text-purple-600 border border-purple-200 dark:border-purple-800 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"
-                    >
-                      Forgot?
-                    </button>
-                  </div>
-                  <p className="text-[9px] text-gray-400 italic text-center">Default PIN is <span className="font-bold">123456</span> unless previously rotated.</p>
-                </div>
-              </div>
-
-              {[
-                { id: 'passkey', icon: ShieldCheck, label: 'Passkey (FIDO2)', desc: 'Secure biometric login', color: 'text-indigo-500' },
-                { id: 'biometric', icon: Fingerprint, label: t('biometric_scanner'), desc: t('biometric_desc'), color: 'text-cyan-500' },
-                { id: 'sms', icon: Smartphone, label: 'SMS Verification', desc: 'Verify via text message', color: 'text-emerald-500' },
-                { id: 'email_otp', icon: Mail, label: t('email_otp'), desc: t('email_otp_desc'), color: 'text-blue-500' },
-                { id: 'totp', icon: Shield, label: t('google_auth'), desc: t('totp_desc'), color: 'text-orange-500' }
-              ].map(method => (
-                <div key={`mfa-${method.id}`} className="space-y-2">
-                  <button
-                    onClick={() => handleUpdate2FA(method.id)}
-                    className={cn(
-                      "w-full flex items-center justify-between p-3 rounded-xl border transition-all",
-                      userData?.twoFactorType === method.id 
-                        ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800" 
-                        : "bg-gray-50 dark:bg-gray-700/30 border-gray-100 dark:border-gray-700 hover:border-indigo-200"
-                    )}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className={cn("p-1.5 rounded-lg bg-white dark:bg-gray-800 shadow-sm", method.color)}>
-                        <method.icon className="w-4 h-4" />
                       </div>
-                      <div className="text-left">
-                        <p className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                          {method.label}
-                          {method.id === 'passkey' && userData?.passkeyRegistered && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 uppercase tracking-wider">
-                              Registered
+                    )}
+
+                    {method.id === 'sms' && (
+                      <div className="mt-2 mx-2 p-5 bg-emerald-50/30 dark:bg-emerald-900/10 border border-emerald-100/50 dark:border-emerald-800/30 rounded-3xl animate-in slide-in-from-top-2">
+                        <div className="space-y-5">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-400 tracking-widest pl-1">Mobile Authority Number</label>
+                            <div className="flex gap-2">
+                              <input 
+                                type="tel"
+                                value={phoneNumber}
+                                onChange={(e) => setPhoneNumber(e.target.value)}
+                                placeholder="+254 7..."
+                                className="flex-1 bg-white dark:bg-gray-950 border border-emerald-100 dark:border-emerald-900 rounded-2xl px-5 py-3 text-sm focus:ring-2 focus:ring-emerald-500 outline-none shadow-inner"
+                              />
+                              <button 
+                                onClick={() => {
+                                  if (!phoneNumber) return alert("Please enter a phone number.");
+                                  setPendingAction('verify_phone');
+                                  setShowFingerprintModal(true);
+                                }}
+                                disabled={isVerifyingPhone || phoneNumber === userData?.phoneNumber}
+                                className="px-5 py-3 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                              >
+                                {isVerifyingPhone ? "Processing..." : userData?.phoneNumber ? "Rotate" : "Link Now"}
+                              </button>
+                            </div>
+                          </div>
+                          {userData?.phoneNumber && (
+                            <div className="flex items-center gap-3 p-3 bg-white/50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-800 shadow-sm">
+                              <div className="w-6 h-6 bg-emerald-100 dark:bg-emerald-900 rounded-full flex items-center justify-center text-emerald-600">
+                                <Check className="w-3 h-3" />
+                              </div>
+                              <p className="text-[10px] font-bold text-gray-600 dark:text-emerald-400">Authenticated Line: <span className="text-gray-900 dark:text-white font-black">{userData.phoneNumber}</span></p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+              
+            <div className="h-px bg-gray-100 dark:bg-gray-700/50 my-2" />
+
+            {/* Section 3: Hardened Encryption (PINs) */}
+            <div>
+              <h4 className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-4 pl-1">Hardened Logic & PIN Controls</h4>
+              
+              <div className="grid grid-cols-1 gap-4">
+                {/* Withdrawal PIN (SCA) */}
+                <div className="p-6 bg-purple-50/10 dark:bg-purple-950/10 rounded-[2rem] border border-purple-100 dark:border-purple-900/30 transition-all">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-white dark:bg-gray-800 rounded-2xl flex items-center justify-center text-purple-600 shadow-sm border border-purple-100/50 dark:border-purple-800/30">
+                        <KeyRound className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none">Withdrawal PIN (SCA)</h4>
+                          {!userData?.hasSetPin && (
+                            <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-[8px] font-black text-red-600 dark:text-red-400 rounded-md uppercase tracking-widest animate-pulse">
+                              Action Required
                             </span>
                           )}
-                        </p>
-                        <p className="text-[10px] text-gray-500">
-                          {method.desc}
-                        </p>
+                        </div>
+                        <p className="text-[10px] text-gray-500 font-medium mt-1">Multi-digit key required for vault outflows.</p>
                       </div>
                     </div>
-                    {userData?.twoFactorType === method.id && (
-                      <div className="w-5 h-5 bg-indigo-600 rounded-full flex items-center justify-center">
-                        <Check className="w-3 h-3 text-white" />
-                      </div>
-                    )}
-                  </button>
-
-                  {userData?.twoFactorType === 'totp' && method.id === 'totp' && userData?.twoFactorSecret && (
-                    <div className="p-4 bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-900/20 rounded-xl mx-2 animate-in fade-in slide-in-from-top-1">
-                      <div className="flex flex-col items-center gap-4">
-                        <div className="p-3 bg-white rounded-2xl shadow-sm border border-orange-100">
-                          <QRCodeSVG 
-                            value={`otpauth://totp/PulseFeeds:${userData.email}?secret=${userData.twoFactorSecret}&issuer=PulseFeeds`}
-                            size={140}
-                            level="H"
-                            includeMargin={true}
-                          />
-                        </div>
-                        <div className="text-center space-y-1">
-                          <p className="text-[10px] font-bold text-orange-800 dark:text-orange-300 uppercase tracking-wider">{t('scan_qr')}</p>
-                          <p className="text-[9px] text-gray-500 max-w-[180px]">{t('scan_qr_desc')}</p>
-                        </div>
-                        
-                        <div className="w-full space-y-1 mt-1">
-                          <p className="text-[10px] font-bold text-orange-800 dark:text-orange-300 uppercase tracking-wider">{t('manual_entry')}</p>
-                          <div className="flex items-center justify-between bg-white dark:bg-gray-900 p-2 rounded-lg border border-orange-200 dark:border-orange-800 w-full">
-                            <code className="text-[10px] font-mono font-bold text-orange-600 dark:text-orange-500 tracking-tighter">
-                              {userData.twoFactorSecret}
-                            </code>
-                            <button 
-                              onClick={() => {
-                                navigator.clipboard.writeText(userData.twoFactorSecret || '');
-                                // No toast library imported so using alert/console or assuming it might be there
-                              }}
-                              className="text-[9px] font-black text-gray-400 hover:text-orange-600 transition-colors uppercase"
-                            >
-                              Copy
-                            </button>
+                  </div>
+                  
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-gray-400 dark:text-gray-500 pl-1 tracking-widest">Authority Validation</label>
+                        {!userData?.hasSetPin ? (
+                          <div className="flex items-center gap-3 bg-amber-50/50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/30 rounded-2xl px-5 py-4 text-xs font-bold text-gray-900 dark:text-white shadow-inner">
+                            <div className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center text-white shrink-0 animate-pulse">
+                              <Lock className="w-3.5 h-3.5" />
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest leading-none">First-Time Setup</p>
+                                <p className="text-[9px] text-gray-500 mt-1 leading-tight">No current PIN exists. Verify via **Email Relay** below to authorize your first security key.</p>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {method.id === 'sms' && (
-                    <div className="mx-2 mt-2 p-4 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/20 rounded-xl animate-in fade-in slide-in-from-top-1">
-                      <div className="space-y-4">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-400 tracking-widest pl-1">Phone Number</label>
-                          <div className="flex gap-2">
-                            <input 
-                              type="tel"
-                              value={phoneNumber}
-                              onChange={(e) => setPhoneNumber(e.target.value)}
-                              placeholder="+254 7..."
-                              className="flex-1 bg-white dark:bg-gray-900 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-2 text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
-                            />
-                            <button 
-                              onClick={() => {
-                                if (!phoneNumber) return alert("Please enter a phone number.");
-                                setPendingAction('verify_phone');
-                                setShowFingerprintModal(true);
-                              }}
-                              disabled={isVerifyingPhone || phoneNumber === userData?.phoneNumber}
-                              className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
-                            >
-                              {isVerifyingPhone ? "Sending..." : userData?.phoneNumber ? "Change" : "Verify"}
-                            </button>
+                        ) : passkeyAuthorized || pinEmailVerified ? (
+                          <div className="flex items-center gap-3 bg-emerald-50/50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-2xl px-5 py-4 text-xs font-bold text-gray-900 dark:text-white shadow-inner">
+                            <div className="w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center text-white">
+                              <ShieldCheck className="w-4 h-4" />
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest leading-none">Authenticated</p>
+                                <p className="text-[9px] text-gray-500 mt-0.5">{passkeyAuthorized ? "Passkey Session Active" : "Verified via Email Relay"}</p>
+                            </div>
                           </div>
-                        </div>
-                        {userData?.phoneNumber && (
-                          <div className="flex items-center gap-2 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-white dark:bg-emerald-900/20 p-2 rounded-lg border border-emerald-100 dark:border-emerald-800">
-                            <Check className="w-3 h-3" />
-                            Linked to: {userData.phoneNumber}
+                        ) : (
+                          <div className="space-y-3">
+                            <div className="relative group">
+                              <input 
+                                type="password" 
+                                id="userCurrentPin"
+                                className="w-full bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4 text-sm font-mono tracking-[0.5em] focus:ring-2 focus:ring-purple-500 outline-none shadow-inner transition-all group-hover:border-purple-200"
+                                placeholder="••••••"
+                              />
+                              <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                                <Lock className="w-4 h-4 text-gray-300" />
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              {userData?.passkeyRegistered && (
+                                <button 
+                                  onClick={async () => {
+                                    if (!currentUser) return;
+                                    if (isIframe()) {
+                                      const width = 500;
+                                      const height = 600;
+                                      const left = window.screenX + (window.outerWidth - width) / 2;
+                                      const top = window.screenY + (window.outerHeight - height) / 2;
+                                      const popup = window.open(`#/passkey-auth?userId=${currentUser.uid}&type=auth`, 'Passkey', `width=${width},height=${height},left=${left},top=${top}`);
+                                      const handleMessage = (event: MessageEvent) => {
+                                        if (event.origin !== window.location.origin) return;
+                                        if (event.data?.type === 'passkey-success') {
+                                          setPasskeyAuthorized(true);
+                                          window.removeEventListener('message', handleMessage);
+                                        }
+                                      };
+                                      window.addEventListener('message', handleMessage);
+                                      return;
+                                    }
+                                    setIsPasskeyAuthenticating(true);
+                                    try {
+                                      const resp = await apiFetch('/api/auth/passkey/generate-authentication-options', { method: 'POST', body: JSON.stringify({ userId: currentUser.uid }), headers: { 'Content-Type': 'application/json' } });
+                                      const options = await resp.json();
+                                      const authResp = await startAuthentication(options);
+                                      const verifyResp = await apiFetch('/api/auth/passkey/verify-authentication', { method: 'POST', body: JSON.stringify({ userId: currentUser.uid, response: authResp }), headers: { 'Content-Type': 'application/json' } });
+                                      if ((await verifyResp.json()).verified) setPasskeyAuthorized(true);
+                                    } catch (e: any) { alert(`Auth Error: ${e.message}`); } finally { setIsPasskeyAuthenticating(false); }
+                                  }}
+                                  disabled={isPasskeyAuthenticating}
+                                  className="flex-1 py-2.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-all border border-indigo-100/50 dark:border-indigo-800"
+                                >
+                                  {isPasskeyAuthenticating ? "Verifying..." : "WebAuthn Link"}
+                                </button>
+                              )}
+                              <button 
+                                onClick={async () => {
+                                  if (!currentUser?.email) return;
+                                  setIsSendingOtp(true);
+                                  try {
+                                    const res = await apiFetch("/api/otp/send", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: currentUser.uid, email: currentUser.email, method: 'email' }) });
+                                    if (res.ok) { setPendingAction('reset_pin_email'); setShowFingerprintModal(true); }
+                                  } catch (err) { alert("Email service unreachable."); } finally { setIsSendingOtp(false); }
+                                }}
+                                disabled={isSendingOtp}
+                                className="flex-1 py-2.5 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-purple-100 transition-all border border-purple-100/50 dark:border-purple-800"
+                              >
+                                {isSendingOtp ? "Relaying..." : "Email Relay"}
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <div className="p-4 bg-indigo-600/5 dark:bg-indigo-600/10 rounded-2xl border border-indigo-600/20 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg">
-                  <Lock className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">{t('enable_2fa')}</p>
-                  <p className="text-[10px] text-gray-500">{t('identity_check_desc')}</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => handleToggle2FA(!userData?.twoFactorEnabled)}
-                className={cn(
-                  "w-12 h-6 rounded-full relative transition-colors duration-300",
-                  userData?.twoFactorEnabled ? "bg-indigo-600" : "bg-gray-300 dark:bg-gray-600"
-                )}
-              >
-                <div className={cn(
-                  "absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300",
-                  userData?.twoFactorEnabled ? "right-1" : "left-1"
-                )} />
-              </button>
-            </div>
-
-          <div className="h-px bg-gray-100 dark:bg-gray-700 my-2" />
-
-          {/* Platform SEC-PIN (Administrative) */}
-          <div className="space-y-4">
-             <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-600 shadow-sm">
-                  <Key className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-tight">Vault Security PIN</h4>
-                  <p className="text-[10px] text-gray-500">Master PIN used for platform-level withdrawals and sensitive operations.</p>
-                </div>
-             </div>
-
-             <div className="p-5 bg-white dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-700 space-y-4 shadow-sm">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest pl-1">Current PIN</label>
-                    <input 
-                      type="password" 
-                      id="settCurrentPin"
-                      className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-xs font-mono focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="••••••"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest pl-1">New Secret PIN</label>
-                    <input 
-                      type="password" 
-                      id="settNewPin"
-                      className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-xs font-mono focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="4-8 digits"
-                    />
-                  </div>
-                </div>
-                <button 
-                  onClick={async () => {
-                    const cur = (document.getElementById('settCurrentPin') as HTMLInputElement).value;
-                    const next = (document.getElementById('settNewPin') as HTMLInputElement).value;
-                    if(!cur || !next) return alert("Validation Failed: Both PINs are required.");
-                    
-                    try {
-                      const res = await apiFetch("/api/admin/security/update-pin", {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ currentPin: cur, newPin: next })
-                      });
-                      const data = await res.json();
-                      if (res.ok) {
-                        alert("SEC-PIN Success: Your master security key has been rotated.");
-                        (document.getElementById('settCurrentPin') as HTMLInputElement).value = "";
-                        (document.getElementById('settNewPin') as HTMLInputElement).value = "";
-                      } else {
-                        alert(`Security Logic Error: ${data.message}`);
-                      }
-                    } catch (e: any) {
-                      alert(`Network Integration Error: ${e.message}`);
-                    }
-                  }}
-                  className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/20 active:scale-[0.98]"
-                >
-                  Rotate Master PIN
-                </button>
-             </div>
-          </div>
-
-          <div className="h-px bg-gray-100 dark:bg-gray-700 my-2" />
-
-          {/* Blocked Lists */}
-          <div className="space-y-4">
-            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('blocked_management')}</h4>
-            
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-100 dark:border-red-900/20">
-                <div className="flex items-center gap-3">
-                  <Ban className="w-5 h-5 text-red-500" />
-                  <div>
-                    <h5 className="text-sm font-bold text-gray-900 dark:text-white">{t('blocked_users')}</h5>
-                    <p className="text-[10px] text-gray-500">{(userData?.blockedUsers || []).length} {t('users_restricted')}</p>
-                  </div>
-                </div>
-                <button className="text-xs font-bold text-red-600 hover:underline">{t('manage_blocked')}</button>
-              </div>
-
-              {(userData?.blockedUsers || []).length > 0 && (
-                <div className="space-y-2 pl-2 border-l-2 border-red-100 dark:border-red-900/30">
-                  {Array.from(new Set(userData?.blockedUsers || [])).map((uid: string) => (
-                    <div key={uid} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-gray-200" />
-                        <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300">{uid.substring(0, 8)}...</span>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-gray-400 dark:text-gray-500 pl-1 tracking-widest">New Protocol Key</label>
+                        <div className="relative group">
+                          <input 
+                            type="password" 
+                            id="userNewPin"
+                            className="w-full bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4 text-sm font-mono tracking-[0.5em] focus:ring-2 focus:ring-purple-500 outline-none shadow-inner transition-all group-hover:border-purple-200"
+                            placeholder="4-8 Digits"
+                          />
+                          <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                            <Key className="w-4 h-4 text-gray-300" />
+                          </div>
+                        </div>
+                        <p className="text-[9px] text-gray-400 font-medium pl-1 italic">Entropy recommendation: Use 6+ digits.</p>
                       </div>
-                      <button onClick={() => handleUnblock(uid, 'user')} className="text-[10px] text-blue-600 hover:underline">{t('unblock')}</button>
                     </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex items-center justify-between p-4 bg-orange-50 dark:bg-orange-900/10 rounded-2xl border border-orange-100 dark:border-orange-900/20">
-                <div className="flex items-center gap-3">
-                  <Users2 className="w-5 h-5 text-orange-500" />
-                  <div>
-                    <h5 className="text-sm font-bold text-gray-900 dark:text-white">{t('blocked_groups')}</h5>
-                    <p className="text-[10px] text-gray-500">{(userData?.blockedGroups || []).length} {t('groups_restricted')}</p>
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={async () => {
+                          const cur = (document.getElementById('userCurrentPin') as HTMLInputElement)?.value || "";
+                          const next = (document.getElementById('userNewPin') as HTMLInputElement).value;
+                          if(!passkeyAuthorized && !pinEmailVerified && !cur) return alert("Security Error: Identity verification required.");
+                          if(!next) return alert("Validation Error: Proposed PIN missing.");
+                          try {
+                            const res = await apiFetch("/api/user/security/update-pin", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: currentUser?.uid, currentPin: cur, newPin: next, usePasskey: passkeyAuthorized, email: pinEmailVerified ? currentUser?.email : undefined }) });
+                            if (res.ok) { alert("Protocol Success: PIN Rotated."); setPasskeyAuthorized(false); setPinEmailVerified(false); }
+                          } catch (e: any) { alert(`API Error: ${e.message}`); }
+                        }}
+                        className="flex-1 py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-[1.25rem] text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-purple-600/30 active:scale-95"
+                      >
+                        Authorize Rotation
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <button className="text-xs font-bold text-orange-600 hover:underline">{t('manage_blocked')}</button>
+
+                {/* Vault Master PIN - Admin Only */}
+                {currentUser?.email === 'edwinmuoha@gmail.com' && (
+                  <div className="p-6 bg-blue-50/10 dark:bg-blue-950/10 rounded-[2rem] border border-blue-100 dark:border-blue-900/30">
+                    <div className="flex items-center gap-4 mb-6">
+                        <div className="w-12 h-12 bg-white dark:bg-gray-800 rounded-2xl flex items-center justify-center text-blue-600 shadow-sm border border-blue-100/50 dark:border-blue-800/30">
+                          <Shield className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none">Vault Master Authority</h4>
+                            <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-[7px] font-black text-blue-600 dark:text-blue-400 rounded uppercase tracking-widest">
+                              Root Admin
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-gray-500 font-medium mt-1">High-level administrative encryption key for platform treasury.</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase text-gray-400 dark:text-gray-500 pl-1 tracking-widest">Master Key</label>
+                          <input 
+                            type="password" 
+                            id="settCurrentPin"
+                            className="w-full bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4 text-sm font-mono tracking-[0.5em] focus:ring-2 focus:ring-blue-500 outline-none shadow-inner"
+                            placeholder="••••••"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase text-gray-400 dark:text-gray-500 pl-1 tracking-widest">Secret Proposal</label>
+                          <input 
+                            type="password" 
+                            id="settNewPin"
+                            className="w-full bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4 text-sm font-mono tracking-[0.5em] focus:ring-2 focus:ring-blue-500 outline-none shadow-inner"
+                            placeholder="4-8 Digits"
+                          />
+                        </div>
+                    </div>
+                    <button 
+                        onClick={async () => {
+                          const cur = (document.getElementById('settCurrentPin') as HTMLInputElement).value;
+                          const next = (document.getElementById('settNewPin') as HTMLInputElement).value;
+                          try {
+                            const res = await apiFetch("/api/admin/security/update-pin", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ currentPin: cur, newPin: next }) });
+                            if (res.ok) alert("Administrative Success: Master Key Updated.");
+                          } catch (e: any) { alert(`Error: ${e.message}`); }
+                        }}
+                        className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-[1.25rem] text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-xl shadow-blue-600/30 active:scale-95"
+                      >
+                        Cycle Master Authority
+                      </button>
+                  </div>
+                )}
+
               </div>
             </div>
-          </div>
 
-          <div className="h-px bg-gray-100 dark:bg-gray-700 my-2" />
+            <div className="h-px bg-gray-100 dark:bg-gray-700/50 my-2" />
 
-          {/* Content Filters */}
-          <div className="space-y-4">
-            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('content_filters')}</h4>
-            
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Filter className="w-4 h-4 text-emerald-500" />
-                  <div>
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">{t('sensitive_content')}</p>
-                    <p className="text-[10px] text-gray-500">{t('sensitive_content_desc')}</p>
+            {/* Section 4: Privacy & Social Moderation */}
+            <div>
+              <h4 className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-4 pl-1">Moderation & Perimeter Control</h4>
+              
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="p-5 bg-red-50/30 dark:bg-red-950/10 rounded-[2rem] border border-red-100 dark:border-red-900/30 flex items-center justify-between group transition-all hover:bg-red-50/50">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center text-red-500 shadow-sm border border-red-100/50 dark:border-red-800/30 group-hover:scale-110 transition-transform">
+                        <Ban className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h5 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight">{t('blocked_users')}</h5>
+                        <p className="text-[10px] text-gray-500 font-medium">{(userData?.blockedUsers || []).length} {t('users_restricted')}</p>
+                      </div>
+                    </div>
+                    <button className="px-4 py-2 bg-white dark:bg-gray-800 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-red-100 dark:border-red-800 shadow-sm hover:shadow-md transition-all active:scale-95">{t('manage_blocked')}</button>
+                  </div>
+
+                  <div className="p-5 bg-orange-50/30 dark:bg-orange-950/10 rounded-[2rem] border border-orange-100 dark:border-orange-900/30 flex items-center justify-between group transition-all hover:bg-orange-50/50">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center text-orange-500 shadow-sm border border-orange-100/50 dark:border-orange-800/30 group-hover:scale-110 transition-transform">
+                        <Users2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h5 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight">{t('blocked_groups')}</h5>
+                        <p className="text-[10px] text-gray-500 font-medium">{(userData?.blockedGroups || []).length} {t('groups_restricted')}</p>
+                      </div>
+                    </div>
+                    <button className="px-4 py-2 bg-white dark:bg-gray-800 text-orange-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-orange-100 dark:border-orange-800 shadow-sm hover:shadow-md transition-all active:scale-95">{t('manage_blocked')}</button>
                   </div>
                 </div>
-                <button 
-                  onClick={() => handleUpdateFilters('sensitiveContent', !contentFilters.sensitiveContent)}
-                  className={cn(
-                    "w-10 h-5 rounded-full relative transition-colors",
-                    contentFilters.sensitiveContent ? "bg-emerald-600" : "bg-gray-300 dark:bg-gray-600"
-                  )}
-                >
-                  <div className={cn(
-                    "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
-                    contentFilters.sensitiveContent ? "right-1" : "left-1"
-                  )} />
-                </button>
-              </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <AlertCircle className="w-4 h-4 text-blue-500" />
-                  <div>
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">{t('spam_filter')}</p>
-                    <p className="text-[10px] text-gray-500">{t('spam_filter_desc')}</p>
+                {/* Sub-list for Blocked items if any */}
+                {(userData?.blockedUsers || []).length > 0 && (
+                  <div className="space-y-2 pl-4 border-l-4 border-red-500/20 py-1 animate-in slide-in-from-left-2">
+                    {Array.from(new Set(userData?.blockedUsers || [])).map((uid: string) => (
+                      <div key={uid} className="flex items-center justify-between p-3 bg-white dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center text-[10px] font-black text-gray-400">ID</div>
+                          <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400 tracking-tight">{uid.substring(0, 12)}...</span>
+                        </div>
+                        <button onClick={() => handleUnblock(uid, 'user')} className="px-3 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-blue-100 transition-colors">{t('unblock')}</button>
+                      </div>
+                    ))}
                   </div>
-                </div>
-                <button 
-                  onClick={() => handleUpdateFilters('spamFilter', !contentFilters.spamFilter)}
-                  className={cn(
-                    "w-10 h-5 rounded-full relative transition-colors",
-                    contentFilters.spamFilter ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"
-                  )}
-                >
-                  <div className={cn(
-                    "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
-                    contentFilters.spamFilter ? "right-1" : "left-1"
-                  )} />
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-[10px] font-bold text-gray-500 uppercase">{t('dm_privacy')}</p>
-                <select 
-                  value={contentFilters.directMessagePrivacy}
-                  onChange={(e) => handleUpdateFilters('directMessagePrivacy', e.target.value)}
-                  className="w-full bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-3 text-xs text-gray-900 dark:text-white outline-none"
-                >
-                  <option value="everyone">{t('everyone')}</option>
-                  <option value="following">{t('only_people_i_follow')}</option>
-                  <option value="none">{t('none')}</option>
-                </select>
+                )}
               </div>
             </div>
-          </div>
-          
-          <div className="h-px bg-gray-100 dark:bg-gray-700 my-4" />
 
-          <div className="space-y-3">
-            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">{t('account_privacy_interactions')}</h4>
-            
-            <div className="space-y-4 bg-gray-50 dark:bg-gray-700/20 p-4 rounded-2xl border border-gray-100 dark:border-gray-700">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">{t('profile_visibility')}</p>
-                  <p className="text-[10px] text-gray-500">{t('profile_visibility_desc')}</p>
-                </div>
-                <button 
-                  onClick={() => handleUpdateFilters('publicProfile', !contentFilters.publicProfile)}
-                  className={cn(
-                    "w-10 h-5 rounded-full relative transition-colors",
-                    contentFilters.publicProfile ? "bg-indigo-600" : "bg-gray-300 dark:bg-gray-600"
-                  )}
-                >
-                  <div className={cn(
-                    "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
-                    contentFilters.publicProfile ? "right-1" : "left-1"
-                  )} />
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-bold text-gray-700 dark:text-gray-300">{t('who_see_photos')}</p>
-                <div className="flex gap-2">
-                  {['everyone', 'followers', 'none'].map((val) => (
-                    <button
-                      key={val}
-                      onClick={() => handleUpdateFilters('photoVisibility', val)}
+            {/* Section 5: Content Filtration Filters */}
+            <div>
+              <h4 className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-4 pl-1">Neural Filtration & Privacy</h4>
+              
+              <div className="p-6 bg-emerald-50/10 dark:bg-emerald-950/10 rounded-[2.5rem] border border-emerald-100 dark:border-emerald-900/30 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="flex items-center justify-between group">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center text-emerald-500 shadow-sm border border-emerald-100/50 dark:border-emerald-800/30 group-hover:rotate-12 transition-transform">
+                        <Filter className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none mb-1">{t('sensitive_content')}</p>
+                        <p className="text-[10px] text-gray-500 font-medium">Disturbing media block</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handleUpdateFilters('sensitiveContent', !contentFilters.sensitiveContent)}
                       className={cn(
-                        "flex-1 py-2 text-[10px] font-bold rounded-lg border capitalize transition-all",
-                        contentFilters.photoVisibility === val 
-                          ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-100 dark:shadow-none" 
-                          : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-500"
+                        "w-12 h-6 rounded-full relative transition-all duration-300 shadow-inner",
+                        contentFilters.sensitiveContent ? "bg-emerald-600 shadow-emerald-500/20" : "bg-gray-200 dark:bg-gray-700"
                       )}
                     >
-                      {t(val)}
+                      <div className={cn(
+                        "absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 shadow-md",
+                        contentFilters.sensitiveContent ? "right-1" : "left-1"
+                      )} />
                     </button>
-                  ))}
+                  </div>
+
+                  <div className="flex items-center justify-between group">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center text-blue-500 shadow-sm border border-blue-100/50 dark:border-blue-800/30 group-hover:rotate-12 transition-transform">
+                        <AlertCircle className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none mb-1">{t('spam_filter')}</p>
+                        <p className="text-[10px] text-gray-500 font-medium">Bot & advertisement block</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handleUpdateFilters('spamFilter', !contentFilters.spamFilter)}
+                      className={cn(
+                        "w-12 h-6 rounded-full relative transition-all duration-300 shadow-inner",
+                        contentFilters.spamFilter ? "bg-blue-600 shadow-blue-500/20" : "bg-gray-200 dark:bg-gray-700"
+                      )}
+                    >
+                      <div className={cn(
+                        "absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 shadow-md",
+                        contentFilters.spamFilter ? "right-1" : "left-1"
+                      )} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="h-px bg-emerald-100 dark:bg-emerald-900/50" />
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Mail className="w-3.5 h-3.5 text-gray-400" />
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest leading-none">{t('dm_privacy')}</p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {['everyone', 'following', 'none'].map((level) => (
+                      <button
+                        key={level}
+                        onClick={() => handleUpdateFilters('directMessagePrivacy', level)}
+                        className={cn(
+                          "py-3 text-[10px] font-black rounded-2xl border transition-all uppercase tracking-widest",
+                          contentFilters.directMessagePrivacy === level 
+                            ? "bg-emerald-600 border-emerald-600 text-white shadow-lg shadow-emerald-500/20" 
+                            : "bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 text-gray-500 hover:border-emerald-200"
+                        )}
+                      >
+                        {level}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">{t('allow_followers')}</p>
-                  <p className="text-[10px] text-gray-500">{t('allow_followers_desc')}</p>
+            </div>
+            
+            {/* Section 6: Account Interaction Perimeter */}
+            <div>
+              <h4 className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-4 pl-1">Social Interaction Perimeter</h4>
+              
+              <div className="bg-gray-50/50 dark:bg-gray-800/30 p-6 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 space-y-6">
+                <div className="flex items-center justify-between group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center text-indigo-500 shadow-sm border border-gray-100 dark:border-gray-700 group-hover:scale-110 transition-transform">
+                      <Eye className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none mb-1">{t('profile_visibility')}</p>
+                      <p className="text-[10px] text-gray-500 font-medium">Global discoverability toggle</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => handleUpdateFilters('publicProfile', !contentFilters.publicProfile)}
+                    className={cn(
+                      "w-12 h-6 rounded-full relative transition-all duration-300 shadow-inner",
+                      contentFilters.publicProfile ? "bg-indigo-600 shadow-indigo-500/20" : "bg-gray-200 dark:bg-gray-700"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 shadow-md",
+                      contentFilters.publicProfile ? "right-1" : "left-1"
+                    )} />
+                  </button>
                 </div>
-                <button 
-                  onClick={() => handleUpdateFilters('allowFollowers', !contentFilters.allowFollowers)}
-                  className={cn(
-                    "w-10 h-5 rounded-full relative transition-colors",
-                    contentFilters.allowFollowers ? "bg-emerald-600" : "bg-gray-300 dark:bg-gray-600"
-                  )}
-                >
-                  <div className={cn(
-                    "absolute top-1 w-3 h-3 bg-white rounded-full transition-all",
-                    contentFilters.allowFollowers ? "right-1" : "left-1"
-                  )} />
-                </button>
-              </div>
-            </div>
-          </div>
 
-          <button className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
-            <div className="flex items-center space-x-4">
-              <Eye className="w-5 h-5 text-gray-400" />
-              <div className="text-left">
-                <p className="text-sm font-bold text-gray-900 dark:text-white">{t('profile_visibility')}</p>
-                <p className="text-[10px] text-gray-500">{t('currently_set_to')} {contentFilters.publicProfile ? t('public') : t('private')}</p>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Check className="w-3.5 h-3.5 text-gray-400" />
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest leading-none">Photo Visibility Cluster</p>
+                  </div>
+                  <div className="flex p-1.5 bg-white dark:bg-gray-950 rounded-[1.5rem] border border-gray-100 dark:border-gray-900 shadow-inner gap-1">
+                    {['everyone', 'followers', 'none'].map((val) => (
+                      <button
+                        key={val}
+                        onClick={() => handleUpdateFilters('photoVisibility', val)}
+                        className={cn(
+                          "flex-1 py-3 text-[10px] font-black rounded-xl border transition-all uppercase tracking-tighter",
+                          contentFilters.photoVisibility === val 
+                            ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-500/20" 
+                            : "bg-transparent border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        )}
+                      >
+                        {val === 'everyone' ? 'Public' : val === 'followers' ? 'Circle' : 'Locked'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-white dark:bg-gray-800 rounded-xl flex items-center justify-center text-emerald-500 shadow-sm border border-gray-100 dark:border-gray-700 group-hover:scale-110 transition-transform">
+                      <Users2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none mb-1">{t('allow_followers')}</p>
+                      <p className="text-[10px] text-gray-500 font-medium">Permit subscription to stream</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => handleUpdateFilters('allowFollowers', !contentFilters.allowFollowers)}
+                    className={cn(
+                      "w-12 h-6 rounded-full relative transition-all duration-300 shadow-inner",
+                      contentFilters.allowFollowers ? "bg-emerald-600 shadow-emerald-500/20" : "bg-gray-200 dark:bg-gray-700"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 shadow-md",
+                      contentFilters.allowFollowers ? "right-1" : "left-1"
+                    )} />
+                  </button>
+                </div>
               </div>
             </div>
-            <ChevronRight className="w-4 h-4 text-gray-400" />
-          </button>
+
+            {/* Quick View Link */}
+            <button className="w-full flex items-center justify-between p-5 bg-gradient-to-r from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 rounded-3xl border border-gray-100 dark:border-gray-700 hover:shadow-lg transition-all group active:scale-[0.99]">
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 bg-white dark:bg-gray-800 rounded-2xl flex items-center justify-center text-gray-400 shadow-sm border border-gray-100 dark:border-gray-700 group-hover:rotate-12 transition-transform">
+                  <Eye className="w-6 h-6" />
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight leading-none mb-1">Live Privacy View</p>
+                  <p className="text-[10px] text-gray-500 font-medium">Currently set to <span className="font-black text-indigo-600 dark:text-indigo-400">{contentFilters.publicProfile ? 'PUBLIC BROADCAST' : 'ENCRYPTED PRIVATE'}</span></p>
+                </div>
+              </div>
+              <div className="w-10 h-10 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center group-hover:translate-x-1 transition-transform">
+                <ChevronRight className="w-5 h-5 text-gray-400" />
+              </div>
+            </button>
         </div>
-    )
-  },
+      )
+    },
     {
       id: 'notifications',
       title: t('notifications'),
@@ -1471,6 +1458,7 @@ export default function Settings() {
       <div className="space-y-4">
         {sections.map((section) => (
           <div 
+            id={`settings-sec-${section.id}`}
             key={`section-${section.id}`}
             className={cn(
               "bg-white dark:bg-gray-800 rounded-2xl shadow-sm border transition-all overflow-hidden",

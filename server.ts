@@ -1804,7 +1804,7 @@ async function startServer() {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Origin', 'Cache-Control', 'x-bridge-relay', 'x-api-key', 'x-api-secret'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Origin', 'Cache-Control', 'x-bridge-relay', 'x-api-key', 'x-api-secret', 'X-Pulse-Request', 'X-Education-Retry'],
     exposedHeaders: ['Content-Range', 'X-Content-Range'],
     maxAge: 86400 // 24 hours preflight cache
   }));
@@ -4055,7 +4055,7 @@ async function performRobustEducationSync() {
           console.log(`[Geocode] Attempt ${attempt} using Google Maps API...`);
           try {
             const googleRes = await axios.get(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${googleKey}`, {
-              timeout: 10000,
+              timeout: 15000, // Increased timeout 
               headers: { 
                 'Referer': 'https://pulse-feeds.ai-studio.google',
                 'User-Agent': STANDARD_USER_AGENT
@@ -4365,9 +4365,8 @@ async function performRobustEducationSync() {
     }
 
     // Sanitize OTP: remove spaces, dashes, or any non-digit characters
-    if (typeof otp === 'string') {
-      otp = otp.replace(/\D/g, '');
-    }
+    const otpToVerify = otp || req.body.code;
+    const sanitizedOtp = typeof otpToVerify === 'string' ? otpToVerify.replace(/\D/g, '') : otpToVerify;
 
     try {
       console.log(`[OTP Verify] Verifying for user: ${userId || email}`);
@@ -4385,7 +4384,7 @@ async function performRobustEducationSync() {
         } else {
           try {
             isSuccess = authenticator.verify({
-              token: otp,
+              token: String(sanitizedOtp),
               secret: providedSecret,
               window: 1
             });
@@ -4398,7 +4397,7 @@ async function performRobustEducationSync() {
       if (!isSuccess && storeKey) {
         // 2. Check Memory Store (Email/Sms)
         const memoryOtp = memoryOtpStore.get(storeKey);
-        if (memoryOtp && memoryOtp.otp === otp && memoryOtp.expires > Date.now()) {
+        if (memoryOtp && memoryOtp.otp === String(sanitizedOtp) && memoryOtp.expires > Date.now()) {
           memoryOtpStore.delete(storeKey); // Clear after use
           isSuccess = true;
         }
@@ -4413,7 +4412,7 @@ async function performRobustEducationSync() {
             if (authenticator && typeof authenticator.verify === 'function') {
               if (secret && secret.length >= 16) {
                 isSuccess = authenticator.verify({
-                  token: otp,
+                  token: String(sanitizedOtp),
                   secret: secret,
                   window: 1
                 });
@@ -4428,7 +4427,7 @@ async function performRobustEducationSync() {
       if (!isSuccess) {
         try {
           const otpDoc = await resilientDb.collection('otps').doc(userId).get();
-          if (otpDoc.exists && otpDoc.data()?.otp === otp) {
+          if (otpDoc.exists && otpDoc.data()?.otp === String(sanitizedOtp)) {
             const data = otpDoc.data();
             const createdAt = new Date(data.createdAt).getTime();
             if (!data.used && (Date.now() - createdAt < 5 * 60 * 1000)) { // 5 minutes
@@ -4440,15 +4439,23 @@ async function performRobustEducationSync() {
         }
       }
 
-      if (isSuccess || isAdmin) {
+      // Final check for Success or Admin Bypass
+      const adminEmail = (process.env.ADMIN_EMAIL || 'edwinmuoha@gmail.com').toLowerCase();
+      const userE = (email || '').toLowerCase();
+      const isActuallyAdmin = userE === adminEmail || userId === adminEmail;
+      
+      if (isSuccess || isActuallyAdmin) {
         failedScaAttempts.delete(userId || email);
-        if (isAdmin) isSuccess = true;
         // Also update step-up timestamp
-        await resilientDb.collection('users').doc(userId).update({
-          lastHighRiskAuth: FieldValue.serverTimestamp(),
-          serverSecret: SERVER_SECRET
-        }).catch(() => {});
-        return res.json({ success: true });
+        if (userId) {
+          await resilientDb.collection('users').doc(userId).set({
+            lastHighRiskAuth: FieldValue.serverTimestamp(),
+            serverSecret: SERVER_SECRET
+          }, { merge: true }).catch((err) => {
+            console.error("[OTP Verify] DB update failed:", err.message);
+          });
+        }
+        return res.json({ success: true, message: isActuallyAdmin ? "Admin bypass authorized" : "Verification successful" });
       } else {
         // Record failure
         const current = failedScaAttempts.get(userId) || { count: 0, lockoutUntil: 0 };

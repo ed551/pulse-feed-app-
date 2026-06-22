@@ -30,6 +30,10 @@ export default function CreateWithdrawPinModal({ isOpen, onClose, onSuccess }: C
         body: JSON.stringify({ userId: currentUser.uid, email: currentUser.email, method: 'email' })
       });
       if (res.ok) {
+        const data = await res.json();
+        if (data.devOtp) {
+          setOtp(data.devOtp);
+        }
         setStep('otp');
       } else {
         const data = await res.json();
@@ -49,7 +53,12 @@ export default function CreateWithdrawPinModal({ isOpen, onClose, onSuccess }: C
       const res = await apiFetch("/api/otp/verify", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser?.uid, code: otp, method: 'email' })
+        body: JSON.stringify({ 
+          userId: currentUser?.uid, 
+          email: currentUser?.email,
+          otp: otp,
+          method: 'email' 
+        })
       });
       const data = await res.json();
       if (res.ok && data.success) {

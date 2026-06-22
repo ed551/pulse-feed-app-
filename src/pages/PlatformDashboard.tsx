@@ -2219,6 +2219,27 @@ export default function PlatformDashboard() {
 
       {activeTab === 'withdrawals' && (
         <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
+          {/* Security Coordination Warning for Admin */}
+          {!userData?.hasSetPin && (
+            <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in zoom-in duration-700">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/40 rounded-xl flex items-center justify-center text-amber-600">
+                  <ShieldAlert className="w-6 h-6 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-amber-900 dark:text-amber-100 uppercase tracking-tight leading-none">Security Coordinator Required</h3>
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1 font-medium italic">"Administrative Withdrawal PIN (SCA) is not configured. Your personal identity verification is required for treasury outflows."</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => navigate("/settings", { state: { activeSection: 'security' } })}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-amber-600/20 active:scale-95 transition-all w-full sm:w-auto"
+              >
+                Configure SCA Pin
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold flex items-center gap-2 text-gray-900 dark:text-white">

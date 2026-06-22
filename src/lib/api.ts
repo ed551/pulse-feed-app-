@@ -8,15 +8,25 @@ export const getApiUrl = (path: string): string => {
     window.localStorage.removeItem('CUSTOM_API_BASE_URL');
   }
 
-  const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://89.168.120.135:3000').trim();
+  const rawBaseUrl = import.meta.env.VITE_API_BASE_URL;
+  const baseUrl = (rawBaseUrl || 'https://89-168-120-135.sslip.io').trim();
   const relayUrl = (import.meta.env.VITE_API_RELAY_URL || 'https://ais-pre-vpm462ccg3jpy6a7n4c54f-708516523970.europe-west2.run.app').trim();
   
   const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
   const isSurge = typeof window !== 'undefined' && window.location.hostname.includes('surge.sh');
+  const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
 
   // Safety/Relay Helper
   const resolveTarget = (targetBase: string) => {
+    // If we are calling our own host via an absolute URL, just use relative path
+    try {
+      const urlObj = new URL(targetBase);
+      if (urlObj.hostname === currentHostname) {
+        return cleanPath;
+      }
+    } catch (e) { /* ignore */ }
+
     const isTargetHttp = targetBase.startsWith('http://');
     
     if (isHttps && isTargetHttp) {
@@ -35,24 +45,28 @@ export const getApiUrl = (path: string): string => {
     return `${cleanBase}${cleanPath}`;
   };
 
+  const isLocalStorageOrDev = 
+    currentHostname === 'localhost' || 
+    currentHostname === '127.0.0.1' || 
+    currentHostname.includes('run.app') ||
+    currentHostname.includes('google') ||
+    currentHostname.includes('cloud') ||
+    currentHostname.includes('aistudio.google');
+
+  // If the user EXPLICITLY set a base URL, they likely want to use it regardless of env
+  // unless they are hitting the same host as the app itself.
+  if (rawBaseUrl) {
+    return resolveTarget(rawBaseUrl);
+  }
+
+  // Otherwise, if we are in a known dev/preview env, use the local backend
+  if (isLocalStorageOrDev && !isSurge) {
+    return cleanPath;
+  }
+
+  // Fallback to the default VPS backend if not in local/preview
   if (baseUrl) {
     return resolveTarget(baseUrl);
-  }
-  
-  // Diagnostic for Surge/Production deployments without backend URL
-  // We automatically route to the Oracle Cloud backend when deployed to Surge or a static environment to prevent 404s.
-  const isLocalStorageOrDev = 
-    typeof window !== 'undefined' && (
-      window.location.hostname.includes('localhost') || 
-      window.location.hostname.includes('127.0.0.1') || 
-      window.location.hostname.includes('run.app') ||
-      window.location.hostname.includes('google') ||
-      window.location.hostname.includes('cloud')
-    );
-
-  if (!isLocalStorageOrDev || isSurge) {
-    const fallbackBase = 'http://89.168.120.135:3000';
-    return resolveTarget(fallbackBase);
   }
   
   return cleanPath;
