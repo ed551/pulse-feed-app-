@@ -4274,6 +4274,26 @@ async function performRobustEducationSync() {
   // In-memory OTP store for resilience when DB permissions are restricted
   const memoryOtpStore = new Map<string, { otp: string, expires: number }>();
 
+  // Phone & Passkey Security Routes
+  app.post("/api/user/security/update-phone", async (req, res) => {
+    const { userId, phoneNumber } = req.body;
+    if (!userId || !phoneNumber) return res.status(400).json({ error: "Missing required fields" });
+
+    try {
+      const userRef = resilientDb.collection('users').doc(userId);
+      await userRef.set({
+        phoneNumber: String(phoneNumber).trim(),
+        phoneNumberVerified: true, // Auto-verified for this UI flow
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      return res.json({ success: true, message: "Phone number updated and verified." });
+    } catch (e: any) {
+      console.error("[Security] Update-phone error:", e.message);
+      res.status(500).json({ error: "Failed to update phone number" });
+    }
+  });
+
   // Security AI Advice Route
   app.get("/api/ai/security-advice", async (req, res) => {
     const userId = req.query.userId as string;

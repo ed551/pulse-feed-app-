@@ -245,7 +245,7 @@ Write in a highly professional, clinical, tech-forward tone. Respond with ONLY t
       </div>
 
       {/* AI WITHDRAW PIN SETTING */}
-      <div className="p-6 bg-purple-50/5 dark:bg-purple-950/5 rounded-[2rem] border border-purple-100 dark:border-purple-900/30 relative overflow-hidden text-left">
+      <div className="p-6 bg-purple-50/5 dark:bg-purple-950/5 rounded-[2rem] border border-purple-100 dark:border-purple-900/30 relative overflow-hidden text-left mb-6">
         <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
           <LockKeyhole className="w-36 h-36 text-purple-500 -rotate-12" />
         </div>
@@ -398,6 +398,54 @@ Write in a highly professional, clinical, tech-forward tone. Respond with ONLY t
             </div>
           ) : null}
         </div>
+      </div>
+
+      {/* Phone Management */}
+      <div className="p-6 bg-emerald-50/5 dark:bg-emerald-950/5 rounded-[2rem] border border-emerald-100 dark:border-emerald-900/30 mb-6">
+        <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase mb-4">Mobile Authority Number</h4>
+        <input 
+          type="text"
+          value={userData?.phoneNumber || ""}
+          onChange={(e) => {
+             // In a real implementation this would trigger an update or require verification
+          }}
+          className="w-full bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-3 text-sm"
+          placeholder="+254..."
+        />
+        <button 
+           onClick={async () => {
+             const phone = prompt("Enter new phone number:");
+             if (phone) {
+                const res = await apiFetch("/api/user/security/update-phone", { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ userId: currentUser?.uid, phoneNumber: phone }) 
+                });
+                if (res.ok) alert("Phone updated!");
+                else alert("Update failed.");
+             }
+           }}
+           className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold"
+        >
+          Update Phone Number
+        </button>
+      </div>
+
+      {/* Passkey Management */}
+      <div className="p-6 bg-indigo-50/5 dark:bg-indigo-950/5 rounded-[2rem] border border-indigo-100 dark:border-indigo-900/30">
+         <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase mb-4">Passkey Verification</h4>
+         <p className="text-xs text-gray-500 mb-4">{userData?.passkeyRegistered ? "Passkey is active." : "Register a passkey for secure authentication."}</p>
+         {!userData?.passkeyRegistered && (
+            <button 
+                onClick={() => {
+                   // This would trigger the same flow as Settings.handleRegisterPasskey
+                   alert("Passkey registration requires navigation to Settings.");
+                }}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold"
+            >
+              Register Passkey
+            </button>
+         )}
       </div>
 
       {/* Verification Modals synced locally */}
