@@ -3028,7 +3028,7 @@ export default function Rewards() {
         onClose={() => setShowCreatePinModal(false)}
         onSuccess={() => {
           setShowCreatePinModal(false);
-          // The hasSetPin flag will be updated on the next userData sync
+          window.location.reload();
         }}
       />
     </div>

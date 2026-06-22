@@ -34,7 +34,12 @@ import {
   Calendar,
   Globe,
   Activity,
-  Link2
+  Link2,
+  Sparkles,
+  Brain,
+  Cpu,
+  RefreshCw,
+  LockKeyhole
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -49,6 +54,9 @@ import OTPModal from "../components/tools/OTPModal";
 import PasskeyModal from "../components/tools/PasskeyModal";
 import { cn } from "../lib/utils";
 import { apiFetch } from "../lib/api";
+import { generateContentWithRetry } from "../lib/ai";
+import Markdown from "react-markdown";
+import AISecurityDashboard from "../components/AISecurityDashboard";
 
 export default function Settings() {
   const { currentUser, userData, logout, sendVerificationEmail } = useAuth();
@@ -112,6 +120,11 @@ export default function Settings() {
   const [showPinOtp, setShowPinOtp] = useState(false);
   const [pinEmailVerified, setPinEmailVerified] = useState(false);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [aiAuditing, setAiAuditing] = useState(false);
+  const [aiAuditResult, setAiAuditResult] = useState<string | null>(null);
+  const [aiCurrentPin, setAiCurrentPin] = useState("");
+  const [aiNewPin, setAiNewPin] = useState("");
+  const [isUpdatingAiPin, setIsUpdatingAiPin] = useState(false);
 
   useEffect(() => {
     const checkCap = async () => {
@@ -744,9 +757,18 @@ export default function Settings() {
     },
     {
       id: 'security',
-      title: t('security_privacy'),
-      description: t('security_privacy_desc'),
-      icon: <Shield className="w-5 h-5 text-purple-500" />,
+      title: "AI Security & Privacy Shield",
+      description: "Neural account auditing & intelligent asset lock keys",
+      icon: <Brain className="w-5 h-5 text-purple-500 animate-pulse" />,
+      content: (
+        <AISecurityDashboard />
+      )
+    },
+    {
+      id: 'disabled_security',
+      title: "Disabled Security",
+      description: "Legacy configuration, archived.",
+      icon: <Shield className="w-5 h-5 text-gray-400" />,
       content: (
         <div className="space-y-8 animate-in fade-in slide-in-from-top-2 duration-300">
             {/* Security Summary / Health */}

@@ -4525,7 +4525,7 @@ export default function PlatformDashboard() {
         onClose={() => setShowCreatePinModal(false)} 
         onSuccess={() => {
           setShowCreatePinModal(false);
-          handleBinanceWithdrawal();
+          window.location.reload();
         }}
       />
     </div>
