@@ -735,8 +735,6 @@ export default function Settings() {
       icon: <Shield className="w-5 h-5 text-purple-500" />,
       content: (
         <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
-          <div className="space-y-3">
-          <div className="space-y-4">
             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Identity & Trust</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 flex items-center justify-between">
@@ -1171,7 +1169,6 @@ export default function Settings() {
                 )} />
               </button>
             </div>
-          </div>
 
           <div className="h-px bg-gray-100 dark:bg-gray-700 my-2" />
 
@@ -1427,7 +1424,6 @@ export default function Settings() {
             </button>
           </div>
         </div>
-      </div>
     )
   },
     {
