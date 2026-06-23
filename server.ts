@@ -4253,25 +4253,7 @@ async function performRobustEducationSync() {
     }
   });
 
-  app.post("/api/user/security/reset-pin", async (req, res) => {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: "Email required" });
 
-    try {
-      console.log(`[Security] Initiating PIN reset for ${email}`);
-      // In a real app, send an email with a unique verification link.
-      // For now, we simulate success and logs it.
-      await resilientDb.collection('system_alerts').add({
-        type: 'user_pin_reset_requested',
-        message: `PIN reset link sent to ${email}`,
-        timestamp: FieldValue.serverTimestamp()
-      });
-
-      return res.json({ success: true, message: "Reset instructions have been sent to your email." });
-    } catch (e: any) {
-      return res.status(500).json({ error: e.message });
-    }
-  });
 
   // URL Shortener Proxy (Mock)
   app.get("/api/shorten", (req, res) => {
