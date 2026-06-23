@@ -4256,7 +4256,7 @@ async function performRobustEducationSync() {
         lastHighRiskAuth: FieldValue.serverTimestamp() // Renew auth for immediate withdrawals
       }, { merge: true });
 
-      console.log(`[Security] PIN synchronization SUCCESS for: ${userId}`);
+      console.log(`[Security] PIN synchronization SUCCESS for: ${userId}. hasSetPin set to true.`);
       return res.json({ success: true, message: "Withdrawal PIN secured and fully integrated with treasury gateway." });
     } catch (e: any) {
       console.error("[Security] Critical PIN Update Failure:", e.message);

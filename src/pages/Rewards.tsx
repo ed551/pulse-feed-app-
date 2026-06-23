@@ -648,6 +648,7 @@ export default function Rewards() {
       console.log(`[Binance-Withdrawal] SUCCESS: ${result.data.id}`);
 
       if (currentUser && db) {
+        console.log(`[Binance-Withdrawal] Initiating Firestore update for user: ${currentUser.uid}`);
         const txRef = collection(db, 'users', currentUser.uid, 'transactions');
         const pointsToDeduct = numAmount;
 
@@ -669,12 +670,16 @@ export default function Rewards() {
         };
 
         await addDoc(txRef, txData);
+        console.log(`[Binance-Withdrawal] Added transaction document.`);
         
         const userRef = doc(db, 'users', currentUser.uid);
         await updateDoc(userRef, {
           points: increment(-pointsToDeduct),
           balance: increment(-numAmount)
         });
+        console.log(`[Binance-Withdrawal] Updated user balance/points.`);
+      } else {
+        console.warn(`[Binance-Withdrawal] FAILED to update Firestore: currentUser or db is undefined!`);
       }
 
       setSuccess(`Withdrawal of ${numAmount} ${binanceCoin} has been successfully authorized and queued with the treasury gateway. Transaction ID: ${result.data.id || 'N/A'}. Funds will reflect shortly.`);

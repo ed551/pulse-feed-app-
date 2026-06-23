@@ -100,6 +100,7 @@ export default function CreateWithdrawPinModal({ isOpen, onClose, onSuccess }: C
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setStep('success');
+        console.log('[Security] PIN creation success, triggering reload.');
         setTimeout(() => {
           onSuccess();
           onClose();
