@@ -36,6 +36,7 @@ const GoldGraph = lazy(() => import("./pages/GoldGraph"));
 const PasskeyAuth = lazy(() => import("./pages/PasskeyAuth"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 const BinanceHub = lazy(() => import("./pages/BinanceHub"));
+const B2BPortal = lazy(() => import("./pages/B2BPortal"));
 
 import HealthChecker from "./components/HealthChecker";
 import { IdleAILock } from "./components/IdleAILock";
@@ -175,6 +176,11 @@ export default function App() {
                   } />
                   <Route path="terms" element={<Terms />} />
                   <Route path="privacy" element={<Privacy />} />
+                  <Route path="b2b" element={
+                    <ProtectedRoute>
+                      <B2BPortal />
+                    </ProtectedRoute>
+                  } />
                   <Route path="operations" element={
                     <AdminRoute>
                       <OperationsHQ />

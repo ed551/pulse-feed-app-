@@ -185,6 +185,7 @@ export default function Layout() {
     { path: '/gold', icon: Gem, label: t('gold_graph') },
     { path: '/groups', icon: Users, label: t('groups') },
     { path: '/rewards', icon: Layers, label: t('rewards') },
+    { path: '/b2b', icon: Building2, label: 'B2B Analytics' },
     { path: '/profile', icon: User, label: t('profile') },
     { path: '/audio', icon: Headphones, label: 'Audio' },
     { path: '/education', icon: GraduationCap, label: 'Education' }
@@ -928,6 +929,7 @@ export default function Layout() {
     { path: '/support', icon: Headphones, color: 'text-cyan-500', label: t('support') },
     { path: '/audio', icon: Headphones, color: 'text-indigo-400', label: 'Audio Hub' },
     { path: '/education', icon: GraduationCap, color: 'text-purple-600', label: 'Education Hub' },
+    { path: '/b2b', icon: Building2, color: 'text-blue-500', label: 'B2B Analytics' },
     { path: '/settings', icon: Settings, color: 'text-gray-500', label: t('settings') },
   ];
 

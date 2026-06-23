@@ -42,6 +42,15 @@ import africastalking from 'africastalking';
 import { GoogleGenAI } from "@google/genai";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { SocksProxyAgent } from "socks-proxy-agent";
+import { 
+  generateRegistrationOptions, 
+  verifyRegistrationResponse, 
+  generateAuthenticationOptions, 
+  verifyAuthenticationResponse 
+} from '@simplewebauthn/server';
+
+// In-Memory cache to store temporary challenges for Passkey registration & login ceremonies
+const challengeCache = new Map<string, string>();
 
 dotenv.config();
 
@@ -4711,6 +4720,302 @@ async function performRobustEducationSync() {
       
       // Fallback to simple empty result for UI stability
       res.json([]);
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // BIOMETRIC PASSKEY (WEBAUTHN) API ENDPOINTS
+  // --------------------------------------------------------------------------
+
+  app.post("/api/auth/passkey/generate-registration-options", async (req, res) => {
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
+    try {
+      const userDoc = await resilientDb.collection('users').doc(userId).get();
+      const userData = userDoc.exists ? userDoc.data() : null;
+      const email = userData?.email || `${userId}@pulsefeeds.com`;
+      const displayName = userData?.displayName || email.split('@')[0];
+
+      const rpID = req.get('host')?.split(':')[0] || 'localhost';
+
+      console.log(`[Passkey] Generating registration options for userId: ${userId}, rpID: ${rpID}`);
+
+      const options = await generateRegistrationOptions({
+        rpName: 'Pulse Feeds',
+        rpID,
+        userID: Buffer.from(userId),
+        userName: email,
+        userDisplayName: displayName,
+        attestationType: 'none',
+        authenticatorSelection: {
+          residentKey: 'preferred',
+          userVerification: 'preferred',
+        },
+      });
+
+      challengeCache.set(`reg_${userId}`, options.challenge);
+      return res.json(options);
+    } catch (error: any) {
+      console.error("[Passkey] Error generating registration options:", error);
+      return res.status(500).json({ error: error.message || "Failed to generate registration options" });
+    }
+  });
+
+  app.post("/api/auth/passkey/verify-registration", async (req, res) => {
+    const { userId, response } = req.body;
+    if (!userId || !response) {
+      return res.status(400).json({ error: "Missing required parameters" });
+    }
+
+    try {
+      const expectedChallenge = challengeCache.get(`reg_${userId}`);
+      if (!expectedChallenge) {
+        return res.status(400).json({ error: "Registration challenge expired or missing. Please try again." });
+      }
+
+      const rpID = req.get('host')?.split(':')[0] || 'localhost';
+      const proto = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+      const expectedOrigin = `${proto}://${req.get('host')}`;
+
+      console.log(`[Passkey] Verifying registration for userId: ${userId}, rpID: ${rpID}, origin: ${expectedOrigin}`);
+
+      const verification = await verifyRegistrationResponse({
+        response,
+        expectedChallenge,
+        expectedOrigin,
+        expectedRPID: rpID,
+        requireUserVerification: false,
+      });
+
+      if (verification.verified && verification.registrationInfo) {
+        const { credential } = verification.registrationInfo;
+        const { id, publicKey, counter } = credential;
+
+        const credIDBase64Url = id;
+        const credPubKeyBase64 = Buffer.from(publicKey).toString('base64');
+
+        // Store credential in database
+        await resilientDb.collection('users').doc(userId).collection('passkeys').doc(credIDBase64Url).set({
+          credentialID: credIDBase64Url,
+          credentialPublicKey: credPubKeyBase64,
+          counter,
+          transports: response.response.transports || [],
+          createdAt: FieldValue.serverTimestamp()
+        });
+
+        // Update main user doc flags
+        await resilientDb.collection('users').doc(userId).set({
+          passkeyRegistered: true,
+          twoFactorType: 'passkey'
+        }, { merge: true });
+
+        challengeCache.delete(`reg_${userId}`);
+        return res.json({ verified: true, credentialID: credIDBase64Url });
+      } else {
+        return res.status(400).json({ verified: false, error: "WebAuthn verification failed" });
+      }
+    } catch (error: any) {
+      console.error("[Passkey] Error verifying registration:", error);
+      return res.status(500).json({ error: error.message || "Verification process failed" });
+    }
+  });
+
+  app.post("/api/auth/passkey/generate-authentication-options", async (req, res) => {
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
+    try {
+      // Gather any registered passkeys
+      const passkeysSnap = await resilientDb.collection('users').doc(userId).collection('passkeys').get();
+      const userPasskeys = passkeysSnap.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: data.credentialID,
+          type: 'public-key' as const,
+          transports: data.transports || [],
+        };
+      });
+
+      if (userPasskeys.length === 0) {
+        return res.status(400).json({ error: "No passkeys registered for this account." });
+      }
+
+      const rpID = req.get('host')?.split(':')[0] || 'localhost';
+
+      console.log(`[Passkey] Generating authentication options for userId: ${userId}, rpID: ${rpID}`);
+
+      const options = await generateAuthenticationOptions({
+        rpID,
+        allowCredentials: userPasskeys,
+        userVerification: 'preferred',
+      });
+
+      challengeCache.set(`auth_${userId}`, options.challenge);
+      return res.json(options);
+    } catch (error: any) {
+      console.error("[Passkey] Error generating authentication options:", error);
+      return res.status(500).json({ error: error.message || "Failed to generate authentication options" });
+    }
+  });
+
+  app.post("/api/auth/passkey/verify-authentication", async (req, res) => {
+    const { userId, response } = req.body;
+    if (!userId || !response) {
+      return res.status(400).json({ error: "Missing required parameters" });
+    }
+
+    try {
+      const expectedChallenge = challengeCache.get(`auth_${userId}`);
+      if (!expectedChallenge) {
+        return res.status(400).json({ error: "Authentication challenge expired or missing. Please try again." });
+      }
+
+      const credentialIDStr = response.id;
+      const credDoc = await resilientDb.collection('users').doc(userId).collection('passkeys').doc(credentialIDStr).get();
+      if (!credDoc.exists) {
+        return res.status(404).json({ error: "No matching registered security key found." });
+      }
+
+      const dbCred = credDoc.data()!;
+      const rpID = req.get('host')?.split(':')[0] || 'localhost';
+      const proto = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+      const expectedOrigin = `${proto}://${req.get('host')}`;
+
+      console.log(`[Passkey] Verifying authentication response for userId: ${userId}, credentialId: ${credentialIDStr}, origin: ${expectedOrigin}`);
+
+      const verification = await verifyAuthenticationResponse({
+        response,
+        expectedChallenge,
+        expectedOrigin,
+        expectedRPID: rpID,
+        credential: {
+          id: dbCred.credentialID,
+          publicKey: Buffer.from(dbCred.credentialPublicKey, 'base64'),
+          counter: dbCred.counter,
+        },
+        requireUserVerification: false,
+      });
+
+      if (verification.verified) {
+        // Update security key counter
+        await resilientDb.collection('users').doc(userId).collection('passkeys').doc(credentialIDStr).update({
+          counter: verification.authenticationInfo.newCounter
+        });
+
+        // Set high risk verification timestamp for PIN and session
+        await resilientDb.collection('users').doc(userId).set({
+          lastHighRiskAuth: FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        challengeCache.delete(`auth_${userId}`);
+        return res.json({ verified: true });
+      } else {
+        return res.status(400).json({ verified: false, error: "Biometric assertion failed" });
+      }
+    } catch (error: any) {
+      console.error("[Passkey] Error verifying authentication:", error);
+      return res.status(500).json({ error: error.message || "Failed to verify authentication response" });
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // B2B ANALYTICS PORTAL ENDPOINTS
+  // --------------------------------------------------------------------------
+  app.post("/api/b2b/generate-insights", async (req, res) => {
+    const { focusArea, industryType } = req.body;
+    console.log(`[B2B Analytics] Generating corporate insights for focusArea: "${focusArea || 'General'}", industry: "${industryType || 'Unspecified'}"`);
+    
+    // Check if we should use simulation due to missing keys or as general fallback
+    const useSimulation = !isValidApiKey || isAIBreakerTripped;
+
+    try {
+      if (useSimulation) {
+        throw new Error("AI Services are in local simulation/recovery mode.");
+      }
+
+      const prompt = `You are a world-class enterprise research analyst for Pulse Feeds B2B Analytics.
+      We have summarized crowd-sourced public neighborhood logs. Provide an elite, highly professional, deeply analyzed corporate market intelligence report.
+      
+      Focus Area: ${focusArea || 'General Macro Trends'}
+      Industry Context: ${industryType || 'Municipal Contractors & High-growth Brands'}
+      
+      Format your response strictly as a JSON object with these exact fields:
+      - executiveSummary: A 2-3 sentence executive, corporate-suited, professional paragraph identifying macro trends.
+      - sentimentScore: A number (0 to 100) representing predicted user sentiment index for this area.
+      - sentimentRationale: A 1-sentence rationale explaining the sentiment score.
+      - emergingOpportunities: An array of 3 specific, highly lucrative business/corporate intervention opportunities (e.g. smart fleet routing, targeted sponsorships of community task bounties, smart locker deployments).
+      - nextSteps: An array of 2-3 immediate, professional next steps for B2B executives.
+      
+      Do not include any other commentary, markdown wrappers or external formatting.`;
+
+      const response = await generateContentWithRetry({
+        model: 'gemini-3-flash-preview',
+        systemInstruction: "You are an elite enterprise B2B data strategist. You speak in a highly technical, professional, corporate tone. You excel at drawing macro insights while stringently protecting individual user identities.",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: "application/json" }
+      });
+
+      const contentText = response.text || "";
+      const content = JSON.parse(contentText);
+      return res.json({ success: true, insights: content, source: "Gemini AI" });
+    } catch (error: any) {
+      console.warn(`[B2B Analytics] Using highly-detailed simulation fallback. Reason: ${error.message}`);
+      
+      // Sophisticated Local Simulation Fallback
+      const normalizedArea = (focusArea || 'General Macro Trends').toLowerCase();
+      let simInsights = {
+        executiveSummary: `Anonymized neighborhood activity reports indicate a 14% increase in reported infrastructural anomalies. Community participation remains highly resilient, driven by localized reward payouts, though Transit Grid friction remains a localized priority.`,
+        sentimentScore: 78,
+        sentimentRationale: `High participation in local reward campaigns directly offsets frustrations with transit delays.`,
+        emergingOpportunities: [
+          `Integrate smart parcel lockers near community hubs to mitigate residential delivery costs.`,
+          `Sponsor localized parkette cleanup bounties to drive high-contrast ESG brand recognition.`,
+          `Deploy modern transit amenities in commercial corridors in Zone 4.`
+        ],
+        nextSteps: [
+          `Target resource deployment to Southern District infrastructure categories.`,
+          `Acquire system sponsorship package to align brand with high-retention reward campaigns.`
+        ]
+      };
+
+      if (normalizedArea.includes('infra') || normalizedArea.includes('road') || normalizedArea.includes('trash')) {
+        simInsights = {
+          executiveSummary: `Infrastructural wear patterns are showing accelerated reports along prime commuter lanes. Transit dispersion suggests a shift of 18% of cargo traffic into secondary avenues, affecting corporate supply chains.`,
+          sentimentScore: 62,
+          sentimentRationale: `Localized response delays by municipal contractors are causing negative sentiment spikes in Zone 3.`,
+          emergingOpportunities: [
+            `Formulate bid for automated street-sweeper and pothole surfacing contracts in Ward 8.`,
+            `Sponsor public trash compaction stations to unlock municipality tax-remittance credits.`,
+            `Erect solar micro-shelters at high-frequency transit intersections.`
+          ],
+          nextSteps: [
+            `Provide Municipal Contractors with the priority geolocated pothole dataset.`,
+            `Deploy micro-grid assets in high-incidence zones.`
+          ]
+        };
+      } else if (normalizedArea.includes('safe') || normalizedArea.includes('environment') || normalizedArea.includes('police')) {
+        simInsights = {
+          executiveSummary: `Community safety perception indicators have improved by 8% following active community patrol initiatives. Public-access streetlights and pedestrian crossings represent the highest priority request volume from residents in northern sectors.`,
+          sentimentScore: 85,
+          sentimentRationale: `Residents respond highly positively to direct visibility of community-empowered initiatives.`,
+          emergingOpportunities: [
+            `Deploy smart connected street lighting installations with advertising channels.`,
+            `Partner with community watches to supply eco-friendly electric patrol bikes.`,
+            `Establish smart neighborhood help kiosks near retail strips.`
+          ],
+          nextSteps: [
+            `Liaise with retail associations to sponsor local brightness and watch programs.`,
+            `Utilize the safety indicators reports to optimize physical security assets deployment.`
+          ]
+        };
+      }
+
+      return res.json({ success: true, insights: simInsights, source: "Simulated Model (Offline Mode)" });
     }
   });
 
