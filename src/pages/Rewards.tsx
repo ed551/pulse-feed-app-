@@ -109,6 +109,74 @@ export default function Rewards() {
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncingTxId, setSyncingTxId] = useState<string | null>(null);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
+
+  const handleSyncBinanceStatus = async (tx: any) => {
+    if (!currentUser || !db) return;
+    setSyncingTxId(tx.id);
+    setSyncStatusMsg(null);
+    try {
+      const resp = await apiFetch(`/api/vault/payout-status?reference=${tx.reference || ''}&binanceId=${tx.binanceId || ''}&userId=${currentUser.uid}`);
+      const data = await resp.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || "Failed to query status");
+      }
+
+      if (data.status === 'failed' || data.status === 'rejected' || data.status === 'cancelled' || data.status === 'not_found') {
+        const confirmCancel = window.confirm(
+          `Binance status check returned '${data.status.toUpperCase()}'. Since the payment did not arrive on your Binance account, would you like to refund ${tx.pointsDeducted || tx.amount} points to your balance now?`
+        );
+        if (!confirmCancel) return;
+
+        const refundResp = await apiFetch('/api/vault/payout-refund', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reference: tx.reference, userId: currentUser.uid })
+        });
+        const refundData = await refundResp.json();
+        if (refundData.success) {
+          setSuccess(`Refund completed: ${refundData.refundedPoints} points have been restored to your app balance.`);
+        } else {
+          throw new Error(refundData.error || "Refund error");
+        }
+      } else if (data.status === 'success') {
+        const txDocRef = doc(db, 'users', currentUser.uid, 'transactions', tx.id);
+        await updateDoc(txDocRef, {
+          status: 'success',
+          txId: data.txId || null,
+          details: `Binance withdrawal successful. TxID: ${data.txId || 'N/A'}`
+        });
+        setSuccess("Success! Binance confirmed this withdrawal was processed successfully.");
+      } else {
+        setSyncStatusMsg(`External Status: ${data.status.toUpperCase()} | Binance is still processing this withdrawal. Changes will reflect shortly.`);
+      }
+    } catch (err: any) {
+      console.error("Sync error:", err);
+      const canRefundForce = window.confirm(`External check was unable to resolve of your transaction status: ${err.message}. Since your rewards were reduced but Binance has not reflected changes, would you like to FORCE CANCEL & Refund the ${tx.pointsDeducted || tx.amount} points immediately?`);
+      if (canRefundForce) {
+        try {
+          const refundResp = await apiFetch('/api/vault/payout-refund', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reference: tx.reference, userId: currentUser.uid })
+          });
+          const refundData = await refundResp.json();
+          if (refundData.success) {
+            setSuccess(`Success! Forcibly refunded ${refundData.refundedPoints} points to your balance.`);
+          } else {
+            alert("Refund failed: " + refundData.error);
+          }
+        } catch (refErr: any) {
+          alert("Refund failed: " + refErr.message);
+        }
+      }
+    } finally {
+      setSyncingTxId(null);
+    }
+  };
+
   const [isRecovering, setIsRecovering] = useState(false);
   const [showConditionsModal, setShowConditionsModal] = useState(false);
   const [conditionsError, setConditionsError] = useState<string | null>(null);
@@ -2118,6 +2186,27 @@ export default function Rewards() {
                               </div>
                               <div className="text-[10px] font-black text-gray-900 dark:text-white">
                                 {tx.remainingPoints.toLocaleString()} Points
+                              </div>
+                            </div>
+                          )}
+
+                          {tx.type === 'binance' && tx.status === 'pending' && (
+                            <div className="flex flex-col gap-2 p-3 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-xl">
+                              <p className="text-[10px] leading-relaxed text-amber-800 dark:text-amber-300 font-medium">
+                                If Binance has not credited this withdrawal, the transaction can be resolved. Sync status directly or request an auto-refund here.
+                              </p>
+                              {syncingTxId === tx.id && syncStatusMsg && (
+                                <p className="text-[9px] text-indigo-600 dark:text-indigo-400 font-semibold">{syncStatusMsg}</p>
+                              )}
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSyncBinanceStatus(tx)}
+                                  disabled={syncingTxId === tx.id}
+                                  className="text-[10px] bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-bold py-1 px-3 rounded-lg shadow-sm transition disabled:opacity-50"
+                                >
+                                  {syncingTxId === tx.id ? "Syncing API..." : "Sync & Refund"}
+                                </button>
                               </div>
                             </div>
                           )}

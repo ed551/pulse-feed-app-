@@ -1090,7 +1090,7 @@ export default function PlatformDashboard() {
 
     setIsDevWithdrawing(true);
     try {
-      // 1. Update Stats
+      // 1. Update Stats & Refund User Points/Balance
       const statsRef = doc(db, "platform", "stats");
       const isOperational = withdrawal.category === 'operational';
       
@@ -1099,6 +1099,31 @@ export default function PlatformDashboard() {
         updateData.platformShare = increment(withdrawal.amount);
       } else {
         updateData.totalUserBalances = increment(withdrawal.amount);
+        
+        // Refund individual user's points and balance if this is a user withdrawal
+        if (withdrawal.userId && withdrawal.userId !== 'platform-admin' && withdrawal.userId !== 'system') {
+          const userRef = doc(db, 'users', withdrawal.userId);
+          const refundPoints = withdrawal.pointsDeducted || withdrawal.amount || 0;
+          const refundBalance = withdrawal.amount || 0;
+          
+          await updateDoc(userRef, {
+            points: increment(refundPoints),
+            balance: increment(refundBalance)
+          });
+
+          // Update user's specific transaction subcollection record
+          const userTxSnap = await getDocs(query(
+            collection(db, 'users', withdrawal.userId, 'transactions'),
+            where('reference', '==', withdrawal.reference || '')
+          ));
+          if (!userTxSnap.empty) {
+            await updateDoc(doc(db, 'users', withdrawal.userId, 'transactions', userTxSnap.docs[0].id), {
+              status: 'failed',
+              rolledBackAt: serverTimestamp(),
+              details: `Withdrawal failed: Refunded ${refundPoints} points`
+            });
+          }
+        }
       }
       await updateDoc(statsRef, updateData);
 

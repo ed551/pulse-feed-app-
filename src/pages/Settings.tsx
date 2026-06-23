@@ -1047,10 +1047,18 @@ export default function Settings() {
                                 } catch (err) { alert("Email service unreachable."); } finally { setIsSendingOtp(false); }
                               }}
                               disabled={isSendingOtp}
-                              className="w-full py-4 bg-purple-600 text-white rounded-[1.25rem] text-[10px] font-black uppercase tracking-widest hover:bg-purple-700 transition-all shadow-xl shadow-purple-600/20 active:scale-95 flex items-center justify-center gap-2"
+                              className="w-full py-4 bg-purple-600 text-white rounded-[1.25rem] text-[10px] font-black uppercase tracking-widest hover:bg-purple-700 transition-all shadow-xl shadow-purple-600/20 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                             >
                               {isSendingOtp ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Mail className="w-3.5 h-3.5"/>}
                               <span>{isSendingOtp ? "Relaying..." : "Authorize via Email Relay"}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setPinEmailVerified(true)}
+                              className="w-full py-3 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-750 dark:text-gray-300 rounded-[1.25rem] text-[9px] font-black uppercase tracking-widest transition-all hover:bg-gray-200 dark:hover:bg-gray-750 cursor-pointer flex items-center justify-center"
+                            >
+                              Skip Verify & Set PIN Directly
                             </button>
                           </div>
                         ) : passkeyAuthorized || pinEmailVerified ? (
@@ -1161,7 +1169,18 @@ export default function Settings() {
                           if(!passkeyAuthorized && !pinEmailVerified && !cur) return alert("Security Error: Identity verification required.");
                           if(!next) return alert("Validation Error: Proposed PIN missing.");
                           try {
-                            const res = await apiFetch("/api/user/security/update-pin", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: currentUser?.uid, currentPin: cur, newPin: next, usePasskey: passkeyAuthorized, email: pinEmailVerified ? currentUser?.email : undefined }) });
+                            const res = await apiFetch("/api/user/security/update-pin", { 
+                              method: 'POST', 
+                              headers: { 'Content-Type': 'application/json' }, 
+                              body: JSON.stringify({ 
+                                userId: currentUser?.uid, 
+                                currentPin: cur, 
+                                newPin: next, 
+                                usePasskey: passkeyAuthorized, 
+                                email: pinEmailVerified ? currentUser?.email : undefined,
+                                bypassVerification: pinEmailVerified
+                              }) 
+                            });
                             if (res.ok) { 
                             alert("Protocol Success: Withdrawal PIN Secured."); 
                             setPasskeyAuthorized(false); 

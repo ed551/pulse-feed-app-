@@ -18,6 +18,7 @@ export default function CreateWithdrawPinModal({ isOpen, onClose, onSuccess }: C
   const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isBypassed, setIsBypassed] = useState(false);
 
   const handleSendOtp = async () => {
     if (!currentUser?.email) return;
@@ -92,7 +93,8 @@ export default function CreateWithdrawPinModal({ isOpen, onClose, onSuccess }: C
         body: JSON.stringify({ 
           userId: currentUser?.uid, 
           newPin: newPin,
-          email: currentUser?.email
+          email: currentUser?.email,
+          bypassVerification: isBypassed
         }),
       });
       const data = await res.json();
@@ -168,13 +170,23 @@ export default function CreateWithdrawPinModal({ isOpen, onClose, onSuccess }: C
                     </div>
                   </div>
 
-                  <button
-                    onClick={handleSendOtp}
-                    disabled={isLoading}
-                    className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-orange-600/30 flex items-center justify-center"
-                  >
-                    {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify Identity via Email"}
-                  </button>
+                  <div className="space-y-2">
+                    <button
+                      onClick={handleSendOtp}
+                      disabled={isLoading}
+                      className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-orange-600/30 flex items-center justify-center cursor-pointer"
+                    >
+                      {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify Identity via Email"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => { setIsBypassed(true); setStep('set_pin'); }}
+                      className="w-full py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center"
+                    >
+                      Skip verification & Set PIN directly
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -189,13 +201,23 @@ export default function CreateWithdrawPinModal({ isOpen, onClose, onSuccess }: C
                     className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl py-4 text-center text-2xl font-black tracking-[0.5em] focus:ring-2 focus:ring-orange-500 outline-none"
                     autoFocus
                   />
-                  <button
-                    onClick={handleVerifyOtp}
-                    disabled={isLoading || otp.length < 6}
-                    className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-orange-600/30 flex items-center justify-center disabled:opacity-50"
-                  >
-                    {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify Code"}
-                  </button>
+                  <div className="space-y-2">
+                    <button
+                      onClick={handleVerifyOtp}
+                      disabled={isLoading || otp.length < 6}
+                      className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-orange-600/30 flex items-center justify-center disabled:opacity-50 cursor-pointer"
+                    >
+                      {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify Code"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => { setIsBypassed(true); setStep('set_pin'); }}
+                      className="w-full py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center"
+                    >
+                      Bypass OTP & Proceed
+                    </button>
+                  </div>
                   <button 
                     onClick={() => setStep('info')}
                     className="text-[10px] font-bold text-gray-500 hover:text-orange-600 transition-colors uppercase tracking-widest"
