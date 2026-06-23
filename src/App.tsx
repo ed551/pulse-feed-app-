@@ -187,6 +187,7 @@ export default function App() {
                     </ProtectedRoute>
                   } />
                   <Route path="lab" element={<GeminiLab />} />
+                  <Route path="intelligence" element={<GeminiLab />} />
                   <Route path="membership" element={
                     <ProtectedRoute>
                       <Membership />
