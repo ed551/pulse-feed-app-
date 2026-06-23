@@ -611,12 +611,16 @@ export default function Rewards() {
         console.error(`[Binance-DEBUG] Non-JSON Response from ${displayUrl}. Content-Type: ${contentType}. Status: ${response.status}`);
         
         let errorMsg = `Sync Error: Received unexpected response format (${response.status}) from server.`;
-        if (response.status === 403) {
+        if (text.includes("<html>")) {
+          errorMsg = `Gateway Restriction: The server received an HTML response (Status ${response.status}). This often means the request was blocked by a firewall (WAF) or the session expired.`;
+        } else if (response.status === 403) {
           errorMsg = `Access Denied (403): The server was blocked by Binance security (WAF). This is usually due to the server IP being restricted. Please check your API key restrictions and IP access rules in Binance.`;
         } else if (response.status === 503 || response.status === 502) {
           errorMsg = `Gateway Error (${response.status}): The Binance API gateway is currently unavailable or overloaded.`;
         } else if (response.status === 404) {
-          errorMsg = `API Endpoint Not Found (404). Please ensure your backend is deployed, running, and matches your custom API base URL configuration.`;
+          errorMsg = `API Endpoint Not Found (404). Please ensure your backend is deployed and running.`;
+        } else if (text) {
+          errorMsg = `Server Error (${response.status}): ${text.substring(0, 150)}${text.length > 150 ? "..." : ""}`;
         }
         throw new Error(errorMsg);
       } else {
@@ -662,7 +666,14 @@ export default function Rewards() {
       // Automatically refresh balance after 5 seconds to show update on Binance
       setTimeout(() => checkBinanceAssetBalance(binanceCoin), 5000);
     } catch (err: any) {
-      setError(err.message);
+      console.error("[Binance-Withdrawal] Fatal Error:", err);
+      const isConnectionError = err.message.toLowerCase().includes("failed to fetch") || err.message.toLowerCase().includes("network error") || err.message.toLowerCase().includes("timeout");
+      
+      const displayError = isConnectionError 
+        ? "Network Timeout: The withdrawal request did not reach the server. Please check your internet connection or use diagnostic tools below."
+        : err.message;
+      
+      setError(displayError);
     } finally {
       setIsLoading(false);
     }

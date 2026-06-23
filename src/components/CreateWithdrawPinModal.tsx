@@ -97,15 +97,17 @@ export default function CreateWithdrawPinModal({ isOpen, onClose, onSuccess }: C
           bypassVerification: isBypassed
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setStep('success');
         setTimeout(() => {
           onSuccess();
           onClose();
-        }, 2000);
+          // Force a state refresh to ensure hasSetPin is updated in context
+          window.location.reload();
+        }, 1500);
       } else {
-        setError(data.message || "Failed to reset PIN. Please ensure your email is verified.");
+        setError(data.message || data.error || "Failed to commit security PIN. Verification session may have expired.");
       }
     } catch (e: any) {
       setError("An error occurred.");
