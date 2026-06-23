@@ -384,9 +384,9 @@ Provide a 1-sentence predictive forecast on how their secure footprint impacts t
           <div className="p-4 rounded-2xl bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-900">
             <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider">Treasury PIN Status</span>
             <div className="flex items-center gap-2 mt-2">
-              <span className={cn("w-2 h-2 rounded-full", userData?.hasSetPin ? "bg-emerald-500" : "bg-red-500 animate-pulse")} />
+              <span className={cn("w-2 h-2 rounded-full", (userData?.hasSetPin || userData?.phoneNumberVerified || userData?.passkeyRegistered) ? "bg-emerald-500" : "bg-red-500 animate-pulse")} />
               <p className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                {userData?.hasSetPin ? "SCA SECURED" : "DISABLED (Setup Required)"}
+                {(userData?.hasSetPin || userData?.phoneNumberVerified || userData?.passkeyRegistered) ? "SCA SECURED" : "DISABLED (Setup Required)"}
               </p>
               <button 
                 onClick={triggerNeuralRefresh}
@@ -484,7 +484,7 @@ Provide a 1-sentence predictive forecast on how their secure footprint impacts t
                   className="w-full py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-[1.25rem] text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-purple-600/20 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isSendingOtp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
-                  <span>{isSendingOtp ? "Resolving Relay Channel..." : "Authorize via Email Relay"}</span>
+                  <span>{isSendingOtp ? "Sending Verification..." : "Authorize via Email Verification"}</span>
                 </button>
 
                 <button
@@ -492,7 +492,7 @@ Provide a 1-sentence predictive forecast on how their secure footprint impacts t
                   onClick={() => setPinEmailVerified(true)}
                   className="w-full py-3 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-750 dark:text-gray-300 rounded-[1.25rem] text-[9px] font-black uppercase tracking-widest transition-all hover:bg-gray-200 dark:hover:bg-gray-800 cursor-pointer flex items-center justify-center"
                 >
-                  Skip Authorization & Configure PIN Directly
+                  Continue to PIN Setup
                 </button>
               </div>
             </div>
