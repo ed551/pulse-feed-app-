@@ -1,6 +1,6 @@
 {
   "name": "Pulse Feeds",
-  "description": "Pulse Feeds: Next-gen AI-powered community app with a Gold-Based Economy (mg). Features rewards in Gold, withdrawals in Kenyan Shillings (KES), and real-world problem detection.",
+  "description": "Pulse Feeds: High-security AI-driven community platform featuring an AI-guarded treasury with multi-factor withdrawal protection (PIN/SCA), local & international payouts (USDT/KES), and real-time community engagement.",
   "requestFramePermissions": ["geolocation", "camera", "microphone", "screen-wake-lock", "publickey-credentials-create", "publickey-credentials-get", "payment", "webauthn", "identity-credentials-get"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

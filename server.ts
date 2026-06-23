@@ -2497,9 +2497,9 @@ async function startServer() {
     // Force SCA for any binance withdrawal due to high risk
     if (authLevel < 1) {
       const errorStr = (scaToken || totpCode) 
-        ? "Security validation failed. Please check your PIN or TOTP code."
+        ? "Security validation failed. The provided PIN or TOTP code is incorrect for this user profile."
         : "Strong Customer Authentication (PIN, Biometrics, or OTP) is required for treasury payouts.";
-      console.warn(`[Binance Withdraw Denied] User ${userId} authLevel ${authLevel}.`);
+      console.warn(`[Binance Withdraw Denied] User ${userId} authLevel ${authLevel}. Code used: ${!!scaToken}`);
       return res.status(403).json({ success: false, error: errorStr, code: "SCA_REQUIRED" });
     }
 

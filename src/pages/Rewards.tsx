@@ -77,6 +77,14 @@ export default function Rewards() {
   const { currency, availableCurrencies, changeCurrency, convert, formatReward, loading, rates } = useCurrencyConverter();
   const [activeTab, setActiveTab] = useState<'overview' | 'local' | 'international' | 'history'>('overview');
   const [showSCAModal, setShowSCAModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [withdrawDetails, setWithdrawDetails] = useState<{
+    amount: number;
+    address: string;
+    network: string;
+    asset: string;
+    points: number;
+  } | null>(null);
   const [authMethod, setAuthMethod] = useState<'pin' | 'passkey' | 'totp' | 'sms' | 'password' | 'email'>('pin');
   const [passwordInput, setPasswordInput] = useState("");
   const [smsCode, setSmsCode] = useState("");
@@ -557,26 +565,47 @@ export default function Rewards() {
     if (e) e.preventDefault();
     if (!payoutAmount) return;
 
+    const numAmount = parseFloat(payoutAmount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      setError("Please enter a valid withdrawal amount.");
+      return;
+    }
+
+    // Step 0: Coordination & Confirmation
+    if (!showConfirmModal && !pin && !usePasskey && !totp && !email) {
+      setWithdrawDetails({
+        amount: numAmount,
+        address: binanceAddress,
+        network: binanceNetwork,
+        asset: binanceCoin,
+        points: numAmount // 1 USDT = 1 Point
+      });
+      setShowConfirmModal(true);
+      return;
+    }
+
     // Check if user has set a PIN
     if (!userData?.hasSetPin && !process.env.SKIP_SCA) {
       setShowCreatePinModal(true);
+      setShowConfirmModal(false);
       return;
     }
 
     if (!pin && !usePasskey && !totp && !email && !process.env.SKIP_SCA) {
       setScaPendingAction(() => (p: string, up?: boolean, t?: string, em?: string) => handleBinanceWithdraw(undefined, p, up, t, em));
       setShowSCAModal(true);
+      setShowConfirmModal(false);
       return;
     }
 
     setIsLoading(true);
     setError(null);
     try {
+      console.log(`[Binance-Withdrawal] Initiating ${numAmount} ${binanceCoin} to ${binanceAddress} (${binanceNetwork})`);
+      
       if (!binanceAddress) throw new Error("Binance Wallet Address is required");
       
-      const numAmount = parseFloat(payoutAmount);
-
-      // Balance Check: 100 USDT
+      // Balance Check
       const MIN_BALANCE_FOR_WITHDRAWAL = 100;
       if (points < MIN_BALANCE_FOR_WITHDRAWAL) {
         throw new Error(`A minimum balance of 100 USDT is required in the account to enable withdrawals. Your current balance is ${formatReward(points)}.`);
@@ -584,9 +613,7 @@ export default function Rewards() {
 
       if (numAmount < 10 && !isDeveloper) throw new Error("Minimum Binance withdrawal is 10 USDT");
 
-      // Calculation: If withdrawing USDT, we withdraw the USDT amount directly
       let withdrawQuantity = numAmount;
-
       let result;
       const response = await apiFetch('/api/vault/payout-disburse', {
         method: 'POST',
@@ -607,31 +634,22 @@ export default function Rewards() {
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         const text = await response.text();
-        const displayUrl = `/api/vault/payout-disburse`;
-        console.error(`[Binance-DEBUG] Non-JSON Response from ${displayUrl}. Content-Type: ${contentType}. Status: ${response.status}`);
-        
-        let errorMsg = `Sync Error: Received unexpected response format (${response.status}) from server.`;
-        if (text.includes("<html>")) {
-          errorMsg = `Gateway Restriction: The server received an HTML response (Status ${response.status}). This often means the request was blocked by a firewall (WAF) or the session expired.`;
-        } else if (response.status === 403) {
-          errorMsg = `Access Denied (403): The server was blocked by Binance security (WAF). This is usually due to the server IP being restricted. Please check your API key restrictions and IP access rules in Binance.`;
-        } else if (response.status === 503 || response.status === 502) {
-          errorMsg = `Gateway Error (${response.status}): The Binance API gateway is currently unavailable or overloaded.`;
-        } else if (response.status === 404) {
-          errorMsg = `API Endpoint Not Found (404). Please ensure your backend is deployed and running.`;
-        } else if (text) {
-          errorMsg = `Server Error (${response.status}): ${text.substring(0, 150)}${text.length > 150 ? "..." : ""}`;
-        }
-        throw new Error(errorMsg);
+        console.error(`[Binance-Withdrawal] Non-JSON Response. Status: ${response.status}`, text.substring(0, 500));
+        throw new Error(`Sync Error: Received unexpected response format (${response.status}) from server.`);
       } else {
         result = await response.json();
       }
 
-      if (!result.success) throw new Error(result.error || "Binance withdrawal failed");
+      if (!result.success) {
+        console.warn(`[Binance-Withdrawal] Server rejected request:`, result.error);
+        throw new Error(result.error || "Binance withdrawal failed");
+      }
+
+      console.log(`[Binance-Withdrawal] SUCCESS: ${result.data.id}`);
 
       if (currentUser && db) {
         const txRef = collection(db, 'users', currentUser.uid, 'transactions');
-        const pointsToDeduct = numAmount; // 1 USDT = 1 Point
+        const pointsToDeduct = numAmount;
 
         const txData = {
           amount: numAmount,
@@ -642,7 +660,7 @@ export default function Rewards() {
           network: binanceNetwork,
           timestamp: serverTimestamp(),
           reference: result.data.id || `BIN-${Date.now()}`,
-          details: `Binance ${binanceCoin} withdrawal`,
+          details: `Binance ${binanceCoin} withdrawal (Authorized)`,
           pointsDeducted: pointsToDeduct,
           previousPoints: points,
           remainingPoints: points - pointsToDeduct,
@@ -659,23 +677,27 @@ export default function Rewards() {
         });
       }
 
-      setSuccess(`Success! ${numAmount} ${binanceCoin} withdrawal initiated to ${binanceAddress}`);
+      setSuccess(`Withdrawal of ${numAmount} ${binanceCoin} has been successfully authorized and queued with the treasury gateway. Transaction ID: ${result.data.id || 'N/A'}. Funds will reflect shortly.`);
       setPayoutAmount("");
       setBinanceAddress("");
 
-      // Automatically refresh balance after 5 seconds to show update on Binance
       setTimeout(() => checkBinanceAssetBalance(binanceCoin), 5000);
     } catch (err: any) {
-      console.error("[Binance-Withdrawal] Fatal Error:", err);
-      const isConnectionError = err.message.toLowerCase().includes("failed to fetch") || err.message.toLowerCase().includes("network error") || err.message.toLowerCase().includes("timeout");
+      console.error("[Binance-Withdrawal] Fatal Error Catch:", err);
+      let displayError = err.message;
       
-      const displayError = isConnectionError 
-        ? "Network Timeout: The withdrawal request did not reach the server. Please check your internet connection or use diagnostic tools below."
-        : err.message;
+      if (displayError.includes('Insufficient Balance') || displayError.includes('insufficient_balance')) {
+        displayError = "Treasury Balance Restricted: The gateway account currently has insufficient liquidity for this amount. Please try a smaller test amount (e.g. 10-20 USDT) or notify admin.";
+      } else if (displayError.includes('SCA_REQUIRED') || displayError.includes('Security validation failed')) {
+        displayError = "Authentication Clearance Denied: The Security PIN or MFA token provided was invalid. Access blocked.";
+      } else if (displayError.includes('failed to fetch') || displayError.includes('NetworkError')) {
+        displayError = "Connection Timeout: Your request could not reach the high-security gateway. Please verify your internet connection and try again.";
+      }
       
       setError(displayError);
     } finally {
       setIsLoading(false);
+      setShowConfirmModal(false);
     }
   };
 
@@ -1034,6 +1056,84 @@ export default function Rewards() {
           </p>
         </div>
       </motion.div>
+
+      {/* Withdrawal Confirmation Modal */}
+      <AnimatePresence>
+        {showConfirmModal && withdrawDetails && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 30 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 30 }}
+              className="bg-white dark:bg-gray-900 rounded-[2.5rem] p-8 shadow-2xl border border-gray-100 dark:border-gray-800 max-w-sm w-full relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500" />
+              
+              <div className="relative z-10">
+                <div className="flex justify-center mb-6">
+                  <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center text-blue-600 shadow-inner">
+                    <ShieldCheck className="w-8 h-8" />
+                  </div>
+                </div>
+
+                <div className="text-center mb-8">
+                  <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Confirm Disbursement</h3>
+                  <p className="text-[10px] text-gray-500 mt-2 font-bold uppercase tracking-widest">Verify Treasury Destination</p>
+                </div>
+
+                <div className="space-y-4 mb-8">
+                  <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-700/50">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Amount</span>
+                      <span className="text-sm font-black text-gray-900 dark:text-white">{withdrawDetails.amount} {withdrawDetails.asset}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Network</span>
+                      <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded uppercase">{withdrawDetails.network}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-700/50">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Wallet Address</p>
+                    <p className="text-[10px] font-mono font-bold text-gray-800 dark:text-gray-200 break-all bg-white dark:bg-gray-950 p-3 rounded-xl border border-gray-100 dark:border-gray-900 shadow-inner">
+                      {withdrawDetails.address}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl">
+                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                    <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Security: PIN/MFA Authorized Session Required</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => {
+                      setShowConfirmModal(false);
+                      // This will trigger the PIN/SCA check in the main function
+                      handleBinanceWithdraw();
+                    }}
+                    className="w-full py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 hover:bg-gray-800 dark:hover:bg-gray-100"
+                  >
+                    Authorize Withdrawal
+                  </button>
+                  <button
+                    onClick={() => setShowConfirmModal(false)}
+                    className="w-full py-3 text-[10px] font-black text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 uppercase tracking-widest transition-all"
+                  >
+                    Cancel Disbursement
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* SCA Verification Modal */}
       <AnimatePresence>

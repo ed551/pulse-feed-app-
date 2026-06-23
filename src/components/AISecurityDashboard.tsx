@@ -75,6 +75,19 @@ export default function AISecurityDashboard() {
   const [showCurrentPin, setShowCurrentPin] = useState(false);
   const [isRegisteringPasskey, setIsRegisteringPasskey] = useState(false);
   
+  const [isAuditing, setIsAuditing] = useState(false);
+
+  const triggerNeuralRefresh = async () => {
+    setIsAuditing(true);
+    try {
+      // Small delay to simulate neural sync and allow firestore listener to catch up
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      window.location.reload(); 
+    } catch (e) {
+      setIsAuditing(false);
+    }
+  };
+
   // Auto-trigger Neural Audit on component mount
   useEffect(() => {
     let active = true;
@@ -373,8 +386,16 @@ Provide a 1-sentence predictive forecast on how their secure footprint impacts t
             <div className="flex items-center gap-2 mt-2">
               <span className={cn("w-2 h-2 rounded-full", userData?.hasSetPin ? "bg-emerald-500" : "bg-red-500 animate-pulse")} />
               <p className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                {userData?.hasSetPin ? "SCA SECURED" : "DISABLED (Vulnerable)"}
+                {userData?.hasSetPin ? "SCA SECURED" : "DISABLED (Setup Required)"}
               </p>
+              <button 
+                onClick={triggerNeuralRefresh}
+                className="ml-auto p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors flex items-center gap-1.5 border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
+                title="Neural Sync Status"
+              >
+                <RefreshCw className={cn("w-3 h-3 text-gray-400", isAuditing && "animate-spin")} />
+                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">Sync</span>
+              </button>
             </div>
           </div>
           <div className="p-4 rounded-2xl bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-900">
