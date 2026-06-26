@@ -10,7 +10,7 @@ export const useCurrencyConverter = () => {
   const [rates, setRates] = useState<ExchangeRates>({ 
     USD: 1,
     USDT: 1,
-    KES: 130, // authoritative local rate
+    KES: 1, // unified to 1 USDT
     GOLD: 31.1035 / 2375.40, // ~0.01309 g per USD
     BTC: 1 / 67000
   });

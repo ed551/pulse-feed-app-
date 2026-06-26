@@ -6,7 +6,7 @@ import { Modality } from '@google/genai';
 import { db } from '../../lib/firebase';
 import { setDoc, doc, arrayUnion } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
-import { speak } from '../../lib/speech';
+import { speak, stopSpeech } from '../../lib/speech';
 import { cn } from '../../lib/utils';
 
 interface AIEyeModalProps {
@@ -45,7 +45,7 @@ export default function AIEyeModal({ onClose }: AIEyeModalProps) {
       const stream = videoRef.current.srcObject as MediaStream;
       stream.getTracks().forEach(track => track.stop());
     }
-    window.speechSynthesis.cancel();
+    stopSpeech();
   };
 
   const analyzeProblem = async () => {

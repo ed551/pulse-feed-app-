@@ -8,6 +8,7 @@ let isProcessingQueue = false;
 let currentRate = 1.1; 
 let preferredGender: 'female' | 'male' = 'female';
 let onCompleteCallback: (() => void) | null = null;
+let activeUtterance: SpeechSynthesisUtterance | null = null;
 
 export const setSpeechConfig = (config: { rate?: number; gender?: 'female' | 'male' }) => {
   if (config.rate) currentRate = config.rate;
@@ -78,6 +79,7 @@ const processQueue = () => {
   }
 
   const utterance = new SpeechSynthesisUtterance(text);
+  activeUtterance = utterance;
   const voice = getBestVoice();
   if (voice) utterance.voice = voice;
   
@@ -94,13 +96,22 @@ const processQueue = () => {
   let heartbeat: any;
 
   utterance.onend = () => {
+    if (activeUtterance !== utterance) return;
+    activeUtterance = null;
     if (heartbeat) clearInterval(heartbeat);
     processQueue();
   };
 
   utterance.onerror = (event) => {
+    if (activeUtterance !== utterance) return;
+    activeUtterance = null;
     if (heartbeat) clearInterval(heartbeat);
-    console.error('Speech error:', event);
+    
+    // Silence benign cancellation/interrupted messages from console.warn/error
+    if (event.error !== 'interrupted' && event.error !== 'canceled') {
+      console.warn('Speech synthesis non-fatal warning:', event);
+    }
+    
     window.speechSynthesis.resume();
     processQueue();
   };
@@ -120,6 +131,7 @@ const processQueue = () => {
 
 export const stopSpeech = () => {
   if (typeof window === 'undefined') return;
+  activeUtterance = null; // Mark current utterance as stale immediately!
   window.speechSynthesis.cancel();
   speechQueue = [];
   isProcessingQueue = false;

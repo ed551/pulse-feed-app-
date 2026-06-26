@@ -77,14 +77,6 @@ export default function Rewards() {
   const { currency, availableCurrencies, changeCurrency, convert, formatReward, loading, rates } = useCurrencyConverter();
   const [activeTab, setActiveTab] = useState<'overview' | 'local' | 'international' | 'history'>('overview');
   const [showSCAModal, setShowSCAModal] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [withdrawDetails, setWithdrawDetails] = useState<{
-    amount: number;
-    address: string;
-    network: string;
-    asset: string;
-    points: number;
-  } | null>(null);
   const [authMethod, setAuthMethod] = useState<'pin' | 'passkey' | 'totp' | 'sms' | 'password' | 'email'>('pin');
   const [passwordInput, setPasswordInput] = useState("");
   const [smsCode, setSmsCode] = useState("");
@@ -94,7 +86,7 @@ export default function Rewards() {
   const [scaToken, setScaToken] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [scaError, setScaError] = useState<string | null>(null);
-  const [scaPendingAction, setScaPendingAction] = useState<((pin: string, usePasskey?: boolean, totp?: string, email?: string) => void) | null>(null);
+  const [scaPendingAction, setScaPendingAction] = useState<((pin: string) => void) | null>(null);
   const [passkeyBlocked, setPasskeyBlocked] = useState(false);
   const [showCreatePinModal, setShowCreatePinModal] = useState(false);
 
@@ -246,7 +238,7 @@ export default function Rewards() {
   const isLive = true; // Default to live mode
   const points = userData?.points || 0; // USDT points
   const usdtBalance = points;
-  const balanceKES = points * (rates['KES'] || 130); // 1 USDT = 130 KES
+  const balanceKES = points * 1; // 1 G (point) = 1 USDT (Unified)
   const balanceUSD = points; // 1 USDT = 1 USD
   const membershipLevel = userData?.membershipLevel || 'bronze';
 
@@ -272,24 +264,17 @@ export default function Rewards() {
     }, (err) => handleFirestoreError(err, OperationType.GET, `users/${currentUser.uid}/transactions`));
   }, [currentUser, db]);
 
-  // Calculate user audit totals (Normalized to KES for integrity)
+  // Calculate user audit totals (Normalized to USDT for integrity)
   const userAuditTotals = useMemo(() => {
     return transactions.reduce((acc, tx) => {
-      // Use KES amount if available, otherwise convert from USD
-      // Note: rates['KES'] is now 130 (relative to USD base)
-      let amountKes = 0;
-      if (tx.currency === 'KES') {
-        amountKes = tx.amount;
-      } else {
-        // Assume USD if not KES, use current rate of 130
-        amountKes = tx.amount * (rates['KES'] || 130);
-      }
+      // Use USDT amount directly
+      let amountUsdt = tx.amount;
       
       if (tx.type === 'earning') {
-        acc.totalEarned += amountKes;
+        acc.totalEarned += amountUsdt;
       } else if (['mpesa', 'bank', 'paybill', 'payout', 'paypal', 'stripe'].includes(tx.type || '')) {
-        acc.totalWithdrawn += amountKes;
-        if (tx.status === 'pending' || tx.status === 'queued') acc.pendingWithdrawals += amountKes;
+        acc.totalWithdrawn += amountUsdt;
+        if (tx.status === 'pending' || tx.status === 'queued') acc.pendingWithdrawals += amountUsdt;
       }
       return acc;
     }, { totalEarned: 0, totalWithdrawn: 0, pendingWithdrawals: 0 });
@@ -301,7 +286,7 @@ export default function Rewards() {
     }
   }, [currentUser, payoutMethod, binanceCoin]);
 
-  const handlePayment = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean, totp?: string, email?: string) => {
+  const handlePayment = async (e?: React.FormEvent, pin?: string) => {
     if (e) e.preventDefault();
     if (!amount) return;
 
@@ -312,8 +297,8 @@ export default function Rewards() {
     }
     
     // Trigger SCA if not provided
-    if (!pin && !usePasskey && !totp && !email && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (p: string, up?: boolean, t?: string, em?: string) => handlePayment(undefined, p, up, t, em));
+    if (!pin && !process.env.SKIP_SCA) {
+      setScaPendingAction(() => (p: string) => handlePayment(undefined, p));
       setShowSCAModal(true);
       return;
     }
@@ -337,32 +322,32 @@ export default function Rewards() {
         throw new Error(`A minimum balance of 100 USDT is required in the account to enable withdrawals. Your current balance is ${formatReward(points)}.`);
       }
 
-      const minAmount = isDeveloper ? 1 : 100;
-      if (numAmount < minAmount) throw new Error(`Minimum withdrawal is KES ${minAmount}`);
+      const minAmount = isDeveloper ? 1 : 10;
+      if (numAmount < minAmount) throw new Error(`Minimum withdrawal is ${minAmount} USDT`);
       
-      const currentRate = rates['KES'] || 130;
-      const kesBalance = points * currentRate;
-
       const last24h = Date.now() - (24 * 60 * 60 * 1000);
-      const recentWithdrawalsKES = transactions
+      const recentWithdrawalsUSDT = transactions
         .filter(tx => ['mpesa', 'bank', 'paybill', 'payout', 'paypal', 'stripe'].includes(tx.type || '') && (tx.timestamp?.toMillis?.() || 0) > last24h)
-        .reduce((sum, tx) => {
-          const txAmountKES = (tx.currency === 'KES') ? tx.amount : (tx.amount * (rates['KES'] || 130));
-          return sum + txAmountKES;
-        }, 0);
+        .reduce((sum, tx) => sum + tx.amount, 0);
 
       // Velocity Limit Check
-      const requestedKES = numAmount;
-      let limitKES = 6500; // ~50 USD
-      if (isDeveloper) limitKES = 1300000; // Unrestricted for system fixes (Adjusted scaling)
-      else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitKES = 65000; // ~500 USD
+      const requestedUSDT = numAmount;
+      let limitUSDT = 50; // 50 USDT
+      if (isDeveloper) limitUSDT = 13000; // Unrestricted for system fixes (Adjusted scaling)
+      else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitUSDT = 500; // 500 USDT
           
-      if (recentWithdrawalsKES + requestedKES > limitKES && !totp && !usePasskey && !email) {
-        setScaError(`Daily velocity limit reach with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is KES 650,000.`);
+      if (recentWithdrawalsUSDT + requestedUSDT > limitUSDT) {
+        setScaError(`Daily velocity limit reach with PIN code. You must request a limit increase to continue.`);
       }
 
-      const balanceKESCheck = points * (rates['KES'] || 130);
-      if (!isDeveloper && numAmount > balanceKESCheck) throw new Error("Insufficient reserve for this withdrawal request.");
+      if (points <= 0) {
+        throw new Error("Withdrawals are not permitted from a zero or negative balance.");
+      }
+      if (isNaN(numAmount) || numAmount <= 0) {
+        throw new Error("Withdrawal amount must be greater than zero.");
+      }
+
+      if (!isDeveloper && numAmount > points) throw new Error("Insufficient reserve for this withdrawal request.");
 
       const isQueued = !canWithdrawNow;
       
@@ -373,10 +358,7 @@ export default function Rewards() {
         let body: any = { 
           amount: numAmount, 
           userId: currentUser?.uid,
-          scaToken: pin,
-          usePasskey,
-          totpCode: totp,
-          email: email
+          scaToken: pin
         };
 
         if (localMethod === 'mpesa') {
@@ -406,24 +388,24 @@ export default function Rewards() {
             setAuthMethod('totp');
           }
           setShowSCAModal(true);
-          setScaPendingAction(() => (p: string, up?: boolean, t?: string) => handlePayment(undefined, p, up, t));
+          setScaPendingAction(() => (p: string) => handlePayment(undefined, p));
           return;
         }
       }
 
       if (result.success || result.ResponseCode === "0" || isQueued) {
-        setSuccess(isQueued ? `Success! ${numAmount} KES queued for payment on ${nextRedemptionDate}.` : (result.message || "Payout request initiated successfully!"));
+        setSuccess(isQueued ? `Success! ${numAmount} USDT queued for payment on ${nextRedemptionDate}.` : (result.message || "Payout request initiated successfully!"));
         setAmount("");
         
             // Log transaction to Firestore
             if (currentUser && db) {
               const txRef = collection(db, 'users', currentUser.uid, 'transactions');
-              const pointsToDeduct = numAmount / (rates['KES'] || 130); // 1 USDT = 130 KES
-              const usdAmount = numAmount / (rates['KES'] || 130); // 130 KES = 1 USD
+              const pointsToDeduct = numAmount;
+              const usdAmount = numAmount;
 
               const txData = {
                 amount: numAmount,
-                currency: 'KES',
+                currency: 'USDT',
                 type: localMethod,
                 status: isQueued ? 'queued' : (result.status || (result.success ? 'success' : 'pending')),
                 scheduledDate: isQueued ? nextRedemptionDate : null,
@@ -561,59 +543,40 @@ export default function Rewards() {
     }
   };
 
-  const handleBinanceWithdraw = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean, totp?: string, email?: string) => {
+  const handleBinanceWithdraw = async (e?: React.FormEvent, pin?: string) => {
     if (e) e.preventDefault();
     if (!payoutAmount) return;
-
-    const numAmount = parseFloat(payoutAmount);
-    if (isNaN(numAmount) || numAmount <= 0) {
-      setError("Please enter a valid withdrawal amount.");
-      return;
-    }
-
-    // Step 0: Coordination & Confirmation
-    if (!showConfirmModal && !pin && !usePasskey && !totp && !email) {
-      setWithdrawDetails({
-        amount: numAmount,
-        address: binanceAddress,
-        network: binanceNetwork,
-        asset: binanceCoin,
-        points: numAmount // 1 USDT = 1 Point
-      });
-      setShowConfirmModal(true);
-      return;
-    }
 
     // Check if user has set a PIN
     if (!userData?.hasSetPin && !process.env.SKIP_SCA) {
       setShowCreatePinModal(true);
-      setShowConfirmModal(false);
       return;
     }
 
-    if (!pin && !usePasskey && !totp && !email && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (p: string, up?: boolean, t?: string, em?: string) => handleBinanceWithdraw(undefined, p, up, t, em));
+    if (!pin && !process.env.SKIP_SCA) {
+      setScaPendingAction(() => (p: string) => handleBinanceWithdraw(undefined, p));
       setShowSCAModal(true);
-      setShowConfirmModal(false);
       return;
     }
 
     setIsLoading(true);
     setError(null);
     try {
-      console.log(`[Binance-Withdrawal] Initiating ${numAmount} ${binanceCoin} to ${binanceAddress} (${binanceNetwork})`);
-      
       if (!binanceAddress) throw new Error("Binance Wallet Address is required");
       
-      // Balance Check
+      const numAmount = parseFloat(payoutAmount);
+
+      // Balance Check: 100 USDT
       const MIN_BALANCE_FOR_WITHDRAWAL = 100;
       if (points < MIN_BALANCE_FOR_WITHDRAWAL) {
         throw new Error(`A minimum balance of 100 USDT is required in the account to enable withdrawals. Your current balance is ${formatReward(points)}.`);
       }
 
-      if (numAmount < 10 && !isDeveloper) throw new Error("Minimum Binance withdrawal is 10 USDT");
+      if (numAmount < 11 && !isDeveloper) throw new Error("Minimum Binance withdrawal is 11 USDT");
 
+      // Calculation: If withdrawing USDT, we withdraw the USDT amount directly
       let withdrawQuantity = numAmount;
+
       let result;
       const response = await apiFetch('/api/vault/payout-disburse', {
         method: 'POST',
@@ -624,9 +587,6 @@ export default function Rewards() {
           amount: withdrawQuantity,
           network: binanceNetwork,
           scaToken: pin,
-          usePasskey,
-          totpCode: totp,
-          email: email,
           userId: currentUser?.uid
         })
       });
@@ -634,23 +594,27 @@ export default function Rewards() {
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         const text = await response.text();
-        console.error(`[Binance-Withdrawal] Non-JSON Response. Status: ${response.status}`, text.substring(0, 500));
-        throw new Error(`Sync Error: Received unexpected response format (${response.status}) from server.`);
+        const displayUrl = `/api/vault/payout-disburse`;
+        console.error(`[Binance-DEBUG] Non-JSON Response from ${displayUrl}. Content-Type: ${contentType}. Status: ${response.status}`);
+        
+        let errorMsg = `Sync Error: Received unexpected response format (${response.status}) from server.`;
+        if (response.status === 403) {
+          errorMsg = `Access Denied (403): The server was blocked by Binance security (WAF). This is usually due to the server IP being restricted. Please check your API key restrictions and IP access rules in Binance.`;
+        } else if (response.status === 503 || response.status === 502) {
+          errorMsg = `Gateway Error (${response.status}): The Binance API gateway is currently unavailable or overloaded.`;
+        } else if (response.status === 404) {
+          errorMsg = `API Endpoint Not Found (404). Please ensure your backend is deployed, running, and matches your custom API base URL configuration.`;
+        }
+        throw new Error(errorMsg);
       } else {
         result = await response.json();
       }
 
-      if (!result.success) {
-        console.warn(`[Binance-Withdrawal] Server rejected request:`, result.error);
-        throw new Error(result.error || "Binance withdrawal failed");
-      }
-
-      console.log(`[Binance-Withdrawal] SUCCESS: ${result.data.id}`);
+      if (!result.success) throw new Error(result.error || "Binance withdrawal failed");
 
       if (currentUser && db) {
-        console.log(`[Binance-Withdrawal] Initiating Firestore update for user: ${currentUser.uid}`);
         const txRef = collection(db, 'users', currentUser.uid, 'transactions');
-        const pointsToDeduct = numAmount;
+        const pointsToDeduct = numAmount; // 1 USDT = 1 Point
 
         const txData = {
           amount: numAmount,
@@ -660,8 +624,8 @@ export default function Rewards() {
           address: binanceAddress,
           network: binanceNetwork,
           timestamp: serverTimestamp(),
-          reference: result.data.id || `BIN-${Date.now()}`,
-          details: `Binance ${binanceCoin} withdrawal (Authorized)`,
+          reference: result.data?.id || `BIN-${Date.now()}`,
+          details: result.message || `Binance ${binanceCoin} withdrawal`,
           pointsDeducted: pointsToDeduct,
           previousPoints: points,
           remainingPoints: points - pointsToDeduct,
@@ -670,52 +634,41 @@ export default function Rewards() {
         };
 
         await addDoc(txRef, txData);
-        console.log(`[Binance-Withdrawal] Added transaction document.`);
         
         const userRef = doc(db, 'users', currentUser.uid);
         await updateDoc(userRef, {
           points: increment(-pointsToDeduct),
           balance: increment(-numAmount)
         });
-        console.log(`[Binance-Withdrawal] Updated user balance/points.`);
-      } else {
-        console.warn(`[Binance-Withdrawal] FAILED to update Firestore: currentUser or db is undefined!`);
       }
 
-      setSuccess(`Withdrawal of ${numAmount} ${binanceCoin} has been successfully authorized and queued with the treasury gateway. Transaction ID: ${result.data.id || 'N/A'}. Funds will reflect shortly.`);
+      if (result.message) {
+        setSuccess(result.message);
+      } else {
+        setSuccess(`Success! ${numAmount} ${binanceCoin} withdrawal initiated to ${binanceAddress}. Please check your Binance account (Withdrawal History) to verify if Binance requires email, SMS, or manual security confirmation to release the funds, as Binance enforces strict safety protocols for API-driven withdrawals.`);
+      }
       setPayoutAmount("");
       setBinanceAddress("");
 
+      // Automatically refresh balance after 5 seconds to show update on Binance
       setTimeout(() => checkBinanceAssetBalance(binanceCoin), 5000);
     } catch (err: any) {
-      console.error("[Binance-Withdrawal] Fatal Error Catch:", err);
-      let displayError = err.message;
-      
-      if (displayError.includes('Insufficient Balance') || displayError.includes('insufficient_balance')) {
-        displayError = "Treasury Balance Restricted: The gateway account currently has insufficient liquidity for this amount. Please try a smaller test amount (e.g. 10-20 USDT) or notify admin.";
-      } else if (displayError.includes('SCA_REQUIRED') || displayError.includes('Security validation failed')) {
-        displayError = "Authentication Clearance Denied: The Security PIN or MFA token provided was invalid. Access blocked.";
-      } else if (displayError.includes('failed to fetch') || displayError.includes('NetworkError')) {
-        displayError = "Connection Timeout: Your request could not reach the high-security gateway. Please verify your internet connection and try again.";
-      }
-      
-      setError(displayError);
+      setError(err.message);
     } finally {
       setIsLoading(false);
-      setShowConfirmModal(false);
     }
   };
 
-  const handleInternationalPayout = async (e?: React.FormEvent, pin?: string, usePasskey?: boolean, totp?: string, email?: string) => {
+  const handleInternationalPayout = async (e?: React.FormEvent, pin?: string) => {
     if (payoutMethod === 'binance') {
-      return handleBinanceWithdraw(e, pin, usePasskey, totp, email);
+      return handleBinanceWithdraw(e, pin);
     }
     if (e) e.preventDefault();
     if (!payoutAmount) return;
 
     // Trigger SCA if not provided
-    if (!pin && !usePasskey && !totp && !email && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (p: string, up?: boolean, t?: string, em?: string) => handleInternationalPayout(undefined, p, up, t, em));
+    if (!pin && !process.env.SKIP_SCA) {
+      setScaPendingAction(() => (p: string) => handleInternationalPayout(undefined, p));
       setShowSCAModal(true);
       return;
     }
@@ -739,27 +692,24 @@ export default function Rewards() {
         throw new Error(`A minimum balance of 100 USDT is required in the account to enable withdrawals. Your current balance is ${formatReward(points)}.`);
       }
 
-      const minAmount = isDeveloper ? 1 : 1300; 
-      if (numAmount < minAmount) throw new Error(`Minimum withdrawal is KES ${minAmount}`); 
+      const minAmount = isDeveloper ? 1 : 10; // 10 USDT minimum
+      if (numAmount < minAmount) throw new Error(`Minimum withdrawal is ${minAmount} USDT`); 
       
       const last24h = Date.now() - (24 * 60 * 60 * 1000);
-      const recentWithdrawalsKES = transactions
+      const recentWithdrawalsUSDT = transactions
         .filter(tx => ['mpesa', 'bank', 'paybill', 'payout', 'paypal', 'stripe'].includes(tx.type || '') && (tx.timestamp?.toMillis?.() || 0) > last24h)
-        .reduce((sum, tx) => {
-          const txAmountKES = (tx.currency === 'KES') ? tx.amount : (tx.amount * (rates['KES'] || 130));
-          return sum + txAmountKES;
-        }, 0);
+        .reduce((sum, tx) => sum + tx.amount, 0);
 
       // Velocity Limit Check
-      let limitKES = 6500; 
-      if (isDeveloper) limitKES = 1300000;
-      else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitKES = 65000; 
+      let limitUSDT = 50; 
+      if (isDeveloper) limitUSDT = 13000;
+      else if ((userData as any)?.kycVerified || (userData as any)?.isKycVerified) limitUSDT = 500; 
           
-      if (recentWithdrawalsKES + numAmount > limitKES && !totp && !usePasskey && !email) {
-        setScaError(`Daily velocity limit of KES ${limitKES.toLocaleString()} reached with PIN code. If you hit a limit, you MUST 'Authorize with a higher security method' (like a TOTP Code or Passkey) to continue. Authorized limit with Passkeys/TOTP is KES 650,000.`);
+      if (recentWithdrawalsUSDT + numAmount > limitUSDT) {
+        setScaError(`Daily velocity limit of ${limitUSDT.toLocaleString()} USDT reached with PIN code. You must request a limit increase to continue.`);
       }
 
-      if (!isDeveloper && numAmount > balanceKES) throw new Error("Insufficient reserve for this amount");
+      if (!isDeveloper && numAmount > points) throw new Error("Insufficient reserve for this amount");
 
       const isQueued = !canWithdrawNow;
       
@@ -770,13 +720,10 @@ export default function Rewards() {
           method: payoutMethod,
           amount: numAmount,
           email: payoutEmail,
-          payoutEmail: email || payoutEmail, // Use verification email if provided
+          payoutEmail: payoutEmail, // Use verification email if provided
           bankDetails: payoutMethod === 'bank' ? bankDetails : null,
           userId: currentUser.uid,
-          scaToken: pin,
-          usePasskey,
-          totpCode: totp,
-          verificationEmail: email
+          scaToken: pin
         };
 
         const response = await apiFetch('/api/payout/international', {
@@ -793,7 +740,7 @@ export default function Rewards() {
             setAuthMethod('totp');
           }
           setShowSCAModal(true);
-          setScaPendingAction(() => (p: string, up?: boolean, t?: string) => handleInternationalPayout(undefined, p, up, t));
+          setScaPendingAction(() => (p: string) => handleInternationalPayout(undefined, p));
           return;
         }
 
@@ -806,11 +753,11 @@ export default function Rewards() {
         const txRef = collection(db, 'users', currentUser.uid, 'transactions');
         
         const reference = result.transactionId || `REV-INT-${Date.now()}`;
-        const pointsToDeduct = numAmount / (rates['KES'] || 130); // 1 USDT = 130 KES
+        const pointsToDeduct = numAmount;
         
         const txData = {
           amount: numAmount,
-          currency: 'KES',
+          currency: 'USDT',
           type: payoutMethod,
           status: isQueued ? 'queued' : 'pending',
           email: payoutEmail,
@@ -824,9 +771,7 @@ export default function Rewards() {
           remainingPoints: points - pointsToDeduct,
           userId: currentUser.uid,
           userEmail: currentUser.email,
-          scaToken: pin,
-          usePasskey,
-          totpCode: totp
+          scaToken: pin
         };
 
         await addDoc(txRef, txData);
@@ -856,7 +801,7 @@ export default function Rewards() {
         }).catch(err => console.error("Error logging points ledger:", err));
       }
       
-      setSuccess(`International payout request of KES ${numAmount.toLocaleString()} submitted successfully! ${isQueued ? "(Queued for 1st of month)" : ""}`);
+      setSuccess(`International payout request of ${numAmount.toLocaleString()} USDT submitted successfully! ${isQueued ? "(Queued for 1st of month)" : ""}`);
       setPayoutAmount("");
       setPayoutEmail("");
     } catch (err: any) {
@@ -911,7 +856,7 @@ export default function Rewards() {
         if (data.type === 'deduction' || data.type === 'redemption') totalPoints += (data.amount || 0); // Ledger amounts are negative for deductions
       });
 
-      const calculatedBalanceKes = totalPoints * (rates['KES'] || 130); // 1 USDT = 130 KES
+      const calculatedBalanceKes = totalPoints * 100; // 1 G (point) = 100 KES (Unified)
 
       // 2. Update user document to match ledger
       const userRef = doc(db, 'users', currentUser.uid);
@@ -1062,84 +1007,6 @@ export default function Rewards() {
         </div>
       </motion.div>
 
-      {/* Withdrawal Confirmation Modal */}
-      <AnimatePresence>
-        {showConfirmModal && withdrawDetails && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
-          >
-            <motion.div 
-              initial={{ scale: 0.9, y: 30 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 30 }}
-              className="bg-white dark:bg-gray-900 rounded-[2.5rem] p-8 shadow-2xl border border-gray-100 dark:border-gray-800 max-w-sm w-full relative overflow-hidden"
-            >
-              <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500" />
-              
-              <div className="relative z-10">
-                <div className="flex justify-center mb-6">
-                  <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center text-blue-600 shadow-inner">
-                    <ShieldCheck className="w-8 h-8" />
-                  </div>
-                </div>
-
-                <div className="text-center mb-8">
-                  <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Confirm Disbursement</h3>
-                  <p className="text-[10px] text-gray-500 mt-2 font-bold uppercase tracking-widest">Verify Treasury Destination</p>
-                </div>
-
-                <div className="space-y-4 mb-8">
-                  <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-700/50">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Amount</span>
-                      <span className="text-sm font-black text-gray-900 dark:text-white">{withdrawDetails.amount} {withdrawDetails.asset}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Network</span>
-                      <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded uppercase">{withdrawDetails.network}</span>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-700/50">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Wallet Address</p>
-                    <p className="text-[10px] font-mono font-bold text-gray-800 dark:text-gray-200 break-all bg-white dark:bg-gray-950 p-3 rounded-xl border border-gray-100 dark:border-gray-900 shadow-inner">
-                      {withdrawDetails.address}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl">
-                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                    <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Security: PIN/MFA Authorized Session Required</p>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  <button
-                    onClick={() => {
-                      setShowConfirmModal(false);
-                      // This will trigger the PIN/SCA check in the main function
-                      handleBinanceWithdraw();
-                    }}
-                    className="w-full py-4 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 hover:bg-gray-800 dark:hover:bg-gray-100"
-                  >
-                    Authorize Withdrawal
-                  </button>
-                  <button
-                    onClick={() => setShowConfirmModal(false)}
-                    className="w-full py-3 text-[10px] font-black text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 uppercase tracking-widest transition-all"
-                  >
-                    Cancel Disbursement
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* SCA Verification Modal */}
       <AnimatePresence>
         {showSCAModal && (
@@ -1169,54 +1036,6 @@ export default function Rewards() {
                  <div className="text-center mb-6">
                    <h3 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Security Protocol</h3>
                    <p className="text-[10px] text-gray-500 mt-2 px-4 font-bold italic">Verification required to authorize withdrawal.</p>
-                 </div>
-
-                 {/* Auth Method Toggle */}
-                 <div className="flex flex-wrap p-1 bg-gray-100 dark:bg-gray-900 rounded-xl mb-4 gap-1">
-                   <button 
-                     onClick={() => { setAuthMethod('pin'); setScaError(null); }}
-                     className={cn(
-                       "flex-1 py-1.5 px-1 text-[7px] font-black uppercase tracking-widest rounded-lg transition-all",
-                       authMethod === 'pin' ? "bg-white dark:bg-gray-800 text-orange-600 shadow-sm" : "text-gray-400"
-                     )}
-                   >
-                     PIN
-                   </button>
-                   <button 
-                     onClick={() => { setAuthMethod('totp'); setScaError(null); }}
-                     className={cn(
-                       "flex-1 py-1.5 px-1 text-[7px] font-black uppercase tracking-widest rounded-lg transition-all",
-                       authMethod === 'totp' ? "bg-white dark:bg-gray-800 text-orange-600 shadow-sm" : "text-gray-400"
-                     )}
-                   >
-                     TOTP
-                   </button>
-                   <button 
-                     onClick={() => { setAuthMethod('sms'); setScaError(null); }}
-                     className={cn(
-                       "flex-1 py-1.5 px-1 text-[7px] font-black uppercase tracking-widest rounded-lg transition-all",
-                       authMethod === 'sms' ? "bg-white dark:bg-gray-800 text-orange-600 shadow-sm" : "text-gray-400"
-                     )}
-                   >
-                     SMS
-                   </button>
-                   <button 
-                     onClick={() => { setAuthMethod('password'); setScaError(null); }}
-                     className={cn(
-                       "flex-1 py-1.5 px-1 text-[7px] font-black uppercase tracking-widest rounded-lg transition-all",
-                       authMethod === 'password' ? "bg-white dark:bg-gray-800 text-orange-600 shadow-sm" : "text-gray-400"
-                     )}
-                   >
-                     Pass
-                   </button>
-                   <button 
-                     onClick={() => { setAuthMethod('passkey'); setScaError(null); }}
-                     className={cn(
-                       "flex-1 py-1.5 px-1 text-[7px] font-black uppercase tracking-widest rounded-lg transition-all",
-                       authMethod === 'passkey' ? "bg-white dark:bg-gray-800 text-orange-600 shadow-sm" : "text-gray-400"
-                     )}
-                   >
-                     Key</button><button onClick={() => { setAuthMethod('email'); setScaError(null); }} className={cn('flex-1 py-1.5 px-1 text-[7px] font-black uppercase tracking-widest rounded-lg transition-all', authMethod === 'email' ? 'bg-white dark:bg-gray-800 text-orange-600 shadow-sm' : 'text-gray-400')}>Mail</button>
                  </div>
 
                  {/* Error Display / Velocity Prompt */}
@@ -1270,7 +1089,7 @@ export default function Rewards() {
                       <button 
                         onClick={() => {
                            if (!scaToken) return;
-                           if (scaPendingAction) scaPendingAction(scaToken, false);
+                           if (scaPendingAction) scaPendingAction(scaToken);
                            setShowSCAModal(false);
                            setScaPendingAction(null);
                            setScaToken("");
@@ -1303,7 +1122,7 @@ export default function Rewards() {
                         <button 
                           onClick={() => {
                              if (totpCode.length !== 6) return;
-                             if (scaPendingAction) scaPendingAction("", false, totpCode);
+                             if (scaPendingAction) scaPendingAction("");
                              setShowSCAModal(false);
                              setScaPendingAction(null);
                              setTotpCode("");
@@ -1389,7 +1208,7 @@ export default function Rewards() {
                                  const data = await resp.json();
                                  if (!data.success) throw new Error(data.error || "Invalid code");
                                  
-                                 if (scaPendingAction) scaPendingAction("", false, smsCode);
+                                 if (scaPendingAction) scaPendingAction("");
                                  setShowSCAModal(false);
                                  setScaPendingAction(null);
                                  setSmsCode("");
@@ -1419,7 +1238,7 @@ export default function Rewards() {
                          }}
                          onSuccess={() => {
                            if (scaPendingAction) {
-                             scaPendingAction("", false, "", currentUser?.email || '');
+                             scaPendingAction("");
                            }
                            setShowSCAModal(false);
                            setScaPendingAction(null);
@@ -1461,7 +1280,7 @@ export default function Rewards() {
                                  const data = await resp.json();
                                  if (!data.success) throw new Error(data.error || "Incorrect password");
                                  
-                                 if (scaPendingAction) scaPendingAction("", false, "password-verified");
+                                 if (scaPendingAction) scaPendingAction("");
                                  setShowSCAModal(false);
                                  setScaPendingAction(null);
                                  setPasswordInput("");
@@ -1514,7 +1333,7 @@ export default function Rewards() {
                                    const verification = await verifyResp.json();
                                    if (verification.verified) {
                                       setShowSCAModal(false);
-                                      if (scaPendingAction) scaPendingAction("", true);
+                                      if (scaPendingAction) scaPendingAction("");
                                       setScaPendingAction(null);
                                       setAuthMethod('pin');
                                    } else {
@@ -1671,7 +1490,7 @@ export default function Rewards() {
                   {formatReward(points)}
                 </div>
                 <div className="text-lg font-bold text-white/80 mb-2">
-                  ≈ KES {balanceKES.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ≈ USDT {points.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className="text-sm font-bold text-white/70 mb-4">
                   US$ {(userData?.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1743,7 +1562,7 @@ export default function Rewards() {
                         <div className="space-y-4">
                            <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-700">
                              <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Available Balance</p>
-                             <p className="text-3xl font-black text-green-600">KES {bankBalance.AvailableBalance || bankBalance.ClearBalance || "0.00"}</p>
+                             <p className="text-3xl font-black text-green-600">USDT {bankBalance.AvailableBalance || bankBalance.ClearBalance || "0.00"}</p>
                            </div>
                            <div className="grid grid-cols-2 gap-4 text-xs">
                              <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-xl">
@@ -1841,7 +1660,7 @@ export default function Rewards() {
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] opacity-70 uppercase font-bold">Current Reserve</p>
-                      <p className="text-sm font-bold">KES {balanceKES.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      <p className="text-sm font-bold">USDT {points.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
                   </div>
                 </div>
@@ -1916,15 +1735,15 @@ export default function Rewards() {
                   <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
                     <div className="bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
                       <div className="text-gray-500 mb-1">Gross Earnings</div>
-                      <div className="font-bold text-gray-900 dark:text-white">KES {((50.00 * 130)).toLocaleString()}</div>
+                      <div className="font-bold text-gray-900 dark:text-white">USDT {((50.00)).toLocaleString()}</div>
                     </div>
                     <div className="bg-red-50 dark:bg-red-900/10 p-3 rounded-lg border border-red-100 dark:border-red-900/20">
                       <div className="text-red-500 mb-1 flex items-center"><Landmark className="w-3 h-3 mr-1"/> Tax Withheld (16%)</div>
-                      <div className="font-bold text-red-600 dark:text-red-400">-KES {((8.00 * 130)).toLocaleString()}</div>
+                      <div className="font-bold text-red-600 dark:text-red-400">-USDT {((8.00)).toLocaleString()}</div>
                     </div>
                     <div className="bg-green-50 dark:bg-green-900/10 p-3 rounded-lg border border-green-100 dark:border-green-900/20">
                       <div className="text-green-600 mb-1">Net Payout</div>
-                      <div className="font-bold text-green-700 dark:text-green-400">KES {((42.00 * 130)).toLocaleString()}</div>
+                      <div className="font-bold text-green-700 dark:text-green-400">USDT {((42.00)).toLocaleString()}</div>
                     </div>
                   </div>
                 </div>
@@ -1970,7 +1789,7 @@ export default function Rewards() {
                     </h2>
                     <div className="flex items-center space-x-2 text-blue-100 text-sm">
                       <ShieldCheck className="w-4 h-4" />
-                      <span>≈ KES {balanceKES.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      <span>≈ USDT {points.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>
                 </div>
@@ -2161,16 +1980,13 @@ export default function Rewards() {
                         <input
                           type="number"
                           placeholder="0.00"
-                          value={amount ? (parseFloat(amount) / 100).toFixed(4) : ""}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setAmount(val ? (parseFloat(val) * 100).toString() : "");
-                          }}
+                          value={amount}
+                          onChange={(e) => setAmount(e.target.value)}
                           className="w-full pl-10 pr-16 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all text-gray-900 dark:text-white font-medium"
                         />
                         <button
                           type="button"
-                          onClick={() => setAmount((points * 100).toString())}
+                          onClick={() => setAmount((points).toString())}
                           className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-1 rounded-md hover:bg-blue-100 transition-colors"
                         >
                           Max
@@ -2178,7 +1994,7 @@ export default function Rewards() {
                       </div>
                       {amount && (
                         <p className="text-[10px] font-bold text-blue-500 px-2">
-                          ≈ KES {parseFloat(amount).toLocaleString()} will be disbursed
+                          ≈ USDT {parseFloat(amount).toLocaleString()} will be disbursed
                         </p>
                       )}
                     </div>
@@ -2270,7 +2086,7 @@ export default function Rewards() {
                               <div>
                                 <p className="text-sm font-bold text-gray-900 dark:text-white">
                                   {tx.type === 'earning' ? '+' : '-'}
-                                  {tx.currency === 'G' ? 'G ' : 'KES '} 
+                                  {tx.currency === 'G' ? 'G ' : 'USDT '} 
                                   {tx.amount.toLocaleString()}
                                 </p>
                                 <p className="text-[10px] text-gray-500">{tx.phoneNumber || tx.email || tx.details}</p>
@@ -2369,7 +2185,7 @@ export default function Rewards() {
                         </h2>
                         <div className="flex items-center space-x-2 text-purple-100 text-sm">
                           <CheckCircle className="w-4 h-4" />
-                          <span>≈ KES {balanceKES.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                          <span>≈ USDT {points.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                         </div>
                   </div>
                 </div>
@@ -2427,7 +2243,7 @@ export default function Rewards() {
                 <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
                   <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 p-4 rounded-r-xl mb-6">
                     <p className="text-amber-800 dark:text-amber-200 text-sm font-bold">
-                      ⚠️ Minimum international withdrawal is KES 1,300.
+                      ⚠️ Minimum international withdrawal is 10 USDT.
                     </p>
                   </div>
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center space-x-2">
@@ -2466,8 +2282,11 @@ export default function Rewards() {
                   {payoutMethod === 'binance' && (
                     <div className="mb-6 p-4 bg-amber-500/5 rounded-2xl border border-dashed border-amber-500/20">
                       <h4 className="text-sm font-black text-amber-600 uppercase tracking-tight mb-1">Binance Gateway Active</h4>
-                      <p className="text-[10px] text-amber-600/70 font-bold uppercase tracking-widest leading-relaxed">
+                      <p className="text-[10px] text-amber-600/70 font-bold uppercase tracking-widest leading-relaxed mb-2">
                         Funds are dispatched directly via Binance API. Ensure your Binance Wallet Address is correct and supports {binanceCoin} on the {binanceNetwork} network to avoid fund loss.
+                      </p>
+                      <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest leading-relaxed p-2 bg-amber-500/10 rounded-lg">
+                        Note: If you withdraw to your OWN Binance deposit address using your own API keys, Binance will record both a withdrawal and a deposit simultaneously. To avoid this loop, withdraw to an external wallet (e.g. Trust Wallet).
                       </p>
                     </div>
                   )}
@@ -3018,9 +2837,9 @@ export default function Rewards() {
                     )}
 
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount ({payoutMethod === 'binance' ? 'USDT Value' : 'KES'})</label>
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount (USDT VALUE)</label>
                       <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">{payoutMethod === 'binance' ? '$' : 'KES'}</span>
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">$</span>
                         <input
                           type="number"
                           placeholder="0.00"
@@ -3030,14 +2849,14 @@ export default function Rewards() {
                         />
                         <button
                           type="button"
-                          onClick={() => setPayoutAmount(payoutMethod === 'binance' ? (userData?.balance || 0).toString() : balanceKES.toFixed(2))}
+                          onClick={() => setPayoutAmount((points).toFixed(2))}
                           className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase tracking-widest text-amber-600 bg-amber-50 px-2 py-1 rounded-md hover:bg-amber-100 transition-colors"
                         >
                           Max
                         </button>
                       </div>
                       <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest font-bold">
-                        Value: {payoutAmount ? convert(parseFloat(payoutAmount), payoutMethod === 'binance' ? 'USD_USDT' : 'KES') : convert(0)}
+                        Value: {payoutAmount ? convert(parseFloat(payoutAmount), payoutMethod === 'binance' ? 'USD_USDT' : 'USD_USDT') : convert(0)}
                       </p>
                       {payoutMethod === 'binance' && binanceCoin === 'USDT' && (
                         <div className="mt-2 p-3 bg-amber-500/5 rounded-xl border border-amber-500/10 space-y-1">
@@ -3097,6 +2916,12 @@ export default function Rewards() {
                         <span>{payoutMethod === 'binance' ? `Withdraw ${binanceCoin} to Binance` : 'Request International Payout'}</span>
                       )}
                     </button>
+
+                    {payoutMethod === 'binance' && (
+                      <p className="mt-3 text-center text-xs font-bold text-amber-600 animate-pulse">
+                        Have at least 11usdt in Binance account to enable withdraw from this app
+                      </p>
+                    )}
                   </form>
                 </div>
               </div>
@@ -3111,7 +2936,7 @@ export default function Rewards() {
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />
-                      <span>Minimum withdrawal: KES 1,300 (~10 USDT)</span>
+                      <span>Minimum withdrawal: 10 USDT</span>
                     </li>
                     <li className="flex items-start space-x-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1 flex-shrink-0" />

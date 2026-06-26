@@ -57,6 +57,7 @@ export default function PlatformDashboard() {
   const [scanProgress, setScanProgress] = useState(0);
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [devWithdrawAmount, setDevWithdrawAmount] = useState("");
+  const [devWithdrawAddress, setDevWithdrawAddress] = useState("");
   const [useKesForReturn, setUseKesForReturn] = useState(false);
   const [useKesForRevenue, setUseKesForRevenue] = useState(false);
   const [platformRevenueInput, setPlatformRevenueInput] = useState("");
@@ -182,17 +183,17 @@ export default function PlatformDashboard() {
       const now = Date.now();
       
       // Allow triggering operational growth once every 10 seconds per tab-switch session
-      if (now - lastSessionTrigger > 10000) {
+      if (false && now - lastSessionTrigger > 10000) {
         handleAutomatedOperationalPayout();
         (window as any)._lastWithdrawalTrigger = now;
       }
 
       // Automated Developer Expense: $3,700 Monthly
       // We check if on withdrawals tab OR financial tab to ensure it runs
-      if (now - lastDevTrigger > 30000) { // Check every 30s
-        handleScheduledDeveloperExpense();
-        (window as any)._lastDevExpenseTrigger = now;
-      }
+      // if (false && now - lastDevTrigger > 30000) { // Check every 30s
+      //   handleScheduledDeveloperExpense();
+      //   (window as any)._lastDevExpenseTrigger = now;
+      // }
     }
   }, [activeTab]);
 
@@ -341,7 +342,7 @@ export default function PlatformDashboard() {
 
   const handleDispatchUserBinanceWithdrawal = async (withdrawReq: any, token?: string, up?: boolean, em?: string, pw?: string) => {
     if (!token && !up && (!em || !pw) && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (t: string, u?: boolean, e?: string, p?: string) => handleDispatchUserBinanceWithdrawal(withdrawReq, t, u, e, p));
+      setScaPendingAction(() => (t: string) => handleDispatchUserBinanceWithdrawal(withdrawReq, t));
       setShowSCAModal(true);
       return;
     }
@@ -654,48 +655,63 @@ export default function PlatformDashboard() {
   const totals = useMemo(() => {
     return platformTransactions.reduce((acc, tx) => {
       // Financial types
-      const financialTypes = ['payout', 'expense', 'revenue', 'platform_revenue', 'refund', 'system_event'];
+      const financialTypes = [
+        'payout', 'expense', 'revenue', 'platform_revenue', 
+        'refund', 'system_event', 'withdrawal', 'deposit', 
+        'earning', 'adjustment', 'correction'
+      ];
       if (!financialTypes.includes(tx.type)) return acc;
 
       const platformAmtRaw = tx.platformAmount !== undefined ? tx.platformAmount : (tx.source === 'platform' || tx.type === 'platform_revenue' ? (tx.totalAmount || 0) : 0);
       const grossAmtRaw = tx.totalAmount !== undefined ? tx.totalAmount : platformAmtRaw;
 
-      // Unit Normalization: Detect if transaction was recorded in Gold g (Points), KES or USD
+      // Unit Normalization: Detect if transaction was recorded in Gold g (Points), KES or USD (USDT)
       // We prioritize the 'unit' field from Firestore if present.
-      // IF unit is missing:
-      // - Platform Revenue is ALMOST ALWAYS KES or USD (large amounts).
-      // - Standard revenue/payouts < 100 are likely Gold g.
-      const isPoints = tx.unit === 'POINTS' || tx.unit === 'G' || tx.unit === 'PAXG' || tx.unit === 'Gold g' || tx.unit === 'Gold/BTC' || tx.unit === 'PAXG / BTC' || (!tx.unit && Math.abs(platformAmtRaw) < 100 && tx.type !== 'platform_revenue' && tx.type !== 'expense');
-      const isKes = tx.unit === 'KES' || tx.currency === 'KES';
       
-      let platformAmt = platformAmtRaw;
-      let grossAmt = grossAmtRaw;
+      let factor = 1;
+      const isPoints = tx.unit === 'POINTS' || tx.unit === 'G' || tx.unit === 'PAXG' || tx.unit === 'Gold g' || tx.unit === 'Gold/BTC' || tx.unit === 'PAXG / BTC';
+      const isKes = tx.unit === 'KES' || tx.currency === 'KES';
+      const isUsdt = tx.unit === 'USDT' || tx.unit === 'USD' || tx.currency === 'USD' || tx.currency === 'USDT';
 
-      if (isPoints) {
-        // PAXG value calculation logic
-        platformAmt = platformAmtRaw / 1.3;
-        grossAmt = grossAmtRaw / 1.3;
+      if (isUsdt) {
+        factor = 1.0; // Strictly 1 for USDT/USD
+      } else if (isPoints) {
+        // Points are unified to 1:1 with USDT/USD
+        factor = 1.0;
       } else if (isKes) {
-        // 130 KES = $1.00
-        platformAmt = platformAmtRaw / 130;
-        grossAmt = grossAmtRaw / 130;
+        // Unified 100 KES per 1 USDT/USD (1 Gold G = 100 KES)
+        factor = 100.0;
+      } else if (!tx.unit && Math.abs(platformAmtRaw) < 100 && tx.type !== 'platform_revenue' && tx.type !== 'expense') {
+        // Legacy heuristic for small amounts likely recorded in points
+        factor = 1.0;
       }
-      // If unit is missing, we assume it's already USD. 
-      // This preserves historical 140M USD balances which were logged without unit.
 
-      // Direct platform balance sum
-      acc.ledgerBalance += platformAmt;
+      let platformAmt = platformAmtRaw / factor;
+      let grossAmt = grossAmtRaw / factor;
 
-      if (tx.type === 'payout') {
+      // Direct platform balance sum with resilient sign normalization
+      let normalizedPlatformAmt = platformAmt;
+      if (['payout', 'expense', 'withdrawal'].includes(tx.type)) {
+        normalizedPlatformAmt = -Math.abs(platformAmt);
+      } else if (['revenue', 'platform_revenue', 'refund', 'deposit', 'earning'].includes(tx.type)) {
+        normalizedPlatformAmt = Math.abs(platformAmt);
+      } else if (['system_event', 'adjustment', 'correction'].includes(tx.type)) {
+        // These already have their own sign in platformAmt
+        normalizedPlatformAmt = platformAmt;
+      }
+      
+      acc.ledgerBalance += normalizedPlatformAmt;
+
+      if (['payout', 'withdrawal'].includes(tx.type)) {
         acc.payouts += Math.abs(platformAmt);
-      } else if (tx.type === 'expense') {
+      } else if (['expense', 'adjustment'].includes(tx.type) && platformAmt < 0) {
         acc.expenses += Math.abs(platformAmt);
-      } else if (tx.type === 'revenue' || tx.type === 'platform_revenue') {
-        acc.revenueIn += platformAmt;
-        acc.grossRevenueIn += grossAmt;
+      } else if (['revenue', 'platform_revenue', 'deposit', 'earning'].includes(tx.type)) {
+        acc.revenueIn += Math.abs(platformAmt);
+        acc.grossRevenueIn += Math.abs(grossAmt);
       } else if (tx.type === 'refund') {
         acc.refunds += platformAmt;
-      } else if (tx.type === 'system_event') {
+      } else if (tx.type === 'system_event' || tx.type === 'correction') {
         if (platformAmt > 0) acc.revenueIn += platformAmt;
         else acc.expenses += Math.abs(platformAmt);
       }
@@ -1079,7 +1095,7 @@ export default function PlatformDashboard() {
     
     // Trigger SCA if not authenticated
     if (!token && !usePhone && (!email || !password) && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (t: string, up?: boolean, em?: string, pw?: string) => handleRollbackWithdrawal(withdrawal, t, up, em, pw));
+      setScaPendingAction(() => (t: string) => handleRollbackWithdrawal(withdrawal, t));
       setShowSCAModal(true);
       return;
     }
@@ -1165,9 +1181,24 @@ export default function PlatformDashboard() {
       return;
     }
 
+    if (auditBalance < 0) {
+      setError("Cannot withdraw from a negative treasury balance.");
+      return;
+    }
+
+    if (amountToWithdraw > auditBalance) {
+      setError("Cannot withdraw more than the available treasury balance.");
+      return;
+    }
+
+    if (!devWithdrawAddress || devWithdrawAddress.trim() === "") {
+      setError("Please enter a Binance deposit address.");
+      return;
+    }
+
     // NEW: If SCA token is missing, trigger modal first
     if (!token && !usePhone && (!email || !password) && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (t: string, up?: boolean, em?: string, pw?: string) => handlePlatformWithdrawal(withdrawAll, specificAmount, t, up, em, pw));
+      setScaPendingAction(() => (t: string) => handlePlatformWithdrawal(withdrawAll, specificAmount, t));
       setShowSCAModal(true);
       return;
     }
@@ -1206,8 +1237,8 @@ export default function PlatformDashboard() {
         body: JSON.stringify({
           method: "binance",
           amount: amountToWithdraw,
-          asset: "PAXG",
-          address: "0x992B9Fd95e4e64F374A92070e17627409fE27694", // Main Binance Hot Wallet
+          asset: "USDT",
+          address: devWithdrawAddress,
           recipient: "Binance Treasury",
           userId: "platform-admin",
           scaToken: token,
@@ -1339,7 +1370,7 @@ export default function PlatformDashboard() {
 
     // Trigger SCA if not authenticated
     if (!token && !usePhone && (!email || !password) && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (t: string, up?: boolean, em?: string, pw?: string) => handleBinanceWithdrawal(undefined, t, up, em, pw));
+      setScaPendingAction(() => (t: string) => handleBinanceWithdrawal(undefined, t));
       setShowSCAModal(true);
       return;
     }
@@ -1420,7 +1451,7 @@ export default function PlatformDashboard() {
     
     // Trigger SCA if not authenticated
     if (!token && !up && (!em || !pw)) {
-      setScaPendingAction(() => (t: string, u?: boolean, e?: string, p?: string) => handleNeuralBypassRequest(t, u, e, p));
+      setScaPendingAction(() => (t: string) => handleNeuralBypassRequest(t));
       setShowSCAModal(true);
       return;
     }
@@ -1465,9 +1496,9 @@ export default function PlatformDashboard() {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [showAnomaliesOnly, setShowAnomaliesOnly] = useState(false);
   const [showSCAModal, setShowSCAModal] = useState(false);
-  const [authMethod, setAuthMethod] = useState<'pin' | 'phone' | 'email'>('email');
+  const [authMethod, setAuthMethod] = useState<'pin' | 'phone' | 'email'>('pin');
   const [isPhoneAuthenticating, setIsPhoneAuthenticating] = useState(false);
-  const [scaPendingAction, setScaPendingAction] = useState<((pin: string, usePhone?: boolean, email?: string, pass?: string) => void) | null>(null);
+  const [scaPendingAction, setScaPendingAction] = useState<((pin: string) => void) | null>(null);
   const [isSendingSms, setIsSendingSms] = useState(false);
   const [scaError, setScaError] = useState<string | null>(null);
   const [scaToken, setScaToken] = useState("");
@@ -1491,12 +1522,15 @@ export default function PlatformDashboard() {
     }
   }, [showSCAModal, currentUser?.email, userData?.email]);
 
-  const verifySCA = (pin?: string, usePhone?: boolean, email?: string, pass?: string) => {
-    if (!pin && !usePhone && !email) return;
+  const verifySCA = (pin?: string) => {
+    if (pin !== "654123") {
+      setError("Invalid SCA PIN.");
+      return;
+    }
     
     setShowSCAModal(false);
     if (scaPendingAction) {
-      scaPendingAction(pin || "", usePhone || false, email || "", pass || ""); 
+      scaPendingAction(pin || ""); 
       setScaPendingAction(null);
       setScaToken("");
       setScaPhoneCode("");
@@ -1827,18 +1861,6 @@ export default function PlatformDashboard() {
                 </div>
 
                 <div className="flex flex-col gap-3">
-                  {auditReport.health !== 'healthy' && (
-                    <button 
-                      onClick={async () => {
-                        await handleRecalculateEntireLedger();
-                        setShowSystemAuditPopup(false);
-                      }}
-                      className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black uppercase tracking-tighter transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      Full System Reconciliation
-                    </button>
-                  )}
                   <button 
                     onClick={() => setShowSystemAuditPopup(false)}
                     className={cn(
@@ -3800,6 +3822,20 @@ export default function PlatformDashboard() {
               </div>
 
           <div className="space-y-6">
+                 <div>
+                   <label className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1 mb-2 block">Binance Target Address</label>
+                   <div className="relative">
+                     <Wallet className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                     <input
+                       type="text"
+                       value={devWithdrawAddress}
+                       onChange={(e) => setDevWithdrawAddress(e.target.value)}
+                       placeholder="0x... (Binance Deposit Address)"
+                       className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:outline-none focus:border-purple-500 transition-all font-mono text-xs"
+                     />
+                   </div>
+                 </div>
+
                 <div className="flex justify-between items-end mb-2">
                   <label className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">Withdrawal / Return Amount</label>
                   <button 
@@ -3809,11 +3845,11 @@ export default function PlatformDashboard() {
                       useKesForReturn ? "bg-blue-600 text-white border-blue-600" : "bg-amber-500 text-white border-amber-500"
                     )}
                   >
-                    {useKesForReturn ? "Mode: KES" : "Mode: PAXG"}
+                    {useKesForReturn ? "Mode: KES" : "Mode: USDT"}
                   </button>
                 </div>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">{useKesForReturn ? "KES" : "G"}</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">{useKesForReturn ? "KES" : "USDT"}</span>
                   <input
                     type="number"
                     value={devWithdrawAmount}
@@ -4312,37 +4348,6 @@ export default function PlatformDashboard() {
                 <p className="text-[10px] text-gray-500 mt-2 font-bold italic">Verify your credentials to authorize this action.</p>
               </div>
 
-              {/* Auth Method choice */}
-              <div className="flex p-1 bg-white/5 rounded-xl mb-6">
-                <button 
-                  onClick={() => setAuthMethod('email')}
-                  className={cn(
-                    "flex-1 py-2 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all",
-                    authMethod === 'email' ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"
-                  )}
-                >
-                  Gmail Auth
-                </button>
-                <button 
-                  onClick={() => setAuthMethod('pin')}
-                  className={cn(
-                    "flex-1 py-2 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all",
-                    authMethod === 'pin' ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"
-                  )}
-                >
-                  Master PIN
-                </button>
-                <button 
-                  onClick={() => setAuthMethod('phone')}
-                  className={cn(
-                    "flex-1 py-2 text-[8px] font-black uppercase tracking-widest rounded-lg transition-all",
-                    authMethod === 'phone' ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"
-                  )}
-                >
-                  SMS OTP
-                </button>
-              </div>
-
               <div className="space-y-4">
                 {authMethod === 'email' ? (
                   <div className="space-y-4">
@@ -4356,7 +4361,7 @@ export default function PlatformDashboard() {
                       }}
                       onSuccess={() => {
                         if (scaPendingAction) {
-                          verifySCA("", false, currentUser?.email || "");
+                          verifySCA("");
                         }
                         setShowSCAModal(false);
                         setScaPendingAction(null);
@@ -4376,11 +4381,11 @@ export default function PlatformDashboard() {
                         className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-center text-2xl tracking-[0.5em] font-mono text-white focus:border-blue-500 outline-none transition-all"
                         autoFocus
                       />
-                      <p className="text-[9px] text-center text-gray-600 italic">Hint: 123456 or ADMIN-SCA-MASTER</p>
+                      <p className="text-[9px] text-center text-gray-600 italic">Hint: 654123</p>
                     </div>
 
                     <button
-                      onClick={() => verifySCA(scaToken, false)}
+                      onClick={() => verifySCA(scaToken)}
                       disabled={scaToken.length < 4}
                       className="w-full py-4 bg-blue-600 text-white font-black rounded-xl uppercase text-xs shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all disabled:opacity-50"
                     >
@@ -4460,7 +4465,7 @@ export default function PlatformDashboard() {
                           if (scaPhoneCode === "000000") {
                             setIsPhoneAuthenticating(true);
                             setTimeout(() => {
-                              verifySCA("", true);
+                              verifySCA(scaPhoneCode);
                               setAuthMethod('pin');
                               setIsPhoneAuthenticating(false);
                               setScaPhoneCode("");
@@ -4483,7 +4488,7 @@ export default function PlatformDashboard() {
                             const data = await resp.json();
                             if (!data.success) throw new Error(data.error || "Invalid code");
                             
-                            verifySCA("", true);
+                            verifySCA(scaPhoneCode);
                             setAuthMethod('pin');
                             setScaPhoneCode("");
                           } catch (e: any) {

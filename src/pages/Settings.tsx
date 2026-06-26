@@ -48,7 +48,7 @@ import { isIframe, getPasskeyErrorLinkMessage, checkPasskeyCapability } from "..
 import { useAuth } from "../contexts/AuthContext";
 import { useTranslation } from "../lib/i18n";
 import { db } from "../lib/firebase";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, setDoc } from "firebase/firestore";
 import FingerprintModal from "../components/tools/FingerprintModal";
 import OTPModal from "../components/tools/OTPModal";
 import PasskeyModal from "../components/tools/PasskeyModal";
@@ -1182,12 +1182,34 @@ export default function Settings() {
                               }) 
                             });
                             if (res.ok) { 
-                            alert("Protocol Success: Withdrawal PIN Secured."); 
-                            setPasskeyAuthorized(false); 
-                            setPinEmailVerified(false);
-                            // If it was first time setup, we should probably redirect or update local state
-                            window.location.reload(); // Refresh to reflect hasSetPin change everywhere
-                          } else {
+                              // Direct client-side write as fallback/instant synchronization
+                              if (currentUser?.uid && db) {
+                                try {
+                                  const userRef = doc(db, 'users', currentUser.uid);
+                                  const secRef = doc(db, 'users', currentUser.uid, 'private', 'security');
+                                  
+                                  await setDoc(secRef, {
+                                    secPin: String(next).trim(),
+                                    updatedAt: new Date()
+                                  }, { merge: true });
+                                  
+                                  await setDoc(userRef, {
+                                    hasSetPin: true,
+                                    lastHighRiskAuth: new Date()
+                                  }, { merge: true });
+                                  
+                                  console.log("[Client Security Settings] Successfully synchronized PIN to Firestore directly.");
+                                } catch (clientDbErr: any) {
+                                  console.warn("[Client Security Settings] Client-side Firestore write failed/blocked:", clientDbErr.message);
+                                }
+                              }
+
+                              alert("Protocol Success: Withdrawal PIN Secured."); 
+                              setPasskeyAuthorized(false); 
+                              setPinEmailVerified(false);
+                              // If it was first time setup, we should probably redirect or update local state
+                              window.location.reload(); // Refresh to reflect hasSetPin change everywhere
+                            } else {
                             const data = await res.json();
                             alert(`Security Error: ${data.message || "Rotation failed."}`);
                           }

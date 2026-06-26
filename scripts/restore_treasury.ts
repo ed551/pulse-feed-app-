@@ -18,7 +18,7 @@ async function restore() {
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || "(default)");
   
-  const amountToRestore = 572267.43;
+  const amountToRestore = 20000;
   const statsRef = doc(db, "platform", "stats");
 
   console.log(`[Maintenance] Restoring ${amountToRestore} to platformShare via Client SDK...`);

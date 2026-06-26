@@ -51,7 +51,7 @@ import OTPModal from "./tools/OTPModal";
 import FingerprintModal from "./tools/FingerprintModal";
 import { cn } from "../lib/utils";
 import { db } from "../lib/firebase";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, setDoc } from "firebase/firestore";
 
 export default function AISecurityDashboard() {
   const { currentUser, userData } = useAuth();
@@ -75,19 +75,6 @@ export default function AISecurityDashboard() {
   const [showCurrentPin, setShowCurrentPin] = useState(false);
   const [isRegisteringPasskey, setIsRegisteringPasskey] = useState(false);
   
-  const [isAuditing, setIsAuditing] = useState(false);
-
-  const triggerNeuralRefresh = async () => {
-    setIsAuditing(true);
-    try {
-      // Small delay to simulate neural sync and allow firestore listener to catch up
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      window.location.reload(); 
-    } catch (e) {
-      setIsAuditing(false);
-    }
-  };
-
   // Auto-trigger Neural Audit on component mount
   useEffect(() => {
     let active = true;
@@ -384,18 +371,10 @@ Provide a 1-sentence predictive forecast on how their secure footprint impacts t
           <div className="p-4 rounded-2xl bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-900">
             <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider">Treasury PIN Status</span>
             <div className="flex items-center gap-2 mt-2">
-              <span className={cn("w-2 h-2 rounded-full", (userData?.hasSetPin || userData?.phoneNumberVerified || userData?.passkeyRegistered) ? "bg-emerald-500" : "bg-red-500 animate-pulse")} />
+              <span className={cn("w-2 h-2 rounded-full", userData?.hasSetPin ? "bg-emerald-500" : "bg-red-500 animate-pulse")} />
               <p className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                {(userData?.hasSetPin || userData?.phoneNumberVerified || userData?.passkeyRegistered) ? "SCA SECURED" : "DISABLED (Setup Required)"}
+                {userData?.hasSetPin ? "SCA SECURED" : "DISABLED (Vulnerable)"}
               </p>
-              <button 
-                onClick={triggerNeuralRefresh}
-                className="ml-auto p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors flex items-center gap-1.5 border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
-                title="Neural Sync Status"
-              >
-                <RefreshCw className={cn("w-3 h-3 text-gray-400", isAuditing && "animate-spin")} />
-                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">Sync</span>
-              </button>
             </div>
           </div>
           <div className="p-4 rounded-2xl bg-white dark:bg-gray-950 border border-gray-100 dark:border-gray-900">
@@ -484,7 +463,7 @@ Provide a 1-sentence predictive forecast on how their secure footprint impacts t
                   className="w-full py-4 bg-purple-600 hover:bg-purple-700 text-white rounded-[1.25rem] text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-purple-600/20 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isSendingOtp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
-                  <span>{isSendingOtp ? "Sending Verification..." : "Authorize via Email Verification"}</span>
+                  <span>{isSendingOtp ? "Resolving Relay Channel..." : "Authorize via Email Relay"}</span>
                 </button>
 
                 <button
@@ -492,7 +471,7 @@ Provide a 1-sentence predictive forecast on how their secure footprint impacts t
                   onClick={() => setPinEmailVerified(true)}
                   className="w-full py-3 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-750 dark:text-gray-300 rounded-[1.25rem] text-[9px] font-black uppercase tracking-widest transition-all hover:bg-gray-200 dark:hover:bg-gray-800 cursor-pointer flex items-center justify-center"
                 >
-                  Continue to PIN Setup
+                  Skip Authorization & Configure PIN Directly
                 </button>
               </div>
             </div>
@@ -522,7 +501,7 @@ Provide a 1-sentence predictive forecast on how their secure footprint impacts t
               ) : null}
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {userData?.hasSetPin && !pinEmailVerified && (
+                {userData?.hasSetPin && (
                   <div className="space-y-2 text-left">
                     <label className="text-[10px] font-black uppercase text-gray-400 dark:text-gray-500 pl-1 tracking-widest">Current Security Key</label>
                     <div className="relative group">
@@ -544,7 +523,7 @@ Provide a 1-sentence predictive forecast on how their secure footprint impacts t
                   </div>
                 )}
                 
-                <div className={cn("space-y-2 text-left", (userData?.hasSetPin && !pinEmailVerified) ? "col-span-1" : "col-span-1 md:col-span-2")}>
+                <div className={cn("space-y-2 text-left", userData?.hasSetPin ? "col-span-1" : "col-span-1 md:col-span-2")}>
                   <label className="text-[10px] font-black uppercase text-gray-400 dark:text-gray-500 pl-1 tracking-widest">New Proposed Key</label>
                   <div className="relative group">
                     <input
@@ -587,8 +566,8 @@ Provide a 1-sentence predictive forecast on how their secure footprint impacts t
               <button
                 type="button"
                 onClick={async () => {
-                  if (userData?.hasSetPin && !aiCurrentPin && !pinEmailVerified) {
-                    return alert("System Error: Please enter your current PIN to authorize this change, or verify via Email Relay.");
+                  if (userData?.hasSetPin && !aiCurrentPin) {
+                    return alert("System Error: Please enter your current PIN to authorize this change.");
                   }
                   if (!aiNewPin || aiNewPin.length < 4 || aiNewPin.length > 8) {
                     return alert("Validation Error: Please configure a new 4-8 digit protection key.");
@@ -600,17 +579,36 @@ Provide a 1-sentence predictive forecast on how their secure footprint impacts t
                       headers: { 'Content-Type': 'application/json' }, 
                       body: JSON.stringify({ 
                         userId: currentUser?.uid, 
-                        currentPin: (userData?.hasSetPin && !pinEmailVerified) ? aiCurrentPin : "", 
+                        currentPin: userData?.hasSetPin ? aiCurrentPin : "", 
                         newPin: aiNewPin, 
-                        usePasskey: false, 
-                        email: pinEmailVerified ? currentUser?.email : undefined,
-                        bypassVerification: pinEmailVerified
+                        bypassVerification: !userData?.hasSetPin
                       }) 
                     });
                     
                     if (res.ok) { 
+                      // Direct client-side write as fallback/instant synchronization
+                      if (currentUser?.uid && db) {
+                        try {
+                          const userRef = doc(db, 'users', currentUser.uid);
+                          const secRef = doc(db, 'users', currentUser.uid, 'private', 'security');
+                          
+                          await setDoc(secRef, {
+                            secPin: String(aiNewPin).trim(),
+                            updatedAt: new Date()
+                          }, { merge: true });
+                          
+                          await setDoc(userRef, {
+                            hasSetPin: true,
+                            lastHighRiskAuth: new Date()
+                          }, { merge: true });
+                          
+                          console.log("[Client Security Dashboard] Successfully synchronized PIN to Firestore directly.");
+                        } catch (clientDbErr: any) {
+                          console.warn("[Client Security Dashboard] Client-side Firestore write failed/blocked:", clientDbErr.message);
+                        }
+                      }
+
                       alert("AI Security Success: Withdrawal PIN secured and fully integrated with treasury gateway."); 
-                      setPinEmailVerified(false);
                       setAiCurrentPin("");
                       setAiNewPin("");
                       window.location.reload(); 

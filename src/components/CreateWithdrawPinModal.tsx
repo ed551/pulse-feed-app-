@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, ShieldCheck, KeyRound, Mail, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../lib/api';
+import { db } from '../lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 interface CreateWithdrawPinModalProps {
   isOpen: boolean;
@@ -12,67 +14,12 @@ interface CreateWithdrawPinModalProps {
 
 export default function CreateWithdrawPinModal({ isOpen, onClose, onSuccess }: CreateWithdrawPinModalProps) {
   const { currentUser } = useAuth();
-  const [step, setStep] = useState<'info' | 'otp' | 'set_pin' | 'success'>('info');
+  const [step, setStep] = useState<'info' | 'otp' | 'set_pin' | 'success'>('set_pin');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
-  const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isBypassed, setIsBypassed] = useState(false);
-
-  const handleSendOtp = async () => {
-    if (!currentUser?.email) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await apiFetch("/api/otp/send", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser.uid, email: currentUser.email, method: 'email' })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.devOtp) {
-          setOtp(data.devOtp);
-        }
-        setStep('otp');
-      } else {
-        const data = await res.json();
-        setError(data.message || "Failed to send verification code.");
-      }
-    } catch (err) {
-      setError("Error connecting to security service.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await apiFetch("/api/otp/verify", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId: currentUser?.uid, 
-          email: currentUser?.email,
-          otp: otp,
-          method: 'email' 
-        })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setStep('set_pin');
-      } else {
-        setError(data.message || "Invalid or expired code.");
-      }
-    } catch (err) {
-      setError("Verification service unavailable.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const [isBypassed, setIsBypassed] = useState(true);
 
   const handleCreatePin = async () => {
     if (newPin !== confirmPin) {
@@ -97,18 +44,37 @@ export default function CreateWithdrawPinModal({ isOpen, onClose, onSuccess }: C
           bypassVerification: isBypassed
         }),
       });
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json();
       if (res.ok) {
+        // Direct client-side write as fallback/instant synchronization
+        if (currentUser?.uid && db) {
+          try {
+            const userRef = doc(db, 'users', currentUser.uid);
+            const secRef = doc(db, 'users', currentUser.uid, 'private', 'security');
+            
+            await setDoc(secRef, {
+              secPin: String(newPin).trim(),
+              updatedAt: new Date()
+            }, { merge: true });
+            
+            await setDoc(userRef, {
+              hasSetPin: true,
+              lastHighRiskAuth: new Date()
+            }, { merge: true });
+            
+            console.log("[Client Security] Successfully synchronized PIN to Firestore directly.");
+          } catch (clientDbErr: any) {
+            console.warn("[Client Security] Client-side Firestore write failed/blocked:", clientDbErr.message);
+          }
+        }
+
         setStep('success');
-        console.log('[Security] PIN creation success, triggering reload.');
         setTimeout(() => {
           onSuccess();
           onClose();
-          // Force a state refresh to ensure hasSetPin is updated in context
-          window.location.reload();
-        }, 1500);
+        }, 2000);
       } else {
-        setError(data.message || data.error || "Failed to commit security PIN. Verification session may have expired.");
+        setError(data.message || "Failed to reset PIN. Please ensure your email is verified.");
       }
     } catch (e: any) {
       setError("An error occurred.");
@@ -150,83 +116,6 @@ export default function CreateWithdrawPinModal({ isOpen, onClose, onSuccess }: C
                 <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-2xl flex items-center gap-3">
                   <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
                   <p className="text-xs font-bold text-red-600 dark:text-red-400 leading-tight">{error}</p>
-                </div>
-              )}
-
-              {step === 'info' && (
-                <div className="space-y-6">
-                  <div className="p-6 bg-orange-50 dark:bg-orange-900/10 rounded-3xl border border-orange-100 dark:border-orange-800/20">
-                    <p className="text-sm font-medium text-orange-800 dark:text-orange-200 leading-relaxed italic">
-                      "To ensure the security of your rewards, you must establish a personalized Withdrawal PIN. This extra layer of protection keeps your earnings safe."
-                    </p>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-4">
-                      <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center text-blue-600 shrink-0">
-                        <Mail className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-gray-900 dark:text-white">Verify Identity</p>
-                        <p className="text-[10px] text-gray-500">We'll send a code to {currentUser?.email}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <button
-                      onClick={handleSendOtp}
-                      disabled={isLoading}
-                      className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-orange-600/30 flex items-center justify-center cursor-pointer"
-                    >
-                      {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify Identity via Email"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => { setIsBypassed(true); setStep('set_pin'); }}
-                      className="w-full py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center"
-                    >
-                      Skip verification & Set PIN directly
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {step === 'otp' && (
-                <div className="space-y-6 text-center">
-                  <p className="text-sm text-gray-500">Enter the 6-digit code sent to your email</p>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                    className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl py-4 text-center text-2xl font-black tracking-[0.5em] focus:ring-2 focus:ring-orange-500 outline-none"
-                    autoFocus
-                  />
-                  <div className="space-y-2">
-                    <button
-                      onClick={handleVerifyOtp}
-                      disabled={isLoading || otp.length < 6}
-                      className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-orange-600/30 flex items-center justify-center disabled:opacity-50 cursor-pointer"
-                    >
-                      {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify Code"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => { setIsBypassed(true); setStep('set_pin'); }}
-                      className="w-full py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center"
-                    >
-                      Bypass OTP & Proceed
-                    </button>
-                  </div>
-                  <button 
-                    onClick={() => setStep('info')}
-                    className="text-[10px] font-bold text-gray-500 hover:text-orange-600 transition-colors uppercase tracking-widest"
-                  >
-                    Back to previous step
-                  </button>
                 </div>
               )}
 
