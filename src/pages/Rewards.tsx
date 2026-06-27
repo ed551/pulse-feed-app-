@@ -99,7 +99,7 @@ export default function Rewards() {
     };
     checkCap();
   }, []);
-  const [localMethod, setLocalMethod] = useState<'mpesa' | 'bank' | 'paybill'>('mpesa');
+  const [localMethod, setLocalMethod] = useState<'mpesa' | 'bank' | 'paybill' | 'crypto'>('mpesa');
   const [paybillDetails, setPaybillDetails] = useState({
     businessNumber: "",
     accountNumber: ""
@@ -112,70 +112,7 @@ export default function Rewards() {
   const [syncingTxId, setSyncingTxId] = useState<string | null>(null);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
 
-  const handleSyncBinanceStatus = async (tx: any) => {
-    if (!currentUser || !db) return;
-    setSyncingTxId(tx.id);
-    setSyncStatusMsg(null);
-    try {
-      const resp = await apiFetch(`/api/vault/payout-status?reference=${tx.reference || ''}&binanceId=${tx.binanceId || ''}&userId=${currentUser.uid}`);
-      const data = await resp.json();
-      
-      if (!data.success) {
-        throw new Error(data.error || "Failed to query status");
-      }
 
-      if (data.status === 'failed' || data.status === 'rejected' || data.status === 'cancelled' || data.status === 'not_found') {
-        const confirmCancel = window.confirm(
-          `Binance status check returned '${data.status.toUpperCase()}'. Since the payment did not arrive on your Binance account, would you like to refund ${tx.pointsDeducted || tx.amount} points to your balance now?`
-        );
-        if (!confirmCancel) return;
-
-        const refundResp = await apiFetch('/api/vault/payout-refund', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reference: tx.reference, userId: currentUser.uid })
-        });
-        const refundData = await refundResp.json();
-        if (refundData.success) {
-          setSuccess(`Refund completed: ${refundData.refundedPoints} points have been restored to your app balance.`);
-        } else {
-          throw new Error(refundData.error || "Refund error");
-        }
-      } else if (data.status === 'success') {
-        const txDocRef = doc(db, 'users', currentUser.uid, 'transactions', tx.id);
-        await updateDoc(txDocRef, {
-          status: 'success',
-          txId: data.txId || null,
-          details: `Binance withdrawal successful. TxID: ${data.txId || 'N/A'}`
-        });
-        setSuccess("Success! Binance confirmed this withdrawal was processed successfully.");
-      } else {
-        setSyncStatusMsg(`External Status: ${data.status.toUpperCase()} | Binance is still processing this withdrawal. Changes will reflect shortly.`);
-      }
-    } catch (err: any) {
-      console.error("Sync error:", err);
-      const canRefundForce = window.confirm(`External check was unable to resolve of your transaction status: ${err.message}. Since your rewards were reduced but Binance has not reflected changes, would you like to FORCE CANCEL & Refund the ${tx.pointsDeducted || tx.amount} points immediately?`);
-      if (canRefundForce) {
-        try {
-          const refundResp = await apiFetch('/api/vault/payout-refund', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reference: tx.reference, userId: currentUser.uid })
-          });
-          const refundData = await refundResp.json();
-          if (refundData.success) {
-            setSuccess(`Success! Forcibly refunded ${refundData.refundedPoints} points to your balance.`);
-          } else {
-            alert("Refund failed: " + refundData.error);
-          }
-        } catch (refErr: any) {
-          alert("Refund failed: " + refErr.message);
-        }
-      }
-    } finally {
-      setSyncingTxId(null);
-    }
-  };
 
   const [isRecovering, setIsRecovering] = useState(false);
   const [showConditionsModal, setShowConditionsModal] = useState(false);
@@ -184,10 +121,8 @@ export default function Rewards() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [amount, setAmount] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [payoutMethod, setPayoutMethod] = useState<'paypal' | 'stripe' | 'bank' | 'binance'>('binance');
-  const [binanceAddress, setBinanceAddress] = useState('');
-  const [binanceCoin, setBinanceCoin] = useState<'USDT'>('USDT');
-  const [binanceNetwork, setBinanceNetwork] = useState('TRX');
+  const [payoutMethod, setPayoutMethod] = useState<'trc20' | 'erc20' | 'bep20' | 'polygon'>('trc20');
+  const [walletAddress, setWalletAddress] = useState('');
   const [paxgBtcRate, setPaxgBtcRate] = useState<number | null>(null);
   const [paxgPrice, setPaxgPrice] = useState<number | null>(null);
   const [btcPrice, setBtcPrice] = useState<number | null>(null);
@@ -280,11 +215,7 @@ export default function Rewards() {
     }, { totalEarned: 0, totalWithdrawn: 0, pendingWithdrawals: 0 });
   }, [transactions, rates]);
 
-  useEffect(() => {
-    if (currentUser && payoutMethod === 'binance') {
-      checkBinanceAssetBalance(binanceCoin);
-    }
-  }, [currentUser, payoutMethod, binanceCoin]);
+
 
   const handlePayment = async (e?: React.FormEvent, pin?: string) => {
     if (e) e.preventDefault();
@@ -316,13 +247,12 @@ export default function Rewards() {
 
       const numAmount = parseFloat(amount);
       
-      // Balance Check: 100 USDT
-      const MIN_BALANCE_FOR_WITHDRAWAL = 100;
-      if (points < MIN_BALANCE_FOR_WITHDRAWAL) {
-        throw new Error(`A minimum balance of 100 USDT is required in the account to enable withdrawals. Your current balance is ${formatReward(points)}.`);
+      // Balance Check: No withdrawals from a zero or negative balance
+      if (points <= 0) {
+        throw new Error("Withdrawals are not permitted from a zero or negative balance.");
       }
 
-      const minAmount = isDeveloper ? 1 : 10;
+      const minAmount = 0.01;
       if (numAmount < minAmount) throw new Error(`Minimum withdrawal is ${minAmount} USDT`);
       
       const last24h = Date.now() - (24 * 60 * 60 * 1000);
@@ -372,6 +302,12 @@ export default function Rewards() {
           if (!paybillDetails.businessNumber || !paybillDetails.accountNumber) throw new Error("Paybill details are required");
           endpoint = '/api/payout/paybill';
           body.paybillDetails = paybillDetails;
+        } else if (localMethod === 'crypto') {
+          if (!walletAddress) throw new Error("Wallet address is required");
+          endpoint = '/api/payout/crypto'; // Note: you'd need this endpoint or fallback to payout/mpesa and handle logic there.
+// No Binance
+          body.walletAddress = walletAddress;
+          body.network = payoutMethod;
         }
 
         const response = await apiFetch(endpoint, {
@@ -453,216 +389,11 @@ export default function Rewards() {
     }
   };
 
-  const [binanceBalance, setBinanceBalance] = useState<{ free: string, locked: string } | null>(null);
-  const [isCheckingBinanceBalance, setIsCheckingBinanceBalance] = useState(false);
-  
-  const [diagnostics, setDiagnostics] = useState<{
-    keyFound: boolean;
-    keyName: string;
-    keyLength: number;
-    isMockKey: boolean;
-    hasBackslashKey: boolean;
-    secretFound: boolean;
-    secretName: string;
-    secretLength: number;
-    isMockSecret: boolean;
-    hasBackslashSecret: boolean;
-    proxyFound?: boolean;
-    proxyName?: string;
-    proxyLength?: number;
-    proxyValue?: string;
-    proxyExhaustedDetected?: boolean;
-    proxyErrorReason?: string;
-    isRestrictedIp?: boolean;
-    isNativeOracleCloud?: boolean;
-    restrictionDetails?: string;
-    serverInfo?: {
-      uptime: number;
-      deployedAt: string;
-      platform: string;
-      memory: { free: number; total: number };
-      nodeVersion: string;
-    };
-  } | null>(null);
-  const [isCheckingDiagnostics, setIsCheckingDiagnostics] = useState(false);
-  const [showDiagPanel, setShowDiagPanel] = useState(false);
 
-  const runKeyDiagnostics = async () => {
-    setIsCheckingDiagnostics(true);
-    setDiagnostics(null);
-    try {
-      const response = await apiFetch(`/api/vault/diagnose`);
-      
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await response.text();
-        console.error("[Diagnostics] Non-JSON response:", text.substring(0, 500));
-        throw new Error(`Endpoint /api/vault/diagnose returned status ${response.status} with non-JSON content. This suggests your VPS (at 89.168.120.135) is returning an error page or a WAF block. Check if the Node.js server is running.`);
-      }
 
-      const data = await response.json();
-      if (data.success && data.diagnostics) {
-        setDiagnostics(data.diagnostics);
-        setShowDiagPanel(true);
-      } else {
-        throw new Error(data.error || "Failed to fetch credentials configuration");
-      }
-    } catch (err: any) {
-      setError(`Credentials Diagnostic Failed. Ensure your Custom Backend URL is set correctly in settings and your server is live: ${err.message}`);
-    } finally {
-      setIsCheckingDiagnostics(false);
-    }
-  };
 
-  const checkBinanceAssetBalance = async (asset: string) => {
-    setIsCheckingBinanceBalance(true);
-    setError(null);
-    try {
-      const response = await apiFetch(`/api/vault/balance/${asset}`);
-      
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await response.text();
-        console.error("[Binance] Non-JSON response received:", text.substring(0, 500));
-        const isHtml = text.includes('<html>') || text.includes('<!DOCTYPE html>');
-        throw new Error(`Endpoint /api/vault/balance/${asset} returned status ${response.status} with non-JSON content. ${isHtml ? "This usually indicates a Binance WAF block or your VPS setup (Nginx) is returning an error page. Check the whitelisted IP 89.168.120.135 translates correctly to your outbound proxy IP." : "Check your server configuration."}`);
-      }
-
-      const data = await response.json();
-      if (data.success) {
-        setBinanceBalance({ free: data.free, locked: data.locked });
-      } else {
-        throw new Error(data.error || "Failed to fetch balance");
-      }
-    } catch (err: any) {
-      setBinanceBalance(null);
-      const isFetchError = err.message === "Failed to fetch" || err.name === "AbortError";
-      setError(`Binance Balance Check Failed: ${err.message}${isFetchError ? " (Network Timeout/CORS). Please click Diagnostics Check below to verify server connectivity." : ""}`);
-    } finally {
-      setIsCheckingBinanceBalance(false);
-    }
-  };
-
-  const handleBinanceWithdraw = async (e?: React.FormEvent, pin?: string) => {
-    if (e) e.preventDefault();
-    if (!payoutAmount) return;
-
-    // Check if user has set a PIN
-    if (!userData?.hasSetPin && !process.env.SKIP_SCA) {
-      setShowCreatePinModal(true);
-      return;
-    }
-
-    if (!pin && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (p: string) => handleBinanceWithdraw(undefined, p));
-      setShowSCAModal(true);
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    try {
-      if (!binanceAddress) throw new Error("Binance Wallet Address is required");
-      
-      const numAmount = parseFloat(payoutAmount);
-
-      // Balance Check: 100 USDT
-      const MIN_BALANCE_FOR_WITHDRAWAL = 100;
-      if (points < MIN_BALANCE_FOR_WITHDRAWAL) {
-        throw new Error(`A minimum balance of 100 USDT is required in the account to enable withdrawals. Your current balance is ${formatReward(points)}.`);
-      }
-
-      if (numAmount < 11 && !isDeveloper) throw new Error("Minimum Binance withdrawal is 11 USDT");
-
-      // Calculation: If withdrawing USDT, we withdraw the USDT amount directly
-      let withdrawQuantity = numAmount;
-
-      let result;
-      const response = await apiFetch('/api/vault/payout-disburse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          asset: binanceCoin,
-          address: binanceAddress,
-          amount: withdrawQuantity,
-          network: binanceNetwork,
-          scaToken: pin,
-          userId: currentUser?.uid
-        })
-      });
-
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await response.text();
-        const displayUrl = `/api/vault/payout-disburse`;
-        console.error(`[Binance-DEBUG] Non-JSON Response from ${displayUrl}. Content-Type: ${contentType}. Status: ${response.status}`);
-        
-        let errorMsg = `Sync Error: Received unexpected response format (${response.status}) from server.`;
-        if (response.status === 403) {
-          errorMsg = `Access Denied (403): The server was blocked by Binance security (WAF). This is usually due to the server IP being restricted. Please check your API key restrictions and IP access rules in Binance.`;
-        } else if (response.status === 503 || response.status === 502) {
-          errorMsg = `Gateway Error (${response.status}): The Binance API gateway is currently unavailable or overloaded.`;
-        } else if (response.status === 404) {
-          errorMsg = `API Endpoint Not Found (404). Please ensure your backend is deployed, running, and matches your custom API base URL configuration.`;
-        }
-        throw new Error(errorMsg);
-      } else {
-        result = await response.json();
-      }
-
-      if (!result.success) throw new Error(result.error || "Binance withdrawal failed");
-
-      if (currentUser && db) {
-        const txRef = collection(db, 'users', currentUser.uid, 'transactions');
-        const pointsToDeduct = numAmount; // 1 USDT = 1 Point
-
-        const txData = {
-          amount: numAmount,
-          currency: binanceCoin,
-          type: 'binance',
-          status: 'pending',
-          address: binanceAddress,
-          network: binanceNetwork,
-          timestamp: serverTimestamp(),
-          reference: result.data?.id || `BIN-${Date.now()}`,
-          details: result.message || `Binance ${binanceCoin} withdrawal`,
-          pointsDeducted: pointsToDeduct,
-          previousPoints: points,
-          remainingPoints: points - pointsToDeduct,
-          userId: currentUser.uid,
-          userEmail: currentUser.email
-        };
-
-        await addDoc(txRef, txData);
-        
-        const userRef = doc(db, 'users', currentUser.uid);
-        await updateDoc(userRef, {
-          points: increment(-pointsToDeduct),
-          balance: increment(-numAmount)
-        });
-      }
-
-      if (result.message) {
-        setSuccess(result.message);
-      } else {
-        setSuccess(`Success! ${numAmount} ${binanceCoin} withdrawal initiated to ${binanceAddress}. Please check your Binance account (Withdrawal History) to verify if Binance requires email, SMS, or manual security confirmation to release the funds, as Binance enforces strict safety protocols for API-driven withdrawals.`);
-      }
-      setPayoutAmount("");
-      setBinanceAddress("");
-
-      // Automatically refresh balance after 5 seconds to show update on Binance
-      setTimeout(() => checkBinanceAssetBalance(binanceCoin), 5000);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleInternationalPayout = async (e?: React.FormEvent, pin?: string) => {
-    if (payoutMethod === 'binance') {
-      return handleBinanceWithdraw(e, pin);
-    }
     if (e) e.preventDefault();
     if (!payoutAmount) return;
 
@@ -680,24 +411,29 @@ export default function Rewards() {
       if (!currentUser?.emailVerified && currentUser?.email) {
         throw new Error("Please verify your email address before making a withdrawal.");
       }
-      if (!userData?.phoneNumber) {
-        throw new Error("Please link and verify locally your phone number in Settings before making a withdrawal.");
+
+      if (!walletAddress) {
+        throw new Error("Please enter a valid USDT wallet address.");
       }
 
       const numAmount = parseFloat(payoutAmount);
 
-      // Balance Check: 100 USDT
-      const MIN_BALANCE_FOR_WITHDRAWAL = 100;
-      if (points < MIN_BALANCE_FOR_WITHDRAWAL) {
-        throw new Error(`A minimum balance of 100 USDT is required in the account to enable withdrawals. Your current balance is ${formatReward(points)}.`);
+      // Balance Check: No withdrawals from a zero or negative balance
+      if (points <= 0) {
+        throw new Error("Withdrawals are not permitted from a zero or negative balance.");
       }
 
-      const minAmount = isDeveloper ? 1 : 10; // 10 USDT minimum
+      // Minimum withdrawal limit
+      const minAmount = 0.01;
       if (numAmount < minAmount) throw new Error(`Minimum withdrawal is ${minAmount} USDT`); 
       
+      if (numAmount > points) {
+        throw new Error(`Insufficient available rewards for this withdrawal. Available rewards: ${points.toFixed(2)} USDT.`);
+      }
+
       const last24h = Date.now() - (24 * 60 * 60 * 1000);
       const recentWithdrawalsUSDT = transactions
-        .filter(tx => ['mpesa', 'bank', 'paybill', 'payout', 'paypal', 'stripe'].includes(tx.type || '') && (tx.timestamp?.toMillis?.() || 0) > last24h)
+        .filter(tx => ['trc20', 'erc20', 'bep20', 'polygon'].includes(tx.type || '') && (tx.timestamp?.toMillis?.() || 0) > last24h)
         .reduce((sum, tx) => sum + tx.amount, 0);
 
       // Velocity Limit Check
@@ -707,21 +443,18 @@ export default function Rewards() {
           
       if (recentWithdrawalsUSDT + numAmount > limitUSDT) {
         setScaError(`Daily velocity limit of ${limitUSDT.toLocaleString()} USDT reached with PIN code. You must request a limit increase to continue.`);
+        throw new Error(`Daily velocity limit of ${limitUSDT.toLocaleString()} USDT reached.`);
       }
-
-      if (!isDeveloper && numAmount > points) throw new Error("Insufficient reserve for this amount");
 
       const isQueued = !canWithdrawNow;
       
-      let result: any = { success: true, message: isQueued ? "Withdrawal queued for 1st of month" : "Processing..." };
+      let result: any = { success: true, message: "Processing..." };
 
       if (!isQueued) {
         const body = {
           method: payoutMethod,
           amount: numAmount,
-          email: payoutEmail,
-          payoutEmail: payoutEmail, // Use verification email if provided
-          bankDetails: payoutMethod === 'bank' ? bankDetails : null,
+          walletAddress: walletAddress,
           userId: currentUser.uid,
           scaToken: pin
         };
@@ -752,7 +485,7 @@ export default function Rewards() {
       if (currentUser && db) {
         const txRef = collection(db, 'users', currentUser.uid, 'transactions');
         
-        const reference = result.transactionId || `REV-INT-${Date.now()}`;
+        const reference = result.transactionId || `REV-CRYP-${Date.now()}`;
         const pointsToDeduct = numAmount;
         
         const txData = {
@@ -760,12 +493,11 @@ export default function Rewards() {
           currency: 'USDT',
           type: payoutMethod,
           status: isQueued ? 'queued' : 'pending',
-          email: payoutEmail,
-          bankDetails: payoutMethod === 'bank' ? bankDetails : null,
+          walletAddress: walletAddress,
           timestamp: serverTimestamp(),
           scheduledDate: isQueued ? nextRedemptionDate : null,
           reference,
-          details: isQueued ? `Queued for Monthly Batch (${nextRedemptionDate})` : `International ${payoutMethod} payout request`,
+          details: `USDT Withdrawal (${payoutMethod.toUpperCase()}) to ${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}`,
           pointsDeducted: pointsToDeduct,
           previousPoints: points,
           remainingPoints: points - pointsToDeduct,
@@ -782,10 +514,11 @@ export default function Rewards() {
           userName: userData?.displayName || 'Anonymous',
         }).catch(err => console.error("Central withdrawal logging failed:", err));
 
-        // Deduct balance immediately for the queued amount
+        // Deduct balance immediately
         const userRef = doc(db, 'users', currentUser.uid);
         await updateDoc(userRef, {
           points: increment(-pointsToDeduct),
+          balance: increment(-pointsToDeduct),
           totalWithdrawals: increment(numAmount)
         });
 
@@ -795,15 +528,15 @@ export default function Rewards() {
           balanceAfter: points - pointsToDeduct,
           type: 'deduction',
           source: 'withdrawal',
-          reason: `International Payout (${payoutMethod})`,
+          reason: `USDT Withdrawal (${payoutMethod.toUpperCase()})`,
           timestamp: serverTimestamp(),
           unit: 'USDT'
         }).catch(err => console.error("Error logging points ledger:", err));
       }
       
-      setSuccess(`International payout request of ${numAmount.toLocaleString()} USDT submitted successfully! ${isQueued ? "(Queued for 1st of month)" : ""}`);
+      setSuccess(`Your withdrawal request of ${numAmount.toLocaleString()} USDT has been submitted successfully!`);
       setPayoutAmount("");
-      setPayoutEmail("");
+      setWalletAddress("");
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -1438,7 +1171,7 @@ export default function Rewards() {
           )}
         >
           <Globe className="w-4 h-4" />
-          <span>Binance & Global</span>
+          <span>Global</span>
         </button>
         <button 
           onClick={() => setActiveTab('history')}
@@ -1686,7 +1419,7 @@ export default function Rewards() {
                   <br/><br/>
                   <strong>2. Exclusions:</strong> Membership level benefits do <strong>not</strong> apply to Ads revenue (fixed 50/50 split).
                   <br/><br/>
-                  <strong>3. Platform Payments:</strong> To ensure the long-term sustainability of our high-performance AI infrastructure, all direct platform payments—including Advanced AI Lab access, Event tickets, and Marketplace transactions—belong 100% to the platform treasury. Specialized revenue from Education Hub course enrollments and AI training follow an 80/20 split (80% platform, 20% user reward).
+                  <strong>3. Platform Payments:</strong> To ensure the long-term sustainability of our high-performance AI infrastructure, all direct platform payments—including Advanced AI Lab access, Event tickets, and Marketplace transactions—belong 100% to the platform treasury. Specialized revenue from Education Hub course enrollments and AI training follow a 50/50 split (50% platform, 50% user reward).
                   <br/><br/>
                   <strong>4. Rewards & Withdrawals:</strong> All earnings are processed in real-time on-demand. You can initiate your withdrawal at any time, and it will be settled instantly.
                   <br/><br/>
@@ -1852,7 +1585,7 @@ export default function Rewards() {
                     </h3>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4 mb-8">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
                     <button
                       onClick={() => setLocalMethod('mpesa')}
                       className={cn(
@@ -1888,6 +1621,18 @@ export default function Rewards() {
                     >
                       <Receipt className="w-6 h-6" />
                       <span className="text-xs font-bold">Pay Bill</span>
+                    </button>
+                    <button
+                      onClick={() => setLocalMethod('crypto')}
+                      className={cn(
+                        "p-4 rounded-2xl border-2 transition-all flex flex-col items-center space-y-2",
+                        localMethod === 'crypto' 
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400" 
+                          : "border-gray-100 dark:border-gray-700 hover:border-blue-200 dark:hover:border-blue-800 text-gray-500"
+                      )}
+                    >
+                      <Wallet className="w-6 h-6" />
+                      <span className="text-xs font-bold">Crypto</span>
                     </button>
                   </div>
 
@@ -1948,7 +1693,7 @@ export default function Rewards() {
                           </select>
                         </div>
                       </div>
-                    ) : (
+                    ) : localMethod === 'paybill' ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Business Number</label>
@@ -1971,18 +1716,65 @@ export default function Rewards() {
                           />
                         </div>
                       </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <button
+                            type="button"
+                            onClick={() => setPayoutMethod('trc20')}
+                            className={cn(
+                              "p-3 rounded-xl border transition-all text-xs font-bold flex items-center justify-center gap-2",
+                              payoutMethod === 'trc20'
+                                ? "bg-amber-500/10 border-amber-500 text-amber-600"
+                                : "border-gray-200 dark:border-gray-700 text-gray-500"
+                            )}
+                          >
+                            TRC20
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPayoutMethod('erc20')}
+                            className={cn(
+                              "p-3 rounded-xl border transition-all text-xs font-bold flex items-center justify-center gap-2",
+                              payoutMethod === 'erc20'
+                                ? "bg-indigo-500/10 border-indigo-500 text-indigo-600"
+                                : "border-gray-200 dark:border-gray-700 text-gray-500"
+                            )}
+                          >
+                            ERC20
+                          </button>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Crypto Wallet Address</label>
+                          <div className="relative">
+                            <Wallet className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            <input
+                              type="text"
+                              placeholder="0x..."
+                              value={walletAddress}
+                              onChange={(e) => setWalletAddress(e.target.value)}
+                              className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all text-gray-900 dark:text-white font-medium"
+                            />
+                          </div>
+                        </div>
+                      </div>
                     )}
+
+                    <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 mb-4">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Available Rewards Balance</p>
+                      <p className="text-xl font-black text-gray-900 dark:text-white">USDT {points.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    </div>
 
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Withdrawal Value</label>
                       <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">G</span>
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">USDT</span>
                         <input
                           type="number"
                           placeholder="0.00"
                           value={amount}
                           onChange={(e) => setAmount(e.target.value)}
-                          className="w-full pl-10 pr-16 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all text-gray-900 dark:text-white font-medium"
+                          className="w-full pl-16 pr-16 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all text-gray-900 dark:text-white font-medium"
                         />
                         <button
                           type="button"
@@ -2122,26 +1914,7 @@ export default function Rewards() {
                             </div>
                           )}
 
-                          {tx.type === 'binance' && tx.status === 'pending' && (
-                            <div className="flex flex-col gap-2 p-3 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-xl">
-                              <p className="text-[10px] leading-relaxed text-amber-800 dark:text-amber-300 font-medium">
-                                If Binance has not credited this withdrawal, the transaction can be resolved. Sync status directly or request an auto-refund here.
-                              </p>
-                              {syncingTxId === tx.id && syncStatusMsg && (
-                                <p className="text-[9px] text-indigo-600 dark:text-indigo-400 font-semibold">{syncStatusMsg}</p>
-                              )}
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleSyncBinanceStatus(tx)}
-                                  disabled={syncingTxId === tx.id}
-                                  className="text-[10px] bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-bold py-1 px-3 rounded-lg shadow-sm transition disabled:opacity-50"
-                                >
-                                  {syncingTxId === tx.id ? "Syncing API..." : "Sync & Refund"}
-                                </button>
-                              </div>
-                            </div>
-                          )}
+
 
                           <div className="flex items-center justify-between text-[8px] font-medium text-gray-400 uppercase tracking-tighter">
                             <span>
@@ -2241,631 +2014,94 @@ export default function Rewards() {
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                  <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 p-4 rounded-r-xl mb-6">
-                    <p className="text-amber-800 dark:text-amber-200 text-sm font-bold">
-                      ⚠️ Minimum international withdrawal is 10 USDT.
+                  <div className="bg-purple-50 dark:bg-purple-950/20 border-l-4 border-purple-500 p-4 rounded-r-xl mb-6">
+                    <p className="text-purple-800 dark:text-purple-200 text-sm font-bold">
+                      ⚠️ Withdrawals are processed immediately.
                     </p>
                   </div>
+
+                  {/* Available Rewards Balance Display */}
+                  <div className="bg-purple-500/10 dark:bg-purple-500/20 p-6 rounded-3xl border border-purple-500/30 flex items-center justify-between mb-8">
+                    <div className="space-y-1">
+                      <p className="text-xs font-black uppercase tracking-wider text-purple-600 dark:text-purple-400">Available Rewards Balance</p>
+                      <p className="text-3xl font-black text-purple-700 dark:text-purple-200">{points.toFixed(2)} USDT</p>
+                    </div>
+                    <Gem className="w-10 h-10 text-purple-500 animate-pulse" />
+                  </div>
+
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center space-x-2">
                     <Globe className="w-5 h-5 text-purple-500" />
-                    <span>Select Payout Method</span>
+                    <span>Select Crypto Network</span>
                   </h3>
 
-                  <div className="grid grid-cols-4 gap-4 mb-8">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
                     {[
-                      { id: 'binance', label: 'Binance (Direct)', icon: Database, color: 'bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-amber-500/10' },
-                      { id: 'paypal', label: 'PayPal', icon: Gem, color: 'border-blue-100 hover:border-blue-200' },
-                      { id: 'stripe', label: 'Stripe', icon: CreditCard, color: 'border-indigo-100 hover:border-indigo-200' },
-                      { id: 'bank', label: 'SWIFT Bank', icon: Landmark, color: 'border-gray-100 hover:border-purple-200' }
+                      { id: 'trc20', label: 'TRC20 (Tron)', icon: Globe, color: 'border-red-100 hover:border-red-200 text-red-500 bg-red-500/5' },
+                      { id: 'erc20', label: 'ERC20 (Ethereum)', icon: Landmark, color: 'border-blue-100 hover:border-blue-200 text-blue-500 bg-blue-500/5' },
+                      { id: 'bep20', label: 'BEP20 (BNB Chain)', icon: Database, color: 'border-amber-100 hover:border-amber-200 text-amber-500 bg-amber-500/5' },
+                      { id: 'polygon', label: 'Polygon (USDT)', icon: Gem, color: 'border-purple-100 hover:border-purple-200 text-purple-500 bg-purple-500/5' }
                     ].map((method) => (
                       <button
                         key={method.id}
+                        type="button"
                         onClick={() => setPayoutMethod(method.id as any)}
                         className={cn(
                           "p-4 rounded-2xl border-2 transition-all flex flex-col items-center space-y-2 relative overflow-hidden group",
                           payoutMethod === method.id 
-                            ? (method.id === 'binance' ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400" : "border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400")
+                            ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400"
                             : cn("text-gray-500 dark:border-gray-700", method.color)
                         )}
                       >
-                        {method.id === 'binance' && (
-                          <div className="absolute -top-1 -right-1">
-                               <div className="bg-amber-500 text-[8px] font-black text-white px-2 py-1 rounded-bl-lg transform rotate-2">BETA</div>
-                          </div>
-                        )}
                         <method.icon className={cn("w-6 h-6", payoutMethod === method.id && "scale-110 transition-transform")} />
                         <span className="text-[10px] font-black uppercase tracking-tighter">{method.label}</span>
                       </button>
                     ))}
                   </div>
 
-                  {payoutMethod === 'binance' && (
-                    <div className="mb-6 p-4 bg-amber-500/5 rounded-2xl border border-dashed border-amber-500/20">
-                      <h4 className="text-sm font-black text-amber-600 uppercase tracking-tight mb-1">Binance Gateway Active</h4>
-                      <p className="text-[10px] text-amber-600/70 font-bold uppercase tracking-widest leading-relaxed mb-2">
-                        Funds are dispatched directly via Binance API. Ensure your Binance Wallet Address is correct and supports {binanceCoin} on the {binanceNetwork} network to avoid fund loss.
-                      </p>
-                      <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest leading-relaxed p-2 bg-amber-500/10 rounded-lg">
-                        Note: If you withdraw to your OWN Binance deposit address using your own API keys, Binance will record both a withdrawal and a deposit simultaneously. To avoid this loop, withdraw to an external wallet (e.g. Trust Wallet).
-                      </p>
-                    </div>
-                  )}
-
-                  <form onSubmit={payoutMethod === 'binance' ? handleBinanceWithdraw : handleInternationalPayout} className="space-y-6">
-                    {payoutMethod === 'binance' ? (
-                      <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Asset</label>
-                             <div className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border border-amber-500/10 rounded-2xl text-gray-900 dark:text-white font-black shadow-sm flex items-center justify-between">
-                               <span>Tether US (USDT)</span>
-                               <Gem className="w-4 h-4 text-emerald-500" />
-                             </div>
-                          </div>
-                          <div className="space-y-2">
-                             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Network</label>
-                             <select 
-                               value={binanceNetwork}
-                               onChange={(e) => setBinanceNetwork(e.target.value)}
-                               className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-gray-900 dark:text-white font-medium shadow-sm"
-                             >
-                               <option value="TRX">TRC20 (TRON Network)</option>
-                               <option value="BSC">BEP20 (Binance Smart Chain)</option>
-                               <option value="ETH">ERC20 (Ethereum)</option>
-                             </select>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Binance Wallet Address</label>
-                          <div className="relative">
-                            <Database className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                            <input
-                              type="text"
-                              placeholder={`Paste your Binance ${binanceCoin} address here`}
-                              value={binanceAddress}
-                              onChange={(e) => setBinanceAddress(e.target.value)}
-                              className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-gray-900 dark:text-white font-mono text-xs shadow-sm"
-                            />
-                          </div>
-                                  <div className={cn(
-                            "p-4 rounded-3xl flex flex-col gap-4",
-                            error?.includes("Binance API keys not configured") 
-                              ? "bg-red-500/10 border border-red-500/20" 
-                              : "bg-amber-500/5 border border-amber-500/15"
-                          )}>
-                            <div className="flex items-start gap-4 w-full">
-                              <div className="p-2 bg-amber-500/10 rounded-xl">
-                                <ShieldAlert className="w-5 h-5 text-amber-500" />
-                              </div>
-                              <div className="flex-1">
-                                 <p className="text-[10px] font-black text-amber-600/70 uppercase tracking-widest leading-none mb-1">Binance Status</p>
-                                 <p className="text-sm font-black text-amber-600">
-                                   {binanceBalance ? "✓ Connected & Active" : "Connection Pending"}
-                                 </p>
-                                 {error?.includes("Binance API keys not configured") && (
-                                   <p className="text-[10px] text-red-500 font-bold mt-1">
-                                     Please add BINANCE_API_KEY and BINANCE_API_SECRET to your App Secrets (top-right gear icon) to enable real payouts.
-                                   </p>
-                                 )}
-                                 {error?.includes("Binance Balance Check Failed") && (
-                                   <div className="mt-2 p-3 bg-red-500/10 rounded-2xl border border-red-500/15 text-[10px] text-red-500 font-bold leading-normal">
-                                     <p>{error.replace("Binance Balance Check Failed:", "").trim()}</p>
-                                     <p className="text-[9px] text-gray-400 mt-1.5 font-medium leading-relaxed">
-                                       Tip: Verify that your Binance API Key is valid, possesses read permission, and does not restrict access to specific IP addresses.
-                                     </p>
-                                   </div>
-                                 )}
-                                 <button
-                                   type="button"
-                                   onClick={runKeyDiagnostics}
-                                   disabled={isCheckingDiagnostics}
-                                   className="mt-2 text-[10px] font-extrabold text-amber-500 hover:text-amber-600 underline uppercase tracking-wider text-left transition-all disabled:opacity-50 flex items-center gap-1.5"
-                                 >
-                                   {isCheckingDiagnostics ? "Checking Configuration..." : "🔍 Diagnostics Check"}
-                                 </button>
-                              </div>
-                              <button 
-                                type="button"
-                                onClick={() => checkBinanceAssetBalance(binanceCoin)}
-                                disabled={isCheckingBinanceBalance}
-                                className="px-4 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all disabled:opacity-50 shadow-lg shadow-amber-500/20"
-                              >
-                                {isCheckingBinanceBalance ? 'Syncing...' : 'Sync Balance'}
-                              </button>
-                            </div>
-
-                            {showDiagPanel && diagnostics && (
-                              <div className="mt-1 p-4 bg-gray-100/50 dark:bg-black/30 border border-gray-200/15 dark:border-white/5 rounded-2xl text-[11px] space-y-3 font-medium leading-relaxed text-gray-700 dark:text-gray-300 animate-in fade-in slide-in-from-top-2">
-                                <div className="flex items-center justify-between border-b border-gray-200/10 pb-1.5">
-                                  <span className="font-extrabold uppercase tracking-widest text-[9px] text-amber-500">Credentials Diagnostics</span>
-                                  <button type="button" onClick={() => setShowDiagPanel(false)} className="text-gray-400 hover:text-gray-200 text-xs font-black">✕</button>
-                                </div>
-                                
-                                {/* API Key Status */}
-                                <div className="space-y-1">
-                                  <p className="flex items-center justify-between">
-                                    <span className="font-bold text-gray-500">API Key Configured:</span>
-                                    <span className={diagnostics.keyFound ? "text-emerald-500 font-extrabold" : "text-red-500 font-extrabold"}>
-                                      {diagnostics.keyFound ? `YES (${diagnostics.keyName})` : "NO"}
-                                    </span>
-                                  </p>
-                                  {diagnostics.keyFound && (
-                                    <>
-                                      <p className="flex items-center justify-between">
-                                        <span className="font-bold text-gray-500">API Key Detected Length:</span>
-                                        <span className="font-mono text-gray-900 dark:text-white font-bold">{diagnostics.keyLength} chars</span>
-                                      </p>
-                                      {diagnostics.isMockKey && (
-                                        <div className="bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] p-3 rounded-xl mt-2 font-bold ring-2 ring-amber-500/10 mb-2">
-                                          <div className="flex items-center gap-2 mb-1">
-                                            <span className="text-lg">⚠️</span>
-                                            <span className="text-xs uppercase">Action Required: Real API Key Needed</span>
-                                          </div>
-                                          <p className="mt-1 leading-tight">You are currently using the <strong>Simulated Mock Key</strong>. This key is for UI diagnostics only and will NOT fetch your real balances from Binance.</p>
-                                          <p className="mt-2 text-[9px] font-medium opacity-80 italic">Replace <code>BINANCE_API_KEY</code> and <code>BINANCE_API_SECRET</code> in Secrets with your real credentials from <code>Binance.com &gt; API Management</code>.</p>
-                                        </div>
-                                      )}
-                                      {diagnostics.hasBackslashKey && (
-                                        <div className="bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[10px] p-2.5 rounded-xl font-bold leading-normal mt-1">
-                                          ⚠️ <strong>Backslash in Key Name!</strong> Your secret name contains a backslash (<code>\</code>). Please re-create the secret and name it exactly <code>BINANCE_API_KEY</code> without any leading or trailing symbols.
-                                        </div>
-                                      )}
-                                    </>
-                                  )}
-                                </div>
-
-                                {/* API Secret Status */}
-                                <div className="space-y-1 border-t border-gray-200/10 pt-2">
-                                  <p className="flex items-center justify-between">
-                                    <span className="font-bold text-gray-500">API Secret Configured:</span>
-                                    <span className={diagnostics.secretFound ? "text-emerald-500 font-extrabold" : "text-red-500 font-extrabold"}>
-                                      {diagnostics.secretFound ? `YES (${diagnostics.secretName})` : "NO"}
-                                    </span>
-                                  </p>
-                                  {diagnostics.secretFound && (
-                                    <>
-                                      <p className="flex items-center justify-between">
-                                        <span className="font-bold text-gray-500">API Secret Detected Length:</span>
-                                        <span className="font-mono text-gray-900 dark:text-white font-bold">{diagnostics.secretLength} chars</span>
-                                      </p>
-                                      {diagnostics.isMockSecret && (
-                                        <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] p-2.5 rounded-xl font-bold leading-normal mt-1">
-                                          ⚠️ <strong>Mock Secret Detected!</strong> You configured the simulated fallback secret in Secrets. You must replace it with your real Binance API Secret key.
-                                        </div>
-                                      )}
-                                      {diagnostics.hasBackslashSecret && (
-                                        <div className="bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[10px] p-2.5 rounded-xl font-bold leading-normal mt-1">
-                                          ⚠️ <strong>Backslash in Secret Name!</strong> Your secret name contains a backslash. Please re-create the secret and name it exactly <code>BINANCE_API_SECRET</code>.
-                                        </div>
-                                      )}
-                                    </>
-                                  )}
-                                </div>
-
-                                {/* Proxy Support Status */}
-                                <div className="space-y-1 border-t border-gray-200/10 pt-2">
-                                  <p className="flex items-center justify-between">
-                                    <span className="font-bold text-gray-500">Static Proxy Routing:</span>
-                                    <span className={diagnostics.proxyFound ? "text-emerald-500 font-extrabold" : "text-amber-500 font-extrabold"}>
-                                      {diagnostics.proxyFound ? `ACTIVE (${diagnostics.proxyName})` : "MISSING (Using Default Route)"}
-                                    </span>
-                                  </p>
-                                  {!diagnostics.proxyFound && (
-                                    <div className="bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-[8px] p-1.5 rounded-lg mt-1 font-bold leading-tight">
-                                      ⚠️ Proxy not detected in server environment. If you just added it to Secrets, please wait a minute or request an agent rebuild to sync environment variables.
-                                    </div>
-                                  )}
-                                  {/* Real-time Connectivity Alert */}
-                                  <p className="flex items-center justify-between">
-                                    <span className="font-bold text-gray-500">Binance Connectivity:</span>
-                                    <span className={(diagnostics as any).lastPingStatus === "OK" ? "text-emerald-500 font-extrabold" : "text-red-500 font-extrabold"}>
-                                      {(diagnostics as any).lastPingStatus || "PENDING"}
-                                      {(diagnostics as any).lastPingLatency ? ` (${(diagnostics as any).lastPingLatency}ms)` : ""}
-                                    </span>
-                                  </p>
-
-                                  <p className="flex items-center justify-between text-[10px] mt-1 pt-1 border-t border-gray-100 dark:border-white/5">
-                                    <span className="font-bold text-gray-400">Detected Outbound IP:</span>
-                                    <span className="font-mono font-bold text-blue-500">
-                                      {(diagnostics as any).outboundIp || "Pending"}
-                                      {diagnostics.proxyExhaustedDetected && " (FALLBACK)"}
-                                    </span>
-                                  </p>
-                                  <p className="flex items-center justify-between text-[10px] pb-1 border-b border-gray-100 dark:border-white/5">
-                                    <span className="font-bold text-emerald-500">Bridge Target (Oracle):</span>
-                                    <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">89.168.120.135 (DE)</span>
-                                  </p>
-                                  <p className="flex items-center justify-between text-[10px] pb-1 border-b border-gray-100 dark:border-white/5">
-                                    <span className="font-bold text-indigo-500">Domain Linked (Surge):</span>
-                                    <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">pulse-feeds.surge.sh</span>
-                                  </p>
-                                  {(diagnostics as any).outboundIp && ((diagnostics as any).outboundIp.includes("ETIMEDOUT") || (diagnostics as any).outboundIp.includes("EHOSTUNREACH") || (diagnostics as any).outboundIp.includes("ECONNREFUSED") || ((diagnostics as any).outboundIp !== '89.168.120.135' && !(diagnostics as any).outboundIp.includes("Check Failed"))) && (
-                                    <div className="bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-[10px] p-3 rounded-xl mt-2 font-bold ring-2 ring-red-500/10 mb-2">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-lg">{(diagnostics as any).outboundIp === '74.220.48.202' ? '🛡️' : '⌛'}</span>
-                                        <span className="text-xs uppercase">{(diagnostics as any).outboundIp === '74.220.48.202' ? 'IP Mismatch / Proxy Inactive' : 'Bridge Tunnel Blocked'}</span>
-                                      </div>
-                                      
-                                      {(diagnostics as any).outboundIp === '74.220.48.202' ? (
-                                        <div className="space-y-2">
-                                          <p className="mt-1 leading-tight">Your request is leaking through the <strong>Cloud Run Direct Route (74.220.48.202)</strong> instead of your Oracle Proxy.</p>
-                                          <div className="bg-amber-500/20 p-2 rounded border border-amber-500/30 text-amber-700 dark:text-amber-300">
-                                            <strong>Fix:</strong> Ensure <code>VITE_API_BASE_URL</code> (or <code>BINANCE_PROXY</code>) is set correctly in Secrets. If you just added it, <strong>re-start</strong> the application to sync environment variables.
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <p className="mt-1 leading-tight mb-2 text-[9px]">
-                                          AI Studio cannot reach your Oracle Gateway. 
-                                          {(diagnostics as any).proxyConnectivityMessage && (
-                                            <span className="block mt-1 text-amber-500 font-bold animate-pulse">{(diagnostics as any).proxyConnectivityMessage}</span>
-                                          )}
-                                        </p>
-                                      )}
-                                      
-                                      <div className="space-y-1.5 pt-2 border-t border-red-500/10 mt-2">
-                                        <p className="text-[9px] uppercase tracking-wider text-red-400/80">Termux Fix Checklist (Server-Side):</p>
-                                        <ol className="list-decimal pl-4 text-[9px] space-y-1.5">
-                                          <li>
-                                            <strong>Connect to Server:</strong>
-                                            <div className="bg-black/20 p-2 rounded-lg font-mono text-gray-300 select-all cursor-pointer hover:bg-black/30 transition-colors mt-1">
-                                              ssh ubuntu@89.168.120.135
-                                            </div>
-                                          </li>
-                                          <li>
-                                            <strong>Open Firewall (Inner):</strong>
-                                            <div className="bg-black/20 p-2 rounded-lg font-mono text-gray-300 select-all cursor-pointer hover:bg-black/30 transition-colors mt-1">
-                                              sudo iptables -I INPUT 6 -p tcp --dport 3000 -j ACCEPT
-                                            </div>
-                                          </li>
-                                          <li>
-                                            <strong>Open Outer Wall (Oracle Console):</strong>
-                                            <p className="mt-1 opacity-80">Go to <code>Networking &gt; VCNs &gt; your-vcn &gt; Security Lists &gt; Default Security List</code>. Add an <strong>Ingress Rule</strong>: Source <code>0.0.0.0/0</code>, Protocol <code>TCP</code>, Port Range <code>3000</code>.</p>
-                                          </li>
-                                          <li>
-                                            <strong>Verify Proxy Listening:</strong>
-                                            <div className="bg-black/20 p-2 rounded-lg font-mono text-gray-300 select-all cursor-pointer hover:bg-black/30 transition-colors mt-1">
-                                              sudo netstat -tulpn | grep 3000
-                                            </div>
-                                            <p className="mt-1 opacity-70 text-[8px] leading-tight">If empty, your proxy isn't running on port 3000. Ensure your service provider or custom script is active.</p>
-                                          </li>
-                                          <li>
-                                            <strong>CORS Support:</strong>
-                                            <p className="mt-1 opacity-70 text-[8px] leading-tight">Ensure your backend allows requests from Surge. Since you are using native mobile setup, verify the <strong>CORS Middleware</strong> is active in your server code to prevent 'Failed to Fetch' errors.</p>
-                                          </li>
-                                          <li className="text-amber-500 font-bold">
-                                            <strong>Binance Whitelisting (CRITICAL for Payouts):</strong>
-                                            <p className="mt-1 leading-tight text-[9px]">Go to your Binance API Management. Enable <strong>"Restrict access to trusted IPs only"</strong> and add <code>89.168.120.135</code> to the trusted list. Without this, Binance WAF will return 403 Forbidden for all withdrawal requests.</p>
-                                          </li>
-                                        </ol>
-                                        <p className="text-[8px] font-medium opacity-70 italic mt-2">* Run <code>sudo netfilter-persistent save</code> after iptables to persist changes.</p>
-                                      </div>
-                                    </div>
-                                  )}
-                                  {(diagnostics as any).outboundIp && 
-                                   (diagnostics as any).outboundIp !== "89.168.120.135" && 
-                                   (diagnostics as any).outboundIp !== "Pending" && 
-                                   !(diagnostics as any).outboundIp.includes("Check Failed") &&
-                                   !(diagnostics as any).outboundIp.includes("ETIMEDOUT") && (
-                                    <div className="bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-[10px] p-3 rounded-xl mt-2 font-bold ring-2 ring-red-500/10 mb-2">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-lg">❌</span>
-                                        <span className="text-xs uppercase">IP Mismatch / Proxy Failure</span>
-                                      </div>
-                                      <p>Binance sees: <code className="bg-red-500/20 px-1 rounded">{(diagnostics as any).outboundIp}</code></p>
-                                      <p>Expected IP: <code className="bg-emerald-500/20 px-1 rounded text-emerald-600 dark:text-emerald-400">89.168.120.135</code></p>
-                                      <p className="mt-2 text-[9px] font-medium leading-tight border-t border-red-500/10 pt-2">
-                                        Since these don't match, Binance will block your requests (Status 451). 
-                                        Verify your <code>BINANCE_PROXY</code> setting in Secrets.
-                                      </p>
-                                    </div>
-                                  )}
-                                  {diagnostics.isRestrictedIp && (
-                                    <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] p-2.5 rounded-xl font-bold leading-normal mt-2">
-                                      🚨 <strong>Blocked Range Detected!</strong> 
-                                      <p className="mt-1 font-medium">{diagnostics.restrictionDetails}</p>
-                                      <p className="mt-1 text-[9px] opacity-80 italic">Note: Residential IPs in Germany are OK, but Cloud/Hosting IPs (like Oracle/Google) are restricted for SAPI.</p>
-                                      <p className="mt-1.5 border-t border-red-500/10 pt-1.5"><strong>Official Fix:</strong> In Binance API settings, select 'Restrict access to trusted IPs only' and whitelist <code>89.168.120.135</code>.</p>
-                                      <p className="mt-1 text-[9px] font-bold text-amber-500">Warning: If your 'Detected IP' is NOT 89.168.120.135, you MUST use a <code>BINANCE_PROXY</code> that provides that IP.</p>
-                                    </div>
-                                  )}
-
-                                  <div className="mt-2 pt-2 border-t border-emerald-500/10 space-y-2">
-                                    <p className="font-extrabold uppercase text-emerald-500 text-[10px] tracking-wider flex items-center gap-1.5">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                      Deployment Connectivity Check
-                                    </p>
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <div className={cn(
-                                        "p-2 rounded-lg border",
-                                        (diagnostics as any).backendBaseUrl ? "bg-emerald-500/5 border-emerald-500/10" : "bg-red-500/5 border-red-500/10"
-                                      )}>
-                                        <p className={cn(
-                                          "text-[8px] font-bold uppercase mb-0.5",
-                                          diagnostics.proxyFound ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
-                                        )}>Cloud Run Backend</p>
-                                  <p className="text-[10px] font-mono font-bold truncate">{(diagnostics as any).backendBaseUrl || 'pulse-feeds.surge.sh'}</p>
-                                        <div className="flex items-center gap-1 mt-1">
-                                          <div className={cn("w-1.5 h-1.5 rounded-full", diagnostics.proxyFound ? "bg-emerald-500" : "bg-amber-500")} />
-                                          <span className="text-[8px] font-bold text-gray-500 uppercase">{(diagnostics as any).backendBaseUrl ? "Reachable" : "Blocked"}</span>
-                                        </div>
-                                      </div>
-                                      <div className="bg-indigo-500/5 p-2 rounded-lg border border-indigo-500/10">
-                                        <p className="text-[8px] text-indigo-600 dark:text-indigo-400 font-bold uppercase mb-0.5">Oracle Cloud IP</p>
-                                        <p className="text-[10px] font-mono font-bold truncate">89.168.120.135</p>
-                                        <div className="flex items-center gap-1 mt-1">
-                                          <div className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                                          <span className="text-[8px] font-bold text-gray-500 uppercase">Gateway Active</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <p className="text-[9px] text-gray-500 italic leading-tight">
-                                      * Ensure <code>VITE_API_BASE_URL</code> matches the Oracle Gateway precisely to maintain connectivity between Surge and your whitelisted IP.
-                                    </p>
-                                  </div>
-
-                                  {diagnostics.serverInfo && (
-                                    <div className="mt-2 pt-2 border-t border-gray-100 dark:border-white/5 space-y-1">
-                                      <p className="font-extrabold uppercase text-indigo-500 text-[9px] tracking-wider mb-1">
-                                        SYSTEM STATUS ({diagnostics.isNativeOracleCloud ? 'ORACLE CLOUD VPS' : 'CLOUD CONTAINER'}):
-                                      </p>
-                                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
-                                        <div className="flex justify-between">
-                                          <span className="text-gray-400">Health:</span>
-                                          <span className="text-emerald-500 font-bold italic">LIVE</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                          <span className="text-gray-400">Uptime:</span>
-                                          <span className="text-gray-700 dark:text-gray-300 font-bold">{Math.floor(diagnostics.serverInfo.uptime / 60)}m {diagnostics.serverInfo.uptime % 60}s</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                          <span className="text-gray-400">RAM:</span>
-                                          <span className="text-gray-700 dark:text-gray-300 font-bold">{diagnostics.serverInfo.memory.total - diagnostics.serverInfo.memory.free}MB / {diagnostics.serverInfo.memory.total}MB</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                          <span className="text-gray-400">Arch:</span>
-                                          <span className="text-gray-700 dark:text-gray-300 font-bold uppercase">{diagnostics.serverInfo.platform}</span>
-                                        </div>
-                                      </div>
-                                      <div className="flex justify-between text-[10px] items-center">
-                                        <span className="text-gray-400 font-bold">Last Oracle Deploy:</span>
-                                        <span className="bg-indigo-500/10 text-indigo-500 px-1.5 py-0.5 rounded font-mono font-extrabold text-[9px]">
-                                          {new Date(diagnostics.serverInfo.deployedAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  )}
-                                  
-                                  {/* Mixed Content / CORS Alert & Safety Logic */}
-                                  {diagnostics && (() => {
-                                      const bridgeInfo = (diagnostics as any).bridgeRelay;
-                                      const rawBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').trim();
-                                      const currentApiBase = getApiUrl('/');
-                                      const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-                                      const isBaseHttp = rawBaseUrl.startsWith('http://');
-                                      const isSurge = typeof window !== 'undefined' && window.location.hostname.includes('surge.sh');
-                                      
-                                      // Logic for relaying matches getApiUrl.ts
-                                      const isRelaying = isHttps && isBaseHttp;
-                                      const isRemoteRelay = isSurge && isRelaying;
-
-                                      if (isRelaying || bridgeInfo?.active) {
-                                        return (
-                                          <div className="mb-3 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl space-y-2">
-                                            <p className="text-[10px] font-bold text-emerald-500 uppercase flex items-center gap-1.5 leading-none">
-                                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                              Bridge Relay Status: {isRemoteRelay ? 'REMOTE SECURE' : 'LOCAL SECURE'}
-                                            </p>
-                                            <p className="text-[9px] text-gray-700 dark:text-gray-300 leading-tight">
-                                              {isRemoteRelay 
-                                                ? `SECURE TUNNEL: Relaying Surge Traffic through Cloud Run to bypass Browser Mixed Content blocks.`
-                                                : `INTERNAL BRIDGE: Relaying HTTPS frontend traffic to HTTP Oracle VPS securely.`}
-                                            </p>
-                                            <div className="p-2 bg-indigo-500/5 rounded-lg border border-indigo-500/10">
-                                              <p className="text-[8px] font-bold text-gray-400 uppercase mb-1">Tunnel Path</p>
-                                              <p className="text-[9px] font-mono truncate">
-                                                {window.location.host} {'->'} {isRemoteRelay ? 'Cloud Run Relay' : 'Local Relay'} {'->'} {rawBaseUrl.replace('http://', '')}
-                                              </p>
-                                            </div>
-                                          </div>
-                                        );
-                                      }
-                                      return (
-                                        <div className="mb-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-1">
-                                           <p className="text-[10px] font-bold text-amber-600 uppercase flex items-center gap-1.5">
-                                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                                              Direct Connection Mode
-                                           </p>
-                                           <p className="text-[9px] text-gray-600 dark:text-gray-400">
-                                              {rawBaseUrl ? `Connecting directly to ${rawBaseUrl}. Ensure HTTPS/SSL is active on the target if using Surge.` : 'No external Oracle Bridge detected. Using default whitelisted IP.'}
-                                           </p>
-                                        </div>
-                                      );
-                                  })()}
-
-                                  {diagnostics.proxyFound && (
-                                    <>
-                                      <p className="flex items-center justify-between font-mono">
-                                        <span className="font-bold text-gray-500">Configured Node:</span>
-                                        <span className="text-gray-900 dark:text-white font-bold">{diagnostics.proxyValue}</span>
-                                      </p>
-                                      
-                                      <button
-                                        type="button"
-                                        onClick={async () => {
-                                          try {
-                                            const res = await apiFetch("/api/vault/ip");
-                                            const data = await res.json();
-                                            alert(`Current Outbound IP: ${data.ip}`);
-                                          } catch (e: any) {
-                                            alert(`Failed to check IP: ${e.message}`);
-                                          }
-                                        }}
-                                        className="mt-2 w-full text-[10px] font-extrabold text-amber-500 hover:text-amber-600 underline uppercase tracking-wider text-center transition-all flex items-center justify-center gap-1.5"
-                                      >
-                                        Check Actual Outbound IP
-                                      </button>
-                                      
-                                      {diagnostics.proxyExhaustedDetected ? (
-                                        <div className="bg-red-500/10 border border-red-500/15 text-red-500 text-[10px] p-2.5 rounded-xl font-bold leading-normal mt-1.5 animate-in fade-in slide-in-from-top-1 space-y-1">
-                                          <p>🚨 <strong>Fixie Proxy Quota Exhausted (Error 407/402)!</strong></p>
-                                          <p>Your Fixie account has reached its limits of 500 requests/month (or authentication credentials are invalid). The server has enabled <strong>Direct Fallback Routing</strong> to prevent network request hang ups, but please upgrade your plan or check your stats at <code>app.usefixie.com</code>.</p>
-                                          {diagnostics.proxyErrorReason && (
-                                            <p className="font-mono text-[9px] text-red-400">Status details: {diagnostics.proxyErrorReason}</p>
-                                          )}
-                                        </div>
-                                      ) : (
-                                        <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] p-2.5 rounded-xl font-bold leading-normal mt-1 animate-in fade-in slide-in-from-top-1">
-                                          🚀 <strong>Proxy Agent Active!</strong> Requests to Binance are successfully being routed through your static proxy. This ensures your Binance API access is routed through a single static IP address (such as <code>89.168.120.135</code>), allowing you to restrict API access safely in Binance API Settings.
-                                        </div>
-                                      )}
-                                    </>
-                                  )}
-                                </div>
-
-                                {/* Checklist */}
-                                <div className="text-[10px] text-gray-400 leading-normal border-t border-gray-200/10 pt-2 font-medium space-y-2">
-                                  <div>
-                                    <p className="font-extrabold uppercase text-amber-500 text-[9px] tracking-wider mb-1">Standard Binance API Setup:</p>
-                                    <ol className="list-decimal pl-4 space-y-1">
-                                      <li>Create API keys under <b>API Management</b> on Binance</li>
-                                      <li>Enable <b>Enable Reading</b> (required for balance checks)</li>
-                                      <li>In AI Studio Secrets, add: <code>BINANCE_API_KEY</code> and <code>BINANCE_API_SECRET</code></li>
-                                    </ol>
-                                  </div>
-                                  
-                                  <div>
-                                    <p className="font-extrabold uppercase text-amber-500 text-[9px] tracking-wider mb-1 mt-1">Setup Secure Routing:</p>
-                                    <ol className="list-decimal pl-4 space-y-1">
-                                      <li><b>Matched Oracle Config:</b> Static OUTBOUND IP is <code>89.168.120.135</code></li>
-                                      <li><b>Matched Surge Config:</b> Domain <code>pulse-feeds.surge.sh</code> is linked</li>
-                                      <li><b>Binance Matching:</b> Whitelist <code>89.168.120.135</code> in API Settings</li>
-                                      <li><b>AI Studio Matching:</b> Ensure <code>VITE_API_BASE_URL</code> (or <code>BINANCE_PROXY</code>) matches precisely</li>
-                                    </ol>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {binanceBalance && (
-                              <div className="pt-4 border-t border-amber-500/10 flex flex-col gap-3 animate-in fade-in slide-in-from-top-1">
-                                <div className="grid grid-cols-2 gap-3 text-xs">
-                                  <div className="bg-amber-500/5 p-3 rounded-2xl border border-amber-500/10">
-                                    <p className="text-[9px] font-black text-amber-600/60 uppercase tracking-widest leading-none mb-1.5">Linked Account</p>
-                                    <p className="font-mono text-gray-950 dark:text-gray-100 font-bold text-xs truncate">
-                                      {currentUser?.email ? (currentUser.email.substring(0, 2) + "***@" + currentUser.email.split('@')[1]) : "ed***@gmail.com"}
-                                    </p>
-                                  </div>
-                                  <div className="bg-amber-500/5 p-3 rounded-2xl border border-amber-500/10">
-                                    <p className="text-[9px] font-black text-amber-600/60 uppercase tracking-widest leading-none mb-1.5">Binance Account ID</p>
-                                    <p className="font-mono text-gray-950 dark:text-gray-100 font-bold text-xs">846285952</p>
-                                  </div>
-                                </div>
-                                <div className="flex gap-2 text-[10px] font-black uppercase tracking-widest text-amber-500 bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-500/20 w-fit">
-                                  <span>Regular User</span>
-                                  <span className="text-amber-500/30">|</span>
-                                  <span className="text-emerald-500">Verified</span>
-                                </div>
-                                <div className="bg-amber-500/10 p-4 rounded-2xl flex items-center justify-between border border-amber-500/20 mt-1">
-                                  <p className="text-xs font-bold text-gray-700 dark:text-gray-300">Available SAPI Balance:</p>
-                                  <p className="font-mono text-sm font-black text-amber-600">{parseFloat(binanceBalance.free).toFixed(6)} {binanceCoin}</p>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                          
-                          <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest px-2">Ensure network ({binanceNetwork}) matches the address to avoid losing funds.</p>
-                        </div>
-                      </div>
-                    ) : payoutMethod !== 'bank' ? (
+                  <form onSubmit={handleInternationalPayout} className="space-y-6">
+                    <div className="space-y-4">
                       <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                          {payoutMethod === 'paypal' ? 'PayPal Email' : 'Stripe Email'}
-                        </label>
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">USDT Wallet Address ({payoutMethod.toUpperCase()})</label>
                         <div className="relative">
-                          <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                          <Database className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                           <input
-                            type="email"
-                            placeholder="email@example.com"
-                            value={payoutEmail}
-                            onChange={(e) => setPayoutEmail(e.target.value)}
-                            className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-purple-500 transition-all text-gray-900 dark:text-white font-medium"
+                            type="text"
+                            placeholder={`Paste your USDT ${payoutMethod.toUpperCase()} wallet address here`}
+                            value={walletAddress}
+                            onChange={(e) => setWalletAddress(e.target.value)}
+                            className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-purple-500 transition-all text-gray-900 dark:text-white font-mono text-xs shadow-sm"
+                            required
                           />
                         </div>
+                        <p className="text-[10px] text-purple-600 font-bold uppercase tracking-widest px-2">
+                          Ensure your external wallet supports USDT transactions on the {payoutMethod.toUpperCase()} network to prevent permanent loss of funds.
+                        </p>
                       </div>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Account Name</label>
-                          <input
-                            type="text"
-                            value={bankDetails.accountName}
-                            onChange={(e) => setBankDetails({...bankDetails, accountName: e.target.value})}
-                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-purple-500 transition-all text-gray-900 dark:text-white font-medium"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Account Number / IBAN</label>
-                          <input
-                            type="text"
-                            value={bankDetails.accountNumber}
-                            onChange={(e) => setBankDetails({...bankDetails, accountNumber: e.target.value})}
-                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-purple-500 transition-all text-gray-900 dark:text-white font-medium"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Bank Name</label>
-                          <input
-                            type="text"
-                            value={bankDetails.bankName}
-                            onChange={(e) => setBankDetails({...bankDetails, bankName: e.target.value})}
-                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-purple-500 transition-all text-gray-900 dark:text-white font-medium"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">SWIFT / BIC Code</label>
-                          <input
-                            type="text"
-                            value={bankDetails.swiftCode}
-                            onChange={(e) => setBankDetails({...bankDetails, swiftCode: e.target.value})}
-                            className="w-full px-4 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-purple-500 transition-all text-gray-900 dark:text-white font-medium"
-                          />
-                        </div>
-                      </div>
-                    )}
 
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount (USDT VALUE)</label>
-                      <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">$</span>
-                        <input
-                          type="number"
-                          placeholder="0.00"
-                          value={payoutAmount}
-                          onChange={(e) => setPayoutAmount(e.target.value)}
-                          className="w-full pl-10 pr-16 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-amber-500 transition-all text-gray-900 dark:text-white font-medium"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setPayoutAmount((points).toFixed(2))}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase tracking-widest text-amber-600 bg-amber-50 px-2 py-1 rounded-md hover:bg-amber-100 transition-colors"
-                        >
-                          Max
-                        </button>
-                      </div>
-                      <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest font-bold">
-                        Value: {payoutAmount ? convert(parseFloat(payoutAmount), payoutMethod === 'binance' ? 'USD_USDT' : 'USD_USDT') : convert(0)}
-                      </p>
-                      {payoutMethod === 'binance' && binanceCoin === 'USDT' && (
-                        <div className="mt-2 p-3 bg-amber-500/5 rounded-xl border border-amber-500/10 space-y-1">
-                          <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest flex justify-between">
-                            <span>Est. USDT Quantity:</span>
-                            <span>{parseFloat(payoutAmount || '0').toFixed(2)} USDT</span>
-                          </p>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Amount to Withdraw (USDT)</label>
+                        <div className="relative">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">$</span>
+                          <input
+                            type="number"
+                            placeholder="0.00"
+                            value={payoutAmount}
+                            onChange={(e) => setPayoutAmount(e.target.value)}
+                            className="w-full pl-10 pr-16 py-4 bg-gray-50 dark:bg-gray-900 border-none rounded-2xl focus:ring-2 focus:ring-purple-500 transition-all text-gray-900 dark:text-white font-medium"
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setPayoutAmount(points.toFixed(2))}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase tracking-widest text-purple-600 bg-purple-50 px-2 py-1 rounded-md hover:bg-purple-100 transition-colors"
+                          >
+                            Max
+                          </button>
                         </div>
-                      )}
+                        <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest font-bold">
+                          Equivalent value: {payoutAmount ? parseFloat(payoutAmount).toFixed(2) : "0.00"} USDT
+                        </p>
+                      </div>
                     </div>
 
                     <AnimatePresence mode="wait">
@@ -2896,10 +2132,9 @@ export default function Rewards() {
 
                     <button
                       type="submit"
-                      disabled={isLoading || (!canWithdrawNow && !isDeveloper)}
+                      disabled={isLoading || points <= 0}
                       className={cn(
-                        "w-full py-4 text-white font-black rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center space-x-2 shadow-lg",
-                        payoutMethod === 'binance' ? "bg-amber-500 shadow-amber-500/20" : "bg-purple-600 shadow-purple-500/20"
+                        "w-full py-4 text-white font-black rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center space-x-2 shadow-lg bg-purple-600 shadow-purple-500/20"
                       )}
                     >
                       {isLoading ? (
@@ -2907,21 +2142,15 @@ export default function Rewards() {
                           <Loader2 className="w-5 h-5 animate-spin" />
                           <span>Processing Payout...</span>
                         </>
-                      ) : !canWithdrawNow && !isDeveloper ? (
+                      ) : points <= 0 ? (
                         <>
                           <Lock className="w-4 h-4 mr-2" />
-                          <span>Locked until {nextRedemptionDate.split(':')[1] || nextRedemptionDate}</span>
+                          <span>No Balance to Withdraw</span>
                         </>
                       ) : (
-                        <span>{payoutMethod === 'binance' ? `Withdraw ${binanceCoin} to Binance` : 'Request International Payout'}</span>
+                        <span>Withdraw Rewards ({payoutMethod.toUpperCase()})</span>
                       )}
                     </button>
-
-                    {payoutMethod === 'binance' && (
-                      <p className="mt-3 text-center text-xs font-bold text-amber-600 animate-pulse">
-                        Have at least 11usdt in Binance account to enable withdraw from this app
-                      </p>
-                    )}
                   </form>
                 </div>
               </div>

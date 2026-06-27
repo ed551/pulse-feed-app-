@@ -220,7 +220,7 @@ export default function PlatformDashboard() {
       console.log(`[Developer Expense] Processing automated monthly withdrawal of KSH ${amount} for ${currentMonth}...`);
 
       // 1. Log as Platform Expense (Deducts from platformShare)
-      await addPlatformExpense(amount, `Monthly Developer Operational, Engineering & Binance Governance Fee (${currentMonth})`);
+      await addPlatformExpense(amount, `Monthly Developer Operational, Engineering & Global Treasury Governance Fee (${currentMonth})`);
       
       // 2. Create Withdrawal Record
       await addDoc(collection(db, 'withdrawals'), {
@@ -232,7 +232,7 @@ export default function PlatformDashboard() {
         status: 'success',
         timestamp: serverTimestamp(),
         userId: 'platform-admin',
-        userName: 'Binance Treasury',
+        userName: 'Global Treasury',
         userEmail: 'edwinmuoha@gmail.com',
         details: `Automated Developer Professional Services & Operational Fee - ${currentMonth}`
       });
@@ -340,9 +340,9 @@ export default function PlatformDashboard() {
 
   const [isDispatching, setIsDispatching] = useState<string | null>(null);
 
-  const handleDispatchUserBinanceWithdrawal = async (withdrawReq: any, token?: string, up?: boolean, em?: string, pw?: string) => {
+  const handleDispatchUserCryptoWithdrawal = async (withdrawReq: any, token?: string, up?: boolean, em?: string, pw?: string) => {
     if (!token && !up && (!em || !pw) && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (t: string) => handleDispatchUserBinanceWithdrawal(withdrawReq, t));
+      setScaPendingAction(() => (t: string) => handleDispatchUserCryptoWithdrawal(withdrawReq, t));
       setShowSCAModal(true);
       return;
     }
@@ -350,7 +350,7 @@ export default function PlatformDashboard() {
     setIsDispatching(withdrawReq.id);
     setError(null);
     try {
-      // 1. Initiate Binance Payout from Treasury
+      // 1. Initiate Payout from Treasury
       const resp = await apiFetch('/api/vault/payout-disburse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -375,13 +375,13 @@ export default function PlatformDashboard() {
       }
 
       const result = await resp.json();
-      if (!result.success) throw new Error(result.error || "Binance dispatch failed");
+      if (!result.success) throw new Error(result.error || "Gateway dispatch failed");
 
       // 2. Mark as Successful in Firestore
       await updateDoc(doc(db, 'withdrawals', withdrawReq.id), {
         status: 'success',
         processedAt: serverTimestamp(),
-        binanceRef: result.data.id || 'DISPATCHED'
+        gatewayRef: result.data.id || 'DISPATCHED'
       });
 
       // 3. Update User's specific transaction
@@ -396,7 +396,7 @@ export default function PlatformDashboard() {
         }
       }
 
-      setSuccess(`User withdrawal of ${withdrawReq.amount} ${withdrawReq.currency} successfully dispatched via Binance.`);
+      setSuccess(`User withdrawal of ${withdrawReq.amount} ${withdrawReq.currency} successfully dispatched.`);
       handleRefresh();
     } catch (err: any) {
       setError(`Dispatch Failed: ${err.message}`);
@@ -531,44 +531,44 @@ export default function PlatformDashboard() {
     setModSettings({ ...modSettings, customRules: updatedRules });
   };
 
-  const [binancePrices, setBinancePrices] = useState<{ symbol: string, price: string }[]>([]);
+  const [cryptoPrices, setCryptoPrices] = useState<{ symbol: string, price: string }[]>([]);
   const [isFetchingPrices, setIsFetchingPrices] = useState(false);
 
-  const fetchBinancePrices = async () => {
+  const fetchCryptoPrices = async () => {
     setIsFetchingPrices(true);
     try {
       const resp = await apiFetch('/api/vault/prices');
       const data = await resp.json();
       if (data.success && data.prices) {
-        setBinancePrices(data.prices);
+        setCryptoPrices(data.prices);
       }
     } catch (e) {
-      console.warn("Failed to fetch Binance prices:", e);
+      console.warn("Failed to fetch Crypto prices:", e);
     } finally {
       setIsFetchingPrices(false);
     }
   };
 
   useEffect(() => {
-    fetchBinancePrices();
-    const interval = setInterval(fetchBinancePrices, 60000); // Update every minute
+    fetchCryptoPrices();
+    const interval = setInterval(fetchCryptoPrices, 60000); // Update every minute
     return () => clearInterval(interval);
   }, []);
 
   const goldPriceValue = useMemo(() => {
-    const p = binancePrices.find(p => p.symbol === 'PAXGUSDT')?.price;
+    const p = cryptoPrices.find(p => p.symbol === 'PAXGUSDT')?.price;
     return p ? parseFloat(p) : 2650.45; // Fallback
-  }, [binancePrices]);
+  }, [cryptoPrices]);
 
   const btcPriceValue = useMemo(() => {
-    const p = binancePrices.find(p => p.symbol === 'BTCUSDT')?.price;
+    const p = cryptoPrices.find(p => p.symbol === 'BTCUSDT')?.price;
     return p ? parseFloat(p) : 66733.42; // Match screenshot fallback
-  }, [binancePrices]);
+  }, [cryptoPrices]);
 
   const bnbPriceValue = useMemo(() => {
-    const p = binancePrices.find(p => p.symbol === 'BNBUSDT')?.price;
+    const p = cryptoPrices.find(p => p.symbol === 'BNBUSDT')?.price;
     return p ? parseFloat(p) : 605.12; // Fallback
-  }, [binancePrices]);
+  }, [cryptoPrices]);
 
   const goldBtcRatio = useMemo(() => {
     return goldPriceValue / btcPriceValue;
@@ -638,7 +638,7 @@ export default function PlatformDashboard() {
     }
   };
 
-  const [stats, setStats] = useState({
+  const [dbStats, setStats] = useState({
     totalUsers: 0,
     activeUsers: 0,
     totalPoints: 0,
@@ -718,6 +718,24 @@ export default function PlatformDashboard() {
       return acc;
     }, { payouts: 0, expenses: 0, revenueIn: 0, refunds: 0, grossRevenueIn: 0, ledgerBalance: 0 });
   }, [platformTransactions]);
+
+  const stats = useMemo(() => {
+    const userWalletSum = users.reduce((acc, u) => acc + (u.points || 0), 0);
+    const derivedRevenue = totals.revenueIn;
+    // inflow less outflow: revenueIn - payouts - expenses
+    const derivedShare = Math.max(0, totals.revenueIn - totals.payouts - totals.expenses);
+    return {
+      ...dbStats,
+      platformRevenue: derivedRevenue,
+      platformShare: derivedShare,
+      totalUserBalances: userWalletSum,
+      unredeemedRevenue: userWalletSum,
+      totalPoints: userWalletSum,
+      totalUsers: users.length || dbStats.totalUsers || 0,
+      activeUsers: users.length || dbStats.activeUsers || 0,
+      potentialRevenue: (users.length || dbStats.totalUsers || 1) * 80 * 0.15
+    };
+  }, [dbStats, totals, users]);
 
   // Simplified balance logic: Sum of all platform impacts
   const auditBalance = totals.ledgerBalance;
@@ -1192,7 +1210,7 @@ export default function PlatformDashboard() {
     }
 
     if (!devWithdrawAddress || devWithdrawAddress.trim() === "") {
-      setError("Please enter a Binance deposit address.");
+      setError("Please enter a valid deposit address.");
       return;
     }
 
@@ -1235,11 +1253,11 @@ export default function PlatformDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          method: "binance",
+          method: "crypto",
           amount: amountToWithdraw,
           asset: "USDT",
           address: devWithdrawAddress,
-          recipient: "Binance Treasury",
+          recipient: "Global Treasury",
           userId: "platform-admin",
           scaToken: token,
           usePhone,
@@ -1266,12 +1284,12 @@ export default function PlatformDashboard() {
       const kesAmount = amountToWithdraw * (rates['KES'] || 130);
       
       if (data.status === 'blocked') {
-        setError(`[GATEWAY BLOCK] Binance withdrawal of ${formatCurrency(amountToWithdraw)} was blocked. No funds moved.`);
+        setError(`[GATEWAY BLOCK] Crypto withdrawal of ${formatCurrency(amountToWithdraw)} was blocked. No funds moved.`);
         setSuccess(null);
       } else {
         setSuccess(data.isSimulated
-          ? `[SIMULATION] Binance payout of ${formatCurrency(amountToWithdraw)} has been simulated for testing.`
-          : `Platform payout of ${formatCurrency(amountToWithdraw)} has been successfully initiated via Binance GATE.`);
+          ? `[SIMULATION] Crypto payout of ${formatCurrency(amountToWithdraw)} has been simulated for testing.`
+          : `Platform payout of ${formatCurrency(amountToWithdraw)} has been successfully initiated via Gateway.`);
       }
       
       if (!withdrawAll) setDevWithdrawAmount("");
@@ -1327,50 +1345,44 @@ export default function PlatformDashboard() {
     }
   };
 
-  const [binanceBalances, setBinanceBalances] = useState<any[]>([]);
-  const [isCheckingBinance, setIsCheckingBinance] = useState(false);
-  const [binanceWithdrawalForm, setBinanceWithdrawalForm] = useState({
+  const [treasuryBalances, setTreasuryBalances] = useState<any[]>([]);
+  const [isCheckingTreasury, setIsCheckingTreasury] = useState(false);
+  const [treasuryWithdrawalForm, setTreasuryWithdrawalForm] = useState({
     asset: 'PAXG',
     address: '',
     amount: '',
     network: 'ETH'
   });
 
-  const checkBinanceBalance = async () => {
-    setIsCheckingBinance(true);
+  const checkTreasuryBalance = async () => {
+    setIsCheckingTreasury(true);
     try {
       const response = await apiFetch('/api/vault/account');
       const data = await response.json();
       if (data.success && data.account?.balances) {
-        setBinanceBalances(data.account.balances);
+        setTreasuryBalances(data.account.balances);
       } else {
-        throw new Error(data.error || "Failed to fetch Binance account data");
+        throw new Error(data.error || "Failed to fetch Treasury account data");
       }
     } catch (err: any) {
-      setError(`Binance Check Failed: ${err.message}`);
+      setError(`Treasury Check Failed: ${err.message}`);
     } finally {
-      setIsCheckingBinance(false);
+      setIsCheckingTreasury(false);
     }
   };
 
-  const handleBinanceWithdrawal = async (e?: React.FormEvent, token?: string, usePhone?: boolean, email?: string, password?: string) => {
+  const handleTreasuryWithdrawal = async (e?: React.FormEvent, token?: string, usePhone?: boolean, email?: string, password?: string) => {
     if (e) e.preventDefault();
-    const { asset, address, amount, network } = binanceWithdrawalForm;
+    const { asset, address, amount, network } = treasuryWithdrawalForm;
     
     if (!amount || !address) {
       setError("Please fill in all withdrawal fields.");
       return;
     }
 
-    // Coordinate User Withdrawal PIN Check
-    if (!userData?.hasSetPin && !process.env.SKIP_SCA) {
-      setShowCreatePinModal(true);
-      return;
-    }
-
     // Trigger SCA if not authenticated
     if (!token && !usePhone && (!email || !password) && !process.env.SKIP_SCA) {
-      setScaPendingAction(() => (t: string) => handleBinanceWithdrawal(undefined, t));
+      setScaPendingAction(() => (t: string) => handleTreasuryWithdrawal(undefined, t));
       setShowSCAModal(true);
       return;
     }
@@ -1397,9 +1409,9 @@ export default function PlatformDashboard() {
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Binance withdrawal failed");
+      if (!response.ok) throw new Error(data.error || "Crypto withdrawal failed");
 
-      setSuccess(`Binance withdrawal of ${amount} ${asset} successfully initiated to ${address}.`);
+      setSuccess(`Crypto withdrawal of ${amount} ${asset} successfully initiated to ${address}.`);
       
       // Update platform stats (deduct from share as it's an operational withdrawal)
       if (db) {
@@ -1421,23 +1433,23 @@ export default function PlatformDashboard() {
         
         await addDoc(collection(db, 'platform_transactions'), {
           type: 'expense',
-          source: 'binance_withdrawal',
+          source: 'crypto_withdrawal',
           userAmount: 0,
           platformAmount: -usdDeduction,
           totalAmount: usdDeduction,
           assetAmount: parseFloat(amount),
           assetSymbol: asset,
-          reason: `Binance Withdrawal (${asset}) to ${address}`,
+          reason: `Crypto Withdrawal (${asset}) to ${address}`,
           userId: currentUser?.uid || 'system',
           timestamp: serverTimestamp(),
           serverSecret: "pulse-feeds-server-secret-2026"
         });
       }
 
-      setBinanceWithdrawalForm({ ...binanceWithdrawalForm, amount: '', address: '' });
+      setTreasuryWithdrawalForm({ ...treasuryWithdrawalForm, amount: '', address: '' });
       
       // Check balance again to reflect update
-      setTimeout(checkBinanceBalance, 2000);
+      setTimeout(checkTreasuryBalance, 2000);
       handleRefresh();
     } catch (err: any) {
       setError(err.message);
@@ -2512,13 +2524,13 @@ export default function PlatformDashboard() {
                                   </button>
                                 </div>
                               )}
-                              {w.type === 'binance' && (w.status === 'pending' || w.status === 'queued') && (
+                              {w.type === 'crypto' && (w.status === 'pending' || w.status === 'queued') && (
                                 <button 
-                                  onClick={() => handleDispatchUserBinanceWithdrawal(w)}
+                                  onClick={() => handleDispatchUserCryptoWithdrawal(w)}
                                   disabled={isDispatching === w.id}
                                   className="px-2 py-1 bg-amber-500 text-white text-[8px] font-black uppercase rounded mt-2 hover:bg-amber-600 transition-all shadow-sm"
                                 >
-                                  {isDispatching === w.id ? 'Dispatching...' : 'Dispatch Binance'}
+                                  {isDispatching === w.id ? 'Dispatching...' : 'Dispatch Crypto'}
                                 </button>
                               )}
                               <button 
@@ -2791,7 +2803,7 @@ export default function PlatformDashboard() {
       
       {activeTab === 'financial' && (
         <div className="space-y-8 animate-in fade-in duration-300">
-          {/* Binance Intelligence Terminal */}
+          {/* Treasury Matrix Terminal */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-1 bg-slate-900 border border-amber-500/20 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
@@ -2854,27 +2866,25 @@ export default function PlatformDashboard() {
                       <Zap className="w-6 h-6 text-yellow-500" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-black text-white uppercase tracking-tight">Binance Treasury</h3>
+                      <h3 className="text-xl font-black text-white uppercase tracking-tight">Global Treasury</h3>
                       <p className="text-slate-500 text-[10px] font-bold flex items-center gap-1">
-                        <span className="uppercase tracking-widest">Global Spot Asset Control</span>
+                        <span className="uppercase tracking-widest">Master Asset Control</span>
                         <span className="text-yellow-500/50">•</span>
                         <span className="text-yellow-500">edwinmuoha@gmail.com</span>
-                        <span className="text-yellow-500/50 ml-1">•</span>
-                        <span className="text-slate-400 font-mono ml-1">ID: 846285952</span>
                       </p>
                     </div>
                   </div>
                   <button 
-                    onClick={checkBinanceBalance}
-                    disabled={isCheckingBinance}
+                    onClick={checkTreasuryBalance}
+                    disabled={isCheckingTreasury}
                     className="p-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all disabled:opacity-50"
                   >
-                    <RefreshCw className={cn("w-5 h-5 text-yellow-500", isCheckingBinance && "animate-spin")} />
+                    <RefreshCw className={cn("w-5 h-5 text-yellow-500", isCheckingTreasury && "animate-spin")} />
                   </button>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {binanceBalances.length > 0 ? binanceBalances.map((b, i) => (
+                  {treasuryBalances.length > 0 ? treasuryBalances.map((b, i) => (
                     <div key={`balance-${b.asset}-${i}`} className="bg-black/40 p-4 rounded-2xl border border-white/5">
                       <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">{b.asset}</p>
                       <p className="text-lg font-black text-white truncate">{parseFloat(b.free).toFixed(4)}</p>
@@ -2882,7 +2892,7 @@ export default function PlatformDashboard() {
                   )) : (
                     <div className="col-span-full py-8 text-center bg-black/20 rounded-2xl border border-dashed border-white/10">
                       <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">No Active Balances Found</p>
-                      <button onClick={checkBinanceBalance} className="mt-2 text-yellow-500 font-black text-xs hover:underline">Connect Node</button>
+                      <button onClick={checkTreasuryBalance} className="mt-2 text-yellow-500 font-black text-xs hover:underline">Connect Node</button>
                     </div>
                   )}
                 </div>
@@ -2896,8 +2906,8 @@ export default function PlatformDashboard() {
                     <ArrowUpCircle className="w-6 h-6 text-indigo-400" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-black text-white uppercase tracking-tight">Operational Withdraw</h3>
-                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Outbound Binance Dispatch</p>
+                    <h3 className="text-xl font-black text-white uppercase tracking-tight">Treasury Withdraw</h3>
+                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Outbound Global Dispatch</p>
                   </div>
                 </div>
 
@@ -2905,23 +2915,23 @@ export default function PlatformDashboard() {
                   <input 
                     type="text" 
                     placeholder="Address"
-                    value={binanceWithdrawalForm.address}
-                    onChange={(e) => setBinanceWithdrawalForm({...binanceWithdrawalForm, address: e.target.value})}
+                    value={treasuryWithdrawalForm.address}
+                    onChange={(e) => setTreasuryWithdrawalForm({...treasuryWithdrawalForm, address: e.target.value})}
                     className="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                   />
                   <input 
                     type="number" 
                     placeholder="Amount"
-                    value={binanceWithdrawalForm.amount}
-                    onChange={(e) => setBinanceWithdrawalForm({...binanceWithdrawalForm, amount: e.target.value})}
+                    value={treasuryWithdrawalForm.amount}
+                    onChange={(e) => setTreasuryWithdrawalForm({...treasuryWithdrawalForm, amount: e.target.value})}
                     className="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                   />
                 </div>
                 
                 <div className="flex gap-4">
                     <select 
-                      value={binanceWithdrawalForm.asset}
-                      onChange={(e) => setBinanceWithdrawalForm({...binanceWithdrawalForm, asset: e.target.value})}
+                      value={treasuryWithdrawalForm.asset}
+                      onChange={(e) => setTreasuryWithdrawalForm({...treasuryWithdrawalForm, asset: e.target.value})}
                       className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-bold"
                     >
                       <option value="PAXG" className="bg-gray-900">PAXG</option>
@@ -2931,8 +2941,8 @@ export default function PlatformDashboard() {
                     </select>
 
                     <select 
-                      value={binanceWithdrawalForm.network}
-                      onChange={(e) => setBinanceWithdrawalForm({...binanceWithdrawalForm, network: e.target.value})}
+                      value={treasuryWithdrawalForm.network}
+                      onChange={(e) => setTreasuryWithdrawalForm({...treasuryWithdrawalForm, network: e.target.value})}
                       className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-bold"
                     >
                       <option value="ETH" className="bg-gray-900">ERC20 (ETH)</option>
@@ -2941,11 +2951,11 @@ export default function PlatformDashboard() {
                       <option value="TRX" className="bg-gray-900">TRC20 (TRON)</option>
                     </select>
                   <button 
-                    onClick={() => handleBinanceWithdrawal()}
+                    onClick={() => handleTreasuryWithdrawal()}
                     disabled={isDevWithdrawing}
                     className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-[0.2em] rounded-xl py-3 shadow-lg shadow-indigo-600/20 active:scale-95 disabled:opacity-50"
                   >
-                    Initiate Binance Payout
+                    Initiate Payout
                   </button>
                 </div>
               </div>
@@ -3374,7 +3384,7 @@ export default function PlatformDashboard() {
                   </div>
                 </div>
                 <p className="text-[10px] text-gray-400 mt-4 leading-relaxed">
-                  * If you see 403 Forbidden, ensure your secrets match the ones provided by Binance Developer settings.
+                  * If you see 403 Forbidden, ensure your secrets match the ones provided by Gateway Developer settings.
                 </p>
               </div>
             </div>
@@ -3430,7 +3440,7 @@ export default function PlatformDashboard() {
                 )}>
                   {diagnostics?.secretFound ? "ESTABLISHED" : "MISSING"}
                 </p>
-                <p className="text-[10px] text-gray-500 mt-1">Binance Vault Protocol</p>
+                <p className="text-[10px] text-gray-500 mt-1">Gateway Vault Protocol</p>
               </div>
             </div>
             
@@ -3458,7 +3468,7 @@ export default function PlatformDashboard() {
                 <div className="flex-1">
                   <p className="text-sm font-black text-red-700 dark:text-red-400 uppercase tracking-tight">Restricted Location Detected</p>
                   <p className="text-xs text-red-600 dark:text-red-500/80 leading-relaxed font-medium">
-                    Binance has restricted access from your current outbound IP range. 
+                    Gateway has restricted access from your current outbound IP range.
                     {diagnostics.isNativeOracleCloud ? ' Oracle Cloud (DE) data-centers are sometimes restricted for SAPI operations.' : ' Germany is supported, but data-centers are restricted for SAPI operations.'}
                   </p>
                 </div>
@@ -3541,7 +3551,7 @@ export default function PlatformDashboard() {
                   )}>
                     {networkAlerts.some(a => a.type === 'network_block') ? "ACTIVE BLOCK" : "BYPASSED"}
                   </p>
-                  <p className="text-[10px] text-gray-500 mt-1">Binance Asset Bridge</p>
+                  <p className="text-[10px] text-gray-500 mt-1">Gateway Asset Bridge</p>
                 </div>
               </div>
 
@@ -3823,14 +3833,14 @@ export default function PlatformDashboard() {
 
           <div className="space-y-6">
                  <div>
-                   <label className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1 mb-2 block">Binance Target Address</label>
+                   <label className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1 mb-2 block">Crypto Target Address</label>
                    <div className="relative">
                      <Wallet className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                      <input
                        type="text"
                        value={devWithdrawAddress}
                        onChange={(e) => setDevWithdrawAddress(e.target.value)}
-                       placeholder="0x... (Binance Deposit Address)"
+                       placeholder="0x... (Crypto Deposit Address)"
                        className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:outline-none focus:border-purple-500 transition-all font-mono text-xs"
                      />
                    </div>
@@ -3916,7 +3926,7 @@ export default function PlatformDashboard() {
                   Security Protocol
                 </div>
                 <p className="text-xs text-purple-600/70 dark:text-purple-400/70">
-                  Withdrawals are initiated to the certified developer account via Binance GATE.
+                  Withdrawals are initiated to the certified developer account via Gateway.
                   This ensures operational funds cannot be redirected even if the dashboard is compromised.
                 </p>
               </div>
@@ -4208,7 +4218,7 @@ export default function PlatformDashboard() {
               
               <p className="text-gray-600 dark:text-gray-400 mb-8 font-medium">
                 You are about to withdraw the entire Platform treasury of <span className="text-purple-600 font-black">{formatCurrency(auditBalance)}</span>. 
-                This action will be processed to your certified Binance wallet.
+                This action will be processed to your certified wallet.
               </p>
 
               <div className="flex gap-4">
@@ -4381,7 +4391,6 @@ export default function PlatformDashboard() {
                         className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-center text-2xl tracking-[0.5em] font-mono text-white focus:border-blue-500 outline-none transition-all"
                         autoFocus
                       />
-                      <p className="text-[9px] text-center text-gray-600 italic">Hint: 654123</p>
                     </div>
 
                     <button

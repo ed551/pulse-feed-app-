@@ -96,7 +96,7 @@ const STUDY_METHODS = [
 export default function EducationHub() {
   const { currentUser, userData } = useAuth();
   const { showNotification } = useNotifications();
-  const { addPlatformRevenue } = useRevenue();
+  const { addPlatformRevenue, addRevenue } = useRevenue();
   const { convert, formatReward, formatCurrency } = useCurrencyConverter();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
@@ -139,24 +139,23 @@ export default function EducationHub() {
       // Simulate payment processing or just direct enrollment for community courses
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // 80/20 Revenue Split for Course Enrollment & AI Training
+      // 50/50 Revenue Split for Course Enrollment & AI Training
       // Total Enrollment Fee/Value: 2.60 USD / USDT
       const totalEnrollmentValue = 2.60;
-      const userShare = totalEnrollmentValue * 0.2; // 20% to user
-      const developerShare = totalEnrollmentValue * 0.8; // 80% to developer (as Platform Revenue)
+      const userShare = totalEnrollmentValue * 0.5; // 50% to user
+      const platformShare = totalEnrollmentValue * 0.5; // 50% to platform
 
-      // Update Firestore
+      // 1. Update Course Enrollment State
       await updateDoc(doc(db, 'users', currentUser.uid), {
         enrolledCourses: arrayUnion(course.id),
-        points: increment(userShare),
         experience: increment(250)
       });
 
-      // Log Developer/Platform Share (Direct USD/USDT value)
-      await addPlatformRevenue(developerShare, `Course Enrollment Fee: ${course.title} (Developer 80% Share)`);
+      // 2. Use unified Revenue Engine for 50/50 Split (Handles audit logs for both)
+      await addRevenue(userShare, platformShare, `Course Enrollment: ${course.title}`, 'education');
 
       showNotification("Education Milestone", { 
-        body: `Welcome to ${course.title}! You've been rewarded ${formatReward(userShare)} (20% share) while 80% (${formatCurrency(developerShare)}) fuels global engineering.` 
+        body: `Welcome to ${course.title}! You've been rewarded ${formatReward(userShare)} (50% share) while 50% (${formatCurrency(platformShare)}) fuels global engineering.` 
       });
       setSelectedCourse(null);
     } catch (err) {
@@ -365,7 +364,7 @@ export default function EducationHub() {
             <h2 className="text-xs font-black uppercase tracking-widest text-gray-400">Online Curricula</h2>
           </div>
           <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full ring-1 ring-indigo-200">
-            80/20 REVENUE SHARE
+            50/50 REVENUE SHARE
           </span>
         </div>
 

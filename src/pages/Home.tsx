@@ -13,6 +13,7 @@ import { multimedia_stream_engine, content_governor, revenue_logic } from "../li
 import { cn } from "../lib/utils";
 import AdUnit from "../components/AdUnit";
 import YouTubeSection from "../components/YouTubeSection";
+import MediaChannelsSection from "../components/MediaChannelsSection";
 import { moderateContent } from "../services/moderationService";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { usePosts } from "../hooks/usePosts";
@@ -471,9 +472,9 @@ export default function Home() {
                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400"></span>
                  PAXG/BTC: {paxgBtcRate ? paxgBtcRate.toFixed(6) : '0.0384'}
                </div>
-               <div className="flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-widest text-indigo-100 border border-white/5">
+                <div className="flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-widest text-indigo-100 border border-white/5">
                  <span className="w-1.5 h-1.5 rounded-full bg-orange-400"></span>
-                 BTC Ref: Binance
+                 Global Treasury
                </div>
             </div>
 
@@ -520,7 +521,11 @@ export default function Home() {
         </div>
       </motion.div>
 
-      <YouTubeSection />
+      {/* Integrated Media Center */}
+      <div className="space-y-6">
+        <YouTubeSection />
+        <MediaChannelsSection />
+      </div>
 
       {/* Community Groups CTA */}
       <div className="mx-6 p-6 bg-white dark:bg-gray-800 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-6 overflow-hidden relative">

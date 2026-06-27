@@ -43,44 +43,27 @@ export const revenue_distribution_engine = (amount: number, source: 'ad' | 'educ
   let platformShare = 0;
   let userShare = 0;
 
-  if (isPaid) {
-    if (source === 'education') {
-      // Education enrollment is an exception: 80/20
-      platformShare = amount * 0.80;
-      userShare = amount * 0.20;
-    } else {
-      // All other paid revenue is 100% Platform
-      platformShare = amount;
-      userShare = 0;
-    }
+  if (source === 'ad') {
+    // Ads is developer activity: 100% platform/developer
+    platformShare = amount;
+    userShare = 0;
   } else {
-    // User engagement (non-paid)
-    if (source === 'education') {
-      // Education engagement: 80/20
-      platformShare = amount * 0.80;
-      userShare = amount * 0.20;
-    } else {
-      // All other engagement (Ads, Community, Active Time): 50/50
-      platformShare = amount * 0.50;
-      userShare = amount * 0.50;
-    }
+    // User activity (education, active_time, community, dating, events): 50/50 split
+    platformShare = amount * 0.50;
+    userShare = amount * 0.50;
   }
 
   return { platformShare, userShare };
 };
 
 export const calculateRevenueDistribution = (amount: number, source: 'ad' | 'education' | 'community' | 'events' | 'dating' | 'active_time' = 'active_time', isPaid: boolean = false) => {
-  if (isPaid) {
-    if (source === 'education') return { platform: amount * 0.80, user: amount * 0.20 };
+  if (source === 'ad') {
+    // Ads is developer activity: 100% platform/developer
     return { platform: amount, user: 0 };
+  } else {
+    // User activity (education, active_time, community, dating, events): 50/50 split
+    return { platform: amount * 0.50, user: amount * 0.50 };
   }
-  
-  if (source === 'education') {
-    return { platform: amount * 0.80, user: amount * 0.20 };
-  }
-  
-  // Default for engagement (including Ads, Community, Active Time)
-  return { platform: amount * 0.50, user: amount * 0.50 };
 };
 export const auto_updater = () => {};
 export const resource_governor = () => {};

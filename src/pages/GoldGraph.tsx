@@ -396,6 +396,15 @@ export default function GoldGraph() {
       </div>
 
       <div className="max-w-[1600px] mx-auto p-8 lg:p-12 space-y-12">
+        <div className="mx-6 mb-8 p-6 bg-amber-900/20 border border-amber-500/20 rounded-2xl flex items-start gap-4">
+          <AlertCircle className="w-8 h-8 text-amber-500 shrink-0" />
+          <div>
+            <h3 className="text-sm font-black text-amber-200 uppercase tracking-widest">Market Data Disclaimer</h3>
+            <p className="text-xs text-amber-100/70 mt-1 leading-relaxed">
+              Market data and projections shown in the Gold Graph are for informational and educational purposes only. They are generated using automated analysis and do not constitute financial advice. Digital assets, particularly those pegged to precious metals, are subject to significant volatility and market risk. Always perform your own research before making investment decisions.
+            </p>
+          </div>
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Visual Terminal */}
           <div className="lg:col-span-2 space-y-8">
@@ -740,6 +749,15 @@ export default function GoldGraph() {
           </div>
         </div>
       </div>
+
+      {/* Disclaimer Note */}
+      <div className="mt-12 bg-yellow-500/10 border border-yellow-500/20 rounded-3xl p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 text-yellow-600 dark:text-yellow-400">
+        <AlertCircle className="w-8 h-8 shrink-0" />
+        <p className="text-xs font-medium leading-relaxed">
+          <strong className="font-black uppercase tracking-widest">Disclaimer:</strong> The data and predictions presented on this dashboard are for informational and entertainment purposes only. The AI insights and market extrapolations do not constitute financial advice. Digital assets and commodities are subject to high market risks. Pulse Feeds is not liable for any financial losses incurred based on this information.
+        </p>
+      </div>
+
     </div>
   );
 }

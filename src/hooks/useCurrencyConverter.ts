@@ -20,105 +20,29 @@ export const useCurrencyConverter = () => {
   const [btcPriceUSD, setBtcPriceUSD] = useState<number>(67000);
 
   useEffect(() => {
-    // Load saved currency
-    const savedCurrency = localStorage.getItem('preferred_currency');
-    if (savedCurrency) {
-      setCurrency(savedCurrency);
-    } else {
-      // Default to USDT for this app
-      setCurrency('USDT');
-    }
-    
-    // Fetch exchange rates and crypto prices (PAXG for Gold)
-    const fetchData = async () => {
-      try {
-        const response = await apiFetch('/api/vault/prices');
-        if (response.ok) {
-          const data = await response.json();
-          const prices = data.prices || [];
-          
-          const paxgTicker = prices.find((p: any) => p.symbol === 'PAXGUSDT');
-          const btcTicker = prices.find((p: any) => p.symbol === 'BTCUSDT');
-          
-          if (paxgTicker && paxgTicker.price) {
-            const price = parseFloat(paxgTicker.price);
-            if (!isNaN(price) && price > 0) {
-              setGoldPriceUSD(price);
-              const gPerUSD = 31.1035 / price;
-              setRates(prev => ({ ...prev, GOLD: gPerUSD }));
-            }
-          }
-
-          if (btcTicker && btcTicker.price) {
-            const btcPrice = parseFloat(btcTicker.price);
-            if (!isNaN(btcPrice) && btcPrice > 0) {
-              setBtcPriceUSD(btcPrice);
-              setRates(prev => ({ ...prev, BTC: 1 / btcPrice }));
-            }
-          }
-        } else {
-          console.warn('Gold rate fetch returned non-OK status. Using fallback.');
-        }
-      } catch (error) {
-        // Reduced log severity as we have fallbacks
-        console.warn('Real-time gold rates unavailable, staying with current rates.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-    // Refresh every 5 minutes
-    const interval = setInterval(fetchData, 300000);
-    return () => clearInterval(interval);
+    // Default to USDT for this app
+    setCurrency('USDT');
+    localStorage.setItem('preferred_currency', 'USDT');
+    setLoading(false);
   }, []);
 
   const changeCurrency = (newCurrency: string) => {
-    setCurrency(newCurrency);
-    localStorage.setItem('preferred_currency', newCurrency);
+    setCurrency('USDT');
+    localStorage.setItem('preferred_currency', 'USDT');
   };
 
   const convert = (amount: number, fromCurrency: string = 'USD'): string => {
-    if (isNaN(amount)) return '0.00 USDT';
-
-    // Convert input to USD base first
-    const rateFrom = rates[fromCurrency] || 1;
-    const amountInUSD = fromCurrency === 'USD' ? amount : amount / rateFrom;
-
-    if (currency === 'USDT') {
-      return `${amountInUSD.toFixed(2)} USDT`;
+    if (isNaN(amount)) return 'USDT 0.00';
+    // If from KES, convert to USDT using the 130 rate
+    let usdAmount = amount;
+    if (fromCurrency === 'KES') {
+      usdAmount = amount / 130;
     }
-
-    if (currency === 'GOLD' || currency === 'BTC_GOLD') {
-      const gRate = rates['GOLD'] || (31.1035 / 2375.40);
-      const grams = amountInUSD * gRate;
-      const paxg = grams / 31.1035;
-      return `${paxg.toFixed(6)} PAXG`;
-    }
-
-    if (currency === 'BTC') {
-      const btcRate = rates['BTC'] || (1/67000);
-      return `${(amountInUSD * btcRate).toFixed(8)} BTC`;
-    }
-
-    if (currency === 'KES') {
-      const rate = rates['KES'] || 130;
-      return new Intl.NumberFormat('en-KE', {
-        style: 'currency',
-        currency: 'KES',
-      }).format(amountInUSD * rate);
-    }
-
-    // Default to USD formatting
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amountInUSD);
+    return `USDT ${usdAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const formatReward = (points: number): string => {
-    // 1 point = 1 USDT internally key
-    return `${points.toFixed(2)} USDT`;
+    return `USDT ${points.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const formatCurrency = (amountInUSD: number): string => {
@@ -126,13 +50,13 @@ export const useCurrencyConverter = () => {
   };
 
   return {
-    currency,
-    rates,
+    currency: 'USDT',
+    rates: { USDT: 1, KES: 130, USD: 1 },
     changeCurrency,
     convert,
     formatReward,
     formatCurrency,
-    loading,
-    availableCurrencies: Object.keys(rates).sort()
+    loading: false,
+    availableCurrencies: ['USDT']
   };
 };

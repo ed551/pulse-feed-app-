@@ -123,6 +123,26 @@ export default function Layout() {
     return () => window.removeEventListener('pulse-app-lock', handleLockRequest);
   }, [currentUser?.email]);
 
+  // Active time tracking for rewards
+  useEffect(() => {
+    if (!currentUser || isIdle) return;
+    
+    // Reward 0.005 USDT for every 1 minute of active time spent in app
+    const interval = setInterval(async () => {
+      try {
+        await apiFetch('/api/user/time-reward', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentUser.uid })
+        });
+      } catch (e) {
+        console.error("Failed to add time reward");
+      }
+    }, 60000); // 1 minute
+
+    return () => clearInterval(interval);
+  }, [currentUser, isIdle]);
+
   const [circuitBreaker, setCircuitBreaker] = useState(getAIBreakerStatus());
   const [dbStatus, setDbStatus] = useState(getConnectionStatus());
 
@@ -201,8 +221,7 @@ export default function Layout() {
     { name: 'Toggle Frame', icon: Smartphone, color: 'text-purple-500', label: t('toggle_frame') },
     { name: 'Terms', icon: FileText, color: 'text-teal-500', label: t('terms') },
     { name: 'Privacy', icon: ShieldCheck, color: 'text-indigo-500', label: t('privacy') },
-    { name: 'Ads', icon: Gem, color: 'text-green-500', label: t('ads') },
-    { name: 'Binance API', icon: Database, color: 'text-amber-500', label: 'Binance' }
+    { name: 'Ads', icon: Gem, color: 'text-green-500', label: t('ads') }
   ];
 
   const handleCategoryClick = (categoryName: string) => {
@@ -221,10 +240,6 @@ export default function Layout() {
     }
     if (categoryName === 'Ads') {
       navigate('/ads');
-      return;
-    }
-    if (categoryName === 'Binance API') {
-      navigate('/binance');
       return;
     }
     if (categoryName === 'Toggle Frame') {
@@ -1100,14 +1115,6 @@ export default function Layout() {
                   )}>
                     {isIdle ? 'Idle' : 'Active'}
                   </span>
-                </div>
-
-                <div 
-                  onClick={() => navigate('/binance')}
-                  className="hidden lg:flex items-center px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-amber-50 dark:bg-amber-900/30 border border-amber-100 dark:border-amber-800 rounded-full shadow-sm group cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-all"
-                >
-                  <Database className="w-2.5 h-2.5 sm:w-3 h-3 text-amber-600 mr-1 group-hover:rotate-12 transition-transform" />
-                  <span className="text-[7px] sm:text-[9px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">Binance Sync</span>
                 </div>
 
                 {/* Points Balance Display */}

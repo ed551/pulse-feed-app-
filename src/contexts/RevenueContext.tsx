@@ -71,7 +71,8 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const IDLE_THRESHOLD = idleThreshold;
   const EARNING_INTERVAL = 30000; // Check every 30s locally
   const SYNC_INTERVAL = 300000; // Sync to DB every 5 mins
-  const ACTIVE_POINTS_PER_INTERVAL = 0.016; // 0.016 PAXG per 30s
+  const ACTIVE_POINTS_PER_INTERVAL = 0.016; // 0.016 USDT per 30s
+  const PLATFORM_POINTS_PER_INTERVAL = 0.016; // 0.016 USDT per 30s (50/50 Split)
   
   const monitorBehaviorWithAI = async () => {
     if (!currentUser || isAnalyzingBehavior || Date.now() - lastBehaviorCheckRef.current < 60000) return;
@@ -471,10 +472,10 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
       earningIntervalRef.current = setInterval(() => {
         if (pointsLocked) return;
         
-        // Accumulate locally: 0.016 USDT per interval
+        // Accumulate locally: 0.016 USDT per interval for each party (50/50)
         const userPts = ACTIVE_POINTS_PER_INTERVAL;
         const userUsd = userPts; // USDT Economy (1:1 with USD)
-        const platUsd = 0.5 * ACTIVE_POINTS_PER_INTERVAL; // Platform takes 50% extra from air
+        const platUsd = PLATFORM_POINTS_PER_INTERVAL; // Platform takes 50% share
 
         pendingUserPointsRef.current += userPts;
         pendingUserValueRef.current += userUsd;
