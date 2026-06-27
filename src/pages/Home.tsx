@@ -524,7 +524,6 @@ export default function Home() {
       {/* Integrated Media Center */}
       <div className="space-y-6">
         <YouTubeSection />
-        <MediaChannelsSection />
       </div>
 
       {/* Community Groups CTA */}

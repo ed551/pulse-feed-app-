@@ -123,11 +123,6 @@ export default function App() {
                 <Route path="/" element={<Layout />}>
                   <Route index element={<Home />} />
                   <Route path="groups" element={<Groups />} />
-                  <Route path="platform" element={
-                    <AdminRoute>
-                      <PlatformDashboard />
-                    </AdminRoute>
-                  } />
                   <Route path="events" element={
                     <ProtectedRoute>
                       <Events />

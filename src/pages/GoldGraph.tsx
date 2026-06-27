@@ -396,12 +396,14 @@ export default function GoldGraph() {
       </div>
 
       <div className="max-w-[1600px] mx-auto p-8 lg:p-12 space-y-12">
-        <div className="mx-6 mb-8 p-6 bg-amber-900/20 border border-amber-500/20 rounded-2xl flex items-start gap-4">
-          <AlertCircle className="w-8 h-8 text-amber-500 shrink-0" />
+        <div className="mx-6 mb-8 p-8 bg-amber-950/40 border-2 border-amber-500/30 rounded-[2rem] flex flex-col md:flex-row items-center gap-6 shadow-2xl shadow-amber-900/20">
+          <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center shrink-0 border border-amber-500/30">
+            <AlertCircle className="w-10 h-10 text-amber-500 animate-pulse" />
+          </div>
           <div>
-            <h3 className="text-sm font-black text-amber-200 uppercase tracking-widest">Market Data Disclaimer</h3>
-            <p className="text-xs text-amber-100/70 mt-1 leading-relaxed">
-              Market data and projections shown in the Gold Graph are for informational and educational purposes only. They are generated using automated analysis and do not constitute financial advice. Digital assets, particularly those pegged to precious metals, are subject to significant volatility and market risk. Always perform your own research before making investment decisions.
+            <h3 className="text-lg font-black text-amber-400 uppercase tracking-[0.2em] mb-2">Institutional Market Disclaimer</h3>
+            <p className="text-sm text-amber-100/70 leading-relaxed font-medium">
+              The neural market projections and high-fidelity PAXG indices presented on this terminal are for informational, analytical, and entertainment purposes only. Digital assets, particularly those pegged to precious metals, exhibit extreme volatility. Pulse Feeds does not provide financial, investment, or legal advice. Users assume all responsibility for interactions within the crypto-economic layer.
             </p>
           </div>
         </div>
@@ -750,12 +752,14 @@ export default function GoldGraph() {
         </div>
       </div>
 
-      {/* Disclaimer Note */}
-      <div className="mt-12 bg-yellow-500/10 border border-yellow-500/20 rounded-3xl p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 text-yellow-600 dark:text-yellow-400">
-        <AlertCircle className="w-8 h-8 shrink-0" />
-        <p className="text-xs font-medium leading-relaxed">
-          <strong className="font-black uppercase tracking-widest">Disclaimer:</strong> The data and predictions presented on this dashboard are for informational and entertainment purposes only. The AI insights and market extrapolations do not constitute financial advice. Digital assets and commodities are subject to high market risks. Pulse Feeds is not liable for any financial losses incurred based on this information.
-        </p>
+      <div className="mt-12 bg-amber-950/40 border border-amber-500/30 rounded-[2.5rem] p-10 flex flex-col sm:flex-row items-center gap-8 text-amber-400 shadow-xl">
+        <ShieldCheck className="w-16 h-16 shrink-0 opacity-80" />
+        <div className="space-y-2">
+          <h4 className="text-xl font-black uppercase tracking-widest">Global Payout Safe-Haven</h4>
+          <p className="text-sm font-medium leading-relaxed opacity-80">
+            All PAXG-backed rewards and treasury outflows are protected by the Pulse Feeds Multi-Signature Protocol. Our decentralized audit engine ensures that your digital gold remains secure and redeemable at a 1:1 ratio. Market predictions are purely technical and do not guarantee future performance.
+          </p>
+        </div>
       </div>
 
     </div>

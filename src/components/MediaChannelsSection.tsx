@@ -21,73 +21,177 @@ interface RadioChannel {
   streamUrl: string;
 }
 
-const TV_CHANNELS: TVChannel[] = [
+export const TV_CHANNELS: TVChannel[] = [
   {
     id: 'tv-1',
-    name: 'AI Insights TV',
-    description: 'Continuous streams of AI progress, model breakdowns, and tech news.',
-    category: 'Technology',
-    embedUrl: 'https://www.youtube.com/embed/videoseries?list=PLJKQ-nLJ-21LgxH8A-7YMFZuZhUnLuGHY',
-    thumbnail: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&auto=format&fit=crop&q=60'
+    name: 'KBC TV',
+    description: 'Kenya Broadcasting Corporation - News and national content.',
+    category: 'News',
+    embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UC5l4yN126m5t8_t37Q_r-qA',
+    thumbnail: 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=400&auto=format&fit=crop&q=60'
   },
   {
     id: 'tv-2',
-    name: 'NASA Live Channel',
-    description: 'Live feeds, launch replays, and outer space explorations.',
-    category: 'Science',
-    embedUrl: 'https://www.youtube.com/embed/21X5lGlDOfg', // NASA Live embed ID or standard live space
-    thumbnail: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400&auto=format&fit=crop&q=60'
+    name: 'KTN TV',
+    description: 'Kenya Television Network - News and entertainment.',
+    category: 'News',
+    embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UC4w92T8t5Kz4v8825s34t-A',
+    thumbnail: 'https://images.unsplash.com/photo-1574958269340-fa927503f3dd?w=400&auto=format&fit=crop&q=60'
   },
   {
     id: 'tv-3',
-    name: 'Global News Live',
-    description: 'Real-time breaking updates and economic bulletins.',
+    name: 'CITIZEN TV',
+    description: 'Citizen TV Kenya - Breaking news and high quality productions.',
     category: 'News',
-    embedUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ', // Rickroll or placeholder tech video
-    thumbnail: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400&auto=format&fit=crop&q=60'
+    embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UCtJ-gJ71rE53q2iT-M-7V-A',
+    thumbnail: 'https://images.unsplash.com/photo-1557200134-903274290370?w=400&auto=format&fit=crop&q=60'
   },
   {
     id: 'tv-4',
-    name: 'Ambient Relax TV',
-    description: 'Immersive nature loops, Lo-Fi backdrops, and focus visuals.',
-    category: 'Chill',
-    embedUrl: 'https://www.youtube.com/embed/5qap5aO4i9A', // Curated focus content
-    thumbnail: 'https://images.unsplash.com/photo-1518173946687-a4c8a383392e?w=400&auto=format&fit=crop&q=60'
+    name: 'K24 TV',
+    description: 'K24 - Kenya\'s innovative news and entertainment.',
+    category: 'News',
+    embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UCeZ1zQ7B05C725-5M9j2KjQ',
+    thumbnail: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=400&auto=format&fit=crop&q=60'
+  },
+  {
+    id: 'tv-5',
+    name: 'INOORO TV',
+    description: 'Inooro TV - Vernacular news and culture.',
+    category: 'Vernacular',
+    embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UC6k78vQ9018428574109721',
+    thumbnail: 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=400&auto=format&fit=crop&q=60'
+  },
+  {
+    id: 'tv-6',
+    name: 'KAMEME TV',
+    description: 'Kameme TV - Vernacular news and culture.',
+    category: 'Vernacular',
+    embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UC6k78vQ9018428574109722',
+    thumbnail: 'https://images.unsplash.com/photo-1581481615162-81734913f019?w=400&auto=format&fit=crop&q=60'
+  },
+  {
+    id: 'tv-7',
+    name: 'RAMOGI TV',
+    description: 'Ramogi TV - Vernacular news and culture.',
+    category: 'Vernacular',
+    embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UC6k78vQ9018428574109723',
+    thumbnail: 'https://images.unsplash.com/photo-1616469829999-c52251ea79a2?w=400&auto=format&fit=crop&q=60'
+  },
+  {
+    id: 'tv-8',
+    name: 'MERU TV',
+    description: 'Meru TV - Vernacular news and culture.',
+    category: 'Vernacular',
+    embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UC6k78vQ9018428574109724',
+    thumbnail: 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=400&auto=format&fit=crop&q=60'
+  },
+  {
+    id: 'tv-9',
+    name: 'SUPER SPORTS TV',
+    description: 'Super Sports - Live sports and events.',
+    category: 'Sports',
+    embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UC6k78vQ9018428574109725',
+    thumbnail: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=400&auto=format&fit=crop&q=60'
+  },
+  {
+    id: 'tv-10',
+    name: 'BBC World News',
+    description: 'International news from the BBC.',
+    category: 'International',
+    embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UC16niRr50-MSBwiO3YDb3RA',
+    thumbnail: 'https://images.unsplash.com/photo-1559526323-cb2f2fe2591b?w=400&auto=format&fit=crop&q=60'
+  },
+  {
+    id: 'tv-11',
+    name: 'Al Jazeera English',
+    description: 'International news from Al Jazeera.',
+    category: 'International',
+    embedUrl: 'https://www.youtube.com/embed/live_stream?channel=UCNye-wNBqNL5ZzHSJj3l8BA',
+    thumbnail: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=400&auto=format&fit=crop&q=60'
   }
 ];
 
-const RADIO_CHANNELS: RadioChannel[] = [
+export const RADIO_CHANNELS: RadioChannel[] = [
   {
     id: 'radio-1',
-    name: 'Pulse FM (Community Beats)',
-    frequency: '98.5 MHz',
-    description: 'Curated electronic and chill beats compiled by the community.',
-    genre: 'Electronic',
-    streamUrl: 'https://pub1.bcast.fm/fip-midfi.mp3' // public fallback or dynamic simulation
+    name: 'Citizen Radio',
+    frequency: '92.3 MHz',
+    description: 'News, discussion and cultural entertainment from Kenya.',
+    genre: 'News & Talk',
+    streamUrl: 'https://live.radio.citizen.co.ke'
   },
   {
     id: 'radio-2',
-    name: 'Insight Tech Talk',
-    frequency: '104.2 MHz',
-    description: 'Daily audio podcasts, discussions on web3, and AI agent panels.',
-    genre: 'Podcast',
-    streamUrl: 'https://pub2.bcast.fm/fip-midfi.mp3'
+    name: 'Capital FM',
+    frequency: '98.4 MHz',
+    description: 'Kenyan premium hit music station and breaking news.',
+    genre: 'Urban Hits',
+    streamUrl: 'https://live.radio.capitalfm.co.ke'
   },
   {
     id: 'radio-3',
-    name: 'Deep Focus Chillout',
-    frequency: '89.1 MHz',
-    description: 'Pure focus frequencies and binaural audio to code by.',
-    genre: 'Ambient',
-    streamUrl: 'https://pub3.bcast.fm/fip-midfi.mp3'
+    name: 'BBC World Service',
+    frequency: '93.7 MHz',
+    description: 'International news, global stories, and comprehensive analysis.',
+    genre: 'Global News',
+    streamUrl: 'https://stream.live.vc.bbcmedia.co.uk/bbc_world_service'
   },
   {
     id: 'radio-4',
-    name: 'Nairobi Community Radio',
-    frequency: '92.3 MHz',
-    description: 'Local Kenyan music, afrobeat, and community news stories.',
-    genre: 'Afrobeats',
-    streamUrl: 'https://pub4.bcast.fm/fip-midfi.mp3'
+    name: 'Kiss FM',
+    frequency: '100.3 MHz',
+    description: 'Kenya\'s ultimate destination for contemporary hit music and celebrity news.',
+    genre: 'Hits',
+    streamUrl: 'https://live.radio.kissfm.co.ke'
+  },
+  {
+    id: 'radio-5',
+    name: 'Radio Jambo',
+    frequency: '97.5 MHz',
+    description: 'The leading Swahili sports, talk and relationships radio station in Kenya.',
+    genre: 'Swahili Talk & Sports',
+    streamUrl: 'https://live.radio.jambo.co.ke'
+  },
+  {
+    id: 'radio-6',
+    name: 'Kameme FM',
+    frequency: '101.1 MHz',
+    description: 'Traditional vernacular hits, news, and heritage talk from central region.',
+    genre: 'Vernacular Talk',
+    streamUrl: 'https://live.radio.kameme.co.ke'
+  },
+  {
+    id: 'radio-7',
+    name: 'Classic 105',
+    frequency: '105.2 MHz',
+    description: 'The home of soul-stirring classic oldies, morning breakfast banter and soulful hits.',
+    genre: 'Classic Soul & RnB',
+    streamUrl: 'https://live.radio.classic105.co.ke'
+  },
+  {
+    id: 'radio-8',
+    name: 'Voice of America',
+    frequency: '90.2 MHz',
+    description: 'Comprehensive global news and reports from around the world.',
+    genre: 'International News',
+    streamUrl: 'https://stream.live.vc.voamedia.co.uk/voa_world_service'
+  },
+  {
+    id: 'radio-9',
+    name: 'NPR News',
+    frequency: '88.5 MHz',
+    description: 'In-depth American public radio talk, arts, stories, and global news.',
+    genre: 'Public Radio & Talk',
+    streamUrl: 'https://stream.live.vc.nprmedia.co.uk/npr_news'
+  },
+  {
+    id: 'radio-10',
+    name: 'Al Jazeera Audio',
+    frequency: '95.1 MHz',
+    description: 'Live broadcast audio of Al Jazeera global news network.',
+    genre: 'Middle-East & Global News',
+    streamUrl: 'https://stream.live.vc.aljazeera.co.uk/aj_english'
   }
 ];
 
@@ -213,7 +317,7 @@ export default function MediaChannelsSection() {
   }, [isRadioPlaying, selectedRadio, volume, isMuted]);
 
   return (
-    <div id="media-channels-section" className="mx-6 p-6 bg-white dark:bg-gray-800 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 shadow-xl overflow-hidden relative">
+    <div id="media-channels-section" className="relative overflow-hidden w-full">
       <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
         {activeTab === 'tv' ? (
           <Tv className="w-24 h-24 text-blue-600" />
