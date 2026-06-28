@@ -469,7 +469,7 @@ export default function Rewards() {
           scaToken: pin
         };
 
-        const response = await apiFetch('/api/payout/international', {
+        const response = await apiFetch('/api/payout/crypto', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
