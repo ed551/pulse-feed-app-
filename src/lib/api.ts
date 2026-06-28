@@ -9,7 +9,8 @@ export const getApiUrl = (path: string): string => {
   }
 
   const rawBaseUrl = import.meta.env.VITE_API_BASE_URL;
-  const baseUrl = (rawBaseUrl || 'https://eight-webs-attend.loca.lt').trim();
+const baseUrl = 'https://eight-webs-attend.loca.lt';
+  
   
   const relayUrl = (import.meta.env.VITE_API_RELAY_URL || 'https://ais-pre-vpm462ccg3jpy6a7n4c54f-708516523970.europe-west2.run.app').trim();
   
