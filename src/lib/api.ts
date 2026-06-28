@@ -88,14 +88,16 @@ export const apiFetch = async (path: string, options: RequestInit = {}, retries 
     
     try {
       const fetchOptions: RequestInit = {
-        ...options,
-        signal: controller.signal,
-        mode: 'cors',
-        credentials: 'omit', // Use omit to be safe for cross-origin if not using cookies
-        headers: {
-          ...options.headers,
-        },
-      };
+    ...options,
+    signal: controller.signal,
+    mode: 'cors',
+    credentials: 'omit', // Use omit to be safe for cross-origin if not using cookies
+    headers: {
+        'Bypass-Tunnel-Reminder': 'true',
+        ...options.headers,
+    },
+};
+      
 
       // Only add JSON content type if it's a POST/PUT with a body
       if (options.method && ['POST', 'PUT', 'PATCH'].includes(options.method.toUpperCase()) && options.body && !fetchOptions.headers?.hasOwnProperty('Content-Type')) {
