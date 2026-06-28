@@ -9,7 +9,8 @@ export const getApiUrl = (path: string): string => {
   }
 
   const rawBaseUrl = import.meta.env.VITE_API_BASE_URL;
-  const baseUrl = (rawBaseUrl || 'https://89-168-120-135.sslip.io').trim();
+  const baseUrl = (rawBaseUrl || 'https://eight-webs-attend.loca.lt').trim();
+  
   const relayUrl = (import.meta.env.VITE_API_RELAY_URL || 'https://ais-pre-vpm462ccg3jpy6a7n4c54f-708516523970.europe-west2.run.app').trim();
   
   const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
