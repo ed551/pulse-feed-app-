@@ -5,6 +5,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { RevenueProvider } from "./contexts/RevenueContext";
 import { HealthProvider } from "./contexts/HealthContext";
+import { IntelligenceProvider } from "./contexts/IntelligenceContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { Loader2 } from "lucide-react";
 import { Analytics } from "./components/Analytics";
@@ -112,7 +113,8 @@ export default function App() {
       <AuthProvider>
         <RevenueProvider>
           <HealthProvider>
-            <HashRouter>
+            <IntelligenceProvider>
+              <HashRouter>
               <GlobalHealthWrapper />
               <WakeLockHandler />
               <IdleAILock />
@@ -123,6 +125,11 @@ export default function App() {
                 <Route path="/" element={<Layout />}>
                   <Route index element={<Home />} />
                   <Route path="groups" element={<Groups />} />
+                  <Route path="platform" element={
+                    <AdminRoute>
+                      <PlatformDashboard />
+                    </AdminRoute>
+                  } />
                   <Route path="events" element={
                     <ProtectedRoute>
                       <Events />
@@ -214,6 +221,7 @@ export default function App() {
               </Routes>
             </Suspense>
           </HashRouter>
+            </IntelligenceProvider>
         </HealthProvider>
       </RevenueProvider>
     </AuthProvider>

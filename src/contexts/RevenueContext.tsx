@@ -10,6 +10,8 @@ interface RevenueContextType {
   pointsLocked: boolean;
   activeSeconds: number;
   totalEarnedToday: number;
+  pendingPoints: number;
+  consistentPoints: number;
   addRevenue: (userAmount: number, platformAmount: number, reason: string, source: 'ad' | 'education' | 'active_time' | 'dating' | 'community' | 'events') => Promise<void>;
   addPlatformRevenue: (amount: number, reason: string) => Promise<void>;
   addPlatformExpense: (amount: number, reason: string) => Promise<void>;
@@ -30,8 +32,59 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isIdle, setIsIdle] = useState(false);
   const [pointsLocked, setPointsLocked] = useState(false);
   const [activeSeconds, setActiveSeconds] = useState(0);
-  const [totalEarnedToday, setTotalEarnedToday] = useState(0);
+  const [totalEarnedToday, setTotalEarnedToday] = useState<number>(() => {
+    try {
+      // Look at localStorage if available (will be fetched dynamically on mount if currentUser is loaded)
+      const saved = localStorage.getItem('pulse_earned_today');
+      const savedTime = localStorage.getItem('pulse_earned_today_time');
+      if (saved && savedTime) {
+        const savedDate = new Date(parseInt(savedTime)).toDateString();
+        const currentDate = new Date().toDateString();
+        if (savedDate === currentDate) {
+          return parseFloat(saved);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return 0;
+  });
   const [isAnalyzingBehavior, setIsAnalyzingBehavior] = useState(false);
+  const [pendingPoints, setPendingPoints] = useState(0);
+  
+  const [optimisticPointsOffset, setOptimisticPointsOffset] = useState(0);
+  const lastDbPointsRef = useRef(0);
+
+  // Derive consistentPoints mathematically without jumps or counting backwards
+  const consistentPoints = (userData?.points || 0) + pendingPoints + optimisticPointsOffset;
+
+  useEffect(() => {
+    if (userData?.points !== undefined) {
+      const dbPts = userData.points;
+      const prevDbPts = lastDbPointsRef.current;
+      lastDbPointsRef.current = dbPts;
+
+      if (dbPts > prevDbPts && prevDbPts > 0) {
+        const increase = dbPts - prevDbPts;
+        setOptimisticPointsOffset(prev => Math.max(0, prev - increase));
+      } else if (dbPts < prevDbPts) {
+        // If DB points decreased (e.g. withdrawal, reset), clear the offset
+        setOptimisticPointsOffset(0);
+      }
+    }
+  }, [userData?.points]);
+
+  // Persist totalEarnedToday in localStorage
+  useEffect(() => {
+    if (currentUser) {
+      try {
+        localStorage.setItem('pulse_earned_today', totalEarnedToday.toString());
+        localStorage.setItem('pulse_earned_today_time', Date.now().toString());
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [totalEarnedToday, currentUser]);
   
   // Self-Update Engine: Batched Synchronization
   const pendingUserPointsRef = useRef(0);
@@ -169,6 +222,10 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
         balance: increment(userValUsd),
         activeTimeRevenue: increment(userValUsd)
       });
+      
+      // Update optimistic offset before resetting pending points to ensure atomic transition
+      setOptimisticPointsOffset(prev => prev + userPts);
+      setPendingPoints(0);
 
       // User-specific Points Ledger
       await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
@@ -221,6 +278,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
     pendingUserPointsRef.current += userPts;
     pendingUserValueRef.current += userVal;
     pendingPlatformValueRef.current += platVal;
+    setPendingPoints(pendingUserPointsRef.current);
   }
 };
 
@@ -472,17 +530,27 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
       earningIntervalRef.current = setInterval(() => {
         if (pointsLocked) return;
         
-        // Accumulate locally: 0.016 USDT per interval for each party (50/50)
-        const userPts = ACTIVE_POINTS_PER_INTERVAL;
+        // Accumulate locally based on 60/40 split and membership level
+        const userMembership = (userDataRef.current?.membershipLevel || 'bronze').toLowerCase();
+        let membershipMultiplier = 1.0;
+        if (userMembership === 'gold') membershipMultiplier = 1.5;
+        else if (userMembership === 'silver') membershipMultiplier = 1.25;
+
+        // Base total amount per interval (30s) is 0.032 USD
+        const baseTotalPerInterval = 0.032;
+        const baseUserUsd = baseTotalPerInterval * 0.60;
+        
+        const userPts = baseUserUsd * membershipMultiplier;
         const userUsd = userPts; // USDT Economy (1:1 with USD)
-        const platUsd = PLATFORM_POINTS_PER_INTERVAL; // Platform takes 50% share
+        const platUsd = baseTotalPerInterval * 0.40;
 
         pendingUserPointsRef.current += userPts;
         pendingUserValueRef.current += userUsd;
         pendingPlatformValueRef.current += platUsd;
 
+        setPendingPoints(pendingUserPointsRef.current);
         setTotalEarnedToday(prev => prev + userPts);
-        console.log(`[Self-Update] Pending Points: ${pendingUserPointsRef.current}. Sync in ${Math.round((SYNC_INTERVAL - (Date.now() - lastSyncRef.current)) / 1000)}s`);
+        console.log(`[Self-Update] Pending Points: ${pendingUserPointsRef.current.toFixed(4)}. Sync in ${Math.round((SYNC_INTERVAL - (Date.now() - lastSyncRef.current)) / 1000)}s`);
 
         // Check if it's time to sync
         if (Date.now() - lastSyncRef.current >= SYNC_INTERVAL) {
@@ -519,7 +587,7 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
   }, [isIdle, currentUser]);
 
   return (
-    <RevenueContext.Provider value={{ isIdle, setIsIdle, pointsLocked, activeSeconds, totalEarnedToday, addRevenue, addPlatformRevenue, addPlatformExpense, deductBalance, syncActiveTimeRewards: syncPendingToFirestore }}>
+    <RevenueContext.Provider value={{ isIdle, setIsIdle, pointsLocked, activeSeconds, totalEarnedToday, pendingPoints, consistentPoints, addRevenue, addPlatformRevenue, addPlatformExpense, deductBalance, syncActiveTimeRewards: syncPendingToFirestore }}>
       {children}
     </RevenueContext.Provider>
   );

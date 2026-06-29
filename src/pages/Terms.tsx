@@ -136,8 +136,8 @@ export default function Terms() {
           Pulse Feeds utilizes a multi-tiered revenue distribution model to ensure platform sustainability and user reward:
         </p>
         <ul>
-          <li><strong>User Activity & Ads Involvement (50/50 Distribution):</strong> Revenue generated from general user activity, including Ads involvement, social interactions, community discussions, and active engagement, is distributed as a 50% split for the Platform and 50% as a User Salary. This distribution is exclusive of direct user payments.</li>
-          <li><strong>Platform Primary Revenue (100% Platform):</strong> Revenue generated from activities not directly involving user salary generation, including App Creation fees, system optimizations, and all direct user payments (e.g., event tickets, sponsorships, premium unlocks), is retained 100% by the Platform.</li>
+          <li><strong>User Activity (60/40 Distribution):</strong> Revenue generated from general user activity, including social interactions, community discussions, and active engagement, is distributed as a 60% split for the User and 40% for Platform maintenance. This distribution is exclusive of direct user payments.</li>
+          <li><strong>Platform Primary Revenue (100% Platform):</strong> Revenue generated from Ads, App Creation fees, system optimizations, and all direct user payments (e.g., memberships, subscriptions, event tickets, sponsorships, premium unlocks), is retained 100% by the Platform.</li>
         </ul>
         <h3>6.3 Monthly Withdrawal Cycle and Thresholds</h3>
         <p>

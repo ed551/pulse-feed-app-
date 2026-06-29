@@ -58,7 +58,7 @@ export default function Layout() {
     { type: t('weather_cloudy'), icon: Cloud, color: 'text-slate-400', bg: 'from-slate-500/20 to-gray-500/20', glow: 'drop-shadow-[0_0_8px_rgba(226,232,240,0.8)]', symbol: '⛅', temp: '--°C', tempValue: 20 },
     { type: t('weather_stormy'), icon: CloudLightning, color: 'text-purple-500', bg: 'from-purple-500/20 to-indigo-500/20', glow: 'drop-shadow-[0_0_8px_rgba(168,85,247,0.8)]', symbol: '⛈️', temp: '--°C', tempValue: 18 }
   ];
-  const { isIdle, totalEarnedToday, pointsLocked } = useRevenue();
+  const { isIdle, totalEarnedToday, pointsLocked, consistentPoints } = useRevenue();
   const navigate = useNavigate();
   const [isDark, setIsDark] = useState(() => {
     // Check localStorage first for immediate flash prevention
@@ -1121,7 +1121,7 @@ export default function Layout() {
                 <div className="flex items-center px-2 sm:px-3 py-1 bg-yellow-50 dark:bg-yellow-900/30 rounded-full border border-yellow-100 dark:border-yellow-800 shadow-sm group">
                   <Layers className="w-3.5 h-3.5 sm:w-4 h-4 text-yellow-600 mr-1 sm:mr-1.5 group-hover:scale-110 transition-transform" />
                   <span className="text-[10px] sm:text-xs font-black text-yellow-800 dark:text-yellow-300 flex items-center gap-1">
-                    {formatReward(userData?.points || 0)}
+                    {formatReward(consistentPoints)}
                   </span>
                 </div>
 
@@ -1705,10 +1705,10 @@ export default function Layout() {
                         <span className="text-xs font-bold text-yellow-700 dark:text-yellow-300">Liquidity Reserve</span>
                       </div>
                       <p className="text-lg font-black text-yellow-900 dark:text-yellow-100">
-                        {formatReward(userData?.points || 0)}
+                        {formatReward(consistentPoints)}
                       </p>
                       <p className="text-[8px] font-black text-yellow-700/60 uppercase tracking-tighter">
-                        +{formatReward(userData?.points || 0)} Accumulation
+                        +{formatReward(totalEarnedToday)} Today Accumulation
                       </p>
                     </div>
                     <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-2xl border border-yellow-100 dark:border-yellow-800/50 flex flex-col gap-1">

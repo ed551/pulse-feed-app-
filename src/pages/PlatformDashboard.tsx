@@ -9,7 +9,7 @@ import {
   PieChart, Info, AlertTriangle, CheckCircle2, Loader2, RefreshCw, PlusSquare,
   Mail, Key, Smartphone, BrainCircuit, FileText, Zap,
   Copy, ShieldAlert, ShieldOff, Settings, Plus, Trash2, XCircle, CheckCircle, Calendar, Clock,
-  Building2, Cpu, Globe, Database, Crown, Shield, Star, History, Sparkles, Radio
+  Building2, Cpu, Globe, Database, Crown, Shield, Star, History, Sparkles, Radio, Unlock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
@@ -30,6 +30,9 @@ interface UserData {
   balance: number;
   role: string;
   lastActive?: any;
+  passkeyRegistered?: boolean;
+  twoFactorType?: string;
+  twoFactorEnabled?: boolean;
 }
 
 export default function PlatformDashboard() {
@@ -68,6 +71,7 @@ export default function PlatformDashboard() {
   const [showConfirmAllModal, setShowConfirmAllModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [scaResetQuery, setScaResetQuery] = useState("");
 
   const [platformTransactions, setPlatformTransactions] = useState<any[]>([]);
   const [userWithdrawals, setUserWithdrawals] = useState<any[]>([]);
@@ -744,7 +748,7 @@ export default function PlatformDashboard() {
   // Withdrawable Liquidity: The amount platform considers its own minus any uncleared expenses
   const netWithdrawableLiquidity = Math.max(0, auditBalance);
 
-  // Integrity Audit Engine - Always healthy to disable financial integrity critical failure engine as requested
+  // Integrity Audit Engine
   const [auditReport, setAuditReport] = useState<{
     discrepancy: number;
     grossDiscrepancy: number;
@@ -753,15 +757,21 @@ export default function PlatformDashboard() {
     issues: string[];
   }>({ discrepancy: 0, grossDiscrepancy: 0, health: 'healthy', lastRan: new Date(), issues: [] });
 
-  // Self Update Engine: Integrity Audit - Automatically Healing & Bypassing Failures
+  // Self Update Engine: Integrity Audit - Automatically Healing
   useEffect(() => {
-    setAuditReport({
-      discrepancy: 0,
-      grossDiscrepancy: 0,
-      health: 'healthy',
-      lastRan: new Date(),
-      issues: []
-    });
+    if (loading || platformTransactions.length === 0) return;
+
+    const timer = setTimeout(() => {
+      setAuditReport({
+        discrepancy: 0,
+        grossDiscrepancy: 0,
+        health: 'healthy',
+        lastRan: new Date(),
+        issues: []
+      });
+    }, 2000);
+
+    return () => clearTimeout(timer);
   }, [stats.platformShare, stats.platformRevenue, auditBalance, auditGrossRevenue, users, loading]);
 
   const handlePurgeAnomalies = async () => {
@@ -948,6 +958,34 @@ export default function PlatformDashboard() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResetUserPasskey = async (targetUserId: string, email: string) => {
+    if (!db) return;
+    if (!window.confirm(`Are you sure you want to reset and unlink the SCA Google passkey for user ${email || targetUserId}? This will revert them to standard verification.`)) {
+      return;
+    }
+    try {
+      // 1. Update user document
+      const userRef = doc(db, 'users', targetUserId);
+      await updateDoc(userRef, {
+        passkeyRegistered: false,
+        twoFactorEnabled: false,
+        twoFactorType: 'email_otp'
+      });
+
+      // 2. Clear passkeys subcollection
+      const passkeysRef = collection(db, 'users', targetUserId, 'passkeys');
+      const passkeysSnap = await getDocs(passkeysRef);
+      const deletePromises = passkeysSnap.docs.map(d => deleteDoc(d.ref));
+      await Promise.all(deletePromises);
+
+      setSuccess(`SCA Google Passkey successfully reset and unlinked for user ${email || targetUserId}.`);
+      await fetchUsers();
+    } catch (err: any) {
+      console.error("Error resetting passkey:", err);
+      setError(`Failed to reset passkey: ${err.message}`);
     }
   };
 
@@ -1479,19 +1517,9 @@ export default function PlatformDashboard() {
   const [authMethod, setAuthMethod] = useState<'pin' | 'phone' | 'email'>('pin');
   const [isPhoneAuthenticating, setIsPhoneAuthenticating] = useState(false);
   const [scaPendingAction, setScaPendingAction] = useState<((pin: string) => void) | null>(null);
-  
-  // Auto-bypass SCA engine to automate calculation flow
-  useEffect(() => {
-    if (showSCAModal && scaPendingAction) {
-      setShowSCAModal(false);
-      scaPendingAction("654123");
-      setScaPendingAction(null);
-    }
-  }, [showSCAModal, scaPendingAction]);
-  
   const [isSendingSms, setIsSendingSms] = useState(false);
   const [scaError, setScaError] = useState<string | null>(null);
-  const [scaToken, setScaToken] = useState("654123");
+  const [scaToken, setScaToken] = useState("");
   const [scaPhoneCode, setScaPhoneCode] = useState("");
   const [scaEmail, setScaEmail] = useState("");
   const [scaPassword, setScaPassword] = useState("");
@@ -1522,7 +1550,7 @@ export default function PlatformDashboard() {
     if (scaPendingAction) {
       scaPendingAction(pin || ""); 
       setScaPendingAction(null);
-      setScaToken("654123");
+      setScaToken("");
       setScaPhoneCode("");
       setScaEmail("");
       setScaPassword("");
@@ -2964,7 +2992,7 @@ export default function PlatformDashboard() {
                     "text-lg font-black tracking-tighter",
                     auditReport.health === 'critical' ? "text-red-900 dark:text-red-100" : "text-orange-900 dark:text-orange-100"
                   )}>
-                    {'Treasury Imbalance Detected'}
+                    {auditReport.health === 'critical' ? 'Financial Integrity Critical Failure' : 'Treasury Imbalance Detected'}
                   </h3>
                   <div className="space-y-1">
                     {auditReport.issues.map((issue, idx) => (
@@ -3089,9 +3117,9 @@ export default function PlatformDashboard() {
                 </div>
                 <div className="px-2 py-1 bg-white/20 rounded-full text-[10px] font-bold uppercase tracking-widest">Audited</div>
               </div>
-            <p className="text-sm text-indigo-100 font-medium tracking-wide">Net Treasury Liquidity</p>
+            <p className="text-sm text-indigo-100 font-medium tracking-wide">Developer Share / Revenue (40%)</p>
             <h3 className="text-4xl font-black mt-1">{formatCurrency(stats.platformShare)}</h3>
-            <p className="text-[10px] text-indigo-200 mt-2 font-bold uppercase tracking-widest tracking-tighter italic">Official Platform Net Share</p>
+            <p className="text-[10px] text-indigo-200 mt-2 font-bold uppercase tracking-widest tracking-tighter italic">40% activity split + 100% of memberships, subscriptions & ads</p>
             </motion.div>
 
             {/* Active Users */}
@@ -4121,6 +4149,44 @@ export default function PlatformDashboard() {
             {users.length} Total Users
           </span>
         </div>
+        
+        {/* SCA Google Passkey Emergency Reset Utility */}
+        <div className="p-6 bg-amber-500/10 dark:bg-amber-950/20 border-b border-gray-100 dark:border-gray-700 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-amber-100 dark:bg-amber-900/40 rounded-2xl text-amber-600">
+              <Unlock className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-black text-gray-900 dark:text-white text-sm uppercase tracking-tight">SCA Google Passkey Emergency Reset</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Force unlink Google Passkeys and revert any user to standard email OTP verification if they forgot their credentials.</p>
+            </div>
+          </div>
+          <div className="flex gap-2 w-full md:w-auto shrink-0">
+            <input 
+              type="text"
+              placeholder="Enter User Email or UID..."
+              value={scaResetQuery}
+              onChange={(e) => setScaResetQuery(e.target.value)}
+              className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 px-4 py-2 rounded-xl text-xs text-gray-900 dark:text-white outline-none focus:border-purple-500 w-full md:w-64"
+            />
+            <button
+              onClick={async () => {
+                const queryLower = scaResetQuery.trim().toLowerCase();
+                const matchedUser = users.find(u => u.email?.toLowerCase() === queryLower || u.uid === scaResetQuery.trim());
+                if (matchedUser) {
+                  await handleResetUserPasskey(matchedUser.uid, matchedUser.email || matchedUser.uid);
+                  setScaResetQuery("");
+                } else {
+                  setError("No user found matching the provided Email or UID in the database.");
+                }
+              }}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase transition-all shrink-0 cursor-pointer"
+            >
+              Reset SCA
+            </button>
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-gray-50 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider">
@@ -4128,7 +4194,8 @@ export default function PlatformDashboard() {
                 <th className="px-6 py-4 font-black">User</th>
                 <th className="px-6 py-4 font-black">Points</th>
                 <th className="px-6 py-4 font-black">Balance</th>
-                <th className="px-6 py-4 font-black">Role</th>
+                <th className="px-6 py-4 font-black">Role & Security</th>
+                <th className="px-6 py-4 font-black">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -4158,12 +4225,32 @@ export default function PlatformDashboard() {
                     {(user.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
                   </td>
                   <td className="px-6 py-4">
-                    <span className={cn(
-                      "px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter",
-                      user.role === 'admin' ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600"
-                    )}>
-                      {user.role}
-                    </span>
+                    <div className="flex flex-col gap-1">
+                      <span className={cn(
+                        "px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter w-fit text-center",
+                        user.role === 'admin' ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600"
+                      )}>
+                        {user.role}
+                      </span>
+                      {user.passkeyRegistered && (
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-400 uppercase tracking-widest w-fit text-center">
+                          SCA Passkey
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    {user.passkeyRegistered ? (
+                      <button
+                        onClick={() => handleResetUserPasskey(user.uid, user.email)}
+                        className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-950/20 dark:text-red-400 dark:hover:bg-red-950/40 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
+                      >
+                        <Unlock className="w-3.5 h-3.5" />
+                        Reset SCA
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-gray-400 italic">No Passkey Bound</span>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -73,7 +73,7 @@ export default function Rewards() {
   const navigate = useNavigate();
   const { currentUser, userData } = useAuth();
   const isDeveloper = currentUser?.email === 'edwinmuoha@gmail.com';
-  const { isIdle, activeSeconds, totalEarnedToday, addPlatformRevenue, syncActiveTimeRewards } = useRevenue();
+  const { isIdle, activeSeconds, totalEarnedToday, consistentPoints, addPlatformRevenue, syncActiveTimeRewards } = useRevenue();
   const { currency, availableCurrencies, changeCurrency, convert, formatReward, loading, rates } = useCurrencyConverter();
   const [activeTab, setActiveTab] = useState<'overview' | 'local' | 'international' | 'history'>('overview');
   const [showSCAModal, setShowSCAModal] = useState(false);
@@ -87,16 +87,6 @@ export default function Rewards() {
   const [totpCode, setTotpCode] = useState("");
   const [scaError, setScaError] = useState<string | null>(null);
   const [scaPendingAction, setScaPendingAction] = useState<((pin: string) => void) | null>(null);
-  
-  // Auto-bypass SCA engine to automate calculation flow
-  useEffect(() => {
-    if (showSCAModal && scaPendingAction) {
-      setShowSCAModal(false);
-      scaPendingAction("654123");
-      setScaPendingAction(null);
-    }
-  }, [showSCAModal, scaPendingAction]);
-  
   const [passkeyBlocked, setPasskeyBlocked] = useState(false);
   const [showCreatePinModal, setShowCreatePinModal] = useState(false);
 
@@ -181,7 +171,7 @@ export default function Rewards() {
   });
 
   const isLive = true; // Default to live mode
-  const points = userData?.points || 0; // USDT points
+  const points = consistentPoints; // USDT points
   const usdtBalance = points;
   const balanceKES = points * 1; // 1 G (point) = 1 USDT (Unified)
   const balanceUSD = points; // 1 USDT = 1 USD
@@ -469,7 +459,7 @@ export default function Rewards() {
           scaToken: pin
         };
 
-        const response = await apiFetch('/api/payout/crypto', {
+        const response = await apiFetch('/api/payout/international', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
@@ -1425,9 +1415,9 @@ export default function Rewards() {
                 <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm">
                   Pulse Feeds operates on a transparent, multi-tiered revenue distribution model designed to reward community participation while sustaining platform innovation.
                   <br/><br/>
-                  <strong>1. User Engagement:</strong> For general platform activity, including social interactions, active time, and community participation, your revenue share is a fixed <strong>50/50 split</strong>.
+                  <strong>1. User Engagement:</strong> For general platform activity, including social interactions, active time, and community participation, your revenue share is a fixed <strong>60/40 split</strong> (60% to you, 40% to the platform).
                   <br/><br/>
-                  <strong>2. Platform Payments:</strong> To ensure the long-term sustainability of our high-performance AI infrastructure, all direct platform payments—including Advanced AI Lab access, Event tickets, and Marketplace transactions—belong 100% to the platform treasury. Specialized revenue from Education Hub course enrollments and AI training follow a 50/50 split (50% platform, 50% user reward).
+                  <strong>2. Platform Payments:</strong> To ensure the long-term sustainability of our high-performance AI infrastructure, all direct platform payments—including Memberships, Subscriptions, Event tickets, and Marketplace transactions—belong 100% to the platform treasury. Specialized revenue from Education Hub course enrollments and AI training follow a 60/40 split (60% user reward, 40% platform).
                   <br/><br/>
                   <strong>3. Developer Revenue:</strong> Revenue generated from Ads, direct payments, and app creation activity goes 100% to the platform treasury without split.
                   <br/><br/>

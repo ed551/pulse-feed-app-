@@ -1,62 +1,81 @@
 import { useState, useEffect } from 'react';
-import { apiFetch } from '../lib/api';
 
 export interface ExchangeRates {
   [currencyCode: string]: number;
 }
 
 export const useCurrencyConverter = () => {
-  // Default rates (Base: 1 USD)
-  const [rates, setRates] = useState<ExchangeRates>({ 
-    USD: 1,
-    USDT: 1,
-    KES: 1, // unified to 1 USDT
-    GOLD: 31.1035 / 2375.40, // ~0.01309 g per USD
-    BTC: 1 / 67000
+  // Rates relative to USD (Base: 1 USD)
+  const [rates] = useState<ExchangeRates>({ 
+    USD: 1.0,
+    USDT: 1.0,
+    KES: 130.0,
+    EUR: 0.92,
+    GBP: 0.79,
+    CAD: 1.37,
+    AUD: 1.50,
+    JPY: 155.0,
+    INR: 83.5,
+    NGN: 1500.0
   });
-  const [currency, setCurrency] = useState<string>('USDT');
-  const [loading, setLoading] = useState(true);
-  const [goldPriceUSD, setGoldPriceUSD] = useState<number>(2375.40); 
-  const [btcPriceUSD, setBtcPriceUSD] = useState<number>(67000);
 
-  useEffect(() => {
-    // Default to USDT for this app
-    setCurrency('USDT');
-    localStorage.setItem('preferred_currency', 'USDT');
-    setLoading(false);
-  }, []);
+  const [currency, setCurrencyState] = useState<string>(() => {
+    return localStorage.getItem('preferred_currency') || 'USDT';
+  });
 
   const changeCurrency = (newCurrency: string) => {
-    setCurrency('USDT');
-    localStorage.setItem('preferred_currency', 'USDT');
+    setCurrencyState(newCurrency);
+    localStorage.setItem('preferred_currency', newCurrency);
+    // Dispatch a custom event to notify other components of the currency change
+    window.dispatchEvent(new Event('preferred-currency-changed'));
   };
 
+  useEffect(() => {
+    const handleCurrencyChange = () => {
+      const saved = localStorage.getItem('preferred_currency');
+      if (saved) {
+        setCurrencyState(saved);
+      }
+    };
+    window.addEventListener('preferred-currency-changed', handleCurrencyChange);
+    return () => {
+      window.removeEventListener('preferred-currency-changed', handleCurrencyChange);
+    };
+  }, []);
+
   const convert = (amount: number, fromCurrency: string = 'USD'): string => {
-    if (isNaN(amount)) return 'USDT 0.00';
-    // If from KES, convert to USDT using the 130 rate
+    if (isNaN(amount)) return `${currency} 0.00`;
+    
+    // 1. Convert input amount from its source currency to USD baseline
     let usdAmount = amount;
-    if (fromCurrency === 'KES') {
-      usdAmount = amount / 130;
+    if (fromCurrency !== 'USD') {
+      const sourceRate = rates[fromCurrency] || 1;
+      usdAmount = amount / sourceRate;
     }
-    return `USDT ${usdAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    // 2. Convert USD amount to the target currency
+    const targetRate = rates[currency] || 1;
+    const finalAmount = usdAmount * targetRate;
+
+    return `${currency} ${finalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const formatReward = (points: number): string => {
-    return `USDT ${points.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return convert(points, 'USD');
   };
 
   const formatCurrency = (amountInUSD: number): string => {
-    return convert(amountInUSD);
+    return convert(amountInUSD, 'USD');
   };
 
   return {
-    currency: 'USDT',
-    rates: { USDT: 1, KES: 130, USD: 1 },
+    currency,
+    rates,
     changeCurrency,
     convert,
     formatReward,
     formatCurrency,
     loading: false,
-    availableCurrencies: ['USDT']
+    availableCurrencies: ['USDT', 'KES', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'INR', 'NGN']
   };
 };

@@ -13,7 +13,6 @@ import { multimedia_stream_engine, content_governor, revenue_logic } from "../li
 import { cn } from "../lib/utils";
 import AdUnit from "../components/AdUnit";
 import YouTubeSection from "../components/YouTubeSection";
-import MediaChannelsSection from "../components/MediaChannelsSection";
 import { moderateContent } from "../services/moderationService";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { usePosts } from "../hooks/usePosts";
@@ -28,7 +27,6 @@ import { Modality } from "@google/genai";
 import { saveInsight } from "../lib/insights";
 import { useTranslation } from "../lib/i18n";
 import HealthChecker from "../components/HealthChecker";
-import NewsFeed from "../components/NewsFeed";
 import GeminiPulse from "../components/GeminiPulse";
 
 export default function Home() {
@@ -383,7 +381,6 @@ export default function Home() {
   return (
     <div className="space-y-6 pb-20">
       <div className="mx-6">
-        <NewsFeed />
       </div>
 
       <div className="px-6 pt-6">

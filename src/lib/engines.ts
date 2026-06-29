@@ -43,26 +43,26 @@ export const revenue_distribution_engine = (amount: number, source: 'ad' | 'educ
   let platformShare = 0;
   let userShare = 0;
 
-  if (source === 'ad') {
-    // Ads is developer activity: 100% platform/developer
+  if (source === 'ad' || isPaid) {
+    // Platform revenue: 100% platform, not shared
     platformShare = amount;
     userShare = 0;
   } else {
-    // User activity (education, active_time, community, dating, events): 50/50 split
-    platformShare = amount * 0.50;
-    userShare = amount * 0.50;
+    // User activity (education, active_time, community, dating, events): 60% user, 40% platform
+    platformShare = amount * 0.40;
+    userShare = amount * 0.60;
   }
 
   return { platformShare, userShare };
 };
 
 export const calculateRevenueDistribution = (amount: number, source: 'ad' | 'education' | 'community' | 'events' | 'dating' | 'active_time' = 'active_time', isPaid: boolean = false) => {
-  if (source === 'ad') {
-    // Ads is developer activity: 100% platform/developer
+  if (source === 'ad' || isPaid) {
+    // Platform revenue: 100% platform, not shared
     return { platform: amount, user: 0 };
   } else {
-    // User activity (education, active_time, community, dating, events): 50/50 split
-    return { platform: amount * 0.50, user: amount * 0.50 };
+    // User activity (education, active_time, community, dating, events): 60% user, 40% platform
+    return { platform: amount * 0.40, user: amount * 0.60 };
   }
 };
 export const auto_updater = () => {};
