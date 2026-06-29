@@ -8,25 +8,21 @@ import {
   ArrowRight, 
   CheckCircle2, 
   XCircle, 
-  AlertTriangle, 
   Loader2, 
   ShieldCheck, 
   Coins, 
-  ChevronRight, 
   ArrowLeft,
-  Building2,
-  ExternalLink,
-  Smartphone,
   RefreshCw
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useRevenue } from "../contexts/RevenueContext";
-import { db, handleFirestoreError, OperationType } from "../lib/firebase";
-import { doc, onSnapshot, updateDoc, increment, collection, addDoc } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { doc, onSnapshot } from "firebase/firestore";
 import { isIframe, checkPasskeyCapability } from "../lib/iframeUtils";
 import { apiFetch } from "../lib/api";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";
+import { startAuthentication } from "@simplewebauthn/browser";
 
 export default function Withdraw() {
   const { currentUser, userData } = useAuth();
@@ -58,9 +54,10 @@ export default function Withdraw() {
   const [withdrawSuccess, setWithdrawSuccess] = useState<any | null>(null);
   const [withdrawLoading, setWithdrawLoading] = useState(false);
 
-  // Security passkey check before final payout execution
+  // Security check before final payout execution
   const [showPayoutPasskeyConfirm, setShowPayoutPasskeyConfirm] = useState(false);
   const [confirmPasskeyLoading, setConfirmPasskeyLoading] = useState(false);
+  const [customScaPin, setCustomScaPin] = useState("");
 
   // Live platform stats for Developer role
   const [platformStats, setPlatformStats] = useState<any>(null);
@@ -100,45 +97,96 @@ export default function Withdraw() {
   const developerBalance = platformStats?.platformShare || 0;
   const currentAvailableBalance = selectedRole === 'developer' ? developerBalance : userBalance;
 
-  // Step 1: Send Gmail OTP Simulation
-  const handleSendGmailOtp = () => {
+  // Step 1: Send Gmail OTP (Real-time Integration)
+  const handleSendGmailOtp = async () => {
     setGmailLoading(true);
     setGmailError("");
-    setTimeout(() => {
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      setSimulatedOtp(code);
-      setGmailOtpSent(true);
+    try {
+      const resp = await apiFetch('/api/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser?.uid,
+          email: currentUser?.email,
+          method: 'email'
+        })
+      });
+      const data = await resp.json();
+      if (resp.ok && data.success) {
+        setGmailOtpSent(true);
+        if (data.devOtp) {
+          setSimulatedOtp(data.devOtp);
+        }
+      } else {
+        throw new Error(data.error || "Failed to dispatch verification code.");
+      }
+    } catch (err: any) {
+      setGmailError(err.message || "Failed to dispatch verification code.");
+    } finally {
       setGmailLoading(false);
-    }, 800);
-  };
-
-  // Step 1: Verify Gmail OTP
-  const handleVerifyGmailOtp = (e: React.FormEvent) => {
-    e.preventDefault();
-    setGmailError("");
-    if (otpInput === simulatedOtp) {
-      setCurrent2FAStep(2);
-    } else {
-      setGmailError("Invalid verification code. Please check your simulated inbox alert.");
     }
   };
 
-  // Step 2: Google Passkey Verification (Real or Simulated)
-  const handleVerifyPasskey = async (simulate: boolean) => {
+  // Step 1: Verify Gmail OTP
+  const handleVerifyGmailOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGmailError("");
+    setGmailLoading(true);
+    try {
+      const resp = await apiFetch('/api/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser?.uid,
+          otp: otpInput,
+          email: currentUser?.email
+        })
+      });
+      const data = await resp.json();
+      if (resp.ok && data.success) {
+        setCurrent2FAStep(2);
+      } else {
+        throw new Error(data.error || "Invalid verification code.");
+      }
+    } catch (err: any) {
+      setGmailError(err.message || "Verification failed. Please check the code and try again.");
+    } finally {
+      setGmailLoading(false);
+    }
+  };
+
+  // Step 2: Google Passkey Verification (Real-time mode)
+  const handleVerifyPasskey = async () => {
     setPasskeyLoading(true);
     setPasskeyError("");
 
-    if (simulate) {
-      setTimeout(() => {
-        setIsPasskeyVerified(true);
-        setIsAuthenticated(true);
-        setPasskeyLoading(false);
-      }, 800);
+    if (isIframe()) {
+      const width = 500;
+      const height = 600;
+      const left = window.screenX + (window.outerWidth - width) / 2;
+      const top = window.screenY + (window.outerHeight - height) / 2;
+      
+      const popup = window.open(
+        `#/passkey-auth?userId=${currentUser?.uid}&type=auth`,
+        'Passkey Authentication',
+        `width=${width},height=${height},left=${left},top=${top},status=no,menubar=no,toolbar=no`
+      );
+
+      const handleMessage = (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        if (event.data?.type === 'passkey-success') {
+          setIsPasskeyVerified(true);
+          setIsAuthenticated(true);
+          window.removeEventListener('message', handleMessage);
+        }
+      };
+      window.addEventListener('message', handleMessage);
+      setPasskeyLoading(false);
       return;
     }
 
     try {
-      // Real WebAuthn call
+      // 1. Get options from server
       const resp = await apiFetch('/api/auth/passkey/generate-authentication-options', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -147,8 +195,10 @@ export default function Withdraw() {
       const options = await resp.json();
       if (options.error) throw new Error(options.error);
       
-      const authResp = await (window as any).SimpleWebAuthnBrowser.startAuthentication(options);
+      // 2. Start WebAuthn authentication in browser
+      const authResp = await startAuthentication(options);
       
+      // 3. Verify assertion signature with server
       const verifyResp = await apiFetch('/api/auth/passkey/verify-authentication', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -159,24 +209,50 @@ export default function Withdraw() {
         setIsPasskeyVerified(true);
         setIsAuthenticated(true);
       } else {
-        throw new Error("Device biometrics verification failed");
+        throw new Error(verification.error || "Biometric authentication signature invalid");
       }
     } catch (err: any) {
       console.error("Passkey WebAuthn error:", err);
-      setPasskeyError(err.message || "Passkey authentication failed. Try using the bypass simulator.");
+      setPasskeyError(err.message || "Passkey authentication failed. Please ensure biometrics are configured on this device.");
     } finally {
       setPasskeyLoading(false);
     }
   };
 
-  // Final Action: Withdraw Payout Execution
-  const handleExecuteWithdrawal = async (simulatePasskey: boolean) => {
+  // Final Execution: Withdraw Payout
+  const handleExecuteWithdrawal = async (verificationMethod: 'real_passkey' | 'sec_pin', amountToWithdraw: number) => {
     setConfirmPasskeyLoading(true);
     setWithdrawError("");
 
-    if (!simulatePasskey) {
-      // Perform a real WebAuthn security verification check for double safety before the payout
+    let validatedToken = "";
+
+    if (verificationMethod === 'real_passkey') {
       try {
+        if (isIframe()) {
+          const width = 500;
+          const height = 600;
+          const left = window.screenX + (window.outerWidth - width) / 2;
+          const top = window.screenY + (window.outerHeight - height) / 2;
+          
+          const popup = window.open(
+            `#/passkey-auth?userId=${currentUser?.uid}&type=auth`,
+            'Passkey Authentication',
+            `width=${width},height=${height},left=${left},top=${top},status=no,menubar=no,toolbar=no`
+          );
+
+          const handleMessage = (event: MessageEvent) => {
+            if (event.origin !== window.location.origin) return;
+            if (event.data?.type === 'passkey-success') {
+              window.removeEventListener('message', handleMessage);
+              setConfirmPasskeyLoading(false);
+              setShowPayoutPasskeyConfirm(false);
+              executePayoutRequest("PASSKEY_AUTH_TOKEN", amountToWithdraw);
+            }
+          };
+          window.addEventListener('message', handleMessage);
+          return; // The actual execution will happen in the message listener
+        }
+
         const resp = await apiFetch('/api/auth/passkey/generate-authentication-options', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -185,7 +261,7 @@ export default function Withdraw() {
         const options = await resp.json();
         if (options.error) throw new Error(options.error);
         
-        const authResp = await (window as any).SimpleWebAuthnBrowser.startAuthentication(options);
+        const authResp = await startAuthentication(options);
         
         const verifyResp = await apiFetch('/api/auth/passkey/verify-authentication', {
           method: 'POST',
@@ -194,80 +270,79 @@ export default function Withdraw() {
         });
         const verification = await verifyResp.json();
         if (!verification.verified) throw new Error("Google Passkey Verification failed.");
+        validatedToken = "PASSKEY_AUTH_TOKEN";
       } catch (err: any) {
-        setWithdrawError(err.message || "Security Key verification failed. Try using the simulator bypass.");
+        setWithdrawError(err.message || "Security Key verification failed.");
         setConfirmPasskeyLoading(false);
         return;
       }
+    } else if (verificationMethod === 'sec_pin') {
+      if (!customScaPin.trim()) {
+        setWithdrawError("Please enter your Master SEC-PIN.");
+        setConfirmPasskeyLoading(false);
+        return;
+      }
+      validatedToken = customScaPin.trim();
     }
 
     setConfirmPasskeyLoading(false);
     setShowPayoutPasskeyConfirm(false);
-    setWithdrawLoading(true);
+    executePayoutRequest(validatedToken, amountToWithdraw);
+  };
 
-    const withdrawVal = parseFloat(amount);
+  const executePayoutRequest = async (tokenValue: string, amountToWithdraw: number) => {
+    setWithdrawLoading(true);
+    setWithdrawError("");
+    const withdrawVal = amountToWithdraw;
 
     try {
+      const endpoint = selectedRole === 'developer' ? "/api/payout/platform" : "/api/payout/crypto";
+      
+      const payload: any = {
+        amount: withdrawVal,
+        network: cryptoNetwork,
+        userId: currentUser?.uid,
+        scaToken: tokenValue,
+      };
+
       if (selectedRole === 'developer') {
-        // Platform treasury payout
-        const resp = await apiFetch("/api/payout/platform", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            method: "crypto",
-            amount: withdrawVal,
-            asset: "USDT",
-            address: walletAddress,
-            network: cryptoNetwork,
-            recipient: "Developer Wallet",
-            userId: "platform-admin",
-            scaToken: "PASSKEY_MOCK_TOKEN",
-            email: currentUser?.email,
-          })
-        });
-
-        const data = await resp.json();
-        if (resp.ok && (data.success || data.binanceId)) {
-          setWithdrawSuccess({
-            txId: data.transactionId || `DEV-WITHDRAW-${Date.now()}`,
-            amount: withdrawVal,
-            address: walletAddress,
-            network: cryptoNetwork,
-            recipient: "Developer Account"
-          });
-          setAmount("");
-          setWalletAddress("");
-        } else {
-          throw new Error(data.error || data.details || "Failed to execute platform developer payout.");
-        }
+        payload.method = "crypto";
+        payload.asset = "USDT";
+        payload.address = walletAddress;
+        payload.recipient = "Developer Wallet";
+        payload.userId = currentUser?.uid;
+        payload.email = currentUser?.email;
       } else {
-        // Standard user rewards payout
-        const resp = await apiFetch("/api/payout/crypto", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            walletAddress: walletAddress,
-            network: cryptoNetwork,
-            amount: withdrawVal,
-            userId: currentUser?.uid,
-            scaToken: "PASSKEY_MOCK_TOKEN"
-          })
-        });
+        payload.walletAddress = walletAddress;
+      }
 
-        const data = await resp.json();
-        if (resp.ok && data.success) {
-          setWithdrawSuccess({
-            txId: data.transactionId || `USER-WITHDRAW-${Date.now()}`,
-            amount: withdrawVal,
-            address: walletAddress,
-            network: cryptoNetwork,
-            recipient: "User Rewards"
-          });
-          setAmount("");
-          setWalletAddress("");
-        } else {
-          throw new Error(data.error || data.message || "Failed to process user crypto withdrawal.");
-        }
+      const resp = await apiFetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await resp.json();
+
+      if (resp.status === 401 && data.error === "SCA_REQUIRED") {
+        setWithdrawError("SCA_REQUIRED: Please verify with Passkey.");
+        setShowPayoutPasskeyConfirm(true);
+        setWithdrawLoading(false);
+        return;
+      }
+
+      if (resp.ok && (data.success || data.binanceId)) {
+        setWithdrawSuccess({
+          txId: data.transactionId || `${selectedRole.toUpperCase()}-WITHDRAW-${Date.now()}`,
+          amount: withdrawVal,
+          address: walletAddress,
+          network: cryptoNetwork,
+          recipient: selectedRole === 'developer' ? "Developer Account" : "User Rewards"
+        });
+        setAmount("");
+        setWalletAddress("");
+      } else {
+        throw new Error(data.message || data.error || data.details || "Failed to execute payout.");
       }
     } catch (err: any) {
       setWithdrawError(err.message || "An error occurred during withdrawal processing.");
@@ -283,7 +358,6 @@ export default function Withdraw() {
 
     const numAmount = parseFloat(amount);
     
-    // Safety constraints
     if (currentAvailableBalance <= 0) {
       setWithdrawError("No withdraw from a negative or zero balance.");
       return;
@@ -310,7 +384,8 @@ export default function Withdraw() {
     }
 
     // Trigger passkey confirmation popup before executing withdrawal
-    setShowPayoutPasskeyConfirm(true);
+    // First attempt without SCA_TOKEN, expecting SCA_REQUIRED if needed
+    executePayoutRequest("", numAmount);
   };
 
   const resetPortal = () => {
@@ -503,9 +578,10 @@ export default function Withdraw() {
                           </button>
                           <button
                             type="submit"
+                            disabled={gmailLoading}
                             className="flex-1 py-4 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-2xl transition-all shadow-lg shadow-purple-600/20 flex items-center justify-center gap-2"
                           >
-                            Verify & Advance
+                            {gmailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify & Advance"}
                             <ArrowRight className="w-4 h-4" />
                           </button>
                         </div>
@@ -543,21 +619,12 @@ export default function Withdraw() {
                     <div className="space-y-3">
                       <button
                         type="button"
-                        onClick={() => handleVerifyPasskey(false)}
+                        onClick={() => handleVerifyPasskey()}
                         disabled={passkeyLoading}
                         className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2"
                       >
                         {passkeyLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                        🔑 Verify with Google Passkey
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleVerifyPasskey(true)}
-                        disabled={passkeyLoading}
-                        className="w-full py-3.5 bg-slate-950 border-2 border-dashed border-slate-800 text-purple-400 hover:text-purple-300 font-bold rounded-2xl hover:border-purple-800/40 transition-all text-xs uppercase flex items-center justify-center gap-2"
-                      >
-                        ⚡ Simulate Google Passkey Verification
+                        🔑 Verify with Google Passkey (Real Time)
                       </button>
                     </div>
 
@@ -799,37 +866,59 @@ export default function Withdraw() {
               </div>
 
               <h3 className="text-lg font-black text-white uppercase tracking-wider mb-2">Final Passkey Verification</h3>
-              <p className="text-xs text-slate-400 leading-relaxed px-4 mb-6">
+              <p className="text-xs text-slate-400 leading-relaxed px-4 mb-4">
                 Our zero-trust architecture requires a final Google Passkey biometric authorization signature before executing the payload outflow of <span className="text-purple-400 font-bold">{amount} USDT</span>.
               </p>
 
               {iframeBlocked && (
                 <div className="mb-4 p-3 bg-amber-950/20 border border-amber-500/10 rounded-xl text-[10px] leading-relaxed text-amber-300 text-left">
-                  ⚠️ WebAuthn is likely blocked inside this iframe. Use the "Simulate Bypass" option below.
+                  ⚠️ WebAuthn is likely blocked inside this iframe. Please use the "Master SEC-PIN" option below or open the app in a new tab for real biometrics.
+                </div>
+              )}
+
+              {withdrawError && (
+                <div className="mb-4 text-xs font-bold text-red-400 bg-red-950/10 border border-red-500/10 rounded-xl p-2.5 flex items-center gap-1.5 text-left">
+                  <XCircle className="w-4 h-4 flex-shrink-0" />
+                  {withdrawError}
                 </div>
               )}
 
               <div className="space-y-2.5">
                 <button
-                  onClick={() => handleExecuteWithdrawal(false)}
+                  onClick={() => handleExecuteWithdrawal('real_passkey', parseFloat(amount))}
                   disabled={confirmPasskeyLoading}
-                  className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs uppercase tracking-wide shadow-lg shadow-indigo-600/10 flex items-center justify-center gap-2"
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl text-xs uppercase tracking-wide shadow-lg shadow-indigo-600/10 flex items-center justify-center gap-2"
                 >
-                  {confirmPasskeyLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify Security Key"}
+                  {confirmPasskeyLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify Security Key (Real Time)"}
                 </button>
 
+                {/* Alternative PIN Option for SCA_REQUIRED */}
+                <div className="pt-2 border-t border-slate-800/80">
+                  <label className="text-[10px] font-black tracking-wider text-slate-500 uppercase block mb-1.5 text-left">
+                    Alternative Master SEC-PIN Verification
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      placeholder="e.g. 654123"
+                      value={customScaPin}
+                      onChange={(e) => setCustomScaPin(e.target.value)}
+                      className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-center text-xs text-white font-mono focus:outline-none focus:border-purple-500"
+                    />
                 <button
-                  onClick={() => handleExecuteWithdrawal(true)}
+                  onClick={() => handleExecuteWithdrawal('sec_pin', parseFloat(amount))}
                   disabled={confirmPasskeyLoading}
-                  className="w-full py-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-purple-400 hover:text-purple-300 font-bold rounded-xl text-[10px] uppercase tracking-wide"
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition-colors"
                 >
-                  ⚡ Simulate Passkey Bypass
+                  Verify PIN
                 </button>
+                  </div>
+                </div>
 
                 <button
                   onClick={() => setShowPayoutPasskeyConfirm(false)}
                   disabled={confirmPasskeyLoading}
-                  className="w-full py-2 bg-transparent text-slate-500 hover:text-slate-400 font-bold text-[10px] uppercase tracking-wide"
+                  className="w-full py-2 bg-transparent text-slate-500 hover:text-slate-400 font-bold text-[10px] uppercase tracking-wide mt-2"
                 >
                   Cancel
                 </button>

@@ -11,7 +11,7 @@ interface State {
   recoveryStep: number;
 }
 
-export class ErrorBoundary extends Component<Props, State> {
+export default class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
     error: null,
@@ -39,7 +39,7 @@ export class ErrorBoundary extends Component<Props, State> {
     setTimeout(() => {
       this.setState({ hasError: false, recoveryStep: 0 });
       // Use relative path for reset to support GitHub Pages subdirectories
-      window.location.href = window.location.pathname;
+      window.location.reload();
     }, 9000);
   }
 

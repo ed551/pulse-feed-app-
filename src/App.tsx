@@ -1,7 +1,7 @@
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import React, { Suspense, lazy } from "react";
 import Layout from "./components/Layout";
-import { ErrorBoundary } from "./components/ErrorBoundary";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { RevenueProvider } from "./contexts/RevenueContext";
 import { HealthProvider } from "./contexts/HealthContext";

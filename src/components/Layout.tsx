@@ -129,15 +129,30 @@ export default function Layout() {
     
     // Reward 0.005 USDT for every 1 minute of active time spent in app
     const interval = setInterval(async () => {
-      try {
-        await apiFetch('/api/user/time-reward', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: currentUser.uid })
-        });
-      } catch (e) {
-        console.error("Failed to add time reward");
-      }
+      if (!currentUser || isIdle) return;
+      
+      const sendReward = async (attempt: number): Promise<void> => {
+        try {
+          const response = await apiFetch('/api/user/time-reward', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: currentUser.uid })
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Reward API returned ${response.status}`);
+          }
+        } catch (e) {
+          if (attempt < 3) {
+            console.warn(`Failed to add time reward, retrying in 5s... (attempt ${attempt + 1})`);
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            return sendReward(attempt + 1);
+          }
+          console.error("Failed to add time reward after retries:", e);
+        }
+      };
+      
+      sendReward(0);
     }, 60000); // 1 minute
 
     return () => clearInterval(interval);

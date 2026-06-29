@@ -231,20 +231,16 @@ service cloud.firestore {
       allow write: if (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin() || isOwner(userId);
     }
 
-    match /platform/{docId} {
-      allow read: if isSignedIn();
-      allow write: if (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin() || isSignedIn();
+    match /system/{allPaths=**} {
+      allow read, write: if isAdmin();
     }
 
-    match /platform_transactions/{txId} {
-      allow read: if isAdmin();
-      allow create: if (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin();
-      allow update, delete: if isAdmin();
+    match /platform/{allPaths=**} {
+      allow read, write: if isAdmin();
     }
 
     match /platform_binance_addresses/{addrId} {
-      allow read: if isSignedIn();
-      allow write: if (incoming().get('serverSecret', '') == "pulse-feeds-server-secret-2026") || isAdmin() || isSignedIn();
+      allow read, write: if isAdmin();
     }
 
     match /payout_queue/{queueId} {

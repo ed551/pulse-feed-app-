@@ -53,15 +53,21 @@ export const getApiUrl = (path: string): string => {
     currentHostname.includes('cloud') ||
     currentHostname.includes('aistudio.google');
 
-  // If the user EXPLICITLY set a base URL, they likely want to use it regardless of env
-  // unless they are hitting the same host as the app itself.
-  if (rawBaseUrl) {
-    return resolveTarget(rawBaseUrl);
+  // If we are on Surge, all API requests MUST route to our own Cloud Run backend (relayUrl)
+  if (isSurge) {
+    const cleanRelay = relayUrl.endsWith('/') ? relayUrl.slice(0, -1) : relayUrl;
+    return `${cleanRelay}${cleanPath}`;
   }
 
   // Otherwise, if we are in a known dev/preview env, use the local backend
   if (isLocalStorageOrDev && !isSurge) {
     return cleanPath;
+  }
+
+  // If the user EXPLICITLY set a base URL, they likely want to use it regardless of env
+  // unless they are hitting the same host as the app itself.
+  if (rawBaseUrl) {
+    return resolveTarget(rawBaseUrl);
   }
 
   // Fallback to the default VPS backend if not in local/preview
@@ -104,6 +110,7 @@ export const apiFetch = async (path: string, options: RequestInit = {}, retries 
       }
 
       console.log(`[apiFetch] Calling: ${url} (Mode: ${fetchOptions.mode}, Credentials: ${fetchOptions.credentials})`);
+      console.log(`[apiFetch] Path: ${path}, UrlObj:`, new URL(url, window.location.origin));
       const response = await fetch(url, fetchOptions);
       clearTimeout(timeoutId);
       return response;

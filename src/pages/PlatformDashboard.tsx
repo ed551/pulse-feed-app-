@@ -17,10 +17,12 @@ import { useRevenue } from '../contexts/RevenueContext';
 import { useCurrencyConverter } from '../hooks/useCurrencyConverter';
 import { cn } from '../lib/utils';
 import { apiFetch } from '../lib/api';
+import { startAuthentication } from '@simplewebauthn/browser';
 import { getModerationSettings, saveModerationSettings, ModerationSettings } from "../services/moderationService";
 import { admin_logic, integrity_audit_engine, global_kill_switch } from "../lib/engines";
 import CreateWithdrawPinModal from "../components/CreateWithdrawPinModal";
 import OTPModal from "../components/tools/OTPModal";
+import { isIframe } from '../lib/iframeUtils';
 
 interface UserData {
   uid: string;
@@ -2810,7 +2812,7 @@ export default function PlatformDashboard() {
       {activeTab === 'financial' && (
         <div className="space-y-8 animate-in fade-in duration-300">
           {/* Treasury Matrix Terminal */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="lg:col-span-1 bg-slate-900 border border-amber-500/20 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
                 <TrendingUp className="w-40 h-40 text-amber-500 -rotate-12" />
@@ -2901,68 +2903,6 @@ export default function PlatformDashboard() {
                       <button onClick={checkTreasuryBalance} className="mt-2 text-yellow-500 font-black text-xs hover:underline">Connect Node</button>
                     </div>
                   )}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-slate-900 border border-indigo-500/20 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden group">
-              <div className="relative z-10 space-y-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-indigo-500/10 rounded-2xl flex items-center justify-center border border-indigo-500/20">
-                    <ArrowUpCircle className="w-6 h-6 text-indigo-400" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-black text-white uppercase tracking-tight">Treasury Withdraw</h3>
-                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Outbound Global Dispatch</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <input 
-                    type="text" 
-                    placeholder="Address"
-                    value={treasuryWithdrawalForm.address}
-                    onChange={(e) => setTreasuryWithdrawalForm({...treasuryWithdrawalForm, address: e.target.value})}
-                    className="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
-                  <input 
-                    type="number" 
-                    placeholder="Amount"
-                    value={treasuryWithdrawalForm.amount}
-                    onChange={(e) => setTreasuryWithdrawalForm({...treasuryWithdrawalForm, amount: e.target.value})}
-                    className="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
-                </div>
-                
-                <div className="flex gap-4">
-                    <select 
-                      value={treasuryWithdrawalForm.asset}
-                      onChange={(e) => setTreasuryWithdrawalForm({...treasuryWithdrawalForm, asset: e.target.value})}
-                      className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-bold"
-                    >
-                      <option value="PAXG" className="bg-gray-900">PAXG</option>
-                      <option value="BTC" className="bg-gray-900">BTC</option>
-                      <option value="USDT" className="bg-gray-900">USDT</option>
-                      <option value="BNB" className="bg-gray-900">BNB</option>
-                    </select>
-
-                    <select 
-                      value={treasuryWithdrawalForm.network}
-                      onChange={(e) => setTreasuryWithdrawalForm({...treasuryWithdrawalForm, network: e.target.value})}
-                      className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-bold"
-                    >
-                      <option value="ETH" className="bg-gray-900">ERC20 (ETH)</option>
-                      <option value="BSC" className="bg-gray-900">BEP20 (BSC)</option>
-                      <option value="BTC" className="bg-gray-900">BTC (Native)</option>
-                      <option value="TRX" className="bg-gray-900">TRC20 (TRON)</option>
-                    </select>
-                  <button 
-                    onClick={() => handleTreasuryWithdrawal()}
-                    disabled={isDevWithdrawing}
-                    className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-[0.2em] rounded-xl py-3 shadow-lg shadow-indigo-600/20 active:scale-95 disabled:opacity-50"
-                  >
-                    Initiate Payout
-                  </button>
                 </div>
               </div>
             </div>
@@ -4330,20 +4270,72 @@ export default function PlatformDashboard() {
                   <div className="space-y-4">
                     <button
                       type="button"
-                      onClick={() => {
-                        setShowSCAModal(false);
-                        if (scaPendingAction) scaPendingAction("PASSKEY_MOCK_TOKEN");
-                        setScaPendingAction(null);
-                        setScaToken("");
+                      onClick={async () => {
                         setScaError(null);
-                        window.dispatchEvent(new CustomEvent('show-notification', { 
-                          detail: { title: "Passkey Verified", body: "Google Passkey verification simulation successful.", type: "success" } 
-                        }));
+                        
+                        if (isIframe()) {
+                          const width = 500;
+                          const height = 600;
+                          const left = window.screenX + (window.outerWidth - width) / 2;
+                          const top = window.screenY + (window.outerHeight - height) / 2;
+                          
+                          const popup = window.open(
+                            `#/passkey-auth?userId=${currentUser?.uid}&type=auth`,
+                            'Passkey Authentication',
+                            `width=${width},height=${height},left=${left},top=${top},status=no,menubar=no,toolbar=no`
+                          );
+
+                          const handleMessage = (event: MessageEvent) => {
+                            if (event.origin !== window.location.origin) return;
+                            if (event.data?.type === 'passkey-success') {
+                              setShowSCAModal(false);
+                              if (scaPendingAction) scaPendingAction("PASSKEY_AUTH_TOKEN");
+                              setScaPendingAction(null);
+                              setScaToken("");
+                              window.dispatchEvent(new CustomEvent('show-notification', { 
+                                detail: { title: "Passkey Verified", body: "Google Passkey verification successful.", type: "success" } 
+                              }));
+                              window.removeEventListener('message', handleMessage);
+                            }
+                          };
+                          window.addEventListener('message', handleMessage);
+                          return;
+                        }
+
+                        try {
+                          const resp = await apiFetch('/api/auth/passkey/generate-authentication-options', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userId: currentUser?.uid }),
+                          });
+                          const options = await resp.json();
+                          if (options.error) throw new Error(options.error);
+
+                          const authResp = await startAuthentication(options);
+
+                          const verifyResp = await apiFetch('/api/auth/passkey/verify-authentication', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userId: currentUser?.uid, response: authResp }),
+                          });
+                          const verification = await verifyResp.json();
+                          if (!verification.verified) throw new Error("Google Passkey Verification failed.");
+                          
+                          setShowSCAModal(false);
+                          if (scaPendingAction) scaPendingAction("PASSKEY_AUTH_TOKEN");
+                          setScaPendingAction(null);
+                          setScaToken("");
+                          window.dispatchEvent(new CustomEvent('show-notification', { 
+                            detail: { title: "Passkey Verified", body: "Google Passkey verification successful.", type: "success" } 
+                          }));
+                        } catch (err: any) {
+                          setScaError(err.message || "Passkey authentication failed.");
+                        }
                       }}
                       className="w-full py-4 bg-indigo-600/20 text-indigo-400 font-black rounded-xl uppercase text-xs border border-indigo-500/50 hover:bg-indigo-600/30 transition-all flex items-center justify-center gap-2 shadow-sm"
                     >
                       <ShieldCheck className="w-4 h-4" />
-                      <span>Simulate Google Passkey Auth</span>
+                      <span>Verify with Google Passkey (Real Time)</span>
                     </button>
                   </div>
                 ) : (
