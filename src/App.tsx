@@ -14,7 +14,7 @@ import { Analytics } from "./components/Analytics";
 const Home = lazy(() => import("./pages/Home"));
 const Groups = lazy(() => import("./pages/Groups"));
 const PlatformDashboard = lazy(() => import("./pages/PlatformDashboard"));
-const Rewards = lazy(() => import("./pages/Rewards"));
+const Withdraw = lazy(() => import("./pages/Withdraw"));
 const Community = lazy(() => import("./pages/Community"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Contacts = lazy(() => import("./pages/Contacts"));
@@ -140,11 +140,12 @@ export default function App() {
                       <Community />
                     </ProtectedRoute>
                   } />
-                  <Route path="rewards" element={
+                  <Route path="withdraw" element={
                     <ProtectedRoute>
-                      <Rewards />
+                      <Withdraw />
                     </ProtectedRoute>
                   } />
+                  <Route path="rewards" element={<Navigate to="/withdraw" replace />} />
                   <Route path="profile" element={
                     <ProtectedRoute>
                       <Profile />

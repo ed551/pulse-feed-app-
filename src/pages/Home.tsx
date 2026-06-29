@@ -154,7 +154,7 @@ export default function Home() {
       description: 'Did you know you can earn up to 0.000625 PAXG/month by just engaging with the community? Check your rewards dashboard.',
       imageUrl: 'https://picsum.photos/seed/rewards/800/400',
       cta: 'Check Rewards',
-      link: '/rewards'
+      link: '/withdraw'
     }
   ];
 
@@ -489,7 +489,7 @@ export default function Home() {
               <div className="text-2xl font-black">84%</div>
             </div>
             <button 
-              onClick={() => navigate('/rewards')}
+              onClick={() => navigate('/withdraw')}
               className="bg-white text-indigo-600 p-3 rounded-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-lg"
             >
               <ArrowUpRight className="w-6 h-6" />
@@ -500,8 +500,8 @@ export default function Home() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
           {[
             { label: t('watch_ads'), icon: PlayCircle, path: '/ads', color: 'bg-indigo-400/30' },
-            { label: t('complete_task'), icon: CheckCircle2, path: '/rewards', color: 'bg-purple-400/30' },
-            { label: t('daily_bonus'), icon: Gem, path: '/rewards', color: 'bg-white/20' }
+            { label: t('complete_task'), icon: CheckCircle2, path: '/withdraw', color: 'bg-purple-400/30' },
+            { label: t('daily_bonus'), icon: Gem, path: '/withdraw', color: 'bg-white/20' }
           ].map((item, i) => (
             <button 
               key={i}

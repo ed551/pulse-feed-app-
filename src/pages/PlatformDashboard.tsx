@@ -7,7 +7,7 @@ import {
   Users, User, Award, Gem, TrendingUp, ShieldCheck, Activity, 
   Lock, Wallet, ArrowDownCircle, ArrowUpCircle, BarChart2, 
   PieChart, Info, AlertTriangle, CheckCircle2, Loader2, RefreshCw, PlusSquare,
-  Mail, Key, Smartphone, BrainCircuit, FileText, Zap,
+  Mail, Key, KeyRound, Smartphone, BrainCircuit, FileText, Zap,
   Copy, ShieldAlert, ShieldOff, Settings, Plus, Trash2, XCircle, CheckCircle, Calendar, Clock,
   Building2, Cpu, Globe, Database, Crown, Shield, Star, History, Sparkles, Radio, Unlock
 } from 'lucide-react';
@@ -1514,7 +1514,7 @@ export default function PlatformDashboard() {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [showAnomaliesOnly, setShowAnomaliesOnly] = useState(false);
   const [showSCAModal, setShowSCAModal] = useState(false);
-  const [authMethod, setAuthMethod] = useState<'pin' | 'phone' | 'email'>('pin');
+  const [authMethod, setAuthMethod] = useState<'pin' | 'phone' | 'email' | 'passkey'>('pin');
   const [isPhoneAuthenticating, setIsPhoneAuthenticating] = useState(false);
   const [scaPendingAction, setScaPendingAction] = useState<((pin: string) => void) | null>(null);
   const [isSendingSms, setIsSendingSms] = useState(false);
@@ -3816,128 +3816,7 @@ export default function PlatformDashboard() {
       </div>
 
       {/* Platform Vault & Controls */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Operational Withdrawal */}
-        <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl border-2 border-purple-500/20 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-4 opacity-10">
-                <Wallet className="w-24 h-24" />
-              </div>
-              
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-                  <ArrowDownCircle className="w-6 h-6 text-purple-600" />
-                  Operational Withdrawal
-                </h2>
-                <button 
-                  onClick={() => navigate('/bank-integration')}
-                  className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-100 transition-colors"
-                >
-                  <Building2 className="w-3 h-3" />
-                  Integration Portal
-                </button>
-              </div>
-
-          <div className="space-y-6">
-                 <div>
-                   <label className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1 mb-2 block">Crypto Target Address</label>
-                   <div className="relative">
-                     <Wallet className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                     <input
-                       type="text"
-                       value={devWithdrawAddress}
-                       onChange={(e) => setDevWithdrawAddress(e.target.value)}
-                       placeholder="0x... (Crypto Deposit Address)"
-                       className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:outline-none focus:border-purple-500 transition-all font-mono text-xs"
-                     />
-                   </div>
-                 </div>
-
-                <div className="flex justify-between items-end mb-2">
-                  <label className="text-sm font-bold text-gray-500 dark:text-gray-400 ml-1">Withdrawal / Return Amount</label>
-                  <button 
-                    onClick={() => setUseKesForReturn(!useKesForReturn)}
-                    className={cn(
-                      "text-[10px] font-black uppercase tracking-tighter px-2 py-0.5 rounded border transition-colors",
-                      useKesForReturn ? "bg-blue-600 text-white border-blue-600" : "bg-amber-500 text-white border-amber-500"
-                    )}
-                  >
-                    {useKesForReturn ? "Mode: KES" : "Mode: USDT"}
-                  </button>
-                </div>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">{useKesForReturn ? "KES" : "USDT"}</span>
-                  <input
-                    type="number"
-                    value={devWithdrawAmount}
-                    onChange={(e) => setDevWithdrawAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full pl-12 pr-20 py-4 bg-gray-50 dark:bg-gray-900 border-2 border-gray-100 dark:border-gray-700 rounded-2xl focus:outline-none focus:border-purple-500 transition-all font-bold"
-                  />
-                  <button 
-                    onClick={() => setDevWithdrawAmount(stats.platformShare.toFixed(2))}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-200 transition-colors"
-                  >
-                    Max
-                  </button>
-                </div>
-                {devWithdrawAmount && !isNaN(parseFloat(devWithdrawAmount)) && (
-                  <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 text-xs font-bold text-blue-600 flex justify-between items-center animate-in fade-in slide-in-from-top-1">
-                    <span>Estimated Payout (KES)</span>
-                    <span>KES {((parseFloat(devWithdrawAmount) * (rates['KES'] || 135))).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  {[0.25, 0.5, 0.75].map((percent) => (
-                    <button
-                      key={percent}
-                      onClick={() => setDevWithdrawAmount((stats.platformShare * percent).toFixed(2))}
-                      className="flex-1 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-xl text-[10px] font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
-                    >
-                      {percent * 100}%
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  onClick={() => handlePlatformWithdrawal(false, parseFloat(devWithdrawAmount))}
-                  disabled={isDevWithdrawing || !devWithdrawAmount}
-                  className="flex items-center justify-center gap-2 py-4 bg-purple-600 text-white font-black rounded-2xl hover:bg-purple-700 disabled:opacity-50 transition-all shadow-lg shadow-purple-600/20"
-                >
-                  {isDevWithdrawing ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowDownCircle className="w-5 h-5" />}
-                  Partial Withdrawal
-                </button>
-                <button
-                  onClick={handleReturnFunds}
-                  disabled={isDevWithdrawing || !devWithdrawAmount}
-                  className="flex items-center justify-center gap-2 py-4 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white font-black rounded-2xl hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 transition-all"
-                >
-                  <ArrowUpCircle className="w-5 h-5" />
-                  Return
-                </button>
-              </div>
-
-              <button
-                onClick={() => handlePlatformWithdrawal(true)}
-                disabled={isDevWithdrawing || stats.platformShare <= 0}
-                className="w-full py-3 border-2 border-purple-600 text-purple-600 font-black rounded-2xl hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all"
-              >
-                Withdraw All Available ({formatCurrency(stats.platformShare)})
-              </button>
-
-              <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-2xl border border-purple-100 dark:border-purple-800">
-                <div className="flex items-center gap-2 text-purple-700 dark:text-purple-400 font-bold text-sm mb-1">
-                  <ShieldCheck className="w-4 h-4" />
-                  Security Protocol
-                </div>
-                <p className="text-xs text-purple-600/70 dark:text-purple-400/70">
-                  Withdrawals are initiated to the certified developer account via Gateway.
-                  This ensures operational funds cannot be redirected even if the dashboard is compromised.
-                </p>
-              </div>
-            </div>
-        
+      <div className="grid grid-cols-1 gap-8">
         {/* Log Platform Revenue */}
         <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700">
           <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-6 flex items-center gap-2">
@@ -4264,56 +4143,7 @@ export default function PlatformDashboard() {
         </div>
       </div>
 
-      {/* Confirm All Modal */}
-      <AnimatePresence>
-        {showConfirmAllModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white dark:bg-gray-800 rounded-3xl p-8 max-w-md w-full shadow-2xl border-2 border-purple-500"
-            >
-              <div className="flex items-center gap-4 mb-6">
-                <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-2xl">
-                  <AlertTriangle className="w-8 h-8 text-purple-600" />
-                </div>
-                <h3 className="text-2xl font-black text-gray-900 dark:text-white">Confirm Full Withdrawal</h3>
-              </div>
-              
-              <p className="text-gray-600 dark:text-gray-400 mb-8 font-medium">
-                You are about to withdraw the entire Platform treasury of <span className="text-purple-600 font-black">{formatCurrency(auditBalance)}</span>. 
-                This action will be processed to your certified wallet.
-              </p>
 
-              <div className="flex gap-4">
-                <button
-                  onClick={() => setShowConfirmAllModal(false)}
-                  className="flex-1 py-4 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white font-black rounded-2xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    setShowConfirmAllModal(false);
-                    setScaPendingAction(() => () => handlePlatformWithdrawal(true));
-                    setShowSCAModal(true);
-                  }}
-                  disabled={auditReport.health === 'critical'}
-                  className={cn(
-                    "flex-1 py-4 font-black rounded-2xl shadow-lg transition-all",
-                    auditReport.health === 'critical'
-                      ? "bg-gray-400 cursor-not-allowed opacity-50"
-                      : "bg-purple-600 text-white hover:bg-purple-700 shadow-purple-600/20"
-                  )}
-                >
-                  {auditReport.health === 'critical' ? "Treasury Locked" : "Confirm"}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       <AnimatePresence>
         {showAIBypassModal && (
@@ -4423,6 +4253,36 @@ export default function PlatformDashboard() {
                 <p className="text-[10px] text-gray-500 mt-2 font-bold italic">Verify your credentials to authorize this action.</p>
               </div>
 
+              {/* Auth Alternative Switcher (SCA PIN or Google Passkey) */}
+              <div className="flex bg-white/5 p-1 rounded-2xl mb-6 text-xs font-bold border border-white/10">
+                <button
+                  type="button"
+                  onClick={() => { setAuthMethod('pin'); setScaError(null); }}
+                  className={cn(
+                    "flex-1 py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5",
+                    authMethod === 'pin' 
+                      ? "bg-blue-600 text-white shadow-md font-black" 
+                      : "text-gray-400 hover:text-gray-300"
+                  )}
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>SCA PIN</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAuthMethod('passkey'); setScaError(null); }}
+                  className={cn(
+                    "flex-1 py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5",
+                    authMethod === 'passkey'
+                      ? "bg-indigo-600 text-white shadow-md font-black" 
+                      : "text-gray-400 hover:text-gray-300"
+                  )}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Google Passkey</span>
+                </button>
+              </div>
+
               <div className="space-y-4">
                 {authMethod === 'email' ? (
                   <div className="space-y-4">
@@ -4466,6 +4326,26 @@ export default function PlatformDashboard() {
                       Authorize Transfer
                     </button>
                   </>
+                ) : authMethod === 'passkey' ? (
+                  <div className="space-y-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSCAModal(false);
+                        if (scaPendingAction) scaPendingAction("PASSKEY_MOCK_TOKEN");
+                        setScaPendingAction(null);
+                        setScaToken("");
+                        setScaError(null);
+                        window.dispatchEvent(new CustomEvent('show-notification', { 
+                          detail: { title: "Passkey Verified", body: "Google Passkey verification simulation successful.", type: "success" } 
+                        }));
+                      }}
+                      className="w-full py-4 bg-indigo-600/20 text-indigo-400 font-black rounded-xl uppercase text-xs border border-indigo-500/50 hover:bg-indigo-600/30 transition-all flex items-center justify-center gap-2 shadow-sm"
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Simulate Google Passkey Auth</span>
+                    </button>
+                  </div>
                 ) : (
                   <div className="text-center space-y-4 py-2">
                     <div className="w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center text-green-400 mx-auto">

@@ -31,7 +31,8 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const { currentUser, userData } = useAuth();
   const [isIdle, setIsIdle] = useState(false);
   const [pointsLocked, setPointsLocked] = useState(false);
-  const [activeSeconds, setActiveSeconds] = useState(0);
+  const activeSecondsRef = useRef(0);
+  const activeSeconds = activeSecondsRef.current;
   const [totalEarnedToday, setTotalEarnedToday] = useState<number>(() => {
     try {
       // Look at localStorage if available (will be fetched dynamically on mount if currentUser is loaded)
@@ -484,6 +485,16 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
         points: increment(-pointsToDeduct)
       });
 
+      // User-specific Points Ledger (Audit Trail for deductions)
+      await addDoc(collection(db, 'users', currentUser.uid, 'points_ledger'), {
+        amount: -pointsToDeduct,
+        balanceAfter: (userDataRef.current?.points || 0) - pointsToDeduct,
+        type: 'deduction',
+        source: 'expense',
+        reason: reason,
+        timestamp: serverTimestamp()
+      });
+
       // Log Transaction
       await addDoc(collection(db, 'users', currentUser.uid, 'transactions'), {
         amount: -usdAmount,
@@ -526,45 +537,11 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
   }, []);
 
   useEffect(() => {
-    if (currentUser && !isIdle && !pointsLocked) {
-      earningIntervalRef.current = setInterval(() => {
-        if (pointsLocked) return;
-        
-        // Accumulate locally based on 60/40 split and membership level
-        const userMembership = (userDataRef.current?.membershipLevel || 'bronze').toLowerCase();
-        let membershipMultiplier = 1.0;
-        if (userMembership === 'gold') membershipMultiplier = 1.5;
-        else if (userMembership === 'silver') membershipMultiplier = 1.25;
-
-        // Base total amount per interval (30s) is 0.032 USD
-        const baseTotalPerInterval = 0.032;
-        const baseUserUsd = baseTotalPerInterval * 0.60;
-        
-        const userPts = baseUserUsd * membershipMultiplier;
-        const userUsd = userPts; // USDT Economy (1:1 with USD)
-        const platUsd = baseTotalPerInterval * 0.40;
-
-        pendingUserPointsRef.current += userPts;
-        pendingUserValueRef.current += userUsd;
-        pendingPlatformValueRef.current += platUsd;
-
-        setPendingPoints(pendingUserPointsRef.current);
-        setTotalEarnedToday(prev => prev + userPts);
-        console.log(`[Self-Update] Pending Points: ${pendingUserPointsRef.current.toFixed(4)}. Sync in ${Math.round((SYNC_INTERVAL - (Date.now() - lastSyncRef.current)) / 1000)}s`);
-
-        // Check if it's time to sync
-        if (Date.now() - lastSyncRef.current >= SYNC_INTERVAL) {
-          syncPendingToFirestore();
-        }
-      }, EARNING_INTERVAL);
-    } else {
-      if (earningIntervalRef.current) clearInterval(earningIntervalRef.current);
-      // Sync on idle or logout
-      if (pendingUserPointsRef.current > 0) {
-        syncPendingToFirestore();
-      }
+    // Disabled frontend earning interval.
+    // Relying solely on `/api/user/time-reward` called from Layout.tsx for accurate, single-source rewards.
+    if (earningIntervalRef.current) {
+      clearInterval(earningIntervalRef.current);
     }
-
     return () => {
       if (earningIntervalRef.current) clearInterval(earningIntervalRef.current);
     };
@@ -574,7 +551,7 @@ const addRevenue = async (userUsdAmount: number, platformUsdAmount: number, reas
   useEffect(() => {
     const interval = setInterval(() => {
       if (!isIdle) {
-        setActiveSeconds(prev => prev + 1);
+        activeSecondsRef.current += 1;
       }
     }, 1000);
     return () => clearInterval(interval);

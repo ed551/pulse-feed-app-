@@ -61,10 +61,10 @@ export default function AdsDashboard() {
             Watch Ad & Earn
           </button>
           <button 
-            onClick={() => navigate('/rewards')}
+            onClick={() => navigate('/withdraw')}
             className="bg-white text-green-600 px-6 py-3 rounded-xl font-bold hover:bg-green-50 transition-colors flex items-center justify-center shadow-sm"
           >
-            Withdraw at Rewards
+            Withdraw Funds
             <ArrowRight className="w-4 h-4 ml-2" />
           </button>
         </div>

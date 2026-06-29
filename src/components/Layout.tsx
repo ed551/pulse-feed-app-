@@ -204,7 +204,7 @@ export default function Layout() {
     { path: '/', icon: Home, label: t('home') },
     { path: '/gold', icon: Gem, label: t('gold_graph') },
     { path: '/groups', icon: Users, label: t('groups') },
-    { path: '/rewards', icon: Layers, label: t('rewards') },
+    { path: '/withdraw', icon: Layers, label: t('rewards') },
     { path: '/b2b', icon: Building2, label: 'B2B Analytics' },
     { path: '/profile', icon: User, label: t('profile') },
     { path: '/audio', icon: Headphones, label: 'Audio' },
@@ -215,7 +215,7 @@ export default function Layout() {
     { name: 'All', icon: Home, color: 'text-purple-500', label: t('all') },
     { name: 'Google Apps', icon: LayoutGrid, color: 'text-blue-500', label: t('google_apps') },
     { name: 'Browsers', icon: Globe, color: 'text-orange-500', label: t('browsers') },
-    { name: 'Rewards', icon: Layers, color: 'text-yellow-500', label: t('rewards') },
+    { name: 'Withdraw', icon: Layers, color: 'text-yellow-500', label: t('rewards') },
     { name: 'Indoor Games', icon: Gamepad2, color: 'text-pink-500', label: t('indoor_games') },
     { name: 'Outdoor Games', icon: Map, color: 'text-emerald-500', label: t('outdoor_games') },
     { name: 'Toggle Frame', icon: Smartphone, color: 'text-purple-500', label: t('toggle_frame') },
@@ -226,8 +226,8 @@ export default function Layout() {
 
   const handleCategoryClick = (categoryName: string) => {
     setActiveCategory(categoryName);
-    if (categoryName === 'Rewards') {
-      navigate('/rewards');
+    if (categoryName === 'Withdraw') {
+      navigate('/withdraw');
       return;
     }
     if (categoryName === 'Terms') {
@@ -620,8 +620,18 @@ export default function Layout() {
         let newForecast = forecastWeather;
         if (daily && daily.temperature_2m_max && (daily.weather_code || daily.weathercode)) {
           let forecastTypeIndex = 3;
-          const forecastCode = daily.weather_code ? daily.weather_code[1] : daily.weathercode[1];
-          const forecastTemp = daily.temperature_2m_max[1];
+          const forecastCode = (daily.weather_code && daily.weather_code[1] !== undefined)
+            ? daily.weather_code[1]
+            : (daily.weathercode && daily.weathercode[1] !== undefined)
+              ? daily.weathercode[1]
+              : (daily.weather_code && daily.weather_code[0] !== undefined)
+                ? daily.weather_code[0]
+                : (daily.weathercode && daily.weathercode[0] !== undefined)
+                  ? daily.weathercode[0]
+                  : 0;
+          const forecastTemp = (daily.temperature_2m_max[1] !== undefined)
+            ? daily.temperature_2m_max[1]
+            : (daily.temperature_2m_max[0] !== undefined ? daily.temperature_2m_max[0] : 20);
 
           if (forecastCode === 0) forecastTypeIndex = 0;
           else if (forecastCode >= 1 && forecastCode <= 3) forecastTypeIndex = 3;
@@ -927,7 +937,7 @@ export default function Layout() {
   const coreNavItems = [
     { path: '/', icon: Home, color: 'text-blue-500', label: t('discover') },
     { path: '/groups', icon: Users, color: 'text-green-500', label: t('community') },
-    { path: '/rewards', icon: Gem, color: 'text-yellow-500', label: t('rewards') },
+    { path: '/withdraw', icon: Gem, color: 'text-yellow-500', label: t('rewards') },
     { path: '/profile', icon: User, color: 'text-purple-500', label: t('profile') },
   ];
 
@@ -1121,7 +1131,7 @@ export default function Layout() {
                 <div className="flex items-center px-2 sm:px-3 py-1 bg-yellow-50 dark:bg-yellow-900/30 rounded-full border border-yellow-100 dark:border-yellow-800 shadow-sm group">
                   <Layers className="w-3.5 h-3.5 sm:w-4 h-4 text-yellow-600 mr-1 sm:mr-1.5 group-hover:scale-110 transition-transform" />
                   <span className="text-[10px] sm:text-xs font-black text-yellow-800 dark:text-yellow-300 flex items-center gap-1">
-                    {formatReward(consistentPoints)}
+                    USDT {(consistentPoints || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
 
@@ -1705,10 +1715,10 @@ export default function Layout() {
                         <span className="text-xs font-bold text-yellow-700 dark:text-yellow-300">Liquidity Reserve</span>
                       </div>
                       <p className="text-lg font-black text-yellow-900 dark:text-yellow-100">
-                        {formatReward(consistentPoints)}
+                        USDT {(consistentPoints || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </p>
                       <p className="text-[8px] font-black text-yellow-700/60 uppercase tracking-tighter">
-                        +{formatReward(totalEarnedToday)} Today Accumulation
+                        +USDT {totalEarnedToday.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Today Accumulation
                       </p>
                     </div>
                     <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-2xl border border-yellow-100 dark:border-yellow-800/50 flex flex-col gap-1">
