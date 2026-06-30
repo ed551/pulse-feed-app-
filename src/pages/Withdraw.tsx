@@ -259,7 +259,7 @@ export default function Withdraw() {
                 </div>
 
                 <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-                  {selectedRole === 'developer' ? 'Available Treasury Balance' : 'Available USDT Balance'}
+                  {selectedRole === 'developer' ? 'Amount Available for Withdraw (Treasury)' : 'Amount Available for Withdraw'}
                 </span>
                 
                 <div className="flex items-baseline gap-2 mt-1">

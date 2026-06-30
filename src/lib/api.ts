@@ -59,15 +59,16 @@ export const getApiUrl = (path: string): string => {
     return `${cleanRelay}${cleanPath}`;
   }
 
+  // If we are in a known dev/preview env, use the local backend ONLY
+  // This prevents 404s if a VITE_API_BASE_URL is set but doesn't have all routes
+  if (isLocalStorageOrDev && !isSurge) {
+    return cleanPath;
+  }
+
   // If the user EXPLICITLY set a base URL, they likely want to use it regardless of env
   // unless they are hitting the same host as the app itself.
   if (rawBaseUrl) {
     return resolveTarget(rawBaseUrl);
-  }
-
-  // Otherwise, if we are in a known dev/preview env, use the local backend
-  if (isLocalStorageOrDev && !isSurge) {
-    return cleanPath;
   }
 
   // Fallback to the default VPS backend if not in local/preview

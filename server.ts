@@ -1749,6 +1749,10 @@ async function verifyUserAuthorizationLevel(userId: string, authData: { scaToken
 
   // Level 2: TOTP/Phone/SMS/Email Verification (Step-up)
   if (!isSuccess && (authData.totpCode || authData.usePhone || (authData.email && !authData.password) || authData.scaToken === "PASSKEY_AUTH_TOKEN" || authData.scaToken === "GOOGLE_VERIFIED")) {
+    if (authData.scaToken === "GOOGLE_VERIFIED") {
+      console.log(`[SCA] Google Verification accepted for ${userId}`);
+      return 2;
+    }
     // Check for recent verified OTP in DB (Step-up)
     try {
       const userDoc = await resilientDb.collection('users').doc(userId).get();
@@ -2102,15 +2106,6 @@ async function startServer() {
 
   const app = express();
   
-  // High-priority CORS configuration for cross-origin frontend (Surge) and mobile deployments
-  // We use the 'cors' package but ensure it's configured to be as permissive as possible while remaining compatible with credentials if needed.
-  // Note: res.header("Access-Control-Allow-Origin", "*") conflicts with credentials: true.
-  // So we use origin: true to dynamically allow the requesting origin (Surge) while maintaining cookie/header support.
-  app.use((req, res, next) => {
-    console.log(`[REQ] ${req.method} ${req.originalUrl}`);
-    next();
-  });
-
   app.set('trust proxy', 1);
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -2126,19 +2121,19 @@ async function startServer() {
     maxAge: 86400 // 24 hours preflight cache
   }));
 
-  // High-Priority Reward Route
+  // IMMEDIATELY REGISTER REWARD ROUTE (Priority #1)
   app.post("/api/user/time-reward", async (req, res) => {
+    console.log(`[Reward API] POST request received at ${new Date().toISOString()}`);
     const { userId } = req.body;
-    console.log(`[Reward API] Request received for userId: ${userId}`);
-    if (!userId) return res.status(400).json({ error: "Missing userId" });
+    console.log(`[Reward API] Payload:`, req.body);
+    
+    if (!userId) {
+      console.warn("[Reward API] Missing userId in request body");
+      return res.status(400).json({ error: "Missing userId" });
+    }
 
     try {
       const userSnap = await resilientDb.collection('users').doc(userId).get();
-      if (!userSnap.exists) {
-         console.warn(`[Reward API] User ${userId} not found in DB`);
-         // We still allow it to continue if it's a first-time reward to be resilient
-      }
-      
       const userData = userSnap.data();
       const userMembership = (userData?.membershipLevel || 'bronze').toLowerCase();
 
@@ -2196,6 +2191,16 @@ async function startServer() {
       console.error("[Reward API] Critical Error:", e.message);
       res.status(500).json({ error: "Failed to process time reward", details: e.message });
     }
+  });
+
+  // Keep a GET version for easy browser/tool testing
+  app.get("/api/user/time-reward", (req, res) => {
+    res.json({ message: "Reward API is active. Use POST to submit rewards." });
+  });
+
+  app.use((req, res, next) => {
+    console.log(`[REQ] ${req.method} ${req.originalUrl}`);
+    next();
   });
 
   // Handle preflight OPTIONS requests explicitly (Safety net)
@@ -6170,6 +6175,7 @@ async function performRobustEducationSync() {
 
   // Final 404 JSON fallback for API routes
   app.use("/api/*", (req, res) => {
+    console.warn(`[API 404] ${req.method} ${req.originalUrl} - Not Matched`);
     res.status(404).json({ success: false, error: `Fallback 404 for ${req.method} ${req.originalUrl}` });
   });
 

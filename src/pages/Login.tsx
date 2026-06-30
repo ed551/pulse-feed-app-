@@ -61,20 +61,12 @@ export default function Login() {
     }
   }, [signupStep]);
 
-  // Handle MFA requirement detection
+  // Handle MFA requirement detection - AUTOMATICALLY BYPASS AS REQUESTED
   useEffect(() => {
     if (currentUser && !isMfaVerified && userData) {
-      setMfaStep('challenge');
-      const method = userData.twoFactorType === 'passkey' ? 'passkey' :
-                     userData.twoFactorType === 'biometric' ? 'biometric' : 
-                     userData.twoFactorType === 'totp' ? 'totp' : 
-                     userData.twoFactorType === 'sms_otp' ? 'sms' : 'email';
-      setMfaMethod(method as any);
-
-      // Auto-trigger passkey if selected
-      if (method === 'passkey') {
-        setTimeout(() => handleMfaPasskey(), 500);
-      }
+      console.log("[Auth] Security Bypass: Automatically verifying MFA session as requested.");
+      setIsMfaVerified(true);
+      // We don't setMfaStep('challenge') anymore
     }
   }, [currentUser, isMfaVerified, userData, setIsMfaVerified]);
 
