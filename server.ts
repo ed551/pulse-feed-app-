@@ -1660,7 +1660,16 @@ async function checkVelocityLimit(userId: string, amountKes: number, authLevel: 
   else if (userData?.kycVerified) dailyMaxKes = 65000;
 
   // 2. Emergency overrides
-  const accountAgeDays = userData?.createdAt ? (Date.now() - userData.createdAt.toDate().getTime()) / (1000 * 60 * 60 * 24) : 0;
+  let accountAgeDays = 0;
+  if (userData?.createdAt) {
+    const ca = userData.createdAt;
+    const caMillis = (typeof ca.toDate === 'function') ? ca.toDate().getTime() : 
+                     (ca instanceof Date ? ca.getTime() : 
+                     (typeof ca === 'number' ? ca : new Date(ca).getTime()));
+    if (!isNaN(caMillis)) {
+      accountAgeDays = (Date.now() - caMillis) / (1000 * 60 * 60 * 24);
+    }
+  }
   const isTrustedAccount = accountAgeDays > 90;
 
   if (authLevel === 2) dailyMaxKes = Math.max(dailyMaxKes, isTrustedAccount ? 195000 : 130000);
@@ -2106,9 +2115,13 @@ async function startServer() {
 
   const app = express();
   
+  // ULTRA-HIGH PRIORITY LOGGER
+  app.use((req, res, next) => {
+    console.log(`[ULTRA-LOG] ${req.method} ${req.url} (from: ${req.headers.origin || 'same-origin'})`);
+    next();
+  });
+  
   app.set('trust proxy', 1);
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   app.use(cors({
     origin: (origin, callback) => {
       // Allow all origins (development, Surge, staging, etc.)
@@ -2120,6 +2133,9 @@ async function startServer() {
     exposedHeaders: ['Content-Range', 'X-Content-Range'],
     maxAge: 86400 // 24 hours preflight cache
   }));
+
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   // IMMEDIATELY REGISTER REWARD ROUTE (Priority #1)
   app.post("/api/user/time-reward", async (req, res) => {
@@ -2205,11 +2221,65 @@ async function startServer() {
 
   // Handle preflight OPTIONS requests explicitly (Safety net)
   app.options('*', (req, res) => {
-    res.sendStatus(200);
+    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+    res.header("Access-Control-Allow-Headers", req.headers["access-control-request-headers"] || "Content-Type, Authorization, Accept, X-Requested-With, Origin, Cache-Control, x-bridge-relay, x-api-key, x-api-secret, X-Pulse-Request, X-Education-Retry");
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.header("Access-Control-Max-Age", "86400");
+    res.sendStatus(204);
   });
 
   // --- START OF PAYOUT ROUTES (MOVED UP FOR PRIORITY) ---
+  app.post("/api/payout/platform/sync", async (req, res) => {
+    try {
+      const statsRef = resilientDb.collection('platform').doc('stats');
+      const txs = await resilientDb.collection('platform_transactions').get();
+      const withdrawals = await resilientDb.collection('withdrawals').where('status', '==', 'success').get();
+      const expenses = await resilientDb.collection('platform_expenses').get();
+
+      let revenueIn = 0;
+      txs.forEach(doc => {
+        const data = doc.data();
+        if (data.type === 'revenue' || data.type === 'income') {
+          revenueIn += (parseFloat(data.totalAmount) || parseFloat(data.amount) || 0);
+        }
+      });
+
+      let payoutsOut = 0;
+      withdrawals.forEach(doc => {
+        const data = doc.data();
+        if (data.role === 'admin' || data.type === 'platform') {
+          payoutsOut += (parseFloat(data.amount) || 0);
+        }
+      });
+
+      let expensesOut = 0;
+      expenses.forEach(doc => {
+        const data = doc.data();
+        expensesOut += (parseFloat(data.amount) || 0);
+      });
+
+      const auditBalance = Math.max(0, revenueIn - payoutsOut - expensesOut);
+      
+      await statsRef.set({
+        platformShare: auditBalance,
+        platformRevenue: revenueIn,
+        totalPayouts: payoutsOut,
+        totalExpenses: expensesOut,
+        lastSynced: FieldValue.serverTimestamp(),
+        serverSecret: SERVER_SECRET
+      }, { merge: true });
+
+      console.log(`[Stats Sync] Success. Audit Balance: ${auditBalance}, Revenue: ${revenueIn}`);
+      res.json({ success: true, auditBalance });
+    } catch (e: any) {
+      console.error("[Stats Sync] Error:", e.message);
+      res.status(500).json({ error: "Failed to sync stats", details: e.message });
+    }
+  });
+
   app.post("/api/payout/crypto", async (req, res) => {
+    console.log(`[ROUTE-MATCH] POST /api/payout/crypto triggered`);
     const { walletAddress, network, amount, userId, scaToken, reference: providedReference } = req.body;
     
     console.log(`[Crypto Payout] Initiated. Wallet: ${walletAddress}, Network: ${network}, Amount: ${amount}, User: ${userId}`);
@@ -2305,6 +2375,7 @@ async function startServer() {
   });
 
   app.post("/api/payout/platform", async (req, res) => {
+    console.log(`[ROUTE-MATCH] POST /api/payout/platform triggered`);
     const clientIp = (req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
     console.log(`[API] Received platform payout request from IP: ${clientIp}`, req.body);
     const { phoneNumber, accountNumber, userId, method, amount: rawAmount, recipient, scaToken, reference: providedReference, usePhone, email, password } = req.body;

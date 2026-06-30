@@ -6,7 +6,8 @@ import {
   CheckCircle2, 
   XCircle, 
   Loader2, 
-  Coins
+  Coins,
+  RefreshCw
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useRevenue } from "../contexts/RevenueContext";
@@ -62,9 +63,31 @@ export default function Withdraw() {
     userData?.role === 'admin';
 
   // Available balances
-  const userBalance = consistentPoints || 0;
-  const developerBalance = platformStats?.platformShare || 0;
+  const userBalance = typeof consistentPoints === 'number' ? consistentPoints : 0;
+  
+  // Developer balance: use platformShare which is the 40% share in the dashboard
+  const developerBalance = typeof platformStats?.platformShare === 'number' 
+    ? platformStats.platformShare 
+    : (typeof platformStats?.platformShare === 'string' ? parseFloat(platformStats.platformShare) : 0);
+  
   const currentAvailableBalance = selectedRole === 'developer' ? developerBalance : userBalance;
+
+  const handleSyncStats = async () => {
+    if (selectedRole !== 'developer' || !isDeveloperAccount) return;
+    setWithdrawLoading(true);
+    try {
+      // Trigger the server-side reconciliation if available or just wait for next sync
+      // For now, we rely on the fact that platform/stats is real-time
+      const resp = await apiFetch('/api/payout/platform/sync', { method: 'POST' });
+      if (resp.ok) {
+        setWithdrawError("");
+      }
+    } catch (e) {
+      console.warn("Sync failed:", e);
+    } finally {
+      setWithdrawLoading(false);
+    }
+  };
 
   const executePayoutRequest = async (tokenValue: string, amountToWithdraw: number) => {
     setWithdrawLoading(true);
@@ -98,7 +121,16 @@ export default function Withdraw() {
         body: JSON.stringify(payload)
       });
 
-      const data = await resp.json();
+      const contentType = resp.headers.get("content-type");
+      let data: any;
+
+      if (contentType && contentType.includes("application/json")) {
+        data = await resp.json();
+      } else {
+        const text = await resp.text();
+        console.error("[Withdraw] Received non-JSON response:", text);
+        throw new Error(`Server returned unexpected response (${resp.status}). It might be a configuration issue.`);
+      }
 
       if (resp.status === 401 && data.error === "SCA_REQUIRED") {
         setWithdrawError("Google Security Verification is required. Please try again.");
@@ -264,21 +296,31 @@ export default function Withdraw() {
                 
                 <div className="flex items-baseline gap-2 mt-1">
                   <h2 className="text-4xl font-extrabold text-white tracking-tight">
-                    {currentAvailableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                    {(Number(currentAvailableBalance) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                   </h2>
                   <span className="text-sm font-black text-purple-400 font-mono">USDT</span>
                 </div>
 
                 {selectedRole === 'developer' && platformStats && (
-                  <div className="mt-4 pt-4 border-t border-slate-900 grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Gross Revenue</p>
-                      <p className="text-sm font-bold text-slate-300">{formatCurrency(platformStats.platformRevenue || 0)}</p>
+                  <div className="mt-4 pt-4 border-t border-slate-900 flex flex-col gap-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Gross Revenue</p>
+                        <p className="text-sm font-bold text-slate-300">{formatCurrency(platformStats.platformRevenue || 0)}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Withdrawable Share (40%)</p>
+                        <p className="text-sm font-bold text-emerald-400">{formatCurrency(platformStats.platformShare || 0)}</p>
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Developer 40% Share</p>
-                      <p className="text-sm font-bold text-emerald-400">{formatCurrency(platformStats.platformShare40 || 0)}</p>
-                    </div>
+                    <button 
+                      type="button"
+                      onClick={handleSyncStats}
+                      className="text-[10px] text-slate-500 hover:text-purple-400 flex items-center gap-1.5 transition-colors uppercase font-bold tracking-widest"
+                    >
+                      <RefreshCw className={cn("w-3 h-3", withdrawLoading && "animate-spin")} />
+                      Reconcile Ledger & Sync Balance
+                    </button>
                   </div>
                 )}
               </div>

@@ -10,48 +10,25 @@ export const getApiUrl = (path: string): string => {
 
   const rawBaseUrl = import.meta.env.VITE_API_BASE_URL;
   const baseUrl = (rawBaseUrl || 'https://89-168-120-135.sslip.io').trim();
-  const relayUrl = (import.meta.env.VITE_API_RELAY_URL || 'https://ais-pre-vpm462ccg3jpy6a7n4c54f-708516523970.europe-west2.run.app').trim();
+  const defaultRelayUrl = 'https://ais-pre-vpm462ccg3jpy6a7n4c54f-708516523970.europe-west2.run.app';
+  const relayUrl = (import.meta.env.VITE_API_RELAY_URL || defaultRelayUrl).trim();
   
-  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-  const isSurge = typeof window !== 'undefined' && window.location.hostname.includes('surge.sh');
   const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
 
-  // Safety/Relay Helper
-  const resolveTarget = (targetBase: string) => {
-    // If we are calling our own host via an absolute URL, just use relative path
-    try {
-      const urlObj = new URL(targetBase);
-      if (urlObj.hostname === currentHostname) {
-        return cleanPath;
-      }
-    } catch (e) { /* ignore */ }
+  const isRunApp = currentHostname.includes('run.app');
+  
+  // Detect if we are in an AI Studio / Cloud Shell / Proxied environment
+  const isProxied = currentHostname.includes('google') || 
+                    currentHostname.includes('cloud') || 
+                    currentHostname.includes('aistudio') ||
+                    currentHostname.includes('editor') ||
+                    currentHostname.includes('shell') ||
+                    (currentHostname.includes('run.app') && currentHostname.includes('ais-pre'));
 
-    const isTargetHttp = targetBase.startsWith('http://');
-    
-    if (isHttps && isTargetHttp) {
-      if (isSurge) {
-        // Surge MUST use absolute relay URL because it has no local backend
-        const cleanRelay = relayUrl.endsWith('/') ? relayUrl.slice(0, -1) : relayUrl;
-        console.log(`[API Bridge] Surge Relay: ${path} -> ${cleanRelay}${cleanPath} (targeting ${targetBase})`);
-        return `${cleanRelay}${cleanPath}`;
-      }
-      // run.app / dev can use relative paths which relay through their own local backend
-      console.log(`[API Bridge] Local Relay: ${path} -> ${cleanPath} (targeting ${targetBase})`);
-      return cleanPath;
-    }
-
-    const cleanBase = targetBase.endsWith('/') ? targetBase.slice(0, -1) : targetBase;
-    return `${cleanBase}${cleanPath}`;
-  };
-
-  const isLocalStorageOrDev = 
-    currentHostname === 'localhost' || 
-    currentHostname === '127.0.0.1' || 
-    currentHostname.includes('run.app') ||
-    currentHostname.includes('google') ||
-    currentHostname.includes('cloud') ||
-    currentHostname.includes('aistudio.google');
+  const isLocal = currentHostname === 'localhost' || currentHostname === '127.0.0.1';
+  const isSurge = currentHostname.includes('surge.sh');
 
   // If we are on Surge, all API requests MUST route to our own Cloud Run backend (relayUrl)
   if (isSurge) {
@@ -59,21 +36,38 @@ export const getApiUrl = (path: string): string => {
     return `${cleanRelay}${cleanPath}`;
   }
 
-  // If we are in a known dev/preview env, use the local backend ONLY
-  // This prevents 404s if a VITE_API_BASE_URL is set but doesn't have all routes
-  if (isLocalStorageOrDev && !isSurge) {
+  // If we are actually ON a run.app URL (like in shared preview or proxied editor), 
+  // and we are NOT local, we should probably use relative paths unless we are specifically 
+  // on a host that doesn't serve the API.
+  if (isRunApp && !isLocal) {
+    // If the origin itself is where we expect the API (shared/deployed preview), use relative
+    return cleanPath;
+  }
+
+  // If we are in a proxied environment (AI Studio Editor) but NOT on a run.app URL yet,
+  // we must use the absolute relay URL.
+  if (isProxied && !isLocal) {
+    // Use current origin if it looks like a valid relay (Cloud Run)
+    const effectiveRelay = isRunApp ? currentOrigin : relayUrl;
+    const cleanRelay = effectiveRelay.endsWith('/') ? effectiveRelay.slice(0, -1) : effectiveRelay;
+    return `${cleanRelay}${cleanPath}`;
+  }
+
+  // If we are local, use relative paths
+  if (isLocal) {
     return cleanPath;
   }
 
   // If the user EXPLICITLY set a base URL, they likely want to use it regardless of env
-  // unless they are hitting the same host as the app itself.
   if (rawBaseUrl) {
-    return resolveTarget(rawBaseUrl);
+    const cleanBase = rawBaseUrl.endsWith('/') ? rawBaseUrl.slice(0, -1) : rawBaseUrl;
+    return `${cleanBase}${cleanPath}`;
   }
 
   // Fallback to the default VPS backend if not in local/preview
   if (baseUrl) {
-    return resolveTarget(baseUrl);
+    const cleanBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+    return `${cleanBase}${cleanPath}`;
   }
   
   return cleanPath;
@@ -96,7 +90,7 @@ export const apiFetch = async (path: string, options: RequestInit = {}, retries 
         ...options,
         signal: controller.signal,
         mode: 'cors',
-        credentials: 'omit', // Use omit to be safe for cross-origin if not using cookies
+        credentials: 'include', // Changed from omit to include for better auth compatibility
         headers: {
           ...options.headers,
         },
