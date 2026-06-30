@@ -2126,6 +2126,78 @@ async function startServer() {
     maxAge: 86400 // 24 hours preflight cache
   }));
 
+  // High-Priority Reward Route
+  app.post("/api/user/time-reward", async (req, res) => {
+    const { userId } = req.body;
+    console.log(`[Reward API] Request received for userId: ${userId}`);
+    if (!userId) return res.status(400).json({ error: "Missing userId" });
+
+    try {
+      const userSnap = await resilientDb.collection('users').doc(userId).get();
+      if (!userSnap.exists) {
+         console.warn(`[Reward API] User ${userId} not found in DB`);
+         // We still allow it to continue if it's a first-time reward to be resilient
+      }
+      
+      const userData = userSnap.data();
+      const userMembership = (userData?.membershipLevel || 'bronze').toLowerCase();
+
+      let membershipMultiplier = 1.0; 
+      if (userMembership === 'gold') membershipMultiplier = 1.5;
+      else if (userMembership === 'silver') membershipMultiplier = 1.25;
+
+      const baseTotalAmount = 0.010; 
+      const userAmount = baseTotalAmount * 0.60 * membershipMultiplier;
+      const platformAmount = baseTotalAmount * 0.40;
+      const totalAmount = userAmount + platformAmount;
+      const timestamp = FieldValue.serverTimestamp();
+
+      const userRef = resilientDb.collection('users').doc(userId);
+      await userRef.set({
+        points: FieldValue.increment(userAmount),
+        balance: FieldValue.increment(userAmount),
+        activeTimeRevenue: FieldValue.increment(userAmount),
+        serverSecret: SERVER_SECRET,
+        updatedAt: timestamp
+      }, { merge: true });
+
+      // Log Points Ledger
+      await resilientDb.collection('users').doc(userId).collection('points_ledger').add({
+        amount: userAmount,
+        type: 'accrual',
+        source: 'active_time',
+        reason: `Active Time Reward (1 Minute) - ${userMembership.toUpperCase()} Level`,
+        timestamp
+      });
+
+      const statsRef = resilientDb.collection('platform').doc('stats');
+      await statsRef.set({
+        platformRevenue: FieldValue.increment(totalAmount),
+        platformShare: FieldValue.increment(platformAmount),
+        totalUserBalances: FieldValue.increment(userAmount),
+        lastUpdated: timestamp
+      }, { merge: true });
+
+      await resilientDb.collection('platform_transactions').add({
+        type: 'revenue',
+        source: 'active_time',
+        userAmount: userAmount,
+        platformAmount: platformAmount,
+        totalAmount: totalAmount,
+        unit: 'USD',
+        reason: `Active Time Reward (1 Minute) - ${userMembership.toUpperCase()} Level`,
+        userId: userId,
+        timestamp
+      });
+
+      console.log(`[Reward API] Success: User ${userId} rewarded ${userAmount} USD`);
+      return res.json({ success: true, reward: userAmount });
+    } catch (e: any) {
+      console.error("[Reward API] Critical Error:", e.message);
+      res.status(500).json({ error: "Failed to process time reward", details: e.message });
+    }
+  });
+
   // Handle preflight OPTIONS requests explicitly (Safety net)
   app.options('*', (req, res) => {
     res.sendStatus(200);
@@ -5249,92 +5321,6 @@ async function performRobustEducationSync() {
     }
   });
 
-  app.post("/api/user/time-reward", async (req, res) => {
-    const { userId } = req.body;
-    if (!userId) return res.status(400).json({ error: "Missing userId" });
-
-    try {
-      // Get user membership level for multiplier
-      const userSnap = await resilientDb.collection('users').doc(userId).get();
-      const userData = userSnap.data();
-      const userMembership = (userData?.membershipLevel || 'bronze').toLowerCase();
-
-      let membershipMultiplier = 1.0; // Default Bronze
-      if (userMembership === 'gold') membershipMultiplier = 1.5;
-      else if (userMembership === 'silver') membershipMultiplier = 1.25;
-
-      // 60% User, 40% Platform split
-      const baseTotalAmount = 0.010; // Total baseline per minute
-      const userAmount = baseTotalAmount * 0.60 * membershipMultiplier;
-      const platformAmount = baseTotalAmount * 0.40;
-      const totalAmount = userAmount + platformAmount;
-      const timestamp = FieldValue.serverTimestamp();
-
-      const userRef = resilientDb.collection('users').doc(userId);
-      await userRef.update({
-        points: FieldValue.increment(userAmount),
-        balance: FieldValue.increment(userAmount),
-        activeTimeRevenue: FieldValue.increment(userAmount),
-        serverSecret: SERVER_SECRET
-      });
-
-      // Log Points Ledger
-      await resilientDb.collection('users').doc(userId).collection('points_ledger').add({
-        amount: userAmount,
-        type: 'accrual',
-        source: 'active_time',
-        reason: `Active Time Reward (1 Minute) - ${userMembership.toUpperCase()} Level`,
-        timestamp
-      });
-
-      // Log User Transaction
-      await resilientDb.collection('users').doc(userId).collection('transactions').add({
-        amount: userAmount,
-        currency: 'USD',
-        type: 'earning',
-        source: 'active_time',
-        status: 'success',
-        timestamp,
-        reference: `TIME-REV-${Date.now()}`,
-        details: `Active Time Reward (1 Minute) - ${userMembership.toUpperCase()} Level`,
-        pointsAdded: userAmount
-      });
-
-      // Update Platform Stats
-      const statsRef = resilientDb.collection('platform').doc('stats');
-      await statsRef.update({
-        platformRevenue: FieldValue.increment(totalAmount),
-        platformShare: FieldValue.increment(platformAmount),
-        totalUserBalances: FieldValue.increment(userAmount),
-        lastUpdated: timestamp
-      }).catch(async () => {
-        await statsRef.set({
-          platformRevenue: totalAmount,
-          platformShare: platformAmount,
-          totalUserBalances: userAmount,
-          lastUpdated: timestamp
-        }, { merge: true });
-      });
-
-      // Log Platform Transaction
-      await resilientDb.collection('platform_transactions').add({
-        type: 'revenue',
-        source: 'active_time',
-        userAmount: userAmount,
-        platformAmount: platformAmount,
-        totalAmount: totalAmount,
-        unit: 'USD',
-        reason: `Active Time Reward (1 Minute) - ${userMembership.toUpperCase()} Level`,
-        userId: userId,
-        timestamp
-      });
-
-      return res.json({ success: true, reward: userAmount });
-    } catch (e: any) {
-      console.error("Failed to process time reward:", e);
-      res.status(500).json({ error: "Failed to process time reward" });
-    }
-  });
 
   // OTP Security Routes
   app.post("/api/user/security/reset-pin", async (req, res) => {
