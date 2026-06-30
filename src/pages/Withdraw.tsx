@@ -28,6 +28,14 @@ export default function Withdraw() {
   const { currentUser, userData } = useAuth();
   const { consistentPoints } = useRevenue();
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2
+    }).format(amount);
+  };
+
   // Route/Role selector states
   const [selectedRole, setSelectedRole] = useState<'user' | 'developer'>('user');
   
@@ -35,7 +43,6 @@ export default function Withdraw() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [current2FAStep, setCurrent2FAStep] = useState<1 | 2>(1);
   const [gmailOtpSent, setGmailOtpSent] = useState(false);
-  const [simulatedOtp, setSimulatedOtp] = useState("");
   const [otpInput, setOtpInput] = useState("");
   const [gmailError, setGmailError] = useState("");
   const [gmailLoading, setGmailLoading] = useState(false);
@@ -114,9 +121,6 @@ export default function Withdraw() {
       const data = await resp.json();
       if (resp.ok && data.success) {
         setGmailOtpSent(true);
-        if (data.devOtp) {
-          setSimulatedOtp(data.devOtp);
-        }
       } else {
         throw new Error(data.error || "Failed to dispatch verification code.");
       }
@@ -392,7 +396,6 @@ export default function Withdraw() {
     setIsAuthenticated(false);
     setCurrent2FAStep(1);
     setGmailOtpSent(false);
-    setSimulatedOtp("");
     setOtpInput("");
     setIsPasskeyVerified(false);
     setWithdrawSuccess(null);
@@ -435,7 +438,6 @@ export default function Withdraw() {
                 onClick={() => {
                   setSelectedRole('user');
                   setGmailOtpSent(false);
-                  setSimulatedOtp("");
                   setOtpInput("");
                   setGmailError("");
                 }}
@@ -451,7 +453,6 @@ export default function Withdraw() {
                 onClick={() => {
                   setSelectedRole('developer');
                   setGmailOtpSent(false);
-                  setSimulatedOtp("");
                   setOtpInput("");
                   setGmailError("");
                 }}
@@ -534,17 +535,6 @@ export default function Withdraw() {
                       </button>
                     ) : (
                       <form onSubmit={handleVerifyGmailOtp} className="space-y-4">
-                        {/* Simulation Alert Box */}
-                        {simulatedOtp && (
-                          <div className="p-4 bg-emerald-950/20 border border-emerald-500/20 rounded-2xl text-xs font-mono text-emerald-400/90 leading-relaxed flex items-start gap-3">
-                            <span className="text-lg leading-none mt-0.5">📨</span>
-                            <div>
-                              <strong className="text-emerald-300 block mb-0.5">Gmail Simulator Inbox</strong>
-                              Verification code is <span className="bg-emerald-500/10 px-2 py-0.5 rounded font-black border border-emerald-500/20 text-white">{simulatedOtp}</span> (sent to {currentUser?.email}). Enter below to verify.
-                            </div>
-                          </div>
-                        )}
-
                         <div>
                           <label className="text-xs font-bold tracking-wider text-slate-500 uppercase ml-1 block mb-2">Verification Code</label>
                           <input
@@ -570,7 +560,6 @@ export default function Withdraw() {
                             type="button"
                             onClick={() => {
                               setGmailOtpSent(false);
-                              setSimulatedOtp("");
                             }}
                             className="w-1/3 py-4 bg-slate-950 border border-slate-800 text-slate-300 font-bold rounded-2xl hover:bg-slate-900 transition-all text-xs uppercase"
                           >
@@ -679,7 +668,9 @@ export default function Withdraw() {
                 <Coins className="w-32 h-32" />
               </div>
 
-              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Available USDT Balance</span>
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                {selectedRole === 'developer' ? 'Available Treasury Balance' : 'Available USDT Balance'}
+              </span>
               
               <div className="flex items-baseline gap-2 mt-1">
                 <h2 className="text-4xl font-extrabold text-white tracking-tight">
@@ -687,6 +678,27 @@ export default function Withdraw() {
                 </h2>
                 <span className="text-sm font-black text-purple-400 font-mono">USDT</span>
               </div>
+
+              {selectedRole === 'developer' && platformStats && (
+                <div className="mt-4 pt-4 border-t border-slate-900 grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Gross Revenue</p>
+                    <p className="text-sm font-bold text-slate-300">{formatCurrency(platformStats.platformRevenue || 0)}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Developer 40% Share</p>
+                    <p className="text-sm font-bold text-emerald-400">{formatCurrency(platformStats.platformShare40 || 0)}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Ads Revenue</p>
+                    <p className="text-sm font-bold text-blue-400">{formatCurrency(platformStats.platformAds || 0)}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Payments & Subs</p>
+                    <p className="text-sm font-bold text-indigo-400">{formatCurrency(platformStats.platformPayments || 0)}</p>
+                  </div>
+                </div>
+              )}
 
               {selectedRole === 'user' ? (
                 <div className="mt-4 pt-4 border-t border-slate-800 text-[11px] text-slate-400 leading-relaxed flex items-start gap-2">
@@ -812,7 +824,7 @@ export default function Withdraw() {
                 <div className="space-y-2">
                   <h3 className="text-2xl font-black text-emerald-300">Transaction Successful</h3>
                   <p className="text-xs text-slate-400 px-6">
-                    Your withdrawal request has been authorized and simulated/dispatched to the payout node.
+                    Your withdrawal request has been authorized and dispatched to the real-time payout node.
                   </p>
                 </div>
 

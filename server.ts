@@ -872,7 +872,7 @@ async function generateContentWithRetry(params: any): Promise<any> {
   // Proactive Simulation for known billing issues
   if (isAIBreakerTripped && breakerErrorText.includes("billing")) {
     console.log("[Server AI] Proactive Simulation Mode Active due to previous billing failure.");
-    return getSimulationResponse(params);
+    throw new Error("AI services currently unavailable (Rate Limit/Billing). Simulation is disabled.");
   }
 
   if (isAIBreakerTripped) {
@@ -936,11 +936,11 @@ async function generateContentWithRetry(params: any): Promise<any> {
                           combinedErrorText.includes("blocked");
         
         if (isDunning) {
-          console.warn("[Server AI] Billing/Blocking restriction detected during request. Switching to simulation.");
+          console.error("[Server AI] Billing/Blocking restriction detected. Simulation fallback disabled per user request.");
           isAIBreakerTripped = true;
           breakerErrorText = "Gemini API Blocked: Project billing restricted (Dunning). Please resolve this in your Google Cloud Console Billing dashboard to restore AI features.";
           breakerTrippedAt = Date.now();
-          return getSimulationResponse(params);
+          throw error; // Propagate the error instead of simulating
         }
 
         const errorJson = (function() {
@@ -2642,21 +2642,7 @@ async function startServer() {
 
       // Check for circuit breaker before real call
       if (isAIBreakerTripped) {
-        try {
-          const sim = getSimulationResponse((lessonTitle || "") + " " + (courseTitle || "") + " research academic");
-          return res.json(JSON.parse(sim.text));
-        } catch (simErr) {
-          // Fallback if simulation parsing fails
-          return res.json({
-            title: lessonTitle || "Pulse Lesson",
-            description: "AI synchronized curriculum content.",
-            overview: "Understanding the Pulse Feeds ecosystem.",
-            objectives: ["System mastery"],
-            keyConcepts: ["Simulation active"],
-            communityImpact: "Growth enabled.",
-            modules: []
-          });
-        }
+        return res.status(503).json({ error: "AI services currently unavailable (Rate Limit/Billing). Real-time AI required." });
       }
       
       const prompt = `Research and provide deep academic content for a lesson titled "${lessonTitle}" within the course "${courseTitle}". 
@@ -2682,14 +2668,7 @@ async function startServer() {
       res.json(content);
     } catch (error: any) {
       console.error("[Education Research] Error:", error.message);
-      
-      // Attempt simulation fallback on error
-      try {
-        const sim = getSimulationResponse((lessonTitle || "") + " " + (courseTitle || "") + " research academic fallback");
-        return res.json(JSON.parse(sim.text));
-      } catch (simError) {
-        res.status(500).json({ error: error.message });
-      }
+      res.status(500).json({ error: error.message || "Failed to generate research content" });
     }
   });
 
@@ -3469,10 +3448,9 @@ async function startServer() {
     }
 
     if (!isBinanceConfigured()) {
-      return res.json({
-        success: true,
-        status: "simulated",
-        message: "Binance is not configured. Treating transaction as simulated/pending."
+      return res.status(503).json({
+        success: false,
+        error: "Binance service not configured. Real-time payouts required."
       });
     }
 
@@ -3652,8 +3630,7 @@ async function startServer() {
       });
       
       if (isNetworkBlock(error)) {
-        console.warn(`Equity Bank API blocked via network. Using simulation fallback token.`);
-        return "simulated-token-eq-" + Date.now();
+        throw new Error(`Equity Bank API blocked via network. Real-time production mode required. [IP: ${TARGET_STATIC_IP}]`);
       }
       
       throw new Error(`Failed to generate Equity Bank access token: ${error.message}`);
@@ -3813,8 +3790,7 @@ async function startServer() {
       });
 
       if (isNetworkBlock(error)) {
-        console.warn(`M-Pesa API blocked via network. Using simulation fallback token.`);
-        return "simulated-token-mpesa-" + Date.now();
+        throw new Error(`M-Pesa API blocked via network. Real-time production mode required. [IP: ${TARGET_STATIC_IP}]`);
       }
 
       throw new Error(`Failed to generate M-Pesa access token: ${error.message}`);
@@ -4832,30 +4808,19 @@ async function performRobustEducationSync() {
       }
 
       if (isNetworkBlock(lastError)) {
-        console.warn("[Weather] Network block detected. Returning default simulated weather.");
-        return res.json({
-          current_weather: { temperature: 24.5, weathercode: 0, time: new Date().toISOString() },
-          daily: { temperature_2m_max: [28.0, 28.0], weather_code: [0, 0] },
-          _source: 'simulation_network_block'
-        });
+        return res.status(503).json({ error: "Weather service providers are currently unreachable. Please check your network connection." });
       }
 
-      console.warn(`[Weather] Returning ultimate simulated weather fallback for ${cacheKey} due to: ${lastError?.message || 'Unknown error'}`);
-      return res.json({
-        current_weather: { temperature: 22.0, weathercode: 3, time: new Date().toISOString() },
-        daily: { temperature_2m_max: [24.0, 25.0], weather_code: [3, 3] },
-        _source: 'simulation_ultimate_fallback',
-        _is_simulated: true,
-        _error_details: lastError?.message || "Service unavailable"
+      console.error(`[Weather] All providers failed for ${cacheKey}. Returning error instead of simulation.`);
+      return res.status(503).json({
+        error: "Weather service unavailable",
+        details: lastError?.message || "Service providers failed or timed out."
       });
     } catch (criticalErr: any) {
       console.error("[Weather CRITICAL] Universal fallback triggered due to exception:", criticalErr.message);
-      return res.json({
-        current_weather: { temperature: 22.5, weathercode: 3, time: new Date().toISOString() },
-        daily: { temperature_2m_max: [24.0, 25.0], weather_code: [3, 3] },
-        _source: 'simulation_ultimate_critical_fallback',
-        _is_simulated: true,
-        _error_details: criticalErr.message || "Unknown routing exception"
+      return res.status(500).json({ 
+        error: "Weather system internal error", 
+        details: criticalErr.message 
       });
     }
   });
@@ -5798,7 +5763,8 @@ async function performRobustEducationSync() {
 
       const rpID = req.get('host')?.split(':')[0] || 'localhost';
       const proto = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
-      const expectedOrigin = `${proto}://${req.get('host')}`;
+      const origin = req.headers.origin || `${proto}://${req.get('host')}`;
+      const expectedOrigin = origin;
 
       console.log(`[Passkey] Verifying registration for userId: ${userId}, rpID: ${rpID}, origin: ${expectedOrigin}`);
 
@@ -5904,7 +5870,8 @@ async function performRobustEducationSync() {
       const dbCred = credDoc.data()!;
       const rpID = req.get('host')?.split(':')[0] || 'localhost';
       const proto = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
-      const expectedOrigin = `${proto}://${req.get('host')}`;
+      const origin = req.headers.origin || `${proto}://${req.get('host')}`;
+      const expectedOrigin = origin;
 
       console.log(`[Passkey] Verifying authentication response for userId: ${userId}, credentialId: ${credentialIDStr}, origin: ${expectedOrigin}`);
 
@@ -5984,58 +5951,11 @@ async function performRobustEducationSync() {
       const content = JSON.parse(contentText);
       return res.json({ success: true, insights: content, source: "Gemini AI" });
     } catch (error: any) {
-      console.warn(`[B2B Analytics] Using highly-detailed simulation fallback. Reason: ${error.message}`);
-      
-      // Sophisticated Local Simulation Fallback
-      const normalizedArea = (focusArea || 'General Macro Trends').toLowerCase();
-      let simInsights = {
-        executiveSummary: `Anonymized neighborhood activity reports indicate a 14% increase in reported infrastructural anomalies. Community participation remains highly resilient, driven by localized reward payouts, though Transit Grid friction remains a localized priority.`,
-        sentimentScore: 78,
-        sentimentRationale: `High participation in local reward campaigns directly offsets frustrations with transit delays.`,
-        emergingOpportunities: [
-          `Integrate smart parcel lockers near community hubs to mitigate residential delivery costs.`,
-          `Sponsor localized parkette cleanup bounties to drive high-contrast ESG brand recognition.`,
-          `Deploy modern transit amenities in commercial corridors in Zone 4.`
-        ],
-        nextSteps: [
-          `Target resource deployment to Southern District infrastructure categories.`,
-          `Acquire system sponsorship package to align brand with high-retention reward campaigns.`
-        ]
-      };
-
-      if (normalizedArea.includes('infra') || normalizedArea.includes('road') || normalizedArea.includes('trash')) {
-        simInsights = {
-          executiveSummary: `Infrastructural wear patterns are showing accelerated reports along prime commuter lanes. Transit dispersion suggests a shift of 18% of cargo traffic into secondary avenues, affecting corporate supply chains.`,
-          sentimentScore: 62,
-          sentimentRationale: `Localized response delays by municipal contractors are causing negative sentiment spikes in Zone 3.`,
-          emergingOpportunities: [
-            `Formulate bid for automated street-sweeper and pothole surfacing contracts in Ward 8.`,
-            `Sponsor public trash compaction stations to unlock municipality tax-remittance credits.`,
-            `Erect solar micro-shelters at high-frequency transit intersections.`
-          ],
-          nextSteps: [
-            `Provide Municipal Contractors with the priority geolocated pothole dataset.`,
-            `Deploy micro-grid assets in high-incidence zones.`
-          ]
-        };
-      } else if (normalizedArea.includes('safe') || normalizedArea.includes('environment') || normalizedArea.includes('police')) {
-        simInsights = {
-          executiveSummary: `Community safety perception indicators have improved by 8% following active community patrol initiatives. Public-access streetlights and pedestrian crossings represent the highest priority request volume from residents in northern sectors.`,
-          sentimentScore: 85,
-          sentimentRationale: `Residents respond highly positively to direct visibility of community-empowered initiatives.`,
-          emergingOpportunities: [
-            `Deploy smart connected street lighting installations with advertising channels.`,
-            `Partner with community watches to supply eco-friendly electric patrol bikes.`,
-            `Establish smart neighborhood help kiosks near retail strips.`
-          ],
-          nextSteps: [
-            `Liaise with retail associations to sponsor local brightness and watch programs.`,
-            `Utilize the safety indicators reports to optimize physical security assets deployment.`
-          ]
-        };
-      }
-
-      return res.json({ success: true, insights: simInsights, source: "Simulated Model (Offline Mode)" });
+      console.error(`[B2B Analytics] AI generation failed. Simulation is disabled. Reason: ${error.message}`);
+      return res.status(503).json({ 
+        error: "B2B Insights System currently unavailable", 
+        details: error.message 
+      });
     }
   });
 
@@ -6134,20 +6054,35 @@ async function performRobustEducationSync() {
 
       // Update Platform Stats
       const statsRef = resilientDb.collection('platform').doc('stats');
-      await statsRef.update({
+      const updateData: any = {
         platformRevenue: FieldValue.increment(totalAmount),
         platformShare: FieldValue.increment(platformAmount),
         totalUserBalances: FieldValue.increment(userAmount),
         lastUpdated: timestamp
-      }).catch(async (err) => {
+      };
+
+      // Detailed Categorization
+      if (source === 'ad') {
+        updateData.platformAds = FieldValue.increment(platformAmount);
+      } else if (source === 'payment' || source === 'subscription' || source === 'membership') {
+        updateData.platformPayments = FieldValue.increment(platformAmount);
+      } else {
+        updateData.platformShare40 = FieldValue.increment(platformAmount);
+      }
+
+      await statsRef.update(updateData).catch(async (err) => {
         if (err.message.includes('NOT_FOUND') || err.message.includes('no document')) {
-          await statsRef.set({
+          const initData: any = {
             platformRevenue: totalAmount,
             platformShare: platformAmount,
             totalUserBalances: userAmount,
             lastUpdated: timestamp,
-            createdAt: timestamp
-          });
+            createdAt: timestamp,
+            platformAds: source === 'ad' ? platformAmount : 0,
+            platformPayments: (source === 'payment' || source === 'subscription' || source === 'membership') ? platformAmount : 0,
+            platformShare40: (source !== 'ad' && source !== 'payment' && source !== 'subscription' && source !== 'membership') ? platformAmount : 0
+          };
+          await statsRef.set(initData);
         }
       });
 

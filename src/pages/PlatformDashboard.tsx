@@ -1586,7 +1586,9 @@ export default function PlatformDashboard() {
     );
   }
 
-  if (!isDevUnlocked) {
+  const isAdmin = currentUser?.email === 'edwinmuoha@gmail.com' || userData?.role === 'admin';
+
+  if (!isDevUnlocked && !isAdmin) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center p-6">
         <motion.div 
