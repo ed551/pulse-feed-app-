@@ -1748,7 +1748,7 @@ async function verifyUserAuthorizationLevel(userId: string, authData: { scaToken
   }
 
   // Level 2: TOTP/Phone/SMS/Email Verification (Step-up)
-  if (!isSuccess && (authData.totpCode || authData.usePhone || (authData.email && !authData.password) || authData.scaToken === "PASSKEY_AUTH_TOKEN")) {
+  if (!isSuccess && (authData.totpCode || authData.usePhone || (authData.email && !authData.password) || authData.scaToken === "PASSKEY_AUTH_TOKEN" || authData.scaToken === "GOOGLE_VERIFIED")) {
     // Check for recent verified OTP in DB (Step-up)
     try {
       const userDoc = await resilientDb.collection('users').doc(userId).get();
