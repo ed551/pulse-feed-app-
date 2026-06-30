@@ -511,6 +511,29 @@ export default function Withdraw() {
                   </div>
                 </div>
 
+                {/* Passkey Direct Bypass Option */}
+                {current2FAStep === 1 && !gmailOtpSent && (
+                  <div className="mb-8">
+                    <button
+                      onClick={handleVerifyPasskey}
+                      disabled={passkeyLoading}
+                      className="w-full py-4 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-center gap-3 hover:bg-slate-800 transition-all group"
+                    >
+                      <div className="w-8 h-8 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
+                        <KeyRound className="w-5 h-5" />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-xs font-black text-white uppercase tracking-wider">Fast Track with Passkey</p>
+                        <p className="text-[10px] text-slate-500 font-medium">Bypass Gmail OTP using Google Passkey</p>
+                      </div>
+                    </button>
+                    <div className="relative my-6">
+                      <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800/50"></div></div>
+                      <div className="relative flex justify-center text-[10px] uppercase font-black tracking-widest text-slate-600 bg-[#0A0C14] px-4">OR USE GMAIL</div>
+                    </div>
+                  </div>
+                )}
+
                 {/* 2FA STEP 1: GMAIL VERIFICATION */}
                 {current2FAStep === 1 && (
                   <div className="space-y-6">

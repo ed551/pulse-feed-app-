@@ -1,7 +1,7 @@
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import React, { Suspense, lazy } from "react";
 import Layout from "./components/Layout";
-import ErrorBoundary from "./components/ErrorBoundary";
+import SystemBoundary from "./components/SystemBoundary";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { RevenueProvider } from "./contexts/RevenueContext";
 import { HealthProvider } from "./contexts/HealthContext";
@@ -109,7 +109,7 @@ function WakeLockHandler() {
 
 export default function App() {
   return (
-    <ErrorBoundary>
+    <SystemBoundary>
       <AuthProvider>
         <RevenueProvider>
           <HealthProvider>
@@ -226,6 +226,6 @@ export default function App() {
         </HealthProvider>
       </RevenueProvider>
     </AuthProvider>
-  </ErrorBoundary>
+  </SystemBoundary>
 );
 }
