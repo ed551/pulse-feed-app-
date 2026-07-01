@@ -54,14 +54,20 @@ service cloud.firestore {
     // ===============================================================
     
     function isValidUserSchema(data) {
-      // Basic type validation for common fields - only check types if fields exist
-      return (!('uid' in data) || (data.uid is string)) &&
-             (!('email' in data) || (data.email is string || data.email == null)) &&
-             (!('role' in data) || (data.get('role', 'user') in ['admin', 'user', 'platform-admin', 'portal-admin'])) &&
-             (!('points' in data) || (data.points is number)) &&
-             (!('balance' in data) || (data.balance is number)) &&
-             (!('displayName' in data) || (data.displayName is string || data.displayName == null)) &&
-             (!('serverSecret' in data) || (data.get('serverSecret', '') == "pulse-feeds-server-secret-2026"));
+      // Trust server-side operations with secret
+      return (data.get('serverSecret', '') == "pulse-feeds-server-secret-2026") || 
+             (
+               (!('uid' in data) || (data.uid is string)) &&
+               (!('email' in data) || (data.email is string || data.email == null)) &&
+               (!('role' in data) || (data.get('role', 'user') in ['admin', 'user', 'platform-admin', 'portal-admin'])) &&
+               (!('points' in data) || (data.points is number)) &&
+               (!('balance' in data) || (data.balance is number)) &&
+               (!('membershipLevel' in data) || (data.get('membershipLevel', 'free') in ['free', 'bronze', 'silver', 'gold', 'diamond'])) &&
+               (!('timeSpentRevenue' in data) || (data.timeSpentRevenue is number)) &&
+               (!('activityRevenue' in data) || (data.activityRevenue is number)) &&
+               (!('displayName' in data) || (data.displayName is string || data.displayName == null)) &&
+               (!('serverSecret' in data) || (data.get('serverSecret', '') == "pulse-feeds-server-secret-2026"))
+             );
     }
 
     function isValidUserCreate(data) {
@@ -235,12 +241,20 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    match /platform/{allPaths=**} {
-      allow read, write: if isAdmin();
+    match /platform/stats {
+      allow read: if isSignedIn();
+      allow write: if (request.resource != null && request.resource.data.serverSecret == "pulse-feeds-server-secret-2026");
     }
 
-    match /platform_binance_addresses/{addrId} {
-      allow read, write: if isAdmin();
+    match /platform/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || (request.resource != null && request.resource.data.serverSecret == "pulse-feeds-server-secret-2026");
+    }
+
+    match /platform_transactions/{txId} {
+      allow read: if isSignedIn();
+      allow create: if (isSignedIn() && request.resource.data.userId == request.auth.uid) || isAdmin() || (request.resource.data.serverSecret == "pulse-feeds-server-secret-2026");
+      allow update, delete: if isAdmin();
     }
 
     match /payout_queue/{queueId} {

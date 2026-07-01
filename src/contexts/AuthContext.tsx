@@ -61,12 +61,14 @@ interface UserData {
   isPointsRecovered?: boolean;
   isRestoredTo6337?: boolean;
   recoveredAt?: any;
-  membershipLevel?: 'bronze' | 'silver' | 'gold';
+  membershipLevel?: 'bronze' | 'silver' | 'gold' | 'diamond';
   membershipStatus?: 'active' | 'expired' | 'canceled';
   twoFactorEnabled?: boolean;
   twoFactorType?: 'biometric' | 'email_otp' | 'totp' | 'passkey' | 'sms_otp';
   twoFactorSecret?: string;
   phoneNumber?: string;
+  activityRevenue?: number;
+  timeSpentRevenue?: number;
   language?: string;
   timezone?: string;
   timeFormat?: string;

@@ -10,25 +10,23 @@ export const getApiUrl = (path: string): string => {
 
   const rawBaseUrl = import.meta.env.VITE_API_BASE_URL;
   const baseUrl = (rawBaseUrl || 'https://89-168-120-135.sslip.io').trim();
-  const defaultRelayUrl = 'https://ais-pre-vpm462ccg3jpy6a7n4c54f-708516523970.europe-west2.run.app';
-  const relayUrl = (import.meta.env.VITE_API_RELAY_URL || defaultRelayUrl).trim();
+  const relayUrl = (import.meta.env.VITE_API_RELAY_URL || 'https://ais-pre-vpm462ccg3jpy6a7n4c54f-708516523970.europe-west2.run.app').trim();
   
+  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+  const isSurge = typeof window !== 'undefined' && window.location.hostname.includes('surge.sh');
   const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
 
-  const isRunApp = currentHostname.includes('run.app');
-  
   // Detect if we are in an AI Studio / Cloud Shell / Proxied environment
   const isProxied = currentHostname.includes('google') || 
                     currentHostname.includes('cloud') || 
                     currentHostname.includes('aistudio') ||
                     currentHostname.includes('editor') ||
-                    currentHostname.includes('shell') ||
-                    (currentHostname.includes('run.app') && currentHostname.includes('ais-pre'));
+                    currentHostname.includes('shell');
 
+  const isRunApp = currentHostname.includes('run.app');
   const isLocal = currentHostname === 'localhost' || currentHostname === '127.0.0.1';
-  const isSurge = currentHostname.includes('surge.sh');
 
   // If we are on Surge, all API requests MUST route to our own Cloud Run backend (relayUrl)
   if (isSurge) {
@@ -36,20 +34,18 @@ export const getApiUrl = (path: string): string => {
     return `${cleanRelay}${cleanPath}`;
   }
 
-  // If we are actually ON a run.app URL (like in shared preview or proxied editor), 
-  // and we are NOT local, we should probably use relative paths unless we are specifically 
-  // on a host that doesn't serve the API.
-  if (isRunApp && !isLocal) {
-    // If the origin itself is where we expect the API (shared/deployed preview), use relative
+  // If we are actually ON a run.app URL (like in shared preview), use relative paths
+  if (isRunApp && !isProxied) {
     return cleanPath;
   }
 
-  // If we are in a proxied environment (AI Studio Editor) but NOT on a run.app URL yet,
-  // we must use the absolute relay URL.
+  // If we are in a proxied environment (AI Studio Editor), we must use the absolute relay URL
   if (isProxied && !isLocal) {
-    // Use current origin if it looks like a valid relay (Cloud Run)
-    const effectiveRelay = isRunApp ? currentOrigin : relayUrl;
-    const cleanRelay = effectiveRelay.endsWith('/') ? effectiveRelay.slice(0, -1) : effectiveRelay;
+    // If the current origin itself is a run.app URL, we can use it as the relay
+    // This happens if the user opens the preview in a new tab from the editor
+    if (isRunApp) return cleanPath;
+
+    const cleanRelay = relayUrl.endsWith('/') ? relayUrl.slice(0, -1) : relayUrl;
     return `${cleanRelay}${cleanPath}`;
   }
 

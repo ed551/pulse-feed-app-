@@ -7,6 +7,7 @@ import { moderateContent } from '../services/moderationService';
 import { useNotifications } from '../hooks/useNotifications';
 import { generateContentWithRetry, getAIBreakerStatus } from '../lib/ai';
 import { generateAvatar } from '../services/imageService';
+import { apiFetch } from '../lib/api';
 import { cn } from '../lib/utils';
 
 interface CreatePostModalProps {
@@ -209,6 +210,21 @@ export default function CreatePostModal({ type: initialType, onClose }: CreatePo
       }
 
       await addPost(postData);
+
+      // TRIGGER ACTIVITY REWARD
+      try {
+        await apiFetch('/api/user/activity-reward', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: currentUser.uid,
+            type: 'post',
+            action: `Published ${type}`
+          })
+        });
+      } catch (rewardErr) {
+        console.error("Activity reward failed:", rewardErr);
+      }
 
       showNotification("Post Published!", {
         body: `Your ${type} is now live!`,

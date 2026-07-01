@@ -35,6 +35,9 @@ interface UserData {
   passkeyRegistered?: boolean;
   twoFactorType?: string;
   twoFactorEnabled?: boolean;
+  membershipLevel?: string;
+  timeSpentRevenue?: number;
+  activityRevenue?: number;
 }
 
 export default function PlatformDashboard() {
@@ -651,6 +654,8 @@ export default function PlatformDashboard() {
     totalUserBalances: 0,
     platformRevenue: 0,
     platformShare: 0,
+    totalInflow: 0,
+    totalOutflow: 0,
     unredeemedRevenue: 0, // Same as user balances
     potentialRevenue: 0
   });
@@ -726,17 +731,19 @@ export default function PlatformDashboard() {
   }, [platformTransactions]);
 
   const stats = useMemo(() => {
-    const userWalletSum = users.reduce((acc, u) => acc + (u.points || 0), 0);
-    const derivedRevenue = totals.revenueIn;
-    // inflow less outflow: revenueIn - payouts - expenses
-    const derivedShare = Math.max(0, totals.revenueIn - totals.payouts - totals.expenses);
+    const userWalletSum = users.reduce((acc, u) => acc + (u.balance || 0), 0);
+    const derivedRevenue = dbStats.totalInflow || totals.revenueIn;
+    const derivedOutflow = dbStats.totalOutflow || (totals.payouts + totals.expenses);
+    const derivedShare = derivedRevenue - derivedOutflow;
+
     return {
       ...dbStats,
-      platformRevenue: derivedRevenue,
-      platformShare: derivedShare,
+      platformRevenue: derivedRevenue, // Total Inflow
+      platformShare: derivedShare, // Total Net (Dev)
+      totalOutflow: derivedOutflow,
       totalUserBalances: userWalletSum,
       unredeemedRevenue: userWalletSum,
-      totalPoints: userWalletSum,
+      totalPoints: users.reduce((acc, u) => acc + (u.points || 0), 0),
       totalUsers: users.length || dbStats.totalUsers || 0,
       activeUsers: users.length || dbStats.activeUsers || 0,
       potentialRevenue: (users.length || dbStats.totalUsers || 1) * 80 * 0.15
@@ -867,6 +874,8 @@ export default function PlatformDashboard() {
         const data = docSnap.data();
         setStats(prev => ({
           ...prev,
+          totalInflow: data.totalInflow || 0,
+          totalOutflow: data.totalOutflow || 0,
           platformRevenue: data.platformRevenue || 0,
           platformShare: data.platformShare || 0,
           totalUserBalances: data.totalUserBalances || 0,
@@ -2600,11 +2609,12 @@ export default function PlatformDashboard() {
               Update your own membership level instantly for testing purposes. Changes will reflect in your profile and revenue calculators.
             </p>
             
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
-                { id: 'bronze', name: 'Bronze', icon: Shield, color: 'text-orange-500', bg: 'bg-orange-100 dark:bg-orange-900/30' },
-                { id: 'silver', name: 'Silver', icon: Star, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
-                { id: 'gold', name: 'Gold', icon: Crown, color: 'text-yellow-500', bg: 'bg-yellow-100 dark:bg-yellow-900/30' }
+                { id: 'gold', name: 'Gold', icon: Crown, color: 'text-yellow-500', bg: 'bg-yellow-100 dark:bg-yellow-900/30', share: '80%' },
+                { id: 'silver', name: 'Silver', icon: Star, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30', share: '50%' },
+                { id: 'bronze', name: 'Bronze', icon: Shield, color: 'text-orange-500', bg: 'bg-orange-100 dark:bg-orange-900/30', share: '30%' },
+                { id: 'diamond', name: 'Diamond', icon: Gem, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30', share: '10%' }
               ].map((tier) => (
                 <button
                   key={tier.id}
@@ -2616,7 +2626,7 @@ export default function PlatformDashboard() {
                         membershipStatus: 'active',
                         updatedAt: serverTimestamp()
                       });
-                      setSuccess(`Membership set to ${tier.name} successfully!`);
+                      setSuccess(`Membership set to ${tier.name} successfully! User Share: ${tier.share}`);
                     } catch (err: any) {
                       setError(`Failed to update membership: ${err.message}`);
                     }
@@ -2632,6 +2642,7 @@ export default function PlatformDashboard() {
                     <tier.icon className={cn("w-8 h-8", tier.color)} />
                   </div>
                   <span className="text-lg font-black text-gray-900 dark:text-white mb-1 tracking-tight">{tier.name}</span>
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{tier.share} User Share</span>
                   {userData?.membershipLevel === tier.id && (
                     <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mt-2 flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3" /> Current
@@ -2639,6 +2650,85 @@ export default function PlatformDashboard() {
                   )}
                 </button>
               ))}
+            </div>
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-sm border border-gray-100 dark:border-gray-700">
+            <h2 className="text-xl font-black text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+              <Users className="w-6 h-6 text-indigo-500" />
+              Global Membership Control
+            </h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-gray-100 dark:border-gray-700">
+                    <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">User</th>
+                    <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Membership</th>
+                    <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Balance</th>
+                    <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+                  {users.slice(0, 10).map((user) => (
+                    <tr key={user.uid} className="group hover:bg-gray-50/50 dark:hover:bg-gray-900/50 transition-colors">
+                      <td className="py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center font-black text-indigo-600">
+                            {user.displayName?.charAt(0) || 'U'}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-gray-900 dark:text-white">{user.displayName || 'Unknown'}</p>
+                            <p className="text-[10px] text-gray-500 font-medium">{user.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-4">
+                        <span className={cn(
+                          "px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest",
+                          user.membershipLevel === 'gold' ? "bg-yellow-100 text-yellow-600" :
+                          user.membershipLevel === 'silver' ? "bg-blue-100 text-blue-600" :
+                          user.membershipLevel === 'bronze' ? "bg-orange-100 text-orange-600" :
+                          "bg-purple-100 text-purple-600"
+                        )}>
+                          {user.membershipLevel || 'Free'}
+                        </span>
+                      </td>
+                      <td className="py-4">
+                        <p className="text-sm font-black text-gray-900 dark:text-white font-mono">{formatCurrency(user.balance || 0)}</p>
+                      </td>
+                      <td className="py-4">
+                        <div className="flex gap-2">
+                          {['gold', 'silver', 'bronze', 'diamond'].map((level) => (
+                            <button
+                              key={level}
+                              disabled={user.membershipLevel === level}
+                              onClick={async () => {
+                                try {
+                                  await updateDoc(doc(db, 'users', user.uid), {
+                                    membershipLevel: level,
+                                    updatedAt: serverTimestamp()
+                                  });
+                                  setSuccess(`Updated ${user.displayName} to ${level.toUpperCase()}`);
+                                } catch (err: any) {
+                                  setError(err.message);
+                                }
+                              }}
+                              className={cn(
+                                "p-1.5 rounded-lg border transition-all text-[8px] font-black uppercase",
+                                user.membershipLevel === level 
+                                  ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed" 
+                                  : "hover:border-indigo-500 hover:text-indigo-600 border-gray-200 dark:border-gray-700"
+                              )}
+                            >
+                              {level.charAt(0)}
+                            </button>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
           
@@ -2978,90 +3068,68 @@ export default function PlatformDashboard() {
 
           {/* Performance Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Self Update Engine Status */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden group"
-            >
-              <div className="absolute top-0 right-0 p-2">
-                <div className="flex gap-1">
-                  <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
-                  <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse delay-75" />
-                  <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse delay-150" />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl group-hover:bg-indigo-100 transition-colors">
-                  <Cpu className="w-6 h-6 text-indigo-600" />
-                </div>
-                <div className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Update Engine</div>
-              </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Status: High Performance</p>
-              <h3 className="text-2xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-                OPT-S1 <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
-              </h3>
-              <p className="text-[10px] text-gray-400 mt-2 font-bold uppercase tracking-wider">Sync Latency: <span className="text-emerald-500">5m Batched</span></p>
-            </motion.div>
-
-            {/* Revenue In */}
+            {/* Revenue Inflow */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700"
+              className="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-xl border border-gray-100 dark:border-gray-700 relative overflow-hidden group"
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-xl">
-                  <ArrowUpCircle className="w-6 h-6 text-green-600" />
-                </div>
-                <div className="text-[10px] font-black text-green-600 uppercase tracking-widest">Total In</div>
+              <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:rotate-12 transition-transform">
+                <Database className="w-24 h-24 text-emerald-600" />
               </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Total Platform Revenue</p>
-            <h3 className="text-3xl font-black text-green-600 dark:text-green-400">+{formatCurrency(stats.platformRevenue)}</h3>
-            <p className="text-xs text-gray-400 mt-2">Verified Gross Inflow</p>
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl">
+                  <ArrowUpCircle className="w-6 h-6 text-emerald-600" />
+                </div>
+                <div className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">Real-Time Inflow</div>
+              </div>
+              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Total Revenue Inflow</p>
+              <h3 className="text-3xl font-black text-gray-900 dark:text-white tracking-tighter">+{formatCurrency(stats.platformRevenue)}</h3>
+              <p className="text-[10px] text-gray-400 mt-3 font-bold uppercase italic">Ads, Payments, Subscriptions</p>
             </motion.div>
 
-            {/* Revenue Out */}
+            {/* Revenue Outflow */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700"
+              className="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-xl border border-gray-100 dark:border-gray-700 relative overflow-hidden group"
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl">
-                  <ArrowDownCircle className="w-6 h-6 text-red-600" />
-                </div>
-                <div className="text-[10px] font-black text-red-600 uppercase tracking-widest">Total Out</div>
+              <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:rotate-12 transition-transform">
+                <ArrowDownCircle className="w-24 h-24 text-rose-600" />
               </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Platform Outflow</p>
-            <h3 className="text-3xl font-black text-red-600 dark:text-red-400">
-              {formatCurrency(Math.abs(stats.platformRevenue - stats.platformShare))}
-            </h3>
-            <div className="flex items-center gap-2 mt-2">
-              <span className="text-[10px] text-gray-400">Total Deductions (Withdrawals & Expenses)</span>
-            </div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-rose-50 dark:bg-rose-900/20 rounded-2xl">
+                  <ArrowDownCircle className="w-6 h-6 text-rose-600" />
+                </div>
+                <div className="text-[10px] font-black text-rose-600 uppercase tracking-[0.2em]">Total Outflow</div>
+              </div>
+              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Total Revenue Outflow</p>
+              <h3 className="text-3xl font-black text-gray-900 dark:text-white tracking-tighter">-{formatCurrency(stats.totalOutflow)}</h3>
+              <p className="text-[10px] text-gray-400 mt-3 font-bold uppercase italic">User Shares & Paid Payouts</p>
             </motion.div>
 
-            {/* Current Balance */}
+            {/* Revenue Net (Developer Revenue) */}
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="bg-gradient-to-br from-indigo-600 to-purple-700 p-6 rounded-2xl shadow-xl text-white overflow-hidden relative group"
+              className="bg-gradient-to-br from-indigo-600 to-purple-700 p-8 rounded-[2.5rem] shadow-2xl text-white overflow-hidden relative group border border-indigo-500/30"
             >
-              <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:scale-110 transition-transform">
+                <ShieldCheck className="w-32 h-32" />
+              </div>
               <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-white/20 rounded-xl">
+                <div className="p-3 bg-white/20 rounded-2xl">
                   <Wallet className="w-6 h-6" />
                 </div>
-                <div className="px-2 py-1 bg-white/20 rounded-full text-[10px] font-bold uppercase tracking-widest">Audited</div>
+                <div className="px-2 py-1 bg-white/20 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/20">Verified</div>
               </div>
-            <p className="text-sm text-indigo-100 font-medium tracking-wide">Developer Share / Revenue (40%)</p>
-            <h3 className="text-4xl font-black mt-1">{formatCurrency(stats.platformShare)}</h3>
-            <p className="text-[10px] text-indigo-200 mt-2 font-bold uppercase tracking-widest tracking-tighter italic">40% activity split + 100% of memberships, subscriptions & ads</p>
+              <p className="text-xs font-black text-indigo-100 uppercase tracking-widest mb-1">Total Revenue Net</p>
+              <h3 className="text-4xl font-black tracking-tighter mb-1">{formatCurrency(stats.platformShare)}</h3>
+              <p className="text-[10px] text-indigo-100/60 font-bold uppercase tracking-widest mt-3 italic leading-tight">Developer Revenue (Net Profit)</p>
             </motion.div>
 
             {/* Active Users */}
@@ -3069,17 +3137,20 @@ export default function PlatformDashboard() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
-              className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700"
+              className="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-xl border border-gray-100 dark:border-gray-700 relative overflow-hidden group"
             >
+              <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:rotate-12 transition-transform">
+                <Users className="w-24 h-24 text-blue-600" />
+              </div>
               <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-2xl">
                   <Users className="w-6 h-6 text-blue-600" />
                 </div>
                 <Activity className="w-4 h-4 text-blue-500" />
               </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Community Reach</p>
-              <h3 className="text-3xl font-black text-gray-900 dark:text-white">{stats.activeUsers}</h3>
-              <p className="text-xs text-gray-400 mt-2">Active platform participants</p>
+              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Total Community</p>
+              <h3 className="text-3xl font-black text-gray-900 dark:text-white tracking-tighter">{stats.activeUsers}</h3>
+              <p className="text-[10px] text-gray-400 mt-3 font-bold uppercase italic">Active Platform Members</p>
             </motion.div>
           </div>
 

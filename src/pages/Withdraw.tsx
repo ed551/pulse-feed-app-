@@ -7,7 +7,7 @@ import {
   XCircle, 
   Loader2, 
   Coins,
-  RefreshCw
+  History
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useRevenue } from "../contexts/RevenueContext";
@@ -39,6 +39,7 @@ export default function Withdraw() {
   const [withdrawError, setWithdrawError] = useState("");
   const [withdrawSuccess, setWithdrawSuccess] = useState<any | null>(null);
   const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [withdrawalHistory, setWithdrawalHistory] = useState<any[]>([]);
 
   // Live platform stats for Developer role
   const [platformStats, setPlatformStats] = useState<any>(null);
@@ -57,37 +58,31 @@ export default function Withdraw() {
     return () => unsubscribe();
   }, [currentUser]);
 
+  // Fetch withdrawal history
+  useEffect(() => {
+    if (!currentUser) return;
+    const { collection, query, where, orderBy, onSnapshot } = require("firebase/firestore");
+    const q = query(
+      collection(db, "withdrawals"),
+      where("userId", "==", currentUser.uid),
+      orderBy("timestamp", "desc")
+    );
+    const unsubscribe = onSnapshot(q, (snapshot: any) => {
+      const history = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      setWithdrawalHistory(history);
+    });
+    return () => unsubscribe();
+  }, [currentUser]);
+
   const isDeveloperAccount = 
     currentUser?.email === 'edwinmuoha@gmail.com' || 
     currentUser?.phoneNumber === '+254728011174' || 
     userData?.role === 'admin';
 
   // Available balances
-  const userBalance = typeof consistentPoints === 'number' ? consistentPoints : 0;
-  
-  // Developer balance: use platformShare which is the 40% share in the dashboard
-  const developerBalance = typeof platformStats?.platformShare === 'number' 
-    ? platformStats.platformShare 
-    : (typeof platformStats?.platformShare === 'string' ? parseFloat(platformStats.platformShare) : 0);
-  
+  const userBalance = consistentPoints || 0;
+  const developerBalance = platformStats?.platformShare || 0;
   const currentAvailableBalance = selectedRole === 'developer' ? developerBalance : userBalance;
-
-  const handleSyncStats = async () => {
-    if (selectedRole !== 'developer' || !isDeveloperAccount) return;
-    setWithdrawLoading(true);
-    try {
-      // Trigger the server-side reconciliation if available or just wait for next sync
-      // For now, we rely on the fact that platform/stats is real-time
-      const resp = await apiFetch('/api/payout/platform/sync', { method: 'POST' });
-      if (resp.ok) {
-        setWithdrawError("");
-      }
-    } catch (e) {
-      console.warn("Sync failed:", e);
-    } finally {
-      setWithdrawLoading(false);
-    }
-  };
 
   const executePayoutRequest = async (tokenValue: string, amountToWithdraw: number) => {
     setWithdrawLoading(true);
@@ -256,15 +251,17 @@ export default function Withdraw() {
               </div>
             </div>
             
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setSelectedRole(selectedRole === 'user' ? 'developer' : 'user')}
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all"
-              >
-                Switch to {selectedRole === 'user' ? 'Developer' : 'User'}
-              </button>
-            </div>
+            {isDeveloperAccount && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedRole(selectedRole === 'user' ? 'developer' : 'user')}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all"
+                >
+                  Switch to {selectedRole === 'user' ? 'Developer' : 'User'}
+                </button>
+              </div>
+            )}
           </div>
 
           {selectedRole === 'developer' && !isDeveloperAccount ? (
@@ -296,31 +293,32 @@ export default function Withdraw() {
                 
                 <div className="flex items-baseline gap-2 mt-1">
                   <h2 className="text-4xl font-extrabold text-white tracking-tight">
-                    {(Number(currentAvailableBalance) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                    {currentAvailableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                   </h2>
                   <span className="text-sm font-black text-purple-400 font-mono">USDT</span>
                 </div>
 
+                <div className="mt-4 pt-4 border-t border-slate-900 grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Time Spent Revenue</p>
+                    <p className="text-sm font-bold text-slate-300">{formatCurrency(userData?.timeSpentRevenue || 0)}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Activity Revenue</p>
+                    <p className="text-sm font-bold text-emerald-400">{formatCurrency(userData?.activityRevenue || 0)}</p>
+                  </div>
+                </div>
+
                 {selectedRole === 'developer' && platformStats && (
-                  <div className="mt-4 pt-4 border-t border-slate-900 flex flex-col gap-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Gross Revenue</p>
-                        <p className="text-sm font-bold text-slate-300">{formatCurrency(platformStats.platformRevenue || 0)}</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Withdrawable Share (40%)</p>
-                        <p className="text-sm font-bold text-emerald-400">{formatCurrency(platformStats.platformShare || 0)}</p>
-                      </div>
+                  <div className="mt-4 pt-4 border-t border-slate-900 grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Revenue Inflow</p>
+                      <p className="text-sm font-bold text-slate-300">{formatCurrency(platformStats.totalInflow || 0)}</p>
                     </div>
-                    <button 
-                      type="button"
-                      onClick={handleSyncStats}
-                      className="text-[10px] text-slate-500 hover:text-purple-400 flex items-center gap-1.5 transition-colors uppercase font-bold tracking-widest"
-                    >
-                      <RefreshCw className={cn("w-3 h-3", withdrawLoading && "animate-spin")} />
-                      Reconcile Ledger & Sync Balance
-                    </button>
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Revenue Outflow</p>
+                      <p className="text-sm font-bold text-rose-400">{formatCurrency(platformStats.totalOutflow || 0)}</p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -451,6 +449,39 @@ export default function Withdraw() {
               )}
             </>
           )}
+        </div>
+
+        {/* Withdrawal Record List */}
+        <div className="mt-8 bg-slate-900/80 backdrop-blur-md rounded-3xl border border-slate-800 p-8 shadow-2xl space-y-6">
+          <div className="flex items-center gap-2 mb-4">
+            <History className="w-5 h-5 text-purple-500" />
+            <h3 className="text-sm font-black text-white uppercase tracking-widest">Withdrawal Record</h3>
+          </div>
+          <div className="space-y-3">
+            {withdrawalHistory.length === 0 ? (
+              <p className="text-xs text-slate-500 text-center py-4 italic">No withdrawal records found.</p>
+            ) : (
+              withdrawalHistory.map((tx) => (
+                <div key={tx.id} className="p-4 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-between text-xs font-mono">
+                  <div>
+                    <p className="font-bold text-white">{tx.amount} USDT</p>
+                    <p className="text-[9px] text-slate-500 uppercase tracking-tighter mt-0.5">
+                      {tx.timestamp?.seconds ? new Date(tx.timestamp.seconds * 1000).toLocaleString() : 'Processing'}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className={cn(
+                      "text-[9px] font-black uppercase px-2 py-0.5 rounded",
+                      tx.status === 'success' || tx.status === 'completed' ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
+                    )}>
+                      {tx.status || 'Pending'}
+                    </p>
+                    <p className="text-[9px] text-slate-500 mt-0.5 truncate max-w-[100px]">{tx.walletAddress || tx.address}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
 

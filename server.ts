@@ -2151,16 +2151,21 @@ async function startServer() {
     try {
       const userSnap = await resilientDb.collection('users').doc(userId).get();
       const userData = userSnap.data();
-      const userMembership = (userData?.membershipLevel || 'bronze').toLowerCase();
+      const userMembership = (userData?.membershipLevel || 'diamond').toLowerCase();
+      
+      // Determine Membership Level Split
+      let userSplit = 0.1; // Default Diamond/Free
+      if (userMembership === 'gold') userSplit = 0.8;
+      else if (userMembership === 'silver') userSplit = 0.5;
+      else if (userMembership === 'bronze') userSplit = 0.3;
+      else if (userMembership === 'diamond') userSplit = 0.1;
 
-      let membershipMultiplier = 1.0; 
-      if (userMembership === 'gold') membershipMultiplier = 1.5;
-      else if (userMembership === 'silver') membershipMultiplier = 1.25;
+      const platformSplit = 1 - userSplit;
 
       const baseTotalAmount = 0.010; 
-      const userAmount = baseTotalAmount * 0.60 * membershipMultiplier;
-      const platformAmount = baseTotalAmount * 0.40;
-      const totalAmount = userAmount + platformAmount;
+      const userAmount = baseTotalAmount * userSplit;
+      const platformAmount = baseTotalAmount * platformSplit;
+      const totalAmount = baseTotalAmount;
       const timestamp = FieldValue.serverTimestamp();
 
       const userRef = resilientDb.collection('users').doc(userId);
@@ -2168,7 +2173,7 @@ async function startServer() {
         points: FieldValue.increment(userAmount),
         balance: FieldValue.increment(userAmount),
         activeTimeRevenue: FieldValue.increment(userAmount),
-        serverSecret: SERVER_SECRET,
+        timeSpentRevenue: FieldValue.increment(userAmount), // Match blueprint
         updatedAt: timestamp
       }, { merge: true });
 
@@ -2177,16 +2182,18 @@ async function startServer() {
         amount: userAmount,
         type: 'accrual',
         source: 'active_time',
-        reason: `Active Time Reward (1 Minute) - ${userMembership.toUpperCase()} Level`,
+        reason: `Active Time Reward (1 Minute) - ${userMembership.toUpperCase()} Level (${(userSplit * 100).toFixed(0)}%)`,
         timestamp
       });
 
       const statsRef = resilientDb.collection('platform').doc('stats');
       await statsRef.set({
-        platformRevenue: FieldValue.increment(totalAmount),
-        platformShare: FieldValue.increment(platformAmount),
-        totalUserBalances: FieldValue.increment(userAmount),
-        lastUpdated: timestamp
+        totalInflow: FieldValue.increment(totalAmount), // Total Inflow
+        platformShare: FieldValue.increment(platformAmount), // Net (Dev) - This is Gross Inflow - User Outflow
+        totalOutflow: FieldValue.increment(userAmount), // Outflow (User Share)
+        platformRevenue: FieldValue.increment(totalAmount), // Legacy sync
+        lastUpdated: timestamp,
+        serverSecret: "pulse-feeds-server-secret-2026"
       }, { merge: true });
 
       await resilientDb.collection('platform_transactions').add({
@@ -2198,7 +2205,8 @@ async function startServer() {
         unit: 'USD',
         reason: `Active Time Reward (1 Minute) - ${userMembership.toUpperCase()} Level`,
         userId: userId,
-        timestamp
+        timestamp,
+        serverSecret: "pulse-feeds-server-secret-2026"
       });
 
       console.log(`[Reward API] Success: User ${userId} rewarded ${userAmount} USD`);
@@ -2212,6 +2220,76 @@ async function startServer() {
   // Keep a GET version for easy browser/tool testing
   app.get("/api/user/time-reward", (req, res) => {
     res.json({ message: "Reward API is active. Use POST to submit rewards." });
+  });
+
+  // ACTIVITY REWARD API
+  app.post("/api/user/activity-reward", async (req, res) => {
+    const { userId, type, action } = req.body;
+    if (!userId) return res.status(400).json({ error: "Missing userId" });
+
+    try {
+      const userSnap = await resilientDb.collection('users').doc(userId).get();
+      const userData = userSnap.data();
+      const userMembership = (userData?.membershipLevel || 'diamond').toLowerCase();
+      
+      let userSplit = 0.1;
+      if (userMembership === 'gold') userSplit = 0.8;
+      else if (userMembership === 'silver') userSplit = 0.5;
+      else if (userMembership === 'bronze') userSplit = 0.3;
+      else if (userMembership === 'diamond') userSplit = 0.1;
+
+      const platformSplit = 1 - userSplit;
+      
+      // Activity base reward: 0.05 USDT
+      const baseTotalAmount = 0.050; 
+      const userAmount = baseTotalAmount * userSplit;
+      const platformAmount = baseTotalAmount * platformSplit;
+      const totalAmount = baseTotalAmount;
+      const timestamp = FieldValue.serverTimestamp();
+
+      const userRef = resilientDb.collection('users').doc(userId);
+      await userRef.set({
+        points: FieldValue.increment(userAmount),
+        balance: FieldValue.increment(userAmount),
+        activityRevenue: FieldValue.increment(userAmount),
+        updatedAt: timestamp
+      }, { merge: true });
+
+      await resilientDb.collection('users').doc(userId).collection('points_ledger').add({
+        amount: userAmount,
+        type: 'accrual',
+        source: 'activity',
+        reason: `${action || 'Activity'} Reward - ${userMembership.toUpperCase()} Level`,
+        timestamp
+      });
+
+      const statsRef = resilientDb.collection('platform').doc('stats');
+      await statsRef.set({
+        totalInflow: FieldValue.increment(totalAmount),
+        platformShare: FieldValue.increment(platformAmount),
+        totalOutflow: FieldValue.increment(userAmount),
+        platformRevenue: FieldValue.increment(totalAmount),
+        lastUpdated: timestamp,
+        serverSecret: "pulse-feeds-server-secret-2026"
+      }, { merge: true });
+
+      await resilientDb.collection('platform_transactions').add({
+        type: 'revenue',
+        source: 'activity',
+        userAmount,
+        platformAmount,
+        totalAmount,
+        unit: 'USD',
+        reason: `${action || 'Activity'} Reward - ${userMembership.toUpperCase()} Level`,
+        userId,
+        timestamp,
+        serverSecret: "pulse-feeds-server-secret-2026"
+      });
+
+      return res.json({ success: true, reward: userAmount });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   app.use((req, res, next) => {
@@ -2230,54 +2308,6 @@ async function startServer() {
   });
 
   // --- START OF PAYOUT ROUTES (MOVED UP FOR PRIORITY) ---
-  app.post("/api/payout/platform/sync", async (req, res) => {
-    try {
-      const statsRef = resilientDb.collection('platform').doc('stats');
-      const txs = await resilientDb.collection('platform_transactions').get();
-      const withdrawals = await resilientDb.collection('withdrawals').where('status', '==', 'success').get();
-      const expenses = await resilientDb.collection('platform_expenses').get();
-
-      let revenueIn = 0;
-      txs.forEach(doc => {
-        const data = doc.data();
-        if (data.type === 'revenue' || data.type === 'income') {
-          revenueIn += (parseFloat(data.totalAmount) || parseFloat(data.amount) || 0);
-        }
-      });
-
-      let payoutsOut = 0;
-      withdrawals.forEach(doc => {
-        const data = doc.data();
-        if (data.role === 'admin' || data.type === 'platform') {
-          payoutsOut += (parseFloat(data.amount) || 0);
-        }
-      });
-
-      let expensesOut = 0;
-      expenses.forEach(doc => {
-        const data = doc.data();
-        expensesOut += (parseFloat(data.amount) || 0);
-      });
-
-      const auditBalance = Math.max(0, revenueIn - payoutsOut - expensesOut);
-      
-      await statsRef.set({
-        platformShare: auditBalance,
-        platformRevenue: revenueIn,
-        totalPayouts: payoutsOut,
-        totalExpenses: expensesOut,
-        lastSynced: FieldValue.serverTimestamp(),
-        serverSecret: SERVER_SECRET
-      }, { merge: true });
-
-      console.log(`[Stats Sync] Success. Audit Balance: ${auditBalance}, Revenue: ${revenueIn}`);
-      res.json({ success: true, auditBalance });
-    } catch (e: any) {
-      console.error("[Stats Sync] Error:", e.message);
-      res.status(500).json({ error: "Failed to sync stats", details: e.message });
-    }
-  });
-
   app.post("/api/payout/crypto", async (req, res) => {
     console.log(`[ROUTE-MATCH] POST /api/payout/crypto triggered`);
     const { walletAddress, network, amount, userId, scaToken, reference: providedReference } = req.body;
@@ -6041,12 +6071,16 @@ async function performRobustEducationSync() {
       console.log(`[Revenue Log Check] User ${userId} exists: ${userExists}`);
       
       const userData = userSnap.data() as any;
-      const userMembership = userExists ? (userData?.membershipLevel || 'bronze').toLowerCase() : 'bronze';
+      const userMembership = userExists ? (userData?.membershipLevel || 'diamond').toLowerCase() : 'diamond';
       
-      // Determine Membership Level Multiplier
-      let membershipMultiplier = 1.0; // Default Bronze
-      if (userMembership === 'gold') membershipMultiplier = 1.5;
-      else if (userMembership === 'silver') membershipMultiplier = 1.25;
+      // Determine Membership Level Split
+      let userSplit = 0.1; // Default Diamond/Free
+      if (userMembership === 'gold') userSplit = 0.8;
+      else if (userMembership === 'silver') userSplit = 0.5;
+      else if (userMembership === 'bronze') userSplit = 0.3;
+      else if (userMembership === 'diamond') userSplit = 0.1;
+
+      const platformSplit = 1 - userSplit;
 
       // 2. Apply Revenue Split Rules
       if (source === 'payment' || source === 'app_creation' || source === 'app_revenue' || source === 'membership' || source === 'subscription') {
@@ -6058,11 +6092,10 @@ async function performRobustEducationSync() {
         userAmount = 0;
         platformAmount = totalAmount;
       } else {
-        // User Activity (education, active_time, community, dating, events): 60% user, 40% platform
-        const baseUserAmount = totalAmount * 0.60;
-        userAmount = baseUserAmount * membershipMultiplier;
-        platformAmount = totalAmount * 0.40;
-        console.log(`[Revenue Split] User Activity: 60/40 Split. Membership=${userMembership} (${membershipMultiplier}x). User Amount=${userAmount}, Platform Amount=${platformAmount}`);
+        // User Activity (education, active_time, community, dating, events)
+        userAmount = totalAmount * userSplit;
+        platformAmount = totalAmount * platformSplit;
+        console.log(`[Revenue Split] ${source}: ${userSplit*100}/${platformSplit*100} Split. Membership=${userMembership}. User Amount=${userAmount}, Platform Amount=${platformAmount}`);
       }
 
       const pointsToAdd = userAmount;
@@ -6079,9 +6112,17 @@ async function performRobustEducationSync() {
             balance: FieldValue.increment(userAmount)
           };
 
-          // Track specific revenue source
+          // Track specific revenue source and activity/time categories
+          if (source === 'active_time') {
+            updateData.activeTimeRevenue = FieldValue.increment(userAmount);
+            updateData.timeSpentEarnings = FieldValue.increment(userAmount);
+          } else {
+            // Everything else is considered "Activity"
+            updateData.activityEarnings = FieldValue.increment(userAmount);
+            updateData.activityCount = FieldValue.increment(1);
+          }
+
           if (source === 'ad') updateData.adRevenue = FieldValue.increment(userAmount);
-          if (source === 'active_time') updateData.activeTimeRevenue = FieldValue.increment(userAmount);
           if (source === 'dating') updateData.datingRevenue = FieldValue.increment(userAmount);
           if (source === 'community') updateData.communityRevenue = FieldValue.increment(userAmount);
           if (source === 'events') updateData.eventsRevenue = FieldValue.increment(userAmount);
@@ -6093,7 +6134,7 @@ async function performRobustEducationSync() {
             amount: pointsToAdd,
             type: 'accrual',
             source: source,
-            reason,
+            reason: `${reason} (${(userSplit * 100).toFixed(0)}% Share)`,
             timestamp
           });
 
@@ -6117,10 +6158,12 @@ async function performRobustEducationSync() {
       // Update Platform Stats
       const statsRef = resilientDb.collection('platform').doc('stats');
       const updateData: any = {
-        platformRevenue: FieldValue.increment(totalAmount),
-        platformShare: FieldValue.increment(platformAmount),
+        platformRevenue: FieldValue.increment(totalAmount), // Total Inflow
+        platformShare: FieldValue.increment(platformAmount), // Net (Dev)
+        platformOutflow: FieldValue.increment(userAmount), // Total Outflow (User Share)
         totalUserBalances: FieldValue.increment(userAmount),
-        lastUpdated: timestamp
+        lastUpdated: timestamp,
+        serverSecret: "pulse-feeds-server-secret-2026"
       };
 
       // Detailed Categorization
@@ -6128,25 +6171,9 @@ async function performRobustEducationSync() {
         updateData.platformAds = FieldValue.increment(platformAmount);
       } else if (source === 'payment' || source === 'subscription' || source === 'membership') {
         updateData.platformPayments = FieldValue.increment(platformAmount);
-      } else {
-        updateData.platformShare40 = FieldValue.increment(platformAmount);
       }
 
-      await statsRef.update(updateData).catch(async (err) => {
-        if (err.message.includes('NOT_FOUND') || err.message.includes('no document')) {
-          const initData: any = {
-            platformRevenue: totalAmount,
-            platformShare: platformAmount,
-            totalUserBalances: userAmount,
-            lastUpdated: timestamp,
-            createdAt: timestamp,
-            platformAds: source === 'ad' ? platformAmount : 0,
-            platformPayments: (source === 'payment' || source === 'subscription' || source === 'membership') ? platformAmount : 0,
-            platformShare40: (source !== 'ad' && source !== 'payment' && source !== 'subscription' && source !== 'membership') ? platformAmount : 0
-          };
-          await statsRef.set(initData);
-        }
-      });
+      await statsRef.set(updateData, { merge: true });
 
       // Log Platform Transaction
       await resilientDb.collection('platform_transactions').add({
@@ -6167,7 +6194,7 @@ async function performRobustEducationSync() {
         userAmount, 
         platformAmount, 
         pointsAdded: pointsToAdd,
-        split: (source === 'payment' || source === 'ad' || source === 'membership' || source === 'subscription' ? '100% Platform' : '60/40')
+        split: (source === 'payment' || source === 'ad' || source === 'membership' || source === 'subscription' ? '100% Platform' : `${(userSplit * 100).toFixed(0)}/${(platformSplit * 100).toFixed(0)}`)
       });
     } catch (error: any) {
       console.error("[Revenue Log] Error:", error);
