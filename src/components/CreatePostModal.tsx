@@ -65,7 +65,7 @@ export default function CreatePostModal({ type: initialType, onClose }: CreatePo
       }
 
       const response = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }]
       });
 

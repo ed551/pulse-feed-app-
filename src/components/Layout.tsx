@@ -372,7 +372,7 @@ export default function Layout() {
       const statusMessage = "Pulse Feeds is currently in development. To be fully functional, I need a secure backend connection, valid API keys for all integrated services, and a verified administrative account. System health is currently optimal, but these components are required for full feature deployment.";
       
       const response = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.5-flash",
         contents: [{ role: "user", parts: [{ text: `Say clearly and professionally: ${statusMessage}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
@@ -442,8 +442,8 @@ export default function Layout() {
         try {
           const prompt = `Provide a smart, professional 1-sentence market analysis for community points and earnings today. The predicted direction is ${prediction.direction}. Mention one potential economic driver.`;
           const response = await generateContentWithRetry({
-            model: "gemini-3-flash-preview",
-            contents: [{ role: "user", parts: [{ text: prompt }] }]
+          model: "gemini-3.5-flash",
+          contents: [{ role: "user", parts: [{ text: prompt }] }]
           });
           
           if (response.text) {
@@ -681,7 +681,7 @@ export default function Layout() {
           if (shouldAnalyze) {
             try {
               const analysisResponse = await generateContentWithRetry({
-              model: "gemini-3-flash-preview",
+              model: "gemini-3.5-flash",
               contents: [{ role: "user", parts: [{ text: `Analyze this weather for ${city}: Today is ${newWeather.temp} and ${newWeather.type}. Tomorrow's forecast is ${forecastWeather.temp} and ${forecastWeather.type}. Provide a 1-sentence smart summary for the user about the current conditions and the transition to tomorrow.` }] }],
             });
               if (analysisResponse.text) {
@@ -887,7 +887,7 @@ export default function Layout() {
       
       // Smart Analysis for the correction
       const analysisResponse = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.5-flash",
         contents: [{ role: "user", parts: [{ text: `The user corrected the weather. It was reported as ${currentWeather.temp} ${currentWeather.type}, but the user says it is actually ${temp}°C and ${cond}. Provide a 1-sentence smart acknowledgment and update the system intelligence about this local discrepancy.` }] }],
       });
       
@@ -1146,7 +1146,7 @@ export default function Layout() {
                 <div className="flex items-center px-2 sm:px-3 py-1 bg-yellow-50 dark:bg-yellow-900/30 rounded-full border border-yellow-100 dark:border-yellow-800 shadow-sm group">
                   <Layers className="w-3.5 h-3.5 sm:w-4 h-4 text-yellow-600 mr-1 sm:mr-1.5 group-hover:scale-110 transition-transform" />
                   <span className="text-[10px] sm:text-xs font-black text-yellow-800 dark:text-yellow-300 flex items-center gap-1">
-                    USDT {(consistentPoints || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    USDT {Number(consistentPoints || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                   </span>
                 </div>
 
@@ -1730,10 +1730,10 @@ export default function Layout() {
                         <span className="text-xs font-bold text-yellow-700 dark:text-yellow-300">Liquidity Reserve</span>
                       </div>
                       <p className="text-lg font-black text-yellow-900 dark:text-yellow-100">
-                        USDT {(consistentPoints || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        USDT {Number(consistentPoints || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                       </p>
                       <p className="text-[8px] font-black text-yellow-700/60 uppercase tracking-tighter">
-                        +USDT {totalEarnedToday.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Today Accumulation
+                        +USDT {Number(totalEarnedToday || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Today Accumulation
                       </p>
                     </div>
                     <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-2xl border border-yellow-100 dark:border-yellow-800/50 flex flex-col gap-1">

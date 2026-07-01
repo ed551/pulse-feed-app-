@@ -3,7 +3,7 @@ import { generateContentWithRetry } from "../lib/ai";
 export const generateAvatar = async (prompt: string): Promise<string> => {
   try {
     const response = await generateContentWithRetry({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.5-flash',
       contents: {
         parts: [
           { text: prompt },

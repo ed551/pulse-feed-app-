@@ -299,7 +299,7 @@ export default function Community() {
       }
       try {
         const summary = await generateContentWithRetry({
-          model: "gemini-3-flash-preview",
+          model: "gemini-3.5-flash",
           contents: [{ role: "user", parts: [{ text: "Summarize the current community vibe: People are reporting potholes, offering coding skills, and voting for a new garden. Keep it under 2 sentences, encouraging and energetic." }] }]
         });
         setAiSummary(summary.text || "The community is buzzing with activity! From infrastructure improvements to skill sharing, Pulse members are actively building a better neighborhood together.");
@@ -348,7 +348,7 @@ export default function Community() {
       }
 
       const response = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.5-flash",
         contents: [{
           role: "user",
           parts: [{
@@ -477,7 +477,7 @@ export default function Community() {
       if (!breaker.isTripped) {
         const aiPrompt = `Analyze this community problem report: "${newReport.title} - ${newReport.description}". Provide a 1-sentence assessment of its impact and priority.`;
         const aiResponse = await generateContentWithRetry({
-          model: "gemini-3-flash-preview",
+          model: "gemini-3.5-flash",
           contents: [{ role: "user", parts: [{ text: aiPrompt }] }]
         });
         aiAnalysisResult = aiResponse.text || aiAnalysisResult;

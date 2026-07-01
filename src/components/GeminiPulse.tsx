@@ -52,7 +52,7 @@ export default function GeminiPulse() {
         // based on the vision of the community.
         
         const response = await generateContentWithRetry({
-          model: "gemini-3-flash-preview",
+          model: "gemini-3.5-flash",
           contents: [{ role: "user", parts: [{ text: `Generate 3 current "Community Pulse Insights" for a social app called Pulse Feeds.
           These should sound like real-time data trends.
           Format as JSON array: [{title, description, category, val, trend}]

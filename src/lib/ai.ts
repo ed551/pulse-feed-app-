@@ -183,7 +183,7 @@ export async function generateContentWithRetry(params: any): Promise<any> {
     
     while (retries <= MAX_RETRIES) {
       try {
-        if (params && !params.model) params.model = 'gemini-3-flash-preview';
+        if (params && !params.model) params.model = 'gemini-3.5-flash';
         
         // Normalize contents format per AGENTS.md
         if (params.contents && !Array.isArray(params.contents) && typeof params.contents === 'string') {
@@ -228,7 +228,7 @@ export async function generateContentWithRetry(params: any): Promise<any> {
                           combinedErrorText.includes("billing_depleted") ||
                           status === 402;
 
-        const isQuotaExceeded = status === 429 || combinedErrorText.includes("quota") || combinedErrorText.includes("resource_exhausted");
+        const isQuotaExceeded = status === 429 || combinedErrorText.includes("quota") || combinedErrorText.includes("resource_exhausted") || combinedErrorText.includes("rate limit");
         const isProxyError = status === 500 || status === 503 || status === 504 || combinedErrorText.includes("xhr error") || combinedErrorText.includes("failed to fetch") || status === 502;
         const isNotFound = status === 404;
         const isBlocked = status === 403 || combinedErrorText.includes("permission denied") || combinedErrorText.includes("dunning") || combinedErrorText.includes("lightning dunning");
@@ -246,17 +246,17 @@ export async function generateContentWithRetry(params: any): Promise<any> {
           throw new Error(breakerErrorText);
         }
         
-          // Model Fallback Logic (Sync with server.ts)
+          // Model Fallback Logic (Sync with server.ts and AGENTS.md)
           if ((isQuotaExceeded || isProxyError || isNotFound || isDepleted)) {
             retries++;
             const oldModel = params.model;
             
             if (isQuotaExceeded || isDepleted) {
-              const waitTime = isDepleted ? 60000 : 30000; // 60s for billing fallback, 30s for quota
+              const waitTime = isDepleted ? 60000 : 20000; // Mandatory recovery delay
               console.debug(`[Client AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. Mandatory recovery delay of ${waitTime/1000}s. (Attempt ${retries}/${MAX_RETRIES})`);
               
-              if (isDepleted && retries >= 1) {
-                console.error("[Client AI] Billing/Quota issues detected. Please check your AI Studio credits.");
+              if (isDepleted && retries >= 3) {
+                console.error("[Client AI] Billing/Quota issues detected across multiple attempts.");
                 throw error;
               }
 
@@ -266,21 +266,18 @@ export async function generateContentWithRetry(params: any): Promise<any> {
 
             const currentModel = params.model;
             // Robust Fallback Sequence based on User Instructions (AGENTS.md)
-            if (currentModel === 'gemini-3-flash-preview') {
-              params.model = 'gemini-3.5-flash';
-            } else if (currentModel === 'gemini-3.5-flash') {
-              params.model = 'gemini-flash-latest';
-            } else if (currentModel === 'gemini-flash-latest') {
+            if (currentModel === 'gemini-3.5-flash') {
               params.model = 'gemini-3.1-flash-lite';
             } else if (currentModel === 'gemini-3.1-flash-lite') {
+              params.model = 'gemini-flash-latest';
+            } else if (currentModel === 'gemini-flash-latest') {
+              params.model = 'gemini-3-flash-preview';
+            } else if (currentModel === 'gemini-3-flash-preview') {
               params.model = 'gemini-3.1-pro-preview';
             } else if (currentModel === 'gemini-3.1-pro-preview') {
-              params.model = 'gemini-1.5-flash';
-            } else if (currentModel === 'gemini-1.5-flash') {
-              params.model = 'gemini-1.5-flash-8b';
+              params.model = 'gemini-2.0-flash-exp';
             } else {
-              // Loop back to primary
-              params.model = 'gemini-3-flash-preview';
+              params.model = 'gemini-3.5-flash';
             }
             
             if (retries >= MAX_RETRIES) {
@@ -317,7 +314,8 @@ export async function generateContentWithRetry(params: any): Promise<any> {
     throw new Error("AI service unavailable after multiple retries across different models.");
   } finally {
     if (currentRelease) {
-      currentRelease();
+      // Always enforce the minimum interval even on failure to prevent rapid retries hitting quota
+      setTimeout(currentRelease, MIN_REQUEST_INTERVAL);
     }
   }
 }

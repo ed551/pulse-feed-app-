@@ -58,7 +58,7 @@ Structure:
 Keep it very brief but high impact. Use Markdown. Use the scan date provided above as the reference date in the report.`;
 
       const response = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.5-flash",
         contents: prompt
       });
 

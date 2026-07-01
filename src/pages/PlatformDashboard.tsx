@@ -463,7 +463,7 @@ export default function PlatformDashboard() {
       `;
 
       const response = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.5-flash",
         contents: [{ role: "user", parts: [{ text: `You are the Pulse Master Search Engine. Analyze this platform health data and provide a concise, 3-paragraph executive summary. 
         IMPORTANT: Use your Master Search Engine capabilities to research current global trends in decentralised social platforms, community rewards (Web3/Points), and online education startup growth for May 2026. 
         Compare Pulse Feeds performance to these global benchmarks.
@@ -950,8 +950,8 @@ export default function PlatformDashboard() {
         const data = doc.data();
         const userDataItem = { uid: doc.id, ...data } as UserData;
         userData.push(userDataItem);
-        points += userDataItem.points || 0;
-        cash += userDataItem.balance || 0;
+        points += Number(userDataItem.points || 0);
+        cash += Number(userDataItem.balance || 0);
       });
 
       setUsers(userData);
@@ -2486,7 +2486,7 @@ export default function PlatformDashboard() {
                             {w.amountKes && (
                               <div className="text-[10px] text-green-600 font-bold mt-0.5 flex items-center gap-1">
                                 <span className="opacity-50">≈</span>
-                                <span>KES {w.amountKes.toLocaleString()}</span>
+                                <span>KES {Number(w.amountKes || 0).toLocaleString()}</span>
                               </div>
                             )}
                             <div className="flex items-center gap-1.5 mt-2">
@@ -2947,7 +2947,7 @@ export default function PlatformDashboard() {
                     </div>
                     <div className="p-3 bg-black/20 rounded-xl border border-white/5">
                       <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Bitcoin (BTC)</p>
-                      <p className="text-sm font-black text-white">${btcPriceValue.toLocaleString()}</p>
+                      <p className="text-sm font-black text-white">${Number(btcPriceValue || 0).toLocaleString()}</p>
                     </div>
                   </div>
                 </div>
@@ -3085,8 +3085,8 @@ export default function PlatformDashboard() {
                 <div className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">Real-Time Inflow</div>
               </div>
               <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Total Revenue Inflow</p>
-              <h3 className="text-3xl font-black text-gray-900 dark:text-white tracking-tighter">+{formatCurrency(stats.platformRevenue)}</h3>
-              <p className="text-[10px] text-gray-400 mt-3 font-bold uppercase italic">Ads, Payments, Subscriptions</p>
+              <h3 className="text-3xl font-black text-gray-900 dark:text-white tracking-tighter">USDT {Number(stats.platformRevenue || 0).toLocaleString()}</h3>
+              <p className="text-[10px] text-gray-400 mt-3 font-bold uppercase italic">Ads, Payments, Subscriptions & Others</p>
             </motion.div>
 
             {/* Revenue Outflow */}
@@ -3106,8 +3106,8 @@ export default function PlatformDashboard() {
                 <div className="text-[10px] font-black text-rose-600 uppercase tracking-[0.2em]">Total Outflow</div>
               </div>
               <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Total Revenue Outflow</p>
-              <h3 className="text-3xl font-black text-gray-900 dark:text-white tracking-tighter">-{formatCurrency(stats.totalOutflow)}</h3>
-              <p className="text-[10px] text-gray-400 mt-3 font-bold uppercase italic">User Shares & Paid Payouts</p>
+              <h3 className="text-3xl font-black text-gray-900 dark:text-white tracking-tighter">USDT {Number(stats.totalOutflow || 0).toLocaleString()}</h3>
+              <p className="text-[10px] text-gray-400 mt-3 font-bold uppercase italic">Includes 80% User Share & Payouts</p>
             </motion.div>
 
             {/* Revenue Net (Developer Revenue) */}
@@ -3128,8 +3128,8 @@ export default function PlatformDashboard() {
                 <div className="px-2 py-1 bg-white/20 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/20">Verified</div>
               </div>
               <p className="text-xs font-black text-indigo-100 uppercase tracking-widest mb-1">Total Revenue Net</p>
-              <h3 className="text-4xl font-black tracking-tighter mb-1">{formatCurrency(stats.platformShare)}</h3>
-              <p className="text-[10px] text-indigo-100/60 font-bold uppercase tracking-widest mt-3 italic leading-tight">Developer Revenue (Net Profit)</p>
+              <h3 className="text-4xl font-black tracking-tighter mb-1">USDT {Number(stats.platformShare || 0).toLocaleString()}</h3>
+              <p className="text-[10px] text-indigo-100/60 font-bold uppercase tracking-widest mt-3 italic leading-tight">Developer Revenue (Includes 20% User Share)</p>
             </motion.div>
 
             {/* Active Users */}
@@ -4111,10 +4111,10 @@ export default function PlatformDashboard() {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-gray-900 dark:text-white font-black text-sm">
-                    {formatReward(user.points || 0)}
+                    {formatReward(Number(user.points || 0))}
                   </td>
                   <td className="px-6 py-4 text-green-600 dark:text-green-400 font-black text-sm">
-                    {(user.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                    USDT {Number(user.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-col gap-1">

@@ -896,7 +896,7 @@ async function generateContentWithRetry(params: any): Promise<any> {
     let retries = 0;
     while (retries <= MAX_RETRIES) {
       try {
-        if (params && !params.model) params.model = 'gemini-3-flash-preview';
+        if (params && !params.model) params.model = 'gemini-3.5-flash';
         
         // Normalize contents format per AGENTS.md
         if (params.contents && !Array.isArray(params.contents) && typeof params.contents === 'string') {
@@ -1020,7 +1020,7 @@ async function generateContentWithRetry(params: any): Promise<any> {
               // 429 (Quota) and 402 (Billing) need substantial wait times.
               // 503 (Service Unavailable) usually just means one specific model is overloaded, 
               // so we reduce the wait time to 2s to allow faster switching to fallback models.
-              const waitTime = isDepleted ? 60000 : (isUnavailable ? 2000 : 30000); 
+              const waitTime = isDepleted ? 60000 : (isUnavailable ? 2000 : 15000); 
               console.debug(`[Server AI] ${oldModel} error ${status}${isDepleted ? ' (BILLING)' : ''}. recovery delay of ${waitTime/1000}s. (Attempt ${retries}/${MAX_RETRIES})`);
               
               // If we are hitting billing errors and we've already tried several times, fail fast
@@ -1035,21 +1035,18 @@ async function generateContentWithRetry(params: any): Promise<any> {
 
             const currentModel = params.model;
             // Robust Fallback Sequence based on User Instructions (AGENTS.md)
-            if (currentModel === 'gemini-3-flash-preview') {
-              params.model = 'gemini-3.5-flash';
-            } else if (currentModel === 'gemini-3.5-flash') {
-              params.model = 'gemini-flash-latest';
-            } else if (currentModel === 'gemini-flash-latest') {
+            if (currentModel === 'gemini-3.5-flash') {
               params.model = 'gemini-3.1-flash-lite';
             } else if (currentModel === 'gemini-3.1-flash-lite') {
+              params.model = 'gemini-flash-latest';
+            } else if (currentModel === 'gemini-flash-latest') {
+              params.model = 'gemini-3-flash-preview';
+            } else if (currentModel === 'gemini-3-flash-preview') {
               params.model = 'gemini-3.1-pro-preview';
             } else if (currentModel === 'gemini-3.1-pro-preview') {
-              params.model = 'gemini-1.5-flash';
-            } else if (currentModel === 'gemini-1.5-flash') {
-              params.model = 'gemini-1.5-flash-8b';
+              params.model = 'gemini-2.0-flash-exp';
             } else {
-              // Loop back to primary
-              params.model = 'gemini-3-flash-preview';
+              params.model = 'gemini-3.5-flash';
             }
           
             if (retries >= MAX_RETRIES) {
@@ -1082,7 +1079,8 @@ async function generateContentWithRetry(params: any): Promise<any> {
     throw new Error("AI service unavailable after retries.");
   } finally {
     if (currentRelease) {
-      currentRelease();
+      // Always enforce the minimum interval even on failure to prevent rapid retries hitting quota
+      setTimeout(currentRelease, MIN_REQUEST_INTERVAL);
     }
   }
 }
@@ -2153,8 +2151,9 @@ async function startServer() {
       const userData = userSnap.data();
       const userMembership = (userData?.membershipLevel || 'diamond').toLowerCase();
       
-      // Determine Membership Level Split
-      let userSplit = 0.1; // Default Diamond/Free
+      // Determine Membership Level Split (Respecting User Prompt for Activity/Time Rewards)
+      // User Prompt: "User revenue ... from time spent ... and activity ... if user is in Gold level Membership ... 20% for developer and 80% for user"
+      let userSplit = 0.1; // Default: 10% User
       if (userMembership === 'gold') userSplit = 0.8;
       else if (userMembership === 'silver') userSplit = 0.5;
       else if (userMembership === 'bronze') userSplit = 0.3;
@@ -2232,7 +2231,9 @@ async function startServer() {
       const userData = userSnap.data();
       const userMembership = (userData?.membershipLevel || 'diamond').toLowerCase();
       
-      let userSplit = 0.1;
+      // Determine Membership Level Split (Respecting User Prompt for Activity/Time Rewards)
+      // User Prompt: "User revenue ... from time spent ... and activity ... if user is in Gold level Membership ... 20% for developer and 80% for user"
+      let userSplit = 0.1; // Default: 10% User
       if (userMembership === 'gold') userSplit = 0.8;
       else if (userMembership === 'silver') userSplit = 0.5;
       else if (userMembership === 'bronze') userSplit = 0.3;
@@ -2835,7 +2836,7 @@ async function startServer() {
       Style: Academic, professional, yet inspiring. Use a "Pulse Feeds" editorial tone.`;
 
       const response = await generateContentWithRetry({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3.5-flash',
         systemInstruction: "You are an elite academic curator for Pulse Feeds Education Hub. You specialize in deep research and clear communication of complex enterprise and technology topics.",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: { responseMimeType: "application/json" }
@@ -4503,7 +4504,7 @@ async function syncEducationCourses() {
 
     // Prefer a lighter model for automated daily tasks to reduce 429 risk
     const response = await generateContentWithRetry({
-      model: "gemini-3-flash-preview", 
+      model: "gemini-3.5-flash", 
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       tools: [{ googleSearch: {} }] 
     });
@@ -4762,7 +4763,7 @@ async function performRobustEducationSync() {
       
       // 3. AI Risk Analysis
       const aiResponse = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.5-flash",
         contents: [{
           role: "user",
           parts: [{ text: `
@@ -6033,7 +6034,7 @@ async function performRobustEducationSync() {
       Do not include any other commentary, markdown wrappers or external formatting.`;
 
       const response = await generateContentWithRetry({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3.5-flash',
         systemInstruction: "You are an elite enterprise B2B data strategist. You speak in a highly technical, professional, corporate tone. You excel at drawing macro insights while stringently protecting individual user identities.",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: { responseMimeType: "application/json" }
@@ -6073,12 +6074,19 @@ async function performRobustEducationSync() {
       const userData = userSnap.data() as any;
       const userMembership = userExists ? (userData?.membershipLevel || 'diamond').toLowerCase() : 'diamond';
       
-      // Determine Membership Level Split
-      let userSplit = 0.1; // Default Diamond/Free
+      // Determine Membership Level Split (Respecting User Prompt for Activity/Time Rewards)
+      // User Prompt: "User revenue ... from time spent ... and activity ... if user is in Gold level Membership ... 20% for developer and 80% for user"
+      let userSplit = 0.1; // Default: 10% User
       if (userMembership === 'gold') userSplit = 0.8;
       else if (userMembership === 'silver') userSplit = 0.5;
       else if (userMembership === 'bronze') userSplit = 0.3;
       else if (userMembership === 'diamond') userSplit = 0.1;
+
+      // OVERRIDE for Education Hub / AI Training per AGENTS.md
+      // AGENTS.md: "Implement an 80/20 revenue split (80% to developer, 20% to user as a reward) for course enrollments and AI training."
+      if (source === 'education' || source === 'ai_training') {
+        userSplit = 0.2;
+      }
 
       const platformSplit = 1 - userSplit;
 
@@ -6114,11 +6122,10 @@ async function performRobustEducationSync() {
 
           // Track specific revenue source and activity/time categories
           if (source === 'active_time') {
-            updateData.activeTimeRevenue = FieldValue.increment(userAmount);
-            updateData.timeSpentEarnings = FieldValue.increment(userAmount);
+            updateData.timeSpentRevenue = FieldValue.increment(userAmount);
           } else {
             // Everything else is considered "Activity"
-            updateData.activityEarnings = FieldValue.increment(userAmount);
+            updateData.activityRevenue = FieldValue.increment(userAmount);
             updateData.activityCount = FieldValue.increment(1);
           }
 

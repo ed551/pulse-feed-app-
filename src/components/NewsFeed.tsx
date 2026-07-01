@@ -85,7 +85,7 @@ export default function NewsFeed() {
       if (!textResponse || textResponse.trim().length < 5) {
         console.warn("Empty AI response. Retrying with non-grounded fallback...");
         const retryResponse = await generateContentWithRetry({
-          model: "gemini-3-flash-preview", 
+          model: "gemini-3.5-flash", 
           contents: [{ role: "user", parts: [{ text: prompt + " \nONLY OUTPUT JSON ARRAY." }] }],
           generationConfig: { responseMimeType: "application/json" }
         });

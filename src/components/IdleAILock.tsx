@@ -67,7 +67,7 @@ Format:
 If status is ENGAGED, we will NOT lock the app.`;
 
       const response = await generateContentWithRetry({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3.5-flash',
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config: { response_mime_type: 'application/json' }
       } as any);

@@ -111,7 +111,7 @@ Provide a 1-sentence predictive forecast on how their secure footprint impacts t
 Write in a highly professional, clinical, tech-forward tone. Respond with ONLY the markdown. Do not include any meta-introductions or postscripts. Use bold text and clean bullet points for visual scannability.`;
 
         const response = await generateContentWithRetry({
-          model: "gemini-3-flash-preview",
+          model: "gemini-3.5-flash",
           contents: [{ role: "user", parts: [{ text: contextPrompt }] }]
         });
         
@@ -275,7 +275,7 @@ Provide a 1-sentence predictive forecast on how their secure footprint impacts t
 Write in a highly professional, clinical, tech-forward tone. Respond with ONLY the markdown. Do not include any meta-introductions or postscripts. Use bold text and clean bullet points for visual scannability.`;
 
                   const response = await generateContentWithRetry({
-                    model: "gemini-3-flash-preview",
+                    model: "gemini-3.5-flash",
                     contents: [{ role: "user", parts: [{ text: contextPrompt }] }]
                   });
                   
@@ -351,7 +351,7 @@ Provide a 1-sentence predictive forecast on how their secure footprint impacts t
 
               try {
                 const response = await generateContentWithRetry({
-                  model: "gemini-3-flash-preview",
+                  model: "gemini-3.5-flash",
                   contents: [{ role: "user", parts: [{ text: contextPrompt }] }]
                 });
                 if (response?.text) setAiAuditResult(response.text);

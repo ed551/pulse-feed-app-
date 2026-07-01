@@ -12,7 +12,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { useRevenue } from "../contexts/RevenueContext";
 import { db } from "../lib/firebase";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, collection, query, where, orderBy } from "firebase/firestore";
 import { apiFetch } from "../lib/api";
 import { motion } from "motion/react";
 import { cn } from "../lib/utils";
@@ -22,11 +22,7 @@ export default function Withdraw() {
   const { consistentPoints } = useRevenue();
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2
-    }).format(amount);
+    return `USDT ${Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
   };
 
   // Route/Role selector states
@@ -61,14 +57,13 @@ export default function Withdraw() {
   // Fetch withdrawal history
   useEffect(() => {
     if (!currentUser) return;
-    const { collection, query, where, orderBy, onSnapshot } = require("firebase/firestore");
     const q = query(
       collection(db, "withdrawals"),
       where("userId", "==", currentUser.uid),
       orderBy("timestamp", "desc")
     );
-    const unsubscribe = onSnapshot(q, (snapshot: any) => {
-      const history = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const history = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setWithdrawalHistory(history);
     });
     return () => unsubscribe();
@@ -80,8 +75,8 @@ export default function Withdraw() {
     userData?.role === 'admin';
 
   // Available balances
-  const userBalance = consistentPoints || 0;
-  const developerBalance = platformStats?.platformShare || 0;
+  const userBalance = Number(consistentPoints || 0);
+  const developerBalance = Number(platformStats?.platformShare || 0);
   const currentAvailableBalance = selectedRole === 'developer' ? developerBalance : userBalance;
 
   const executePayoutRequest = async (tokenValue: string, amountToWithdraw: number) => {
@@ -293,7 +288,7 @@ export default function Withdraw() {
                 
                 <div className="flex items-baseline gap-2 mt-1">
                   <h2 className="text-4xl font-extrabold text-white tracking-tight">
-                    {currentAvailableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                    {Number(currentAvailableBalance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
                   </h2>
                   <span className="text-sm font-black text-purple-400 font-mono">USDT</span>
                 </div>
@@ -301,23 +296,23 @@ export default function Withdraw() {
                 <div className="mt-4 pt-4 border-t border-slate-900 grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Time Spent Revenue</p>
-                    <p className="text-sm font-bold text-slate-300">{formatCurrency(userData?.timeSpentRevenue || 0)}</p>
+                    <p className="text-sm font-bold text-slate-300">USDT {Number(userData?.timeSpentRevenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Activity Revenue</p>
-                    <p className="text-sm font-bold text-emerald-400">{formatCurrency(userData?.activityRevenue || 0)}</p>
+                    <p className="text-sm font-bold text-emerald-400">USDT {Number(userData?.activityRevenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</p>
                   </div>
                 </div>
 
-                {selectedRole === 'developer' && platformStats && (
-                  <div className="mt-4 pt-4 border-t border-slate-900 grid grid-cols-2 gap-4">
+                {selectedRole === 'developer' && platformStats && isDeveloperAccount && (
+                  <div className="mt-4 pt-4 border-t border-slate-900 grid grid-cols-2 gap-4 bg-indigo-500/5 -mx-6 px-6 pb-4">
                     <div className="space-y-1">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Revenue Inflow</p>
-                      <p className="text-sm font-bold text-slate-300">{formatCurrency(platformStats.totalInflow || 0)}</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Platform Inflow</p>
+                      <p className="text-sm font-bold text-slate-300">USDT {Number(platformStats.totalInflow || 0).toLocaleString()}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Total Revenue Outflow</p>
-                      <p className="text-sm font-bold text-rose-400">{formatCurrency(platformStats.totalOutflow || 0)}</p>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Platform Net Profit</p>
+                      <p className="text-sm font-bold text-indigo-400">USDT {Number(platformStats.platformShare || 0).toLocaleString()}</p>
                     </div>
                   </div>
                 )}
@@ -327,7 +322,7 @@ export default function Withdraw() {
                 <form onSubmit={handleFormSubmit} className="space-y-5">
                   <div>
                     <label className="text-xs font-black tracking-wider text-slate-400 uppercase ml-1 block mb-2">
-                      Crypto Deposit Address
+                      USDT Deposit Address (TRC20/ERC20/SOL)
                     </label>
                     <div className="relative">
                       <Wallet className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5" />
@@ -335,7 +330,7 @@ export default function Withdraw() {
                         type="text"
                         value={walletAddress}
                         onChange={(e) => setWalletAddress(e.target.value)}
-                        placeholder="Enter USDT Deposit Address"
+                        placeholder="Paste your USDT wallet address"
                         required
                         className="w-full pl-12 pr-4 py-4 bg-slate-950 border-2 border-slate-800 rounded-2xl focus:outline-none focus:border-purple-500 transition-all font-mono text-xs text-white"
                       />
@@ -353,32 +348,32 @@ export default function Withdraw() {
                         className="w-full py-4 px-3 bg-slate-950 border-2 border-slate-800 rounded-2xl focus:outline-none focus:border-purple-500 transition-all font-bold text-xs uppercase text-slate-300"
                       >
                         <option value="TRX">TRX (TRC20)</option>
+                        <option value="SOL">SOL (USDT)</option>
                         <option value="ETH">ETH (ERC20)</option>
                         <option value="BSC">BSC (BEP20)</option>
-                        <option value="SOL">SOL (USDT)</option>
                       </select>
                     </div>
 
                     <div className="col-span-2">
                       <label className="text-xs font-black tracking-wider text-slate-400 uppercase ml-1 block mb-2 flex justify-between items-center">
-                        <span>Amount</span>
+                        <span>Withdraw Amount</span>
                         <button
                           type="button"
                           onClick={() => setAmount(Math.max(0, currentAvailableBalance).toFixed(4))}
                           className="text-[10px] text-purple-400 hover:text-purple-300 font-extrabold uppercase tracking-widest bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20"
                         >
-                          Use Max
+                          Max
                         </button>
                       </label>
                       <div className="relative">
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-xs">USDT</span>
                         <input
                           type="number"
-                          step="0.0001"
+                          step="0.01"
                           min="100"
                           value={amount}
                           onChange={(e) => setAmount(e.target.value)}
-                          placeholder="0.00"
+                          placeholder="Min 100 USDT"
                           required
                           className="w-full pl-14 pr-4 py-4 bg-slate-950 border-2 border-slate-800 rounded-2xl focus:outline-none focus:border-purple-500 transition-all font-bold text-white text-sm"
                         />
@@ -396,93 +391,110 @@ export default function Withdraw() {
                   <button
                     type="submit"
                     disabled={withdrawLoading || currentAvailableBalance < 100}
-                    className="w-full py-4 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all shadow-lg shadow-purple-600/20 active:scale-98 flex items-center justify-center gap-2 text-sm uppercase tracking-wider"
+                    className="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all shadow-lg shadow-purple-600/20 active:scale-98 flex items-center justify-center gap-2 text-sm uppercase tracking-wider"
                   >
-                    {withdrawLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wallet className="w-4 h-4" />}
-                    Submit Withdrawal Request
+                    {withdrawLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+                    Confirm Withdrawal
                   </button>
+                  
+                  {currentAvailableBalance < 100 && (
+                    <p className="text-[10px] text-center text-slate-500 font-bold uppercase tracking-widest">
+                      Threshold: 100 USDT Required
+                    </p>
+                  )}
                 </form>
               ) : (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="text-center py-8 space-y-6"
-                >
-                  <div className="w-20 h-20 bg-emerald-950/30 border border-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 mx-auto animate-bounce">
+                <div className="py-8 text-center animate-in zoom-in-95 duration-300">
+                  <div className="w-20 h-20 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 mx-auto mb-6">
                     <CheckCircle2 className="w-10 h-10" />
                   </div>
-
-                  <div className="space-y-2">
-                    <h3 className="text-2xl font-black text-emerald-300">Transaction Successful</h3>
-                    <p className="text-xs text-slate-400 px-6">
-                      Your withdrawal request has been authorized and dispatched to the real-time payout node.
-                    </p>
-                  </div>
-
-                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 text-left text-xs font-mono space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500">Amount Sent:</span>
-                      <span className="font-bold text-white">{withdrawSuccess.amount} USDT</span>
+                  <h3 className="text-2xl font-black text-white mb-2">Withdrawal Initiated</h3>
+                  <p className="text-sm text-slate-400 mb-8 max-w-xs mx-auto">
+                    Your request for {withdrawSuccess.amount} USDT has been submitted to the blockchain queue.
+                  </p>
+                  
+                  <div className="bg-slate-950/50 rounded-2xl border border-slate-800 p-4 mb-8 text-left space-y-2">
+                    <div className="flex justify-between text-[10px]">
+                      <span className="text-slate-500 font-bold uppercase">Transaction ID</span>
+                      <span className="text-slate-300 font-mono truncate ml-4">{withdrawSuccess.txId}</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500">Destination:</span>
-                      <span className="text-purple-300 truncate max-w-[200px]">{withdrawSuccess.address}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500">Network:</span>
-                      <span className="text-slate-300">{withdrawSuccess.network}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500">Receipt Ref:</span>
-                      <span className="text-slate-400 text-[10px] select-all">{withdrawSuccess.txId}</span>
+                    <div className="flex justify-between text-[10px]">
+                      <span className="text-slate-500 font-bold uppercase">Network</span>
+                      <span className="text-slate-300 font-bold uppercase">{withdrawSuccess.network}</span>
                     </div>
                   </div>
 
                   <button
-                    type="button"
                     onClick={() => setWithdrawSuccess(null)}
-                    className="w-full py-4 bg-slate-950 border border-slate-800 text-white hover:bg-slate-900 font-bold rounded-2xl transition-all uppercase tracking-wide text-xs"
+                    className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white font-black rounded-2xl transition-all uppercase tracking-widest text-xs"
                   >
-                    Initiate New Withdrawal
+                    Done
                   </button>
-                </motion.div>
+                </div>
               )}
             </>
           )}
         </div>
 
-        {/* Withdrawal Record List */}
-        <div className="mt-8 bg-slate-900/80 backdrop-blur-md rounded-3xl border border-slate-800 p-8 shadow-2xl space-y-6">
-          <div className="flex items-center gap-2 mb-4">
-            <History className="w-5 h-5 text-purple-500" />
-            <h3 className="text-sm font-black text-white uppercase tracking-widest">Withdrawal Record</h3>
+        {/* Withdrawal Record */}
+        <div className="mt-12 bg-slate-900/50 rounded-3xl border border-slate-800/50 overflow-hidden backdrop-blur-sm">
+          <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+            <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2">
+              <History className="w-4 h-4 text-purple-500" />
+              Withdrawal Record
+            </h3>
+            <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded-md font-bold">
+              {withdrawalHistory.length} Total
+            </span>
           </div>
-          <div className="space-y-3">
-            {withdrawalHistory.length === 0 ? (
-              <p className="text-xs text-slate-500 text-center py-4 italic">No withdrawal records found.</p>
-            ) : (
-              withdrawalHistory.map((tx) => (
-                <div key={tx.id} className="p-4 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-between text-xs font-mono">
-                  <div>
-                    <p className="font-bold text-white">{tx.amount} USDT</p>
-                    <p className="text-[9px] text-slate-500 uppercase tracking-tighter mt-0.5">
-                      {tx.timestamp?.seconds ? new Date(tx.timestamp.seconds * 1000).toLocaleString() : 'Processing'}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className={cn(
-                      "text-[9px] font-black uppercase px-2 py-0.5 rounded",
-                      tx.status === 'success' || tx.status === 'completed' ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
-                    )}>
-                      {tx.status || 'Pending'}
-                    </p>
-                    <p className="text-[9px] text-slate-500 mt-0.5 truncate max-w-[100px]">{tx.walletAddress || tx.address}</p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+
+          {withdrawalHistory.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-slate-800/50">
+                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Date</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Amount</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/30">
+                  {withdrawalHistory.map((tx) => (
+                    <tr key={tx.id} className="hover:bg-white/5 transition-colors">
+                      <td className="px-6 py-4">
+                        <p className="text-[10px] text-slate-300 font-bold">
+                          {tx.timestamp?.seconds ? new Date(tx.timestamp.seconds * 1000).toLocaleString() : 'Processing'}
+                        </p>
+                        <p className="text-[9px] text-slate-500 font-mono mt-0.5 truncate max-w-[100px]">ID: {tx.id}</p>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-black text-white">
+                        {tx.amount} <span className="text-[9px] text-slate-500">USDT</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={cn(
+                          "px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border",
+                          tx.status === 'completed' ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" :
+                          tx.status === 'rejected' ? "bg-red-500/10 text-red-400 border-red-500/20" :
+                          "bg-orange-500/10 text-orange-400 border-orange-500/20"
+                        )}>
+                          {tx.status || 'pending'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="py-20 text-center">
+              <div className="w-12 h-12 bg-slate-800/50 rounded-full flex items-center justify-center text-slate-600 mx-auto mb-3">
+                <History className="w-6 h-6" />
+              </div>
+              <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">No previous withdrawals found</p>
+            </div>
+          )}
         </div>
+
       </div>
 
       <div className="text-center mt-8 text-[10px] text-slate-600 font-mono flex flex-col items-center gap-1">

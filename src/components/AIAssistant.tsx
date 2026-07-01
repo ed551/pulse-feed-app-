@@ -73,7 +73,7 @@ export default function AIAssistant() {
       setMessages(prev => [...prev, userMsg]);
 
       const response = await generateContentWithRetry({
-        model: "gemini-3-flash-preview", 
+        model: "gemini-3.5-flash", 
         contents: [{ role: "user", parts: [{ text: `Analyze this web page content: "${text}". 
         Provide a 3-bullet summary and 2 actionable insights for the user based on their current goals in Pulse Feeds.` }] }],
         tools: [{ googleSearch: {} }] as any,
@@ -239,7 +239,7 @@ export default function AIAssistant() {
       Be professional, visionary, and boundlessly curious. Always cite current trends from May 2026 when relevant.`;
 
       const response = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.5-flash",
         contents: [{ role: "user", parts: [{ text: `${context}\n\nUser: ${input}` }] }],
         tools: [{ googleSearch: {} }] as any,
         toolConfig: { includeServerSideToolInvocations: true },

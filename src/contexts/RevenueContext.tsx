@@ -57,7 +57,8 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const lastDbPointsRef = useRef(0);
 
   // Derive consistentPoints mathematically without jumps or counting backwards
-  const consistentPoints = (userData?.points || 0) + pendingPoints + optimisticPointsOffset;
+  const safePoints = typeof userData?.points === 'number' ? userData.points : (typeof userData?.points === 'string' ? parseFloat(userData.points) : 0);
+  const consistentPoints = (safePoints || 0) + pendingPoints + optimisticPointsOffset;
 
   useEffect(() => {
     if (userData?.points !== undefined) {
@@ -157,7 +158,7 @@ export const RevenueProvider: React.FC<{ children: React.ReactNode }> = ({ child
       Otherwise return [STABLE].`;
 
       const result = await generateContentWithRetry({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }]
       });
 

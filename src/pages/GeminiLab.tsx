@@ -18,7 +18,7 @@ import { cn } from '../lib/utils';
 import { generateContentWithRetry, getAIBreakerStatus } from "../lib/ai";
 
 const MODELS = [
-  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', desc: 'Next-gen performance' },
+  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', desc: 'Premium Performance' },
   { id: 'gemini-flash-latest', name: 'Gemini Flash Latest', desc: 'Optimized efficiency' }
 ];
 
